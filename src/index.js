@@ -21,6 +21,10 @@ const CFG = {
   minNetRR: 2,
   scanCount: 18,
   duplicateHours: 6,
+  telegramChannel: "kingxauusd1",
+  telegramLookbackMessages: 15,
+  channelAlignedBonus: 15,
+  channelConflictPenalty: 30,
 };
 
 const EXCLUDED_BASES = new Set([
@@ -34,6 +38,11 @@ export default {
     if (url.searchParams.get("test") === "telegram") {
       await telegram(env, "✅ Binance Spot Market Scanner شغال — إشارات فقط، بدون تنفيذ صفقات.");
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
+    }
+    if (url.searchParams.get("test") === "king") {
+      const channel = await getChannelSignals();
+      return output({ ok: true, channel: CFG.telegramChannel, messagesRead: channel.length,
+        messages: channel.slice(0, 10), liveTrading: false });
     }
     return output(await scan(env));
   },
@@ -50,12 +59,13 @@ async function scan(env) {
       return resultBase({ status: "DAILY_LOSS_CAP", dailyLossUSDT: dailyLoss });
     }
 
-    const [tickers, books, exchangeInfo, btc1h, btc4h] = await Promise.all([
+    const [tickers, books, exchangeInfo, btc1h, btc4h, channelMessages] = await Promise.all([
       binance("/api/v3/ticker/24hr"),
       binance("/api/v3/ticker/bookTicker"),
       binance("/api/v3/exchangeInfo"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=100"),
+      getChannelSignals().catch(() => []),
     ]);
 
     const regime = marketRegime(btc1h.map(candle), btc4h.map(candle));
@@ -75,7 +85,7 @@ async function scan(env) {
     for (let i = 0; i < candidates.length; i += 5) {
       const group = candidates.slice(i, i + 5);
       const groupResults = await Promise.all(
-        group.map(x => analyzeSymbol(x, tradable.get(x.symbol), bookMap.get(x.symbol), regime))
+        group.map(x => analyzeSymbol(x, tradable.get(x.symbol), bookMap.get(x.symbol), regime, channelMessages))
       );
       analyses.push(...groupResults);
     }
@@ -139,7 +149,7 @@ function isAllowedBase(base) {
   return true;
 }
 
-async function analyzeSymbol(summary, symbolInfo, book, regime) {
+async function analyzeSymbol(summary, symbolInfo, book, regime, channelMessages = []) {
   try {
     const [raw15, raw1h, depth] = await Promise.all([
       binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=120`),
@@ -154,8 +164,8 @@ async function analyzeSymbol(summary, symbolInfo, book, regime) {
     const spread = ((ask - bid) / mid) * 100;
     const depthSides = onePctDepth(depth, mid);
     const trend = symbolTrend(c1h);
-    const breakout = breakoutRetest(c15);
-    const pullback = trend.rising ? pullbackBounce(c15) : null;
+    const breakout = summary.symbol === "TSTUSDT" ? tstBreakoutRetest(c15, ask) : breakoutRetest(c15);
+    const pullback = summary.symbol !== "TSTUSDT" && trend.rising ? pullbackBounce(c15) : null;
     const setup = breakout || pullback;
     const atr = atr14(c15);
     const entry = ask;
@@ -200,16 +210,29 @@ async function analyzeSymbol(summary, symbolInfo, book, regime) {
       netRewardRiskAtLeast2: netRR >= CFG.minNetRR,
     };
 
+    const channelSignal = findChannelSignal(channelMessages, summary.base, summary.symbol);
+    const channelState = !channelSignal ? "NO_SIGNAL"
+      : channelSignal.direction === "BUY" ? "ALIGNED" : "CONFLICT";
+    checks.channelNotConflicting = channelState !== "CONFLICT";
+
     const valid = Object.values(checks).every(Boolean);
-    const score = valid
+    const baseScore = valid
       ? netRR * 10 + Math.min(summary.volume / 1_000_000, 25) + trend.strength * 5 - spread * 8
       : 0;
+    const score = Math.max(0, baseScore + (channelState === "ALIGNED"
+      ? CFG.channelAlignedBonus : channelState === "CONFLICT" ? -CFG.channelConflictPenalty : 0));
 
     return {
       symbol: summary.symbol,
       valid,
       status: valid ? "READY_SIGNAL" : "WAIT",
       setup: setup?.type || null,
+      channelConfirmation: {
+        channel: CFG.telegramChannel,
+        state: channelState,
+        direction: channelSignal?.direction || null,
+        matchedMessage: channelSignal?.text || null,
+      },
       checks,
       market: {
         bid: fmt(bid), ask: fmt(ask), spreadPct: round(spread, 4),
@@ -293,6 +316,79 @@ function pullbackBounce(candles) {
   return null;
 }
 
+// TST requires its exact agreed sequence: a completed 15m close above 0.01855,
+// followed by a later completed candle that tests and holds 0.01848-0.01855.
+function tstBreakoutRetest(candles, currentAsk) {
+  const breakoutLevel = 0.01855;
+  const retestLow = 0.01848;
+  const recent = candles.slice(-24);
+  for (let i = 0; i < recent.length - 1; i++) {
+    const b = recent[i];
+    if (b.close <= breakoutLevel) continue;
+    for (let j = i + 1; j < recent.length; j++) {
+      const r = recent[j];
+      const testedZone = r.low <= breakoutLevel && r.high >= retestLow;
+      const heldZone = r.close >= retestLow;
+      const entryInRange = currentAsk >= 0.01856 && currentAsk <= 0.01865;
+      if (testedZone && heldZone && entryInRange) {
+        return { type: "TST_EXACT_BREAKOUT_RETEST", resistance: breakoutLevel,
+          retest: r, time: r.openTime };
+      }
+      if (r.close < retestLow) break;
+    }
+  }
+  return null;
+}
+
+async function getChannelSignals() {
+  const response = await fetch(`https://t.me/s/${CFG.telegramChannel}`, {
+    headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 SignalResearchBot/1.0" },
+    cf: { cacheTtl: 60, cacheEverything: true },
+  });
+  if (!response.ok) throw new Error(`Telegram channel fetch failed: ${response.status}`);
+  const messages = [];
+  const handler = {
+    current: "",
+    element(element) {
+      this.current = "";
+      element.onEndTag(() => {
+        const value = this.current.replace(/\s+/g, " ").trim();
+        if (value) messages.push(value);
+        this.current = "";
+      });
+    },
+    text(chunk) { this.current += `${chunk.text} `; },
+  };
+  const transformed = new HTMLRewriter()
+    .on(".tgme_widget_message_text", handler)
+    .transform(response);
+  await transformed.text();
+  return messages.filter(Boolean).slice(-CFG.telegramLookbackMessages).reverse();
+}
+
+function findChannelSignal(messages, baseAsset, symbol) {
+  const base = baseAsset.toUpperCase();
+  const aliases = [base, symbol.toUpperCase(), `${base}/USDT`, `${base}USDT`];
+  if (base === "BTC") aliases.push("BITCOIN");
+  if (base === "ETH") aliases.push("ETHEREUM");
+  if (base === "SOL") aliases.push("SOLANA");
+  for (const raw of messages) {
+    const text = raw.toUpperCase();
+    const assetMatched = aliases.some(alias => containsToken(text, alias));
+    if (!assetMatched) continue;
+    const buy = /\b(BUY|LONG)\b|شراء|صعود/i.test(text);
+    const sell = /\b(SELL|SHORT)\b|بيع|هبوط/i.test(text);
+    if (buy === sell) continue;
+    return { direction: buy ? "BUY" : "SELL", text: raw.slice(0, 300) };
+  }
+  return null;
+}
+
+function containsToken(text, token) {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Z0-9])${escaped}([^A-Z0-9]|$)`, "i").test(text);
+}
+
 function onePctDepth(depth, mid) {
   const bid = depth.bids.filter(([p]) => Number(p) >= mid * 0.99)
     .reduce((s, [p, q]) => s + Number(p) * Number(q), 0);
@@ -365,6 +461,7 @@ function alertText(x, regime) {
     `R:R الصافي: ${p.netRewardRisk}`,
     `تغير 24س: ${x.market.change24hPct}% | السبريد: ${x.market.spreadPct}%`,
     `حالة BTC: ${regime.state}`,
+    `تأكيد القناة: ${x.channelConfirmation.state}`,
     `الإلغاء: ${p.invalidation}`,
     "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
   ].join("\n");
