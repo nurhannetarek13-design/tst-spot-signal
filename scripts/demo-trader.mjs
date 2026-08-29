@@ -10,7 +10,23 @@ if (!API_KEY || !SECRET_KEY) {
 }
 
 function clean(value) {
-  return Number(value).toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+  return Number(value).toFixed(12).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function floorByIncrement(value, increment) {
+  const step = Number(increment);
+  const decimals = Math.max(0, (String(increment).split(".")[1] || "").replace(/0+$/, "").length);
+  return Number((Math.floor((Number(value) + 1e-12) / step) * step).toFixed(decimals));
+}
+
+async function publicDemo(path) {
+  const response = await fetch(DEMO_BASE + path, { headers: { Accept: "application/json" } });
+  const raw = await response.text();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { throw new Error(`Binance Demo HTTP ${response.status}: returned HTML instead of JSON`); }
+  if (!response.ok || data.code) throw new Error(`Binance Demo ${data.code || response.status}: ${data.msg || "request failed"}`);
+  return data;
 }
 
 async function signed(method, path, params = {}) {
@@ -82,22 +98,35 @@ async function main() {
     return;
   }
 
-  const workingQty = Number(plan.quantity);
-  const protectedQty = workingQty * 0.999;
+  const exchangeInfo = await publicDemo(`/api/v3/exchangeInfo?symbol=${encodeURIComponent(setup.symbol)}`);
+  const symbolInfo = exchangeInfo.symbols?.[0];
+  if (!symbolInfo) throw new Error("Symbol is unavailable on Binance Demo");
+  const lot = symbolInfo.filters.find(filter => filter.filterType === "LOT_SIZE");
+  const priceFilter = symbolInfo.filters.find(filter => filter.filterType === "PRICE_FILTER");
+  const stepSize = lot?.stepSize || "0.00000001";
+  const tickSize = priceFilter?.tickSize || "0.00000001";
+
+  const workingQty = floorByIncrement(Number(plan.quantity), stepSize);
+  const protectedQty = floorByIncrement(workingQty * 0.999, stepSize);
+  const entryPrice = floorByIncrement(Number(plan.entry), tickSize);
+  const stopPrice = floorByIncrement(Number(plan.stop), tickSize);
+  const targetPrice = floorByIncrement(Number(plan.target1), tickSize);
+  if (!(workingQty > 0) || !(protectedQty > 0)) throw new Error("Quantity is below Demo trading rules");
+
   const order = await signed("POST", "/api/v3/orderList/otoco", {
     symbol: setup.symbol,
     workingType: "LIMIT",
     workingSide: "BUY",
-    workingPrice: clean(plan.entry),
+    workingPrice: clean(entryPrice),
     workingQuantity: clean(workingQty),
     workingTimeInForce: "GTC",
     workingClientOrderId: clientId,
     pendingSide: "SELL",
     pendingQuantity: clean(protectedQty),
     pendingAboveType: "LIMIT_MAKER",
-    pendingAbovePrice: clean(plan.target1),
+    pendingAbovePrice: clean(targetPrice),
     pendingBelowType: "STOP_LOSS",
-    pendingBelowStopPrice: clean(plan.stop),
+    pendingBelowStopPrice: clean(stopPrice),
     newOrderRespType: "RESULT",
   });
 
@@ -105,9 +134,9 @@ async function main() {
     demoOrderPlaced: true,
     symbol: setup.symbol,
     orderListId: order.orderListId,
-    entry: plan.entry,
-    stop: plan.stop,
-    target: plan.target1,
+    entry: clean(entryPrice),
+    stop: clean(stopPrice),
+    target: clean(targetPrice),
     quantity: clean(workingQty),
     liveTrading: false,
   }, null, 2));
