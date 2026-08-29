@@ -20,7 +20,7 @@ const CFG = {
   maxStopPct: 8,
   minNetRR: 2,
   scanCount: 18,
-  duplicateHours: 6,
+  duplicateHours: 6,\n  demoAutoTrading: true,
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -40,6 +40,12 @@ export default {
     if (url.searchParams.get("test") === "telegram") {
       await telegram(env, "✅ Binance Spot Market Scanner شغال — إشارات فقط، بدون تنفيذ صفقات.");
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
+    }
+    if (url.searchParams.get("test") === "demo") {
+      const account = await demoSigned(env, "GET", "/api/v3/account", {});
+      return output({ ok: true, demoConnected: true, canTrade: account.canTrade,
+        balances: (account.balances || []).filter(x => Number(x.free) > 0 || Number(x.locked) > 0),
+        liveTrading: false, demoTrading: true });
     }
     if (url.searchParams.get("test") === "sources") {
       const sources = await getRiskSources();
@@ -94,13 +100,20 @@ async function scan(env) {
 
     const valid = analyses.filter(x => x.valid).sort((a, b) => b.score - a.score);
     const best = valid[0] || null;
-    let alertSent = false;
+    let alertSent = false;\n    let demoOrder = null;
 
     if (best) {
       const cache = caches.default;
       const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
       if (!(await cache.match(cacheKey))) {
-        await telegram(env, alertText(best, regime));
+        if (CFG.demoAutoTrading && env.BINANCE_DEMO_API_KEY && env.BINANCE_DEMO_SECRET_KEY) {
+          try {
+            demoOrder = await placeDemoOTOCO(env, best, tradable.get(best.symbol));
+          } catch (error) {
+            demoOrder = { placed: false, error: String(error?.message || error) };
+          }
+        }
+        await telegram(env, alertText(best, regime, demoOrder));
         await cache.put(cacheKey, new Response("sent", {
           headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` },
         }));
@@ -459,7 +472,7 @@ function round(v, d) { const p = 10 ** d; return Math.round(v * p) / p; }
 function fmt(v) { return Number(v).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 8 }); }
 function trim(v) { return Number(v.toFixed(8)).toString(); }
 
-function alertText(x, regime) {
+function alertText(x, regime, demoOrder = null) {
   const p = x.plan;
   return [
     `🚨 أفضل إشارة Binance Spot: ${x.symbol}`,
@@ -476,8 +489,79 @@ function alertText(x, regime) {
     `حالة BTC: ${regime.state}`,
     `المصادر الرسمية: Binance آمن=${!x.officialSources.binance.blocked} | CryptoQuant آمن=${!x.officialSources.cryptoQuant.blocked} | Whale Alert آمن=${!x.officialSources.whaleAlert.blocked}`,
     `الإلغاء: ${p.invalidation}`,
+    demoOrder?.placed
+      ? `✅ Demo order placed: OTOCO #${demoOrder.orderListId} — أموال وهمية فقط`
+      : demoOrder?.error
+        ? `⚠️ Demo order error: ${demoOrder.error}`
+        : "ℹ️ Demo order: not placed",
     "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
   ].join("\n");
+}
+
+async function placeDemoOTOCO(env, setup, symbolInfo) {
+  // Hard-coded Demo host: this function cannot reach a live trading endpoint.
+  const openOrders = await demoSigned(env, "GET", "/api/v3/openOrders", {});
+  if (Array.isArray(openOrders) && openOrders.length > 0) {
+    return { placed: false, skipped: "EXISTING_OPEN_ORDER", count: openOrders.length };
+  }
+
+  const lot = (symbolInfo.filters || []).find(f => f.filterType === "LOT_SIZE");
+  const step = Number(lot?.stepSize || "0.00000001");
+  const workingQty = floorStep(Number(setup.plan.quantity), step);
+  const pendingQty = floorStep(workingQty * (1 - CFG.fee), step);
+  if (!(workingQty > 0) || !(pendingQty > 0)) throw new Error("Invalid demo quantity");
+
+  const params = {
+    symbol: setup.symbol,
+    workingType: "LIMIT",
+    workingSide: "BUY",
+    workingPrice: setup.plan.entry,
+    workingQuantity: trim(workingQty),
+    workingTimeInForce: "GTC",
+    pendingSide: "SELL",
+    pendingQuantity: trim(pendingQty),
+    pendingAboveType: "LIMIT_MAKER",
+    pendingAbovePrice: setup.plan.target1,
+    pendingBelowType: "STOP_LOSS",
+    pendingBelowStopPrice: setup.plan.stop,
+    newOrderRespType: "RESULT",
+  };
+  const order = await demoSigned(env, "POST", "/api/v3/orderList/otoco", params);
+  return { placed: true, orderListId: order.orderListId, symbol: setup.symbol,
+    workingQuantity: trim(workingQty), protectedQuantity: trim(pendingQty),
+    entry: setup.plan.entry, stop: setup.plan.stop, target: setup.plan.target1,
+    environment: "BINANCE_DEMO_SPOT" };
+}
+
+async function demoSigned(env, method, path, params) {
+  if (!env.BINANCE_DEMO_API_KEY || !env.BINANCE_DEMO_SECRET_KEY) {
+    throw new Error("Binance Demo secrets missing");
+  }
+  const payload = new URLSearchParams({ ...params, recvWindow: "5000", timestamp: String(Date.now()) });
+  const key = await crypto.subtle.importKey("raw",
+    new TextEncoder().encode(env.BINANCE_DEMO_SECRET_KEY),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signatureBytes = await crypto.subtle.sign("HMAC", key,
+    new TextEncoder().encode(payload.toString()));
+  const signature = [...new Uint8Array(signatureBytes)]
+    .map(byte => byte.toString(16).padStart(2, "0")).join("");
+  payload.set("signature", signature);
+
+  const base = "https://demo-api.binance.com";
+  const url = method === "GET" ? `${base}${path}?${payload}` : `${base}${path}`;
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "X-MBX-APIKEY": env.BINANCE_DEMO_API_KEY,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: method === "GET" ? undefined : payload.toString(),
+  });
+  const result = await response.json();
+  if (!response.ok || result.code) {
+    throw new Error(`Binance Demo ${result.code || response.status}: ${result.msg || "request failed"}`);
+  }
+  return result;
 }
 
 async function telegram(env, text) {
