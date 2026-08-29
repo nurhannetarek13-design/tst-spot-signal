@@ -20,7 +20,8 @@ const CFG = {
   maxStopPct: 8,
   minNetRR: 2,
   scanCount: 18,
-  duplicateHours: 6,\n  demoAutoTrading: true,
+  duplicateHours: 6,
+  demoAutoTrading: true,
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -100,7 +101,8 @@ async function scan(env) {
 
     const valid = analyses.filter(x => x.valid).sort((a, b) => b.score - a.score);
     const best = valid[0] || null;
-    let alertSent = false;\n    let demoOrder = null;
+    let alertSent = false;
+    let demoOrder = null;
 
     if (best) {
       const cache = caches.default;
