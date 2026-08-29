@@ -563,10 +563,18 @@ async function demoSigned(env, method, path, params) {
     headers: {
       "X-MBX-APIKEY": env.BINANCE_DEMO_API_KEY,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Accept": "application/json",
     },
     body: method === "GET" ? undefined : payload.toString(),
   });
-  const result = await response.json();
+  const raw = await response.text();
+  let result;
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    const pageTitle = raw.match(/<title[^>]*>([^<]+)<\\/title>/i)?.[1]?.trim();
+    throw new Error(`Binance Demo HTTP ${response.status}: ${pageTitle || "server returned HTML instead of JSON"}`);
+  }
   if (!response.ok || result.code) {
     throw new Error(`Binance Demo ${result.code || response.status}: ${result.msg || "request failed"}`);
   }
