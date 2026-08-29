@@ -9,7 +9,7 @@ const API_BASES = [
 
 const CFG = {
   capital: 20.08,
-  maxPosition: 5,
+  maxPosition: 10,
   maxRisk: 0.50,
   dailyLossCap: 2,
   fee: 0.001,
@@ -207,7 +207,7 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       stopBelowEntry: stop > 0 && stop < entry,
       stopWithin8Pct: stopPct > 0 && stopPct <= CFG.maxStopPct,
       minimumOrderMet: position + 0.000001 >= minNotional,
-      positionAtMost5USDT: position <= CFG.maxPosition + 0.000001,
+      positionAtMost10USDT: position <= CFG.maxPosition + 0.000001,
       riskAtMost050USDT: riskFees <= CFG.maxRisk,
       netRewardRiskAtLeast2: netRR >= CFG.minNetRR,
     };
@@ -465,7 +465,7 @@ function alertText(x, regime) {
     `🚨 أفضل إشارة Binance Spot: ${x.symbol}`,
     `نوع الفرصة: ${x.setup}`,
     `الدخول المشروط الآن: ${p.entry}`,
-    `الكمية: ${p.quantity} — قيمة الصفقة: ${p.positionUSDT} USDT`,
+    `الكمية: ${p.quantity} — قيمة الصفقة: ${p.positionUSDT} USDT (حد أقصى 10)`,
     `وقف الخسارة: ${p.stop}`,
     `الهدف الأول: ${p.target1}`,
     `الهدف الثاني: ${p.target2}`,
