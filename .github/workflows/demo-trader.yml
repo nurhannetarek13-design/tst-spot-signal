@@ -1,0 +1,27 @@
+name: Binance Demo Auto Trader
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+concurrency:
+  group: binance-demo-auto-trader
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan-and-demo-trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Demo trader
+        env:
+          BINANCE_DEMO_API_KEY: ${{ secrets.BINANCE_DEMO_API_KEY }}
+          BINANCE_DEMO_SECRET_KEY: ${{ secrets.BINANCE_DEMO_SECRET_KEY }}
+        run: node scripts/demo-trader.mjs
