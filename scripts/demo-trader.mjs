@@ -62,6 +62,10 @@ async function signed(method, path, params = {}) {
 }
 
 async function main() {
+  const account = await signed("GET", "/api/v3/account");
+  if (!account.canTrade) throw new Error("Binance Demo account is connected but trading permission is disabled");
+  console.log("Binance Demo connected. Trading permission: enabled. Live trading: false.");
+
   const response = await fetch(WORKER_URL, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`Scanner HTTP ${response.status}`);
   const scan = await response.json();
