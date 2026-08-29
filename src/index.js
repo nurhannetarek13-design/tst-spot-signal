@@ -21,10 +21,12 @@ const CFG = {
   minNetRR: 2,
   scanCount: 18,
   duplicateHours: 6,
-  telegramChannel: "kingxauusd1",
+  sourceChannels: {
+    binance: "binance_announcements",
+    cryptoQuant: "cryptoquant_alert",
+    whaleAlert: "whale_alert_io",
+  },
   telegramLookbackMessages: 15,
-  channelAlignedBonus: 15,
-  channelConflictPenalty: 30,
 };
 
 const EXCLUDED_BASES = new Set([
@@ -39,10 +41,10 @@ export default {
       await telegram(env, "✅ Binance Spot Market Scanner شغال — إشارات فقط، بدون تنفيذ صفقات.");
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
     }
-    if (url.searchParams.get("test") === "king") {
-      const channel = await getChannelSignals();
-      return output({ ok: true, channel: CFG.telegramChannel, messagesRead: channel.length,
-        messages: channel.slice(0, 10), liveTrading: false });
+    if (url.searchParams.get("test") === "sources") {
+      const sources = await getRiskSources();
+      return output({ ok: true, sources: Object.fromEntries(Object.entries(sources).map(([name, messages]) =>
+        [name, { messagesRead: messages.length, messages: messages.slice(0, 3) }])), liveTrading: false });
     }
     return output(await scan(env));
   },
@@ -59,13 +61,13 @@ async function scan(env) {
       return resultBase({ status: "DAILY_LOSS_CAP", dailyLossUSDT: dailyLoss });
     }
 
-    const [tickers, books, exchangeInfo, btc1h, btc4h, channelMessages] = await Promise.all([
+    const [tickers, books, exchangeInfo, btc1h, btc4h, riskSources] = await Promise.all([
       binance("/api/v3/ticker/24hr"),
       binance("/api/v3/ticker/bookTicker"),
       binance("/api/v3/exchangeInfo"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=100"),
-      getChannelSignals().catch(() => []),
+      getRiskSources().catch(() => ({ binance: [], cryptoQuant: [], whaleAlert: [] })),
     ]);
 
     const regime = marketRegime(btc1h.map(candle), btc4h.map(candle));
@@ -85,7 +87,7 @@ async function scan(env) {
     for (let i = 0; i < candidates.length; i += 5) {
       const group = candidates.slice(i, i + 5);
       const groupResults = await Promise.all(
-        group.map(x => analyzeSymbol(x, tradable.get(x.symbol), bookMap.get(x.symbol), regime, channelMessages))
+        group.map(x => analyzeSymbol(x, tradable.get(x.symbol), bookMap.get(x.symbol), regime, riskSources))
       );
       analyses.push(...groupResults);
     }
@@ -149,7 +151,7 @@ function isAllowedBase(base) {
   return true;
 }
 
-async function analyzeSymbol(summary, symbolInfo, book, regime, channelMessages = []) {
+async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}) {
   try {
     const [raw15, raw1h, depth] = await Promise.all([
       binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=120`),
@@ -210,29 +212,23 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, channelMessages 
       netRewardRiskAtLeast2: netRR >= CFG.minNetRR,
     };
 
-    const channelSignal = findChannelSignal(channelMessages, summary.base, summary.symbol);
-    const channelState = !channelSignal ? "NO_SIGNAL"
-      : channelSignal.direction === "BUY" ? "ALIGNED" : "CONFLICT";
-    checks.channelNotConflicting = channelState !== "CONFLICT";
+    const sourceRisk = assessSourceRisk(riskSources, summary.base, summary.symbol);
+    checks.noOfficialBinanceRisk = !sourceRisk.binance.blocked;
+    checks.noOnChainMarketRisk = !sourceRisk.cryptoQuant.blocked;
+    checks.noLargeExchangeDepositRisk = !sourceRisk.whaleAlert.blocked;
 
     const valid = Object.values(checks).every(Boolean);
     const baseScore = valid
       ? netRR * 10 + Math.min(summary.volume / 1_000_000, 25) + trend.strength * 5 - spread * 8
       : 0;
-    const score = Math.max(0, baseScore + (channelState === "ALIGNED"
-      ? CFG.channelAlignedBonus : channelState === "CONFLICT" ? -CFG.channelConflictPenalty : 0));
+    const score = Math.max(0, baseScore);
 
     return {
       symbol: summary.symbol,
       valid,
       status: valid ? "READY_SIGNAL" : "WAIT",
       setup: setup?.type || null,
-      channelConfirmation: {
-        channel: CFG.telegramChannel,
-        state: channelState,
-        direction: channelSignal?.direction || null,
-        matchedMessage: channelSignal?.text || null,
-      },
+      officialSources: sourceRisk,
       checks,
       market: {
         bid: fmt(bid), ask: fmt(ask), spreadPct: round(spread, 4),
@@ -340,12 +336,12 @@ function tstBreakoutRetest(candles, currentAsk) {
   return null;
 }
 
-async function getChannelSignals() {
-  const response = await fetch(`https://t.me/s/${CFG.telegramChannel}`, {
+async function getPublicChannelMessages(channel) {
+  const response = await fetch(`https://t.me/s/${channel}`, {
     headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 SignalResearchBot/1.0" },
     cf: { cacheTtl: 60, cacheEverything: true },
   });
-  if (!response.ok) throw new Error(`Telegram channel fetch failed: ${response.status}`);
+  if (!response.ok) throw new Error(`${channel} fetch failed: ${response.status}`);
   const messages = [];
   const handler = {
     current: "",
@@ -366,22 +362,39 @@ async function getChannelSignals() {
   return messages.filter(Boolean).slice(-CFG.telegramLookbackMessages).reverse();
 }
 
-function findChannelSignal(messages, baseAsset, symbol) {
+async function getRiskSources() {
+  const entries = await Promise.all(Object.entries(CFG.sourceChannels).map(async ([name, channel]) => {
+    try { return [name, await getPublicChannelMessages(channel)]; }
+    catch { return [name, []]; }
+  }));
+  return Object.fromEntries(entries);
+}
+
+function assessSourceRisk(sources, baseAsset, symbol) {
   const base = baseAsset.toUpperCase();
   const aliases = [base, symbol.toUpperCase(), `${base}/USDT`, `${base}USDT`];
   if (base === "BTC") aliases.push("BITCOIN");
   if (base === "ETH") aliases.push("ETHEREUM");
   if (base === "SOL") aliases.push("SOLANA");
-  for (const raw of messages) {
-    const text = raw.toUpperCase();
-    const assetMatched = aliases.some(alias => containsToken(text, alias));
-    if (!assetMatched) continue;
-    const buy = /\b(BUY|LONG)\b|شراء|صعود/i.test(text);
-    const sell = /\b(SELL|SHORT)\b|بيع|هبوط/i.test(text);
-    if (buy === sell) continue;
-    return { direction: buy ? "BUY" : "SELL", text: raw.slice(0, 300) };
-  }
-  return null;
+  const matched = list => (list || []).find(raw => aliases.some(alias => containsToken(raw.toUpperCase(), alias)));
+
+  const binanceMessage = matched(sources.binance);
+  const binanceBlocked = Boolean(binanceMessage &&
+    /DELIST|REMOVE.*TRADING|SUSPEND.*TRADING|CEASE.*TRADING|WILL NOT SUPPORT/i.test(binanceMessage));
+
+  const cryptoMessage = (sources.cryptoQuant || []).find(raw =>
+    /(BTC|BITCOIN).*(EXCHANGE INFLOW|INFLOW.*EXCHANGE|SELLING PRESSURE|SELL PRESSURE)/i.test(raw) &&
+    /(SURGE|SPIKE|INCREAS|HIGH|BEARISH|RISK)/i.test(raw));
+
+  const whaleMessage = matched(sources.whaleAlert);
+  const whaleBlocked = Boolean(whaleMessage &&
+    /(TO BINANCE|TRANSFERRED TO BINANCE|DEPOSITED.*BINANCE)/i.test(whaleMessage));
+
+  return {
+    binance: { blocked: binanceBlocked, matchedMessage: binanceMessage?.slice(0, 300) || null },
+    cryptoQuant: { blocked: Boolean(cryptoMessage), matchedMessage: cryptoMessage?.slice(0, 300) || null },
+    whaleAlert: { blocked: whaleBlocked, matchedMessage: whaleMessage?.slice(0, 300) || null },
+  };
 }
 
 function containsToken(text, token) {
@@ -461,7 +474,7 @@ function alertText(x, regime) {
     `R:R الصافي: ${p.netRewardRisk}`,
     `تغير 24س: ${x.market.change24hPct}% | السبريد: ${x.market.spreadPct}%`,
     `حالة BTC: ${regime.state}`,
-    `تأكيد القناة: ${x.channelConfirmation.state}`,
+    `المصادر الرسمية: Binance آمن=${!x.officialSources.binance.blocked} | CryptoQuant آمن=${!x.officialSources.cryptoQuant.blocked} | Whale Alert آمن=${!x.officialSources.whaleAlert.blocked}`,
     `الإلغاء: ${p.invalidation}`,
     "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
   ].join("\n");
