@@ -43,10 +43,17 @@ export default {
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
     }
     if (url.searchParams.get("test") === "demo") {
-      const account = await demoSigned(env, "GET", "/api/v3/account", {});
-      return output({ ok: true, demoConnected: true, canTrade: account.canTrade,
-        balances: (account.balances || []).filter(x => Number(x.free) > 0 || Number(x.locked) > 0),
-        liveTrading: false, demoTrading: true });
+      try {
+        const account = await demoSigned(env, "GET", "/api/v3/account", {});
+        return output({ ok: true, demoConnected: true, canTrade: account.canTrade,
+          balances: (account.balances || []).filter(x => Number(x.free) > 0 || Number(x.locked) > 0),
+          liveTrading: false, demoTrading: true });
+      } catch (error) {
+        return output({ ok: false, demoConnected: false,
+          error: String(error?.message || error),
+          hint: "Check BINANCE_DEMO_API_KEY and BINANCE_DEMO_SECRET_KEY in Cloudflare Worker secrets.",
+          liveTrading: false, demoTrading: true });
+      }
     }
     if (url.searchParams.get("test") === "sources") {
       const sources = await getRiskSources();
@@ -496,7 +503,7 @@ function alertText(x, regime, demoOrder = null) {
       : demoOrder?.error
         ? `⚠️ Demo order error: ${demoOrder.error}`
         : "ℹ️ Demo order: not placed",
-    "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
+    "⚠️ ليست ضمان مكسب. أي تنفيذ هنا على Binance Demo بأموال وهمية فقط؛ التداول الحقيقي غير مفعّل.",
   ].join("\n");
 }
 
