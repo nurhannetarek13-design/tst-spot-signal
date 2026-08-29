@@ -572,7 +572,7 @@ async function demoSigned(env, method, path, params) {
   try {
     result = JSON.parse(raw);
   } catch {
-    const pageTitle = raw.match(/<title[^>]*>([^<]+)<\\/title>/i)?.[1]?.trim();
+    const pageTitle = raw.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
     throw new Error(`Binance Demo HTTP ${response.status}: ${pageTitle || "server returned HTML instead of JSON"}`);
   }
   if (!response.ok || result.code) {
