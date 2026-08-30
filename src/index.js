@@ -44,6 +44,13 @@ export default {
     if (url.pathname === "/paper-status") {
       return paperStatus(env);
     }
+    if (url.pathname === "/activate-paper") {
+      if (request.method !== "POST" || request.headers.get("X-Setup-Key") !== "b0e37c96b68f4007de35d54b4e06e05372e94ada7c9c852c") {
+        return output({ ok: false, error: "Unauthorized" }, 401);
+      }
+      await ensureTelegramWebhook(env);
+      return paperStatus(env);
+    }
     if (url.pathname === "/telegram-webhook") {
       return telegramWebhook(request, env);
     }
