@@ -12,7 +12,7 @@ on:
     - cron: "*/15 * * * *"
 
 concurrency:
-  group: binance-demo-auto-trader
+  group: binance-demo-auto-trader-v2
   cancel-in-progress: true
 
 permissions:
