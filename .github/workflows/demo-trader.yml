@@ -2,6 +2,12 @@ name: Binance Demo Auto Trader
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/demo-trader.yml"
+      - "scripts/demo-trader.mjs"
+      - "src/index.js"
   schedule:
     - cron: "*/15 * * * *"
 
@@ -15,12 +21,12 @@ permissions:
 jobs:
   scan-and-demo-trade:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Run Demo trader
+      - name: Run local Spot scanner
         env:
           BINANCE_DEMO_API_KEY: ${{ secrets.BINANCE_DEMO_API_KEY }}
           BINANCE_DEMO_SECRET_KEY: ${{ secrets.BINANCE_DEMO_SECRET_KEY }}
