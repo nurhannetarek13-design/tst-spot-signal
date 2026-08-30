@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: tst-spot-signal
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: WORKER_URL
+        value: https://tst-spot-signal.nurhanne-tarek13.workers.dev/
+      - key: RUN_TOKEN
+        sync: false
+      - key: RELAY_SECRET
+        sync: false
