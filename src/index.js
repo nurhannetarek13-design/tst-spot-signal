@@ -41,6 +41,9 @@ const EXCLUDED_BASES = new Set([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/paper-status") {
+      return paperStatus(env);
+    }
     if (url.pathname === "/telegram-webhook") {
       return telegramWebhook(request, env);
     }
@@ -555,6 +558,24 @@ async function ensureTelegramWebhook(env) {
     allowed_updates: ["callback_query"],
     drop_pending_updates: false,
   });
+}
+
+async function paperStatus(env) {
+  try {
+    const info = await telegramApi(env, "getWebhookInfo", {});
+    const active = info.url === `${CFG.publicBaseUrl}/telegram-webhook`;
+    return output({
+      ok: true,
+      paperOnly: true,
+      liveTrading: false,
+      telegramWebhookActive: active,
+      pendingUpdateCount: Number(info.pending_update_count || 0),
+      lastErrorDate: info.last_error_date || null,
+      lastErrorMessage: info.last_error_message || null,
+    }, active ? 200 : 503);
+  } catch (error) {
+    return output({ ok: false, paperOnly: true, liveTrading: false, error: String(error?.message || error) }, 500);
+  }
 }
 
 async function getTelegramWebhookSecret(env) {
