@@ -1,3 +1,4 @@
+// redeploy: load Telegram environment variables
 import express from "express";
 
 const app = express();
