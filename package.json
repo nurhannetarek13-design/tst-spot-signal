@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "start": "node scripts/render-server.mjs",
+    "check:render": "node --check scripts/render-server.mjs",
     "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "devDependencies": {
     "wrangler": "^4.68.0"
