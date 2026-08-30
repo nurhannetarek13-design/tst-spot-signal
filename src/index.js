@@ -9,7 +9,7 @@ const API_BASES = [
 
 const CFG = {
   capital: 20.08,
-  maxPosition: 10,
+  maxPosition: 5,
   maxRisk: 0.50,
   dailyLossCap: 2,
   fee: 0.001,
@@ -21,7 +21,6 @@ const CFG = {
   minNetRR: 2,
   scanCount: 18,
   duplicateHours: 6,
-  demoAutoTrading: true,
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -38,22 +37,12 @@ const EXCLUDED_BASES = new Set([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.searchParams.get("relay") === "telegram") {
+      return relayTelegram(request, env);
+    }
     if (url.searchParams.get("test") === "telegram") {
       await telegram(env, "✅ Binance Spot Market Scanner شغال — إشارات فقط، بدون تنفيذ صفقات.");
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
-    }
-    if (url.searchParams.get("test") === "demo") {
-      try {
-        const account = await demoSigned(env, "GET", "/api/v3/account", {});
-        return output({ ok: true, demoConnected: true, canTrade: account.canTrade,
-          balances: (account.balances || []).filter(x => Number(x.free) > 0 || Number(x.locked) > 0),
-          liveTrading: false, demoTrading: true });
-      } catch (error) {
-        return output({ ok: false, demoConnected: false,
-          error: String(error?.message || error),
-          hint: "Check BINANCE_DEMO_API_KEY and BINANCE_DEMO_SECRET_KEY in Cloudflare Worker secrets.",
-          liveTrading: false, demoTrading: true });
-      }
     }
     if (url.searchParams.get("test") === "sources") {
       const sources = await getRiskSources();
@@ -109,20 +98,12 @@ async function scan(env) {
     const valid = analyses.filter(x => x.valid).sort((a, b) => b.score - a.score);
     const best = valid[0] || null;
     let alertSent = false;
-    let demoOrder = null;
 
     if (best) {
       const cache = caches.default;
       const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
       if (!(await cache.match(cacheKey))) {
-        if (CFG.demoAutoTrading && env.BINANCE_DEMO_API_KEY && env.BINANCE_DEMO_SECRET_KEY) {
-          try {
-            demoOrder = await placeDemoOTOCO(env, best, tradable.get(best.symbol));
-          } catch (error) {
-            demoOrder = { placed: false, error: String(error?.message || error) };
-          }
-        }
-        await telegram(env, alertText(best, regime, demoOrder));
+        await telegram(env, alertText(best, regime));
         await cache.put(cacheKey, new Response("sent", {
           headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` },
         }));
@@ -229,7 +210,7 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       stopBelowEntry: stop > 0 && stop < entry,
       stopWithin8Pct: stopPct > 0 && stopPct <= CFG.maxStopPct,
       minimumOrderMet: position + 0.000001 >= minNotional,
-      positionAtMost10USDT: position <= CFG.maxPosition + 0.000001,
+      positionAtMost5USDT: position <= CFG.maxPosition + 0.000001,
       riskAtMost050USDT: riskFees <= CFG.maxRisk,
       netRewardRiskAtLeast2: netRR >= CFG.minNetRR,
     };
@@ -481,13 +462,13 @@ function round(v, d) { const p = 10 ** d; return Math.round(v * p) / p; }
 function fmt(v) { return Number(v).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 8 }); }
 function trim(v) { return Number(v.toFixed(8)).toString(); }
 
-function alertText(x, regime, demoOrder = null) {
+function alertText(x, regime) {
   const p = x.plan;
   return [
     `🚨 أفضل إشارة Binance Spot: ${x.symbol}`,
     `نوع الفرصة: ${x.setup}`,
     `الدخول المشروط الآن: ${p.entry}`,
-    `الكمية: ${p.quantity} — قيمة الصفقة: ${p.positionUSDT} USDT (حد أقصى 10)`,
+    `الكمية: ${p.quantity} — قيمة الصفقة: ${p.positionUSDT} USDT`,
     `وقف الخسارة: ${p.stop}`,
     `الهدف الأول: ${p.target1}`,
     `الهدف الثاني: ${p.target2}`,
@@ -498,87 +479,8 @@ function alertText(x, regime, demoOrder = null) {
     `حالة BTC: ${regime.state}`,
     `المصادر الرسمية: Binance آمن=${!x.officialSources.binance.blocked} | CryptoQuant آمن=${!x.officialSources.cryptoQuant.blocked} | Whale Alert آمن=${!x.officialSources.whaleAlert.blocked}`,
     `الإلغاء: ${p.invalidation}`,
-    demoOrder?.placed
-      ? `✅ Demo order placed: OTOCO #${demoOrder.orderListId} — أموال وهمية فقط`
-      : demoOrder?.error
-        ? `⚠️ Demo order error: ${demoOrder.error}`
-        : "ℹ️ Demo order: not placed",
-    "⚠️ ليست ضمان مكسب. أي تنفيذ هنا على Binance Demo بأموال وهمية فقط؛ التداول الحقيقي غير مفعّل.",
+    "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
   ].join("\n");
-}
-
-async function placeDemoOTOCO(env, setup, symbolInfo) {
-  // Hard-coded Demo host: this function cannot reach a live trading endpoint.
-  const openOrders = await demoSigned(env, "GET", "/api/v3/openOrders", {});
-  if (Array.isArray(openOrders) && openOrders.length > 0) {
-    return { placed: false, skipped: "EXISTING_OPEN_ORDER", count: openOrders.length };
-  }
-
-  const lot = (symbolInfo.filters || []).find(f => f.filterType === "LOT_SIZE");
-  const step = Number(lot?.stepSize || "0.00000001");
-  const workingQty = floorStep(Number(setup.plan.quantity), step);
-  const pendingQty = floorStep(workingQty * (1 - CFG.fee), step);
-  if (!(workingQty > 0) || !(pendingQty > 0)) throw new Error("Invalid demo quantity");
-
-  const params = {
-    symbol: setup.symbol,
-    workingType: "LIMIT",
-    workingSide: "BUY",
-    workingPrice: setup.plan.entry,
-    workingQuantity: trim(workingQty),
-    workingTimeInForce: "GTC",
-    pendingSide: "SELL",
-    pendingQuantity: trim(pendingQty),
-    pendingAboveType: "LIMIT_MAKER",
-    pendingAbovePrice: setup.plan.target1,
-    pendingBelowType: "STOP_LOSS",
-    pendingBelowStopPrice: setup.plan.stop,
-    newOrderRespType: "RESULT",
-  };
-  const order = await demoSigned(env, "POST", "/api/v3/orderList/otoco", params);
-  return { placed: true, orderListId: order.orderListId, symbol: setup.symbol,
-    workingQuantity: trim(workingQty), protectedQuantity: trim(pendingQty),
-    entry: setup.plan.entry, stop: setup.plan.stop, target: setup.plan.target1,
-    environment: "BINANCE_DEMO_SPOT" };
-}
-
-async function demoSigned(env, method, path, params) {
-  if (!env.BINANCE_DEMO_API_KEY || !env.BINANCE_DEMO_SECRET_KEY) {
-    throw new Error("Binance Demo secrets missing");
-  }
-  const payload = new URLSearchParams({ ...params, recvWindow: "5000", timestamp: String(Date.now()) });
-  const key = await crypto.subtle.importKey("raw",
-    new TextEncoder().encode(env.BINANCE_DEMO_SECRET_KEY),
-    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signatureBytes = await crypto.subtle.sign("HMAC", key,
-    new TextEncoder().encode(payload.toString()));
-  const signature = [...new Uint8Array(signatureBytes)]
-    .map(byte => byte.toString(16).padStart(2, "0")).join("");
-  payload.set("signature", signature);
-
-  const base = "https://demo-api.binance.com";
-  const url = method === "GET" ? `${base}${path}?${payload}` : `${base}${path}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "X-MBX-APIKEY": env.BINANCE_DEMO_API_KEY,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json",
-    },
-    body: method === "GET" ? undefined : payload.toString(),
-  });
-  const raw = await response.text();
-  let result;
-  try {
-    result = JSON.parse(raw);
-  } catch {
-    const pageTitle = raw.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
-    throw new Error(`Binance Demo HTTP ${response.status}: ${pageTitle || "server returned HTML instead of JSON"}`);
-  }
-  if (!response.ok || result.code) {
-    throw new Error(`Binance Demo ${result.code || response.status}: ${result.msg || "request failed"}`);
-  }
-  return result;
 }
 
 async function telegram(env, text) {
@@ -590,14 +492,42 @@ async function telegram(env, text) {
   if (!r.ok) throw new Error(`Telegram error ${r.status}`);
 }
 
+async function relayTelegram(request, env) {
+  try {
+    if (request.method !== "POST") return output({ ok: false, error: "POST required" }, 405);
+    if (!env.BINANCE_DEMO_SECRET_KEY) return output({ ok: false, error: "Relay secret missing" }, 503);
+    const raw = await request.text();
+    if (raw.length > 12000) return output({ ok: false, error: "Payload too large" }, 413);
+    const supplied = request.headers.get("X-Relay-Signature") || "";
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.BINANCE_DEMO_SECRET_KEY), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const bytes = supplied.match(/^[a-f0-9]{64}$/i) ? new Uint8Array(supplied.match(/../g).map(x => parseInt(x, 16))) : new Uint8Array();
+    const valid = bytes.length === 32 && await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(raw));
+    if (!valid) return output({ ok: false, error: "Invalid signature" }, 401);
+    const body = JSON.parse(raw);
+    if (Math.abs(Date.now() - Number(body.timestamp)) > 5 * 60 * 1000) return output({ ok: false, error: "Expired request" }, 401);
+    const message = String(body.text || "").trim();
+    if (!message || message.length > 4000) return output({ ok: false, error: "Invalid message" }, 400);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message));
+    const id = [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+    const cacheKey = new Request(`https://relay-cache.local/${id}`);
+    if (await caches.default.match(cacheKey)) return output({ ok: true, duplicate: true, sent: false });
+    await telegram(env, message);
+    await caches.default.put(cacheKey, new Response("sent", { headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` } }));
+    return output({ ok: true, sent: true });
+  } catch (error) {
+    return output({ ok: false, error: String(error?.message || error) }, 500);
+  }
+}
+
 function resultBase(extra) {
   return { ok: true, checkedAt: new Date().toISOString(), mode: "SIGNAL_ONLY",
     liveTrading: false, orderPlaced: false, capitalUSDT: CFG.capital,
     maxPositionUSDT: CFG.maxPosition, maxRiskUSDT: CFG.maxRisk,
     dailyLossCapUSDT: CFG.dailyLossCap, ...extra };
 }
-function output(data) {
+function output(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
+    status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
   });
 }
