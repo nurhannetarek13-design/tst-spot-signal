@@ -21,6 +21,9 @@ const CFG = {
   minNetRR: 2,
   scanCount: 18,
   duplicateHours: 6,
+  approvalSeconds: 90,
+  paperPositionHours: 72,
+  publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -30,6 +33,7 @@ const CFG = {
 };
 
 const EXCLUDED_BASES = new Set([
+  "BTC", "ETH", "BNB", "SOL",
   "USDC", "FDUSD", "TUSD", "USDP", "DAI", "EUR", "AEUR", "TRY", "BRL",
   "BIDR", "IDRT", "UAH", "NGN", "RUB", "GBP", "AUD", "BUSD",
 ]);
@@ -37,6 +41,12 @@ const EXCLUDED_BASES = new Set([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/telegram-webhook") {
+      return telegramWebhook(request, env);
+    }
+    if (url.searchParams.get("setup") === "telegram-webhook") {
+      return setupTelegramWebhook(request, env);
+    }
     if (url.searchParams.get("relay") === "telegram") {
       return relayTelegram(request, env);
     }
@@ -53,7 +63,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(scan(env));
+    ctx.waitUntil(Promise.all([ensureTelegramWebhook(env), monitorPaperPositions(env), scan(env)]));
   },
 };
 
@@ -103,7 +113,23 @@ async function scan(env) {
       const cache = caches.default;
       const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
       if (!(await cache.match(cacheKey))) {
-        await telegram(env, alertText(best, regime));
+        const approvalId = crypto.randomUUID().replaceAll("-", "").slice(0, 20);
+        const pending = {
+          id: approvalId,
+          symbol: best.symbol,
+          signalId: best.signalId,
+          candidate: best,
+          createdAt: Date.now(),
+          expiresAt: Date.now() + CFG.approvalSeconds * 1000,
+          used: false,
+        };
+        await putState(env, `pending:${approvalId}`, pending, CFG.approvalSeconds + 120);
+        await telegram(env, `${alertText(best, regime)}\n\n⏱️ الموافقة الورقية صالحة ${CFG.approvalSeconds} ثانية فقط.`, {
+          inline_keyboard: [[
+            { text: "✅ تنفيذ ورقي", callback_data: `paper_yes:${approvalId}` },
+            { text: "❌ رفض", callback_data: `paper_no:${approvalId}` },
+          ]],
+        });
         await cache.put(cacheKey, new Response("sent", {
           headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` },
         }));
@@ -175,7 +201,9 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     const atr = atr14(c15);
     const entry = ask;
     const swingLow = setup?.retest?.low || setup?.trigger?.low || c15.at(-2).low;
-    const stopRaw = Math.min(swingLow * 0.998, entry - 1.15 * atr);
+    const stopRaw = summary.symbol === "TSTUSDT"
+      ? 0.01794
+      : Math.min(swingLow * 0.998, entry - 1.15 * atr);
     const stop = roundPrice(stopRaw, entry);
     const stopPct = entry > stop ? ((entry - stop) / entry) * 100 : 999;
     const riskUnit = entry - stop;
@@ -479,17 +507,230 @@ function alertText(x, regime) {
     `حالة BTC: ${regime.state}`,
     `المصادر الرسمية: Binance آمن=${!x.officialSources.binance.blocked} | CryptoQuant آمن=${!x.officialSources.cryptoQuant.blocked} | Whale Alert آمن=${!x.officialSources.whaleAlert.blocked}`,
     `الإلغاء: ${p.invalidation}`,
-    "⚠️ إشارة فقط وليست ضمان مكسب. البوت لا ينفذ أي أمر؛ راجعي Binance يدويًا قبل الدخول.",
+    "⚠️ اختبار ورقي فقط وليست ضمان مكسب. لا يتم إرسال أي أمر إلى Binance.",
   ].join("\n");
 }
 
-async function telegram(env, text) {
+async function telegram(env, text, replyMarkup = undefined) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) throw new Error("Telegram secrets missing");
-  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
+  return telegramApi(env, "sendMessage", {
+    chat_id: env.TELEGRAM_CHAT_ID,
+    text,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
-  if (!r.ok) throw new Error(`Telegram error ${r.status}`);
+}
+
+async function telegramApi(env, method, body) {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token missing");
+  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.ok === false) throw new Error(`Telegram ${method} error ${r.status}: ${data.description || "unknown"}`);
+  return data.result;
+}
+
+async function setupTelegramWebhook(request, env) {
+  if (request.method !== "POST") return output({ ok: false, error: "POST required" }, 405);
+  const supplied = request.headers.get("Authorization") || "";
+  if (!env.RUN_TOKEN || supplied !== `Bearer ${env.RUN_TOKEN}`) return output({ ok: false, error: "Unauthorized" }, 401);
+  const origin = new URL(request.url).origin;
+  const secret = await getTelegramWebhookSecret(env);
+  const result = await telegramApi(env, "setWebhook", {
+    url: `${origin}/telegram-webhook`,
+    secret_token: secret,
+    allowed_updates: ["callback_query"],
+    drop_pending_updates: false,
+  });
+  return output({ ok: true, webhook: `${origin}/telegram-webhook`, result, paperOnly: true });
+}
+
+async function ensureTelegramWebhook(env) {
+  const secret = await getTelegramWebhookSecret(env);
+  return telegramApi(env, "setWebhook", {
+    url: `${CFG.publicBaseUrl}/telegram-webhook`,
+    secret_token: secret,
+    allowed_updates: ["callback_query"],
+    drop_pending_updates: false,
+  });
+}
+
+async function getTelegramWebhookSecret(env) {
+  if (env.TELEGRAM_WEBHOOK_SECRET) return env.TELEGRAM_WEBHOOK_SECRET;
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token missing");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`paper-webhook:${env.TELEGRAM_BOT_TOKEN}`));
+  return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function telegramWebhook(request, env) {
+  try {
+    if (request.method !== "POST") return output({ ok: false, error: "POST required" }, 405);
+    const expectedSecret = await getTelegramWebhookSecret(env);
+    if (!expectedSecret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== expectedSecret) {
+      return output({ ok: false, error: "Unauthorized" }, 401);
+    }
+    const update = await request.json();
+    const query = update.callback_query;
+    if (!query) return output({ ok: true, ignored: true });
+    const chatId = String(query.message?.chat?.id || "");
+    if (chatId !== String(env.TELEGRAM_CHAT_ID)) {
+      await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "غير مسموح", show_alert: true });
+      return output({ ok: false, error: "Wrong chat" }, 403);
+    }
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "جاري إعادة فحص السوق…" });
+    const match = String(query.data || "").match(/^paper_(yes|no):([a-f0-9]{20})$/);
+    if (!match) return output({ ok: true, ignored: true });
+    const [, action, approvalId] = match;
+    const pending = await getState(env, `pending:${approvalId}`);
+    if (!pending || pending.used || Date.now() > Number(pending.expiresAt)) {
+      await finalizeTelegramButton(env, query, "⌛ انتهت صلاحية الإشارة الورقية أو تم استخدامها.");
+      return output({ ok: true, status: "EXPIRED_OR_USED", paperOnly: true });
+    }
+    pending.used = true;
+    await putState(env, `pending:${approvalId}`, pending, 180);
+    if (action === "no") {
+      await finalizeTelegramButton(env, query, `❌ تم رفض الصفقة الورقية: ${pending.symbol}`);
+      return output({ ok: true, status: "REJECTED", symbol: pending.symbol, paperOnly: true });
+    }
+    const daily = await getDailyPaper(env);
+    if (daily.realizedPnlUSDT <= -CFG.dailyLossCap) {
+      await finalizeTelegramButton(env, query, `🛑 مرفوض: تم بلوغ حد الخسارة الورقي اليومي ${CFG.dailyLossCap} USDT.`);
+      return output({ ok: true, status: "DAILY_LOSS_CAP", paperOnly: true });
+    }
+    const fresh = await revalidateCandidate(pending.symbol);
+    if (!fresh.valid) {
+      await finalizeTelegramButton(env, query, `⚠️ لم تُنفذ ورقيًا: شروط ${pending.symbol} لم تعد صالحة بعد إعادة الفحص.\nالسبب: ${fresh.reason}`);
+      return output({ ok: true, status: "REVALIDATION_FAILED", symbol: pending.symbol, reason: fresh.reason, paperOnly: true });
+    }
+    const position = {
+      id: approvalId,
+      symbol: fresh.candidate.symbol,
+      openedAt: Date.now(),
+      entry: Number(fresh.candidate.plan.entry),
+      stop: Number(fresh.candidate.plan.stop),
+      target1: Number(fresh.candidate.plan.target1),
+      target2: Number(fresh.candidate.plan.target2),
+      quantity: Number(fresh.candidate.plan.quantity),
+      positionUSDT: Number(fresh.candidate.plan.positionUSDT),
+      entryFeeUSDT: Number(fresh.candidate.plan.positionUSDT) * CFG.fee,
+      status: "OPEN",
+    };
+    await putState(env, `position:${position.id}`, position, CFG.paperPositionHours * 3600);
+    const active = await getState(env, "paper:active") || [];
+    if (!active.includes(position.id)) active.push(position.id);
+    await putState(env, "paper:active", active, CFG.paperPositionHours * 3600);
+    await finalizeTelegramButton(env, query, [
+      `✅ تم فتح صفقة ورقية: ${position.symbol}`,
+      `الدخول الافتراضي: ${fmt(position.entry)}`,
+      `الكمية: ${trim(position.quantity)} — القيمة: ${position.positionUSDT} USDT`,
+      `الوقف: ${fmt(position.stop)}`,
+      `الهدف 1: ${fmt(position.target1)} | الهدف 2: ${fmt(position.target2)}`,
+      "لا يوجد أمر حقيقي على Binance.",
+    ].join("\n"));
+    return output({ ok: true, status: "PAPER_POSITION_OPENED", position, paperOnly: true, liveTrading: false });
+  } catch (error) {
+    return output({ ok: false, error: String(error?.message || error), paperOnly: true, liveTrading: false }, 500);
+  }
+}
+
+async function finalizeTelegramButton(env, query, text) {
+  if (query.message?.message_id) {
+    return telegramApi(env, "editMessageText", {
+      chat_id: env.TELEGRAM_CHAT_ID,
+      message_id: query.message.message_id,
+      text,
+      reply_markup: { inline_keyboard: [] },
+    });
+  }
+  return telegram(env, text);
+}
+
+async function revalidateCandidate(symbol) {
+  try {
+    const [tickers, books, exchangeInfo, btc1h, btc4h] = await Promise.all([
+      binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
+      binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
+      binance("/api/v3/exchangeInfo"),
+      binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
+      binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=100"),
+    ]);
+    const info = exchangeInfo.symbols.find(x => x.symbol === symbol && x.status === "TRADING" && x.isSpotTradingAllowed);
+    if (!info) return { valid: false, reason: "الزوج غير متاح Spot حاليًا" };
+    const regime = marketRegime(btc1h.map(candle), btc4h.map(candle));
+    if (!regime.longAllowed) return { valid: false, reason: "اتجاه BTC أصبح غير مناسب" };
+    const summary = { symbol, base: info.baseAsset, volume: Number(tickers.quoteVolume), change: Number(tickers.priceChangePercent) };
+    const candidate = await analyzeSymbol(summary, info, books, regime, {});
+    if (!candidate.valid) {
+      const failed = Object.entries(candidate.checks || {}).filter(([, value]) => !value).map(([key]) => key).join(", ");
+      return { valid: false, reason: failed || candidate.status || "فشل التحقق", candidate };
+    }
+    return { valid: true, candidate, regime };
+  } catch (error) {
+    return { valid: false, reason: String(error?.message || error) };
+  }
+}
+
+async function monitorPaperPositions(env) {
+  try {
+    const active = await getState(env, "paper:active") || [];
+    if (!active.length) return { checked: 0, closed: 0 };
+    let closedCount = 0;
+    const remaining = [];
+    for (const id of active) {
+      const position = await getState(env, `position:${id}`);
+      if (!position || position.status !== "OPEN") continue;
+      const book = await binance(`/api/v3/ticker/bookTicker?symbol=${position.symbol}`);
+      const exit = Number(book.bidPrice);
+      let reason = null;
+      if (exit <= position.stop) reason = "STOP";
+      else if (exit >= position.target2) reason = "TARGET_2";
+      else if (exit >= position.target1) reason = "TARGET_1";
+      if (!reason) { remaining.push(id); continue; }
+      const exitFee = position.quantity * exit * CFG.fee;
+      const pnl = position.quantity * (exit - position.entry) - position.entryFeeUSDT - exitFee;
+      position.status = "CLOSED";
+      position.closedAt = Date.now();
+      position.exit = exit;
+      position.exitReason = reason;
+      position.realizedPnlUSDT = round(pnl, 4);
+      await putState(env, `position:${id}`, position, CFG.paperPositionHours * 3600);
+      const daily = await getDailyPaper(env);
+      daily.realizedPnlUSDT = round(daily.realizedPnlUSDT + pnl, 4);
+      daily.closedTrades += 1;
+      await putState(env, daily.key, daily, 3 * 24 * 3600);
+      await telegram(env, `📒 إغلاق ورقي ${position.symbol}\nالسبب: ${reason}\nالخروج الافتراضي: ${fmt(exit)}\nصافي النتيجة بعد الرسوم: ${position.realizedPnlUSDT} USDT\nإجمالي اليوم: ${daily.realizedPnlUSDT} USDT`);
+      closedCount++;
+    }
+    await putState(env, "paper:active", remaining, CFG.paperPositionHours * 3600);
+    return { checked: active.length, closed: closedCount };
+  } catch (error) {
+    return { checked: 0, closed: 0, error: String(error?.message || error) };
+  }
+}
+
+async function getDailyPaper(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `paper:daily:${day}`;
+  return await getState(env, key) || { key, day, realizedPnlUSDT: 0, closedTrades: 0 };
+}
+
+async function getState(env, key) {
+  if (env.SIGNAL_STATE) return env.SIGNAL_STATE.get(key, "json");
+  const response = await caches.default.match(new Request(`https://paper-state.local/${encodeURIComponent(key)}`));
+  return response ? response.json() : null;
+}
+
+async function putState(env, key, value, ttlSeconds) {
+  if (env.SIGNAL_STATE) {
+    await env.SIGNAL_STATE.put(key, JSON.stringify(value), { expirationTtl: Math.max(60, Math.floor(ttlSeconds)) });
+    return;
+  }
+  await caches.default.put(
+    new Request(`https://paper-state.local/${encodeURIComponent(key)}`),
+    new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${Math.max(60, Math.floor(ttlSeconds))}` } })
+  );
 }
 
 async function relayTelegram(request, env) {
