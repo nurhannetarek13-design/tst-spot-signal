@@ -55,7 +55,11 @@ export default {
       return relayTelegram(request, env);
     }
     if (url.searchParams.get("test") === "telegram") {
-      await telegram(env, "✅ Binance Spot Market Scanner شغال — إشارات فقط، بدون تنفيذ صفقات.");
+      await telegram(env, "✅ اختبار الرسالة الجديدة — زر Binance Spot شغال.", {
+        inline_keyboard: [[
+          { text: "🚀 افتحي BTC/USDT على Binance Spot", url: "https://www.binance.com/en/trade/BTC_USDT?type=spot" },
+        ]],
+      });
       return output({ ok: true, telegramTest: "sent", mode: "SIGNAL_ONLY", liveTrading: false });
     }
     if (url.searchParams.get("test") === "sources") {
@@ -99,28 +103,37 @@ async function scanVercelAndAlert(env) {
     const entryLow = entry * 0.998;
     const entryHigh = entry * 1.002;
     const target2 = Number(p.target2 || (entry + 3 * (entry - Number(p.stop))));
-    const pair = x.symbol.endsWith("USDT") ? `${x.symbol.slice(0, -4)}/USDT` : x.symbol;
+    const baseAsset = x.symbol.endsWith("USDT") ? x.symbol.slice(0, -4) : x.symbol;
+    const pair = x.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : x.symbol;
+    const binanceSpotUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
 
     const message = [
       `🟢 فرصة SPOT جاهزة الآن — ${pair}`,
       "",
-      `💵 المبلغ: حتى ${p.maxPositionUSDT} USDT`,
-      `🟢 سعر الدخول: ${fmt(entry)}`,
-      `✅ ادخلي فقط لو السعر الحالي بين ${fmt(entryLow)} و ${fmt(entryHigh)}`,
-      `🛑 وقف الخسارة: ${fmt(Number(p.stop))}`,
-      `🎯 الهدف 1: ${fmt(Number(p.target1))}`,
-      `🎯 الهدف 2: ${fmt(target2)}`,
+      "🧾 نوع الأمر: LIMIT BUY",
+      `💵 Total / المبلغ: ${p.maxPositionUSDT} USDT`,
+      `💲 Price / سعر الشراء: ${fmt(entry)}`,
+      `✅ نفّذي فقط لو السعر الحالي بين ${fmt(entryLow)} و ${fmt(entryHigh)}`,
+      "",
+      `🛑 Stop Loss: ${fmt(Number(p.stop))}`,
+      `🎯 Take Profit 1: ${fmt(Number(p.target1))}`,
+      `🎯 Take Profit 2: ${fmt(target2)}`,
       `⚠️ أقصى مخاطرة محسوبة: ${p.maxRiskUSDT} USDT`,
       "",
-      "📱 التنفيذ: Binance → Spot → الزوج → Buy",
-      "❌ لا تفتحي Perp / Futures ولا تضغطي Long.",
-      "⏱️ الإشارة سريعة: لو عدى دقيقتين أو السعر خرج من نطاق الدخول، تجاهليها.",
+      "👇 دوسي الزر تحت لفتح الزوج مباشرة على Binance Spot.",
+      "بعد الفتح: اختاري Limit → اكتبي Price و Total بالأرقام اللي فوق → Buy.",
+      "❌ لو الصفحة مكتوب فيها Perp أو Long/Short اقفليها ومتشتريش.",
+      "⏱️ لو عدى دقيقتين أو السعر خرج من نطاق الدخول: تجاهلي الإشارة.",
       "",
       `Score: ${x.score}/100 | RSI: ${x.indicators?.rsi14 ?? "-"} | 24h: ${x.market?.change24hPct ?? "-"}%`,
       "Signal only — مفيش أمر اتنفذ تلقائيًا.",
     ].join("\n");
 
-    await telegram(env, message);
+    await telegram(env, message, {
+      inline_keyboard: [[
+        { text: `🚀 افتحي ${pair} على Binance Spot`, url: binanceSpotUrl },
+      ]],
+    });
     await caches.default.put(cacheKey, new Response("sent", {
       headers: { "Cache-Control": "max-age=3600" },
     }));
