@@ -23,7 +23,8 @@ const CFG = {
   duplicateHours: 6,
   approvalSeconds: 90,
   paperPositionHours: 72,
-  publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",\n  vercelScanUrl: "https://tst-spot-signal.vercel.app/scan",
+  publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",
+  vercelScanUrl: "https://tst-spot-signal.vercel.app/scan",
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
