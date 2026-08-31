@@ -1,6 +1,7 @@
 import express from "express";
 
 const app = express();
+app.use(express.text({ type: "application/json", limit: "16kb" }));
 const API_BASES = [
   "https://api.binance.com",
   "https://api-gcp.binance.com",
@@ -96,6 +97,43 @@ app.get("/health", async (_req, res) => {
     return res.json({ ok: true, binance: "reachable", serverTime: data.serverTime, region: process.env.VERCEL_REGION || "unknown", liveTrading: false });
   } catch (error) {
     return res.status(503).json({ ok: false, binance: "blocked", error: String(error?.message || error), liveTrading: false });
+  }
+});
+
+app.get("/executor/status", async (_req, res) => {
+  const cfg = executorConfig();
+  return res.json({
+    ok: true,
+    executor: "VERCEL_SPOT_EXECUTOR",
+    apiConnected: Boolean(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET),
+    liveTradingEnabled: cfg.enabled,
+    tradeUSDT: cfg.tradeUSDT,
+    maxOpenPositions: cfg.maxOpenPositions,
+    reserveUSDT: cfg.reserveUSDT,
+    maxRiskUSDT: cfg.maxRiskUSDT,
+    staticEgressRequiredForBinanceWhitelist: true,
+    region: process.env.VERCEL_REGION || "unknown",
+  });
+});
+
+app.post("/execute/spot-buy", async (req, res) => {
+  try {
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY" });
+
+    const auth = await verifyExecutorRelay(req, raw);
+    if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
+
+    const body = JSON.parse(raw);
+    const symbol = String(body.symbol || "").toUpperCase();
+    if (!/^[A-Z0-9]{4,20}USDT$/.test(symbol)) {
+      return res.status(400).json({ ok: false, status: "BAD_SYMBOL" });
+    }
+
+    const result = await executeSpotOrder(symbol);
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (error) {
+    return res.status(500).json({ ok: false, status: "EXECUTOR_ERROR", error: String(error?.message || error) });
   }
 });
 
@@ -264,6 +302,279 @@ async function scanMarket() {
     results: ranked,
     risk: CFG,
   };
+}
+
+function executorConfig() {
+  const num = (value, fallback, min, max) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+  return {
+    enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING || "").toLowerCase()),
+    tradeUSDT: num(process.env.TRADE_USDT, 5, 1, 100000),
+    maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 3, 1, 20)),
+    reserveUSDT: num(process.env.RESERVE_USDT, 2, 0, 100000),
+    maxRiskUSDT: num(process.env.MAX_RISK_USDT, 0.5, 0.01, 100000),
+  };
+}
+
+async function verifyExecutorRelay(req, raw) {
+  const secret = process.env.TELEGRAM_BOT_TOKEN;
+  if (!secret) return { ok: false, reason: "Executor relay secret missing" };
+
+  const ts = String(req.headers["x-executor-timestamp"] || "");
+  const signature = String(req.headers["x-executor-signature"] || "");
+  const stamp = Number(ts);
+  if (!Number.isFinite(stamp) || Math.abs(Date.now() - stamp) > 60_000) {
+    return { ok: false, reason: "Expired relay request" };
+  }
+
+  const expected = await hmacHex(secret, `${ts}.${raw}`);
+  if (!timingSafeEqualHex(expected, signature)) return { ok: false, reason: "Bad relay signature" };
+  return { ok: true };
+}
+
+function timingSafeEqualHex(a, b) {
+  if (!/^[a-f0-9]+$/i.test(a) || !/^[a-f0-9]+$/i.test(b) || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function executeSpotOrder(symbol) {
+  const cfg = executorConfig();
+  if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
+  if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+    return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
+  }
+
+  const [ticker, book, klines, info] = await Promise.all([
+    binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
+    binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
+    binance(`/api/v3/klines?symbol=${symbol}&interval=15m&limit=120`),
+    binance(`/api/v3/exchangeInfo?symbol=${symbol}`),
+  ]);
+  const fresh = await analyze(symbol, ticker, book, klines);
+  if (!fresh.ok || fresh.decision !== "BUY" || !fresh.paperPlan) {
+    return { ok: false, status: "SIGNAL_NO_LONGER_VALID", reason: "The signal is no longer BUY after revalidation." };
+  }
+
+  const symbolInfo = info.symbols?.[0];
+  if (!symbolInfo || symbolInfo.status !== "TRADING" || !symbolInfo.isSpotTradingAllowed) {
+    return { ok: false, status: "SPOT_UNAVAILABLE", reason: "Pair is not available for Spot trading." };
+  }
+
+  const [account, openOrders] = await Promise.all([
+    signedBinance("GET", "/api/v3/account", {}),
+    signedBinance("GET", "/api/v3/openOrders", {}),
+  ]);
+  if (!account.canTrade) return { ok: false, status: "ACCOUNT_CANNOT_TRADE", reason: "Binance account cannot trade." };
+
+  const botOrders = (openOrders || []).filter(o => String(o.clientOrderId || "").startsWith("TST"));
+  const openSymbols = [...new Set(botOrders.map(o => o.symbol))];
+  if (openSymbols.includes(symbol)) {
+    return { ok: false, status: "SYMBOL_ALREADY_OPEN", reason: "A bot-managed position is already open on this pair." };
+  }
+  if (openSymbols.length >= cfg.maxOpenPositions) {
+    return { ok: false, status: "MAX_OPEN_POSITIONS", reason: `Maximum open positions reached: ${cfg.maxOpenPositions}.` };
+  }
+
+  const freeUSDT = Number((account.balances || []).find(b => b.asset === "USDT")?.free || 0);
+  const availableUSDT = Math.max(0, freeUSDT - cfg.reserveUSDT);
+
+  const entry = Number(fresh.paperPlan.entry);
+  const stopRaw = Number(fresh.paperPlan.stop);
+  const targetRaw = Number(fresh.paperPlan.target1);
+  const riskPct = entry > stopRaw ? (entry - stopRaw) / entry : 1;
+  const riskSizedUSDT = riskPct > 0 ? cfg.maxRiskUSDT / riskPct : cfg.tradeUSDT;
+  let quoteToSpend = Math.min(cfg.tradeUSDT, riskSizedUSDT, availableUSDT);
+  quoteToSpend = Math.floor(quoteToSpend * 100) / 100;
+
+  const notionalFilter = symbolInfo.filters?.find(f => f.filterType === "NOTIONAL") ||
+    symbolInfo.filters?.find(f => f.filterType === "MIN_NOTIONAL");
+  const minNotional = Number(notionalFilter?.minNotional || 5);
+  if (quoteToSpend < minNotional) {
+    return {
+      ok: false,
+      status: "BELOW_MIN_NOTIONAL",
+      reason: `Allowed order size ${quoteToSpend} USDT is below Binance minimum ${minNotional} USDT.`,
+    };
+  }
+
+  const token = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+  const buyParams = {
+    symbol,
+    side: "BUY",
+    type: "MARKET",
+    quoteOrderQty: quoteToSpend.toFixed(2),
+    newClientOrderId: `TSTB${token}`,
+    newOrderRespType: "FULL",
+  };
+
+  const buy = await signedBinance("POST", "/api/v3/order", buyParams);
+  const executedQty = Number(buy.executedQty || 0);
+  const quoteSpent = Number(buy.cummulativeQuoteQty || quoteToSpend);
+  const avgFill = executedQty > 0 ? quoteSpent / executedQty : entry;
+  if (!(executedQty > 0)) {
+    return { ok: false, status: "NO_FILL", reason: "Buy order returned no executed quantity.", orderId: buy.orderId };
+  }
+
+  const baseAsset = symbolInfo.baseAsset;
+  const baseCommission = (buy.fills || [])
+    .filter(f => f.commissionAsset === baseAsset)
+    .reduce((sum, f) => sum + Number(f.commission || 0), 0);
+  const lot = symbolInfo.filters?.find(f => f.filterType === "LOT_SIZE");
+  const stepSize = Number(lot?.stepSize || 0.00000001);
+  const sellQty = floorToStep(Math.max(0, executedQty - baseCommission), stepSize);
+
+  const priceFilter = symbolInfo.filters?.find(f => f.filterType === "PRICE_FILTER");
+  const tickSize = Number(priceFilter?.tickSize || 0.00000001);
+  const currentBook = await binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`);
+  const currentBid = Number(currentBook.bidPrice || avgFill);
+  const takeProfit = ceilToStep(Math.max(targetRaw, currentBid * 1.002), tickSize);
+  const stop = floorToStep(Math.min(stopRaw, currentBid * 0.998), tickSize);
+
+  if (!(Number(sellQty) > 0 && Number(takeProfit) > currentBid && Number(stop) > 0 && Number(stop) < currentBid)) {
+    const close = await emergencyClose(symbol, sellQty, token).catch(() => null);
+    return {
+      ok: Boolean(close),
+      status: close ? "BOUGHT_THEN_SAFETY_CLOSED" : "UNPROTECTED_POSITION",
+      reason: close ? "Protection values were invalid, so the position was closed immediately for safety." : "Bought but failed to protect or close the position.",
+      orderId: buy.orderId,
+      quoteSpentUSDT: round(quoteSpent, 2),
+      quantity: sellQty,
+      avgFillPrice: fmt(avgFill),
+      protection: close ? "CLOSED_FAILSAFE" : "NONE",
+      openPositionsAfter: openSymbols.length,
+      maxOpenPositions: cfg.maxOpenPositions,
+      riskUSDT: round(quoteSpent * riskPct, 4),
+    };
+  }
+
+  let protection = "OCO";
+  try {
+    await signedBinance("POST", "/api/v3/orderList/oco", {
+      symbol,
+      side: "SELL",
+      quantity: sellQty,
+      listClientOrderId: `TSTL${token}`,
+      aboveType: "LIMIT_MAKER",
+      aboveClientOrderId: `TSTT${token}`,
+      abovePrice: takeProfit,
+      belowType: "STOP_LOSS",
+      belowClientOrderId: `TSTS${token}`,
+      belowStopPrice: stop,
+    });
+  } catch (ocoError) {
+    try {
+      await signedBinance("POST", "/api/v3/order", {
+        symbol,
+        side: "SELL",
+        type: "STOP_LOSS",
+        quantity: sellQty,
+        stopPrice: stop,
+        newClientOrderId: `TSTS${token}`,
+      });
+      protection = "STOP_ONLY";
+    } catch (stopError) {
+      const closed = await emergencyClose(symbol, sellQty, token).catch(() => null);
+      if (!closed) {
+        return {
+          ok: false,
+          status: "UNPROTECTED_POSITION",
+          reason: `Bought, but protection and emergency close failed. OCO: ${ocoError.message}; Stop: ${stopError.message}`,
+          orderId: buy.orderId,
+          quoteSpentUSDT: round(quoteSpent, 2),
+          quantity: sellQty,
+          avgFillPrice: fmt(avgFill),
+          protection: "NONE",
+        };
+      }
+      protection = "CLOSED_FAILSAFE";
+    }
+  }
+
+  return {
+    ok: true,
+    status: protection === "CLOSED_FAILSAFE" ? "BOUGHT_THEN_SAFETY_CLOSED" : "LIVE_SPOT_OPENED",
+    symbol,
+    orderId: buy.orderId,
+    quoteSpentUSDT: round(quoteSpent, 2),
+    quantity: sellQty,
+    avgFillPrice: fmt(avgFill),
+    stop,
+    takeProfit,
+    protection,
+    openPositionsAfter: protection === "CLOSED_FAILSAFE" ? openSymbols.length : openSymbols.length + 1,
+    maxOpenPositions: cfg.maxOpenPositions,
+    riskUSDT: round(quoteSpent * riskPct + quoteSpent * CFG.feeRate * 2, 4),
+  };
+}
+
+async function emergencyClose(symbol, quantity, token) {
+  if (!(Number(quantity) > 0)) return null;
+  return signedBinance("POST", "/api/v3/order", {
+    symbol,
+    side: "SELL",
+    type: "MARKET",
+    quantity,
+    newClientOrderId: `TSTX${token}`,
+    newOrderRespType: "FULL",
+  });
+}
+
+async function signedBinance(method, path, params = {}) {
+  const apiKey = process.env.BINANCE_API_KEY;
+  const secret = process.env.BINANCE_API_SECRET;
+  if (!apiKey || !secret) throw new Error("Binance API keys are missing");
+
+  const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
+  const query = Object.entries(all)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&");
+  const signature = await hmacHex(secret, query);
+  const r = await fetch(`https://api.binance.com${path}?${query}&signature=${signature}`, {
+    method,
+    headers: { "X-MBX-APIKEY": apiKey, Accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`${data.code || r.status}: ${data.msg || "Binance request failed"}`);
+  return data;
+}
+
+async function hmacHex(secret, text) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function stepDecimals(step) {
+  const s = String(step);
+  if (s.includes("e-")) return Number(s.split("e-")[1]);
+  const dot = s.indexOf(".");
+  return dot < 0 ? 0 : s.length - dot - 1;
+}
+
+function floorToStep(value, step) {
+  if (!(step > 0)) return String(value);
+  const d = Math.min(stepDecimals(step), 12);
+  const n = Math.floor((Number(value) + step * 1e-9) / step) * step;
+  return n.toFixed(d).replace(/\.?0+$/, "");
+}
+
+function ceilToStep(value, step) {
+  if (!(step > 0)) return String(value);
+  const d = Math.min(stepDecimals(step), 12);
+  const n = Math.ceil((Number(value) - step * 1e-9) / step) * step;
+  return n.toFixed(d).replace(/\.?0+$/, "");
 }
 
 async function telegram(text, replyMarkup = undefined) {
