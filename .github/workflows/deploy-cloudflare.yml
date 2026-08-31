@@ -2,6 +2,12 @@ name: Deploy Cloudflare Minute Scheduler
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/index.js"
+      - "wrangler.jsonc"
+      - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
   contents: read
