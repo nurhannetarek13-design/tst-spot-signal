@@ -41,6 +41,7 @@ app.get("/telegram/test", async (_req, res) => {
   try {
     const book = await binance("/api/v3/ticker/bookTicker?symbol=BTCUSDT");
     const entry = Number(book.askPrice || book.bidPrice);
+    const amount = 5 / entry;
     const entryLow = entry * 0.998;
     const entryHigh = entry * 1.002;
     const stop = entry * 0.99;
@@ -50,18 +51,32 @@ app.get("/telegram/test", async (_req, res) => {
     const text = [
       "🧪 TEST فقط — متشتريش BTC من الرسالة دي",
       "",
-      "🟢 فرصة SPOT — BTC/USDT",
-      "🧾 نوع الأمر: LIMIT BUY",
-      "💵 Total / المبلغ: 5 USDT",
-      `💲 Price / سعر الشراء: ${fmt(entry)}`,
-      `✅ نطاق الدخول: ${fmt(entryLow)} → ${fmt(entryHigh)}`,
-      `🛑 Stop Loss: ${fmt(stop)}`,
-      `🎯 Take Profit 1: ${fmt(target1)}`,
-      `🎯 Take Profit 2: ${fmt(target2)}`,
+      "🟢 BUY NOW — BTC/USDT — SPOT",
+      "",
+      "━━━ اكتبي في Binance بالظبط ━━━",
+      "",
+      "1️⃣ PRICE / السعر",
+      `${fmt(entry)}`,
+      "",
+      "2️⃣ AMOUNT / الكمية",
+      `${fmt(amount)} BTC`,
+      "",
+      "3️⃣ TOTAL / المبلغ",
+      "5 USDT",
+      "",
+      "✅ بعد ما تحطيهم: دوسي BUY BTC",
+      "",
+      "━━━ بعد الشراء ━━━",
+      `🛑 STOP LOSS: ${fmt(stop)}`,
+      `🎯 TAKE PROFIT 1: ${fmt(target1)}`,
+      `🎯 TAKE PROFIT 2: ${fmt(target2)}`,
+      "",
+      "━━━ شرط الدخول ━━━",
+      "السعر الحالي لازم يكون بين:",
+      `${fmt(entryLow)}  →  ${fmt(entryHigh)}`,
       "",
       "👇 الزر تحت يفتح BTC/USDT Spot مباشرة.",
-      "بعد الفتح: Limit → Price → Total → Buy.",
-      "❌ TEST فقط — مفيش إشارة شراء حقيقية هنا.",
+      "❌ TEST فقط — دي مش إشارة شراء حقيقية.",
     ].join("\n");
 
     const result = await telegram(text, {
@@ -128,23 +143,36 @@ app.get("/cron/scan", async (req, res) => {
     }
 
     const p = actionable.paperPlan;
-    const text = [
-      `🟢 فرصة SPOT — ${actionable.symbol.replace("USDT", "/USDT")}`,
-      p ? `💵 المبلغ: حتى ${p.maxPositionUSDT} USDT` : null,
-      p ? `🟢 الدخول: ${fmt(p.entry)}` : null,
-      p ? `🛑 الوقف: ${fmt(p.stop)}` : null,
-      p ? `🎯 الهدف 1: ${fmt(p.target1)}` : null,
-      p ? `🎯 الهدف 2: ${fmt(p.target2)}` : null,
-      "",
-      "📱 Binance → Spot → Buy",
-      "❌ مش Perp / Futures ومش Long.",
-      "⏱️ لو الرسالة قديمة أو السعر اتحرك بعيد عن الدخول: متدخليش.",
-      `Score: ${actionable.score}/100 | RSI: ${actionable.indicators.rsi14}`,
-      "Signal only — مفيش أمر اتنفذ تلقائيًا.",
-    ].filter(Boolean).join("\n");
-
+    const p = actionable.paperPlan;
     const baseAsset = actionable.symbol.endsWith("USDT") ? actionable.symbol.slice(0, -4) : actionable.symbol;
     const pair = actionable.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : actionable.symbol;
+    const entry = Number(p?.entry);
+    const amount = p ? Number(p.maxPositionUSDT) / entry : 0;
+    const text = [
+      `🟢 BUY NOW — ${pair} — SPOT`,
+      "",
+      "━━━ اكتبي في Binance بالظبط ━━━",
+      "",
+      "1️⃣ PRICE / السعر",
+      p ? `${fmt(entry)}` : "-",
+      "",
+      "2️⃣ AMOUNT / الكمية",
+      p ? `${fmt(amount)} ${baseAsset}` : "-",
+      "",
+      "3️⃣ TOTAL / المبلغ",
+      p ? `${p.maxPositionUSDT} USDT` : "-",
+      "",
+      `✅ بعد ما تحطيهم: دوسي BUY ${baseAsset}`,
+      "",
+      "━━━ بعد الشراء ━━━",
+      p ? `🛑 STOP LOSS: ${fmt(p.stop)}` : null,
+      p ? `🎯 TAKE PROFIT 1: ${fmt(p.target1)}` : null,
+      p ? `🎯 TAKE PROFIT 2: ${fmt(p.target2)}` : null,
+      "",
+      "❌ لو ظهر Perp / Futures / Long / Short: متدخليش.",
+      "⏱️ لو الرسالة قديمة أو السعر اتحرك بعيد عن الدخول: متدخليش.",
+    ].filter(Boolean).join("\n");
+
     const binanceSpotUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
     const tg = await telegram(text, {
       inline_keyboard: [[
