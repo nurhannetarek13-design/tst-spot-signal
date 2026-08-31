@@ -7,7 +7,7 @@ on:
     paths:
       - ".github/workflows/demo-trader.yml"
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 concurrency:
   group: spot-signal-scheduler
