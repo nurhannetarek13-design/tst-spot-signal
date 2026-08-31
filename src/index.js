@@ -45,6 +45,9 @@ export default {
     if (url.pathname === "/paper-status") {
       return paperStatus(env);
     }
+    if (url.pathname === "/portfolio-status") {
+      return portfolioStatus(env);
+    }
     if (url.pathname === "/telegram-webhook") {
       return telegramWebhook(request, env);
     }
@@ -111,7 +114,7 @@ export default {
 async function scanVercelAndAlert(env) {
   try {
     const response = await fetch(CFG.vercelScanUrl, {
-      headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-cloudflare/4.0" },
+      headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-cloudflare/5.0" },
       signal: AbortSignal.timeout(50_000),
     });
     if (!response.ok) throw new Error(`Vercel scan failed: ${response.status}`);
@@ -125,10 +128,22 @@ async function scanVercelAndAlert(env) {
     const p = x.paperPlan;
     const signalId = String(x.signalId || `${x.symbol}:${x.price}:${x.indicators?.resistance20 || "na"}`);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(signalId));
-    const key = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("");
-    const cacheKey = new Request(`https://minute-signal-cache.local/${key}`);
+    const signalHash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("").slice(0, 8);
+    const cacheKey = new Request(`https://minute-signal-cache.local/${x.symbol}/${signalHash}`);
     if (await caches.default.match(cacheKey)) {
       return { ok: true, status: "DUPLICATE_SUPPRESSED", symbol: x.symbol };
+    }
+
+    const live = liveConfig(env);
+    let portfolio = null;
+    if (hasBinanceKeys(env)) {
+      portfolio = await portfolioSnapshot(env).catch(() => null);
+      if (portfolio?.openSymbols?.includes(x.symbol)) {
+        return { ok: true, status: "SYMBOL_ALREADY_OPEN", symbol: x.symbol };
+      }
+      if (portfolio && portfolio.openPositions >= live.maxOpenPositions) {
+        return { ok: true, status: "PORTFOLIO_FULL", openPositions: portfolio.openPositions };
+      }
     }
 
     const entry = Number(p.entry);
@@ -137,48 +152,45 @@ async function scanVercelAndAlert(env) {
     const target2 = Number(p.target2 || (entry + 3 * (entry - Number(p.stop))));
     const baseAsset = x.symbol.endsWith("USDT") ? x.symbol.slice(0, -4) : x.symbol;
     const pair = x.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : x.symbol;
-    const binanceSpotUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
+    const openText = portfolio ? `${portfolio.openPositions}/${live.maxOpenPositions}` : `0/${live.maxOpenPositions}`;
 
-    const amount = Number(p.maxPositionUSDT) / entry;
     const message = [
-      `🟢 BUY NOW — ${pair} — SPOT`,
+      `🟢 فرصة SPOT — ${pair}`,
       "",
-      "━━━ اكتبي في Binance بالظبط ━━━",
+      `💵 حجم الصفقة المستهدف: حتى ${live.tradeUSDT} USDT`,
+      `📂 الصفقات المفتوحة: ${openText}`,
+      `🛑 Stop: ${fmt(Number(p.stop))}`,
+      `🎯 TP1: ${fmt(Number(p.target1))}`,
+      `🎯 TP2: ${fmt(target2)}`,
       "",
-      "1️⃣ PRICE / السعر",
-      `${fmt(entry)}`,
+      `✅ السعر صالح تقريبًا بين ${fmt(entryLow)} و ${fmt(entryHigh)}`,
       "",
-      "2️⃣ AMOUNT / الكمية",
-      `${fmt(amount)} ${baseAsset}`,
+      live.enabled && hasBinanceKeys(env)
+        ? "👇 دوسي BUY فقط — البوت يعيد الفحص وينفذ Spot ويحط الحماية تلقائيًا."
+        : "🔒 زر BUY جاهز، لكن التنفيذ الحقيقي لن يعمل قبل ربط Binance API وتفعيل LIVE_TRADING.",
       "",
-      "3️⃣ TOTAL / المبلغ",
-      `${p.maxPositionUSDT} USDT`,
-      "",
-      `✅ بعد ما تحطيهم: دوسي BUY ${baseAsset}`,
-      "",
-      "━━━ بعد الشراء ━━━",
-      `🛑 STOP LOSS: ${fmt(Number(p.stop))}`,
-      `🎯 TAKE PROFIT 1: ${fmt(Number(p.target1))}`,
-      `🎯 TAKE PROFIT 2: ${fmt(target2)}`,
-      "",
-      "━━━ شرط الدخول ━━━",
-      `السعر الحالي لازم يكون بين:`,
-      `${fmt(entryLow)}  →  ${fmt(entryHigh)}`,
-      "",
-      "👇 افتحي الزوج من الزر تحت.",
-      "❌ لو ظهر Perp / Futures / Long / Short: متدخليش.",
-      "⏱️ لو عدى دقيقتين أو السعر خرج من النطاق: تجاهلي الإشارة.",
+      "❌ Spot فقط — لا Futures / Perp / Short.",
+      `⏱️ الزر صالح ${live.approvalSeconds} ثانية فقط.`,
     ].join("\n");
 
+    await ensureTelegramWebhook(env);
     await telegram(env, message, {
       inline_keyboard: [[
-        { text: `🚀 افتحي ${pair} على Binance Spot`, url: binanceSpotUrl },
+        { text: `✅ BUY ≤ ${live.tradeUSDT} USDT`, callback_data: `live_buy:${x.symbol}:${signalHash}` },
+        { text: "❌ تجاهل", callback_data: `live_no:${x.symbol}:${signalHash}` },
       ]],
     });
+
     await caches.default.put(cacheKey, new Response("sent", {
       headers: { "Cache-Control": "max-age=3600" },
     }));
-    return { ok: true, status: "ALERT_SENT", symbol: x.symbol, signalId };
+    return {
+      ok: true,
+      status: "ALERT_SENT",
+      symbol: x.symbol,
+      signalId,
+      portfolio: portfolio ? { openPositions: portfolio.openPositions, maxOpenPositions: live.maxOpenPositions } : null,
+    };
   } catch (error) {
     return { ok: false, status: "SCHEDULER_ERROR", error: String(error?.message || error) };
   }
@@ -706,16 +718,77 @@ async function telegramWebhook(request, env) {
     if (!expectedSecret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== expectedSecret) {
       return output({ ok: false, error: "Unauthorized" }, 401);
     }
+
     const update = await request.json();
     const query = update.callback_query;
     if (!query) return output({ ok: true, ignored: true });
+
     const chatId = String(query.message?.chat?.id || "");
     if (chatId !== String(env.TELEGRAM_CHAT_ID)) {
       await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "غير مسموح", show_alert: true });
       return output({ ok: false, error: "Wrong chat" }, 403);
     }
+
+    const data = String(query.data || "");
+    const liveMatch = data.match(/^live_(buy|no):([A-Z0-9]{4,20}USDT):([a-f0-9]{8})$/);
+    if (liveMatch) {
+      const [, action, symbol, signalHash] = liveMatch;
+      const cfg = liveConfig(env);
+      const messageAgeMs = Math.max(0, Date.now() - Number(query.message?.date || 0) * 1000);
+
+      if (messageAgeMs > cfg.approvalSeconds * 1000) {
+        await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "الإشارة انتهت صلاحيتها", show_alert: true });
+        await finalizeTelegramButton(env, query, "⌛ الإشارة انتهت صلاحيتها. استني إشارة جديدة.");
+        return output({ ok: true, status: "LIVE_SIGNAL_EXPIRED", symbol });
+      }
+
+      if (action === "no") {
+        await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "تم التجاهل" });
+        await finalizeTelegramButton(env, query, `❌ تم تجاهل فرصة ${symbol.replace("USDT", "/USDT")}`);
+        return output({ ok: true, status: "LIVE_REJECTED", symbol });
+      }
+
+      // Remove the button immediately to avoid accidental double taps.
+      if (query.message?.message_id) {
+        await telegramApi(env, "editMessageReplyMarkup", {
+          chat_id: env.TELEGRAM_CHAT_ID,
+          message_id: query.message.message_id,
+          reply_markup: { inline_keyboard: [] },
+        }).catch(() => null);
+      }
+      await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "جاري فحص السعر والحساب ثم تنفيذ Spot…" });
+
+      const execution = await executeLiveSpotBuy(env, symbol, signalHash);
+      if (!execution.ok) {
+        await finalizeTelegramButton(env, query, [
+          `⚠️ لم يتم الشراء — ${symbol.replace("USDT", "/USDT")}`,
+          execution.reason || execution.error || "تعذر التنفيذ",
+          "لم يتم إرسال صفقة جديدة إذا ظهر هذا التنبيه.",
+        ].join("\n"));
+        return output({ ...execution, symbol });
+      }
+
+      const lines = [
+        `✅ تم شراء ${symbol.replace("USDT", "/USDT")} — SPOT`,
+        `💵 المستخدم: ${execution.quoteSpentUSDT} USDT`,
+        `📦 الكمية: ${execution.quantity}`,
+        `💲 متوسط التنفيذ: ${execution.avgFillPrice}`,
+        `🛑 Stop: ${execution.stop}`,
+        `🎯 Take Profit: ${execution.takeProfit}`,
+        `📂 الصفقات المفتوحة الآن: ${execution.openPositionsAfter}/${execution.maxOpenPositions}`,
+        execution.protection === "OCO"
+          ? "🛡️ الحماية مفعلة على Binance: Take Profit + Stop Loss (OCO)."
+          : execution.protection === "STOP_ONLY"
+            ? "🛡️ تم تفعيل Stop Loss فقط لأن OCO لم يُقبل."
+            : "🛡️ تم إغلاق الصفقة فورًا كإجراء أمان لأن الحماية لم تُقبل.",
+      ];
+      await finalizeTelegramButton(env, query, lines.join("\n"));
+      return output(execution);
+    }
+
+    // Keep the previous paper buttons working for the legacy paper scanner.
     await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "جاري إعادة فحص السوق…" });
-    const match = String(query.data || "").match(/^paper_(yes|no):([a-f0-9]{20})$/);
+    const match = data.match(/^paper_(yes|no):([a-f0-9]{20})$/);
     if (!match) return output({ ok: true, ignored: true });
     const [, action, approvalId] = match;
     const pending = await getState(env, `pending:${approvalId}`);
@@ -766,7 +839,7 @@ async function telegramWebhook(request, env) {
     ].join("\n"));
     return output({ ok: true, status: "PAPER_POSITION_OPENED", position, paperOnly: true, liveTrading: false });
   } catch (error) {
-    return output({ ok: false, error: String(error?.message || error), paperOnly: true, liveTrading: false }, 500);
+    return output({ ok: false, error: String(error?.message || error) }, 500);
   }
 }
 
@@ -849,6 +922,362 @@ async function getDailyPaper(env) {
   const day = new Date().toISOString().slice(0, 10);
   const key = `paper:daily:${day}`;
   return await getState(env, key) || { key, day, realizedPnlUSDT: 0, closedTrades: 0 };
+}
+
+function liveConfig(env) {
+  const num = (value, fallback, min, max) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+  return {
+    enabled: ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
+    tradeUSDT: num(env.TRADE_USDT, 5, 1, 100000),
+    maxOpenPositions: Math.floor(num(env.MAX_OPEN_POSITIONS, 3, 1, 20)),
+    reserveUSDT: num(env.RESERVE_USDT, 2, 0, 100000),
+    maxRiskUSDT: num(env.MAX_RISK_USDT, 0.5, 0.01, 100000),
+    dailyLossCapUSDT: num(env.DAILY_LOSS_CAP_USDT, 2, 0.1, 100000),
+    approvalSeconds: Math.floor(num(env.APPROVAL_SECONDS, 90, 30, 300)),
+  };
+}
+
+function hasBinanceKeys(env) {
+  return Boolean(env.BINANCE_API_KEY && env.BINANCE_API_SECRET);
+}
+
+async function portfolioStatus(env) {
+  const cfg = liveConfig(env);
+  const base = {
+    ok: true,
+    mode: "PORTFOLIO_MANAGER",
+    liveTradingEnabled: cfg.enabled,
+    apiConnected: hasBinanceKeys(env),
+    config: {
+      tradeUSDT: cfg.tradeUSDT,
+      maxOpenPositions: cfg.maxOpenPositions,
+      reserveUSDT: cfg.reserveUSDT,
+      maxRiskUSDT: cfg.maxRiskUSDT,
+      dailyLossCapUSDT: cfg.dailyLossCapUSDT,
+    },
+  };
+  if (!hasBinanceKeys(env)) return output(base);
+  try {
+    const snapshot = await portfolioSnapshot(env);
+    return output({ ...base, ...snapshot });
+  } catch (error) {
+    return output({ ...base, ok: false, error: String(error?.message || error) }, 503);
+  }
+}
+
+async function portfolioSnapshot(env) {
+  const cfg = liveConfig(env);
+  const [account, openOrders] = await Promise.all([
+    signedBinance(env, "GET", "/api/v3/account", { omitZeroBalances: "true" }),
+    signedBinance(env, "GET", "/api/v3/openOrders", {}),
+  ]);
+  const usdt = (account.balances || []).find(x => x.asset === "USDT");
+  const freeUSDT = Number(usdt?.free || 0);
+  const botOrders = (openOrders || []).filter(o => String(o.clientOrderId || "").startsWith("TST"));
+  const openSymbols = [...new Set(botOrders.map(o => o.symbol))];
+  const openPositions = openSymbols.length;
+  const freeAfterReserve = Math.max(0, freeUSDT - cfg.reserveUSDT);
+  const balanceSlots = Math.floor(freeAfterReserve / Math.max(cfg.tradeUSDT, 0.00000001));
+  const positionSlots = Math.max(0, cfg.maxOpenPositions - openPositions);
+  return {
+    canTrade: Boolean(account.canTrade),
+    freeUSDT: round2(freeUSDT),
+    reservedUSDT: cfg.reserveUSDT,
+    openPositions,
+    openSymbols,
+    freeSlots: Math.max(0, Math.min(positionSlots, balanceSlots)),
+  };
+}
+
+async function executeLiveSpotBuy(env, symbol, signalHash) {
+  const cfg = liveConfig(env);
+  if (!cfg.enabled) {
+    return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING لسه مش متفعّل في Cloudflare." };
+  }
+  if (!hasBinanceKeys(env)) {
+    return { ok: false, status: "API_NOT_CONNECTED", reason: "BINANCE_API_KEY / BINANCE_API_SECRET لسه مش مضافين." };
+  }
+
+  const freshResponse = await fetch(`${CFG.vercelScanUrl.replace(/\/scan$/, "")}/signal/${symbol}`, {
+    headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-cloudflare-live/1.0" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!freshResponse.ok) {
+    return { ok: false, status: "REVALIDATION_ERROR", reason: `تعذر إعادة فحص الإشارة (${freshResponse.status}).` };
+  }
+  const fresh = await freshResponse.json();
+  if (!fresh?.ok || fresh.decision !== "BUY" || !fresh.paperPlan) {
+    return { ok: false, status: "SIGNAL_NO_LONGER_VALID", reason: "الإشارة لم تعد BUY بعد إعادة الفحص؛ لم يتم الشراء." };
+  }
+
+  const portfolio = await portfolioSnapshot(env);
+  if (!portfolio.canTrade) {
+    return { ok: false, status: "ACCOUNT_CANNOT_TRADE", reason: "حساب Binance لا يسمح بالتداول حاليًا." };
+  }
+  if (portfolio.openSymbols.includes(symbol)) {
+    return { ok: false, status: "SYMBOL_ALREADY_OPEN", reason: "في صفقة مفتوحة بالفعل على نفس الزوج." };
+  }
+  if (portfolio.openPositions >= cfg.maxOpenPositions) {
+    return { ok: false, status: "MAX_OPEN_POSITIONS", reason: `وصلنا للحد الأقصى: ${cfg.maxOpenPositions} صفقات مفتوحة.` };
+  }
+
+  const entry = Number(fresh.paperPlan.entry);
+  const stopRaw = Number(fresh.paperPlan.stop);
+  const targetRaw = Number(fresh.paperPlan.target1);
+  if (!(entry > 0 && stopRaw > 0 && stopRaw < entry && targetRaw > entry)) {
+    return { ok: false, status: "INVALID_PLAN", reason: "خطة السعر/الوقف/الهدف غير صالحة؛ لم يتم الشراء." };
+  }
+
+  const riskPct = (entry - stopRaw) / entry;
+  const riskSizedUSDT = riskPct > 0 ? cfg.maxRiskUSDT / riskPct : cfg.tradeUSDT;
+  const availableUSDT = Math.max(0, portfolio.freeUSDT - cfg.reserveUSDT);
+  let quoteToSpend = Math.min(cfg.tradeUSDT, riskSizedUSDT, availableUSDT);
+  quoteToSpend = Math.floor(quoteToSpend * 100) / 100;
+
+  const info = await binance(`/api/v3/exchangeInfo?symbol=${symbol}`);
+  const symbolInfo = info.symbols?.[0];
+  if (!symbolInfo || symbolInfo.status !== "TRADING" || !symbolInfo.isSpotTradingAllowed) {
+    return { ok: false, status: "SPOT_UNAVAILABLE", reason: "الزوج غير متاح Spot حاليًا." };
+  }
+
+  const notionalFilter = symbolInfo.filters?.find(f => f.filterType === "NOTIONAL") ||
+    symbolInfo.filters?.find(f => f.filterType === "MIN_NOTIONAL");
+  const minNotional = Number(notionalFilter?.minNotional || 5);
+  if (quoteToSpend < minNotional) {
+    return { ok: false, status: "BELOW_MIN_NOTIONAL", reason: `الحجم المسموح بالمخاطرة ${quoteToSpend} USDT أقل من الحد الأدنى للزوج ${minNotional} USDT.` };
+  }
+
+  const projectedRisk = quoteToSpend * riskPct + quoteToSpend * CFG.fee * 2;
+  const daily = await getLiveDailyRisk(env);
+  if (daily.riskUsedUSDT + projectedRisk > cfg.dailyLossCapUSDT) {
+    return {
+      ok: false,
+      status: "DAILY_RISK_CAP",
+      reason: `حد المخاطرة اليومي ${cfg.dailyLossCapUSDT} USDT لن يسمح بالصفقة دي. المستخدم اليوم: ${round2(daily.riskUsedUSDT)} USDT.`,
+    };
+  }
+
+  const clientToken = String(signalHash || crypto.randomUUID().replaceAll("-", "").slice(0, 8)).slice(0, 8);
+  const buyClientId = `TSTB${clientToken}`;
+  const buyParams = {
+    symbol,
+    side: "BUY",
+    type: "MARKET",
+    newClientOrderId: buyClientId,
+    newOrderRespType: "FULL",
+  };
+
+  if (symbolInfo.quoteOrderQtyMarketAllowed !== false) {
+    buyParams.quoteOrderQty = quoteToSpend.toFixed(2);
+  } else {
+    const marketLot = symbolInfo.filters?.find(f => f.filterType === "MARKET_LOT_SIZE") ||
+      symbolInfo.filters?.find(f => f.filterType === "LOT_SIZE");
+    const step = Number(marketLot?.stepSize || 0.00000001);
+    const qty = floorToStep(quoteToSpend / entry, step);
+    if (!(Number(qty) > 0)) return { ok: false, status: "QTY_ZERO", reason: "الكمية المحسوبة أقل من الحد المسموح." };
+    buyParams.quantity = qty;
+  }
+
+  let buy;
+  try {
+    buy = await signedBinance(env, "POST", "/api/v3/order", buyParams);
+  } catch (error) {
+    return { ok: false, status: "BUY_REJECTED", reason: `Binance رفض أمر الشراء: ${String(error?.message || error)}` };
+  }
+
+  const executedQty = Number(buy.executedQty || 0);
+  const quoteSpent = Number(buy.cummulativeQuoteQty || quoteToSpend);
+  const avgFill = executedQty > 0 ? quoteSpent / executedQty : entry;
+  if (!(executedQty > 0)) {
+    return { ok: false, status: "NO_FILL", reason: "أمر الشراء لم يرجع كمية منفذة؛ راجعي Binance.", orderId: buy.orderId };
+  }
+
+  const baseAsset = symbolInfo.baseAsset;
+  const baseCommission = (buy.fills || [])
+    .filter(f => f.commissionAsset === baseAsset)
+    .reduce((sum, f) => sum + Number(f.commission || 0), 0);
+  const sellableQtyRaw = Math.max(0, executedQty - baseCommission);
+  const lot = symbolInfo.filters?.find(f => f.filterType === "LOT_SIZE");
+  const stepSize = Number(lot?.stepSize || 0.00000001);
+  const sellQty = floorToStep(sellableQtyRaw, stepSize);
+
+  const priceFilter = symbolInfo.filters?.find(f => f.filterType === "PRICE_FILTER");
+  const tickSize = Number(priceFilter?.tickSize || 0.00000001);
+  const book = await binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`);
+  const current = Number(book.bidPrice || avgFill);
+  const takeProfit = ceilToStep(Math.max(targetRaw, current * 1.002), tickSize);
+  const stop = floorToStep(Math.min(stopRaw, current * 0.998), tickSize);
+
+  if (!(Number(sellQty) > 0 && Number(takeProfit) > current && Number(stop) > 0 && Number(stop) < current)) {
+    const close = await emergencyClose(env, symbol, sellQty, clientToken).catch(() => null);
+    return {
+      ok: Boolean(close),
+      status: close ? "CLOSED_FAILSAFE" : "UNPROTECTED_POSITION",
+      reason: close ? "تم الشراء لكن قيم الحماية لم تكن صالحة، فتم إغلاق الصفقة فورًا للأمان." : "تم الشراء وتعذر حساب/تنفيذ الحماية. راجعي Binance فورًا.",
+      protection: close ? "CLOSED_FAILSAFE" : "NONE",
+      quoteSpentUSDT: round2(quoteSpent),
+      quantity: sellQty,
+      avgFillPrice: fmt(avgFill),
+      stop,
+      takeProfit,
+      openPositionsAfter: portfolio.openPositions,
+      maxOpenPositions: cfg.maxOpenPositions,
+    };
+  }
+
+  let protection = "OCO";
+  try {
+    await signedBinance(env, "POST", "/api/v3/orderList/oco", {
+      symbol,
+      side: "SELL",
+      quantity: sellQty,
+      listClientOrderId: `TSTL${clientToken}`,
+      aboveType: "LIMIT_MAKER",
+      aboveClientOrderId: `TSTT${clientToken}`,
+      abovePrice: takeProfit,
+      belowType: "STOP_LOSS",
+      belowClientOrderId: `TSTS${clientToken}`,
+      belowStopPrice: stop,
+    });
+  } catch (ocoError) {
+    try {
+      await signedBinance(env, "POST", "/api/v3/order", {
+        symbol,
+        side: "SELL",
+        type: "STOP_LOSS",
+        quantity: sellQty,
+        stopPrice: stop,
+        newClientOrderId: `TSTS${clientToken}`,
+      });
+      protection = "STOP_ONLY";
+    } catch (stopError) {
+      const closed = await emergencyClose(env, symbol, sellQty, clientToken).catch(() => null);
+      if (!closed) {
+        return {
+          ok: false,
+          status: "UNPROTECTED_POSITION",
+          reason: `تم الشراء لكن فشل OCO وStop Loss وفشل الإغلاق الآمن. راجعي Binance فورًا. OCO: ${ocoError.message}; Stop: ${stopError.message}`,
+          protection: "NONE",
+          quoteSpentUSDT: round2(quoteSpent),
+          quantity: sellQty,
+          avgFillPrice: fmt(avgFill),
+          stop,
+          takeProfit,
+        };
+      }
+      protection = "CLOSED_FAILSAFE";
+    }
+  }
+
+  const actualRisk = quoteSpent * Math.max(0, (avgFill - Number(stop)) / avgFill) + quoteSpent * CFG.fee * 2;
+  await addLiveDailyRisk(env, actualRisk);
+
+  const after = protection === "CLOSED_FAILSAFE"
+    ? await portfolioSnapshot(env).catch(() => portfolio)
+    : { ...portfolio, openPositions: portfolio.openPositions + 1 };
+
+  return {
+    ok: true,
+    status: protection === "CLOSED_FAILSAFE" ? "BOUGHT_THEN_SAFETY_CLOSED" : "LIVE_SPOT_OPENED",
+    symbol,
+    orderId: buy.orderId,
+    quoteSpentUSDT: round2(quoteSpent),
+    quantity: sellQty,
+    avgFillPrice: fmt(avgFill),
+    stop,
+    takeProfit,
+    protection,
+    openPositionsAfter: after.openPositions,
+    maxOpenPositions: cfg.maxOpenPositions,
+  };
+}
+
+async function emergencyClose(env, symbol, quantity, token) {
+  if (!(Number(quantity) > 0)) return null;
+  return signedBinance(env, "POST", "/api/v3/order", {
+    symbol,
+    side: "SELL",
+    type: "MARKET",
+    quantity,
+    newClientOrderId: `TSTX${token}`,
+    newOrderRespType: "FULL",
+  });
+}
+
+async function getLiveDailyRisk(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `live:risk:${day}`;
+  return await getState(env, key) || { day, riskUsedUSDT: 0, trades: 0 };
+}
+
+async function addLiveDailyRisk(env, riskUSDT) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `live:risk:${day}`;
+  const state = await getLiveDailyRisk(env);
+  state.riskUsedUSDT = round2(Number(state.riskUsedUSDT || 0) + Number(riskUSDT || 0));
+  state.trades = Number(state.trades || 0) + 1;
+  await putState(env, key, state, 36 * 3600);
+  return state;
+}
+
+async function signedBinance(env, method, path, params = {}) {
+  if (!hasBinanceKeys(env)) throw new Error("Binance API keys are missing");
+  const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
+  const query = Object.entries(all)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+  const signature = await hmacHex(env.BINANCE_API_SECRET, query);
+  const url = `https://api.binance.com${path}?${query}&signature=${signature}`;
+  const r = await fetch(url, {
+    method,
+    headers: { "X-MBX-APIKEY": env.BINANCE_API_KEY, Accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`${data.code || r.status}: ${data.msg || "Binance request failed"}`);
+  return data;
+}
+
+async function hmacHex(secret, text) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function stepDecimals(step) {
+  const s = String(step);
+  if (s.includes("e-")) return Number(s.split("e-")[1]);
+  const dot = s.indexOf(".");
+  if (dot < 0) return 0;
+  return s.length - dot - 1;
+}
+
+function floorToStep(value, step) {
+  if (!(step > 0)) return String(value);
+  const decimals = stepDecimals(step);
+  const n = Math.floor((Number(value) + step * 1e-9) / step) * step;
+  return n.toFixed(Math.min(decimals, 12)).replace(/\.?0+$/, "");
+}
+
+function ceilToStep(value, step) {
+  if (!(step > 0)) return String(value);
+  const decimals = stepDecimals(step);
+  const n = Math.ceil((Number(value) - step * 1e-9) / step) * step;
+  return n.toFixed(Math.min(decimals, 12)).replace(/\.?0+$/, "");
+}
+
+function round2(value) {
+  return Math.round(Number(value) * 100) / 100;
 }
 
 async function getState(env, key) {
