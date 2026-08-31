@@ -39,14 +39,36 @@ app.get("/", (_req, res) => {
 
 app.get("/telegram/test", async (_req, res) => {
   try {
-    const result = await telegram(
-      "✅ اختبار الرسالة الجديدة\nاضغطي الزر تحت للتأكد إنه بيفتح Binance Spot مباشرة.",
-      {
-        inline_keyboard: [[
-          { text: "🚀 افتحي BTC/USDT على Binance Spot", url: "https://www.binance.com/en/trade/BTC_USDT?type=spot" },
-        ]],
-      }
-    );
+    const book = await binance("/api/v3/ticker/bookTicker?symbol=BTCUSDT");
+    const entry = Number(book.askPrice || book.bidPrice);
+    const entryLow = entry * 0.998;
+    const entryHigh = entry * 1.002;
+    const stop = entry * 0.99;
+    const target1 = entry * 1.02;
+    const target2 = entry * 1.03;
+
+    const text = [
+      "🧪 TEST فقط — متشتريش BTC من الرسالة دي",
+      "",
+      "🟢 فرصة SPOT — BTC/USDT",
+      "🧾 نوع الأمر: LIMIT BUY",
+      "💵 Total / المبلغ: 5 USDT",
+      `💲 Price / سعر الشراء: ${fmt(entry)}`,
+      `✅ نطاق الدخول: ${fmt(entryLow)} → ${fmt(entryHigh)}`,
+      `🛑 Stop Loss: ${fmt(stop)}`,
+      `🎯 Take Profit 1: ${fmt(target1)}`,
+      `🎯 Take Profit 2: ${fmt(target2)}`,
+      "",
+      "👇 الزر تحت يفتح BTC/USDT Spot مباشرة.",
+      "بعد الفتح: Limit → Price → Total → Buy.",
+      "❌ TEST فقط — مفيش إشارة شراء حقيقية هنا.",
+    ].join("\n");
+
+    const result = await telegram(text, {
+      inline_keyboard: [[
+        { text: "🚀 افتحي BTC/USDT على Binance Spot", url: "https://www.binance.com/en/trade/BTC_USDT?type=spot" },
+      ]],
+    });
     return res.json({ ok: true, telegram: "sent", result, liveTrading: false });
   } catch (error) {
     return res.status(500).json({ ok: false, telegram: "failed", error: String(error?.message || error), liveTrading: false });
