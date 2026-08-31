@@ -18,7 +18,7 @@ const CFG = {
   maxPositionUSDT: 5,
   minQuoteVolume24h: 2_000_000,
   maxSpreadPct: 0.25,
-  scanLimit: 24,
+  scanAllSpotUSDT: true,
   feeRate: 0.001,
 };
 
@@ -139,13 +139,11 @@ async function scanMarket() {
     .filter(t => spot.has(t.symbol) && bookMap.has(t.symbol))
     .filter(t => isAllowed(t.symbol))
     .map(t => ({ ...t, qv: Number(t.quoteVolume || 0), change: Number(t.priceChangePercent || 0) }))
-    .filter(t => t.qv >= CFG.minQuoteVolume24h && t.change > -15 && t.change < 35)
-    .sort((a, b) => b.qv - a.qv)
-    .slice(0, CFG.scanLimit);
+    .sort((a, b) => b.qv - a.qv);
 
   const results = [];
-  for (let i = 0; i < candidates.length; i += 6) {
-    const group = candidates.slice(i, i + 6);
+  for (let i = 0; i < candidates.length; i += 12) {
+    const group = candidates.slice(i, i + 12);
     const analyzed = await Promise.all(group.map(async t => {
       try {
         const klines = await binance(`/api/v3/klines?symbol=${t.symbol}&interval=15m&limit=120`);
@@ -162,6 +160,7 @@ async function scanMarket() {
   return {
     ok: true,
     mode: "SIGNAL_ONLY",
+    universe: "ALL_BINANCE_SPOT_USDT",
     liveTrading: false,
     generatedAt: new Date().toISOString(),
     scanned: ranked.length,
