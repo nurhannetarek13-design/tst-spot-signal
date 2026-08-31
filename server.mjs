@@ -114,7 +114,14 @@ app.get("/cron/scan", async (req, res) => {
       "Signal only — مفيش أمر اتنفذ تلقائيًا.",
     ].filter(Boolean).join("\n");
 
-    const tg = await telegram(text);
+    const baseAsset = actionable.symbol.endsWith("USDT") ? actionable.symbol.slice(0, -4) : actionable.symbol;
+    const pair = actionable.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : actionable.symbol;
+    const binanceSpotUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
+    const tg = await telegram(text, {
+      inline_keyboard: [[
+        { text: `🚀 افتحي ${pair} على Binance Spot`, url: binanceSpotUrl },
+      ]],
+    });
     lastAlertKey = key;
     lastAlertAt = now;
     return res.json({ ok: true, scanned: scan.scanned, alertSent: true, telegram: tg, selected: actionable, liveTrading: false });
@@ -203,7 +210,7 @@ async function scanMarket() {
   };
 }
 
-async function telegram(text) {
+async function telegram(text, replyMarkup = undefined) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is missing in Vercel Environment Variables");
@@ -211,7 +218,12 @@ async function telegram(text) {
   const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    }),
     signal: AbortSignal.timeout(10_000),
   });
   const data = await r.json();
