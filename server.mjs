@@ -100,18 +100,18 @@ app.get("/cron/scan", async (req, res) => {
 
     const p = actionable.paperPlan;
     const text = [
-      `🚨 ${actionable.decision} ${actionable.symbol}`,
-      `Score: ${actionable.score}/100`,
-      `Price: ${fmt(actionable.price)}`,
-      `24h: ${actionable.market.change24hPct}%`,
-      `RSI(14): ${actionable.indicators.rsi14}`,
-      p ? `Entry: ${fmt(p.entry)}` : null,
-      p ? `Stop: ${fmt(p.stop)}` : null,
-      p ? `Target: ${fmt(p.target1)}` : null,
-      p ? `Max position: ${p.maxPositionUSDT} USDT` : null,
-      p ? `Max risk: ${p.maxRiskUSDT} USDT` : null,
+      `🟢 فرصة SPOT — ${actionable.symbol.replace("USDT", "/USDT")}`,
+      p ? `💵 المبلغ: حتى ${p.maxPositionUSDT} USDT` : null,
+      p ? `🟢 الدخول: ${fmt(p.entry)}` : null,
+      p ? `🛑 الوقف: ${fmt(p.stop)}` : null,
+      p ? `🎯 الهدف 1: ${fmt(p.target1)}` : null,
+      p ? `🎯 الهدف 2: ${fmt(p.target2)}` : null,
       "",
-      "Signal only — no live order was placed.",
+      "📱 Binance → Spot → Buy",
+      "❌ مش Perp / Futures ومش Long.",
+      "⏱️ لو الرسالة قديمة أو السعر اتحرك بعيد عن الدخول: متدخليش.",
+      `Score: ${actionable.score}/100 | RSI: ${actionable.indicators.rsi14}`,
+      "Signal only — مفيش أمر اتنفذ تلقائيًا.",
     ].filter(Boolean).join("\n");
 
     const tg = await telegram(text);
@@ -135,11 +135,41 @@ async function scanMarket() {
     .map(s => s.symbol));
   const bookMap = new Map(books.map(b => [b.symbol, b]));
 
-  const candidates = tickers
+  const universe = tickers
     .filter(t => spot.has(t.symbol) && bookMap.has(t.symbol))
     .filter(t => isAllowed(t.symbol))
-    .map(t => ({ ...t, qv: Number(t.quoteVolume || 0), change: Number(t.priceChangePercent || 0) }))
-    .sort((a, b) => b.qv - a.qv);
+    .map(t => {
+      const book = bookMap.get(t.symbol);
+      const bid = Number(book?.bidPrice || 0);
+      const ask = Number(book?.askPrice || 0);
+      const mid = (bid + ask) / 2;
+      const spread = mid > 0 ? ((ask - bid) / mid) * 100 : 999;
+      const last = Number(t.lastPrice || 0);
+      const high = Number(t.highPrice || 0);
+      const nearHigh = high > 0 ? last / high : 0;
+      return {
+        ...t,
+        qv: Number(t.quoteVolume || 0),
+        change: Number(t.priceChangePercent || 0),
+        spread,
+        nearHigh,
+      };
+    });
+
+  const safe = universe
+    .filter(t => t.qv >= CFG.minQuoteVolume24h)
+    .filter(t => t.change > -15 && t.change < 35)
+    .filter(t => t.spread <= CFG.maxSpreadPct);
+
+  const priority = [...safe]
+    .sort((a, b) => {
+      const scoreA = (a.nearHigh * 40) + (Math.max(a.change, 0) * 2) + Math.log10(Math.max(a.qv, 1));
+      const scoreB = (b.nearHigh * 40) + (Math.max(b.change, 0) * 2) + Math.log10(Math.max(b.qv, 1));
+      return scoreB - scoreA;
+    })
+    .slice(0, 60);
+
+  const candidates = priority;
 
   const results = [];
   for (let i = 0; i < candidates.length; i += 12) {
@@ -163,7 +193,9 @@ async function scanMarket() {
     universe: "ALL_BINANCE_SPOT_USDT",
     liveTrading: false,
     generatedAt: new Date().toISOString(),
-    scanned: ranked.length,
+    scanned: universe.length,
+    deepScanned: ranked.length,
+    eligibleAfterSafety: safe.length,
     best: buys[0] || ranked[0] || null,
     buySignals: buys.slice(0, 5),
     results: ranked,
@@ -240,6 +272,7 @@ async function analyze(symbol, ticker, book, rawKlines) {
   const qty = Math.max(0, Math.min(riskQty, budgetQty));
   const positionUSDT = qty * entry;
   const target1 = entry + 2 * stopDistance;
+  const target2 = entry + 3 * stopDistance;
   const estFees = positionUSDT * CFG.feeRate * 2;
 
   let score = 0;
@@ -263,7 +296,8 @@ async function analyze(symbol, ticker, book, rawKlines) {
     market: { change24hPct: round(change24hPct, 2), quoteVolume24hUSDT: round(Number(ticker.quoteVolume || 0), 0), spreadPct: round(spreadPct, 4) },
     indicators: { ema20: round(ema20, 8), ema50: round(ema50, 8), rsi14: round(rsi14, 2), atr14: round(atr, 8), volumeRatio20: round(volumeRatio, 2), resistance20: round(resistance20, 8), support20: round(support20, 8) },
     checks: { trendUp, breakout, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing },
-    paperPlan: decision === "BUY" ? { entry: round(entry, 8), stop: round(stop, 8), target1: round(target1, 8), maxPositionUSDT: round(positionUSDT, 2), maxRiskUSDT: CFG.maxRiskPerTradeUSDT, estimatedRoundTripFeesUSDT: round(estFees, 4) } : null,
+    signalId: `${symbol}:${last.openTime}:${round(resistance20, 8)}`,
+    paperPlan: decision === "BUY" ? { entry: round(entry, 8), stop: round(stop, 8), target1: round(target1, 8), target2: round(target2, 8), maxPositionUSDT: round(positionUSDT, 2), maxRiskUSDT: CFG.maxRiskPerTradeUSDT, estimatedRoundTripFeesUSDT: round(estFees, 4) } : null,
     liveTrading: false,
   };
 }
