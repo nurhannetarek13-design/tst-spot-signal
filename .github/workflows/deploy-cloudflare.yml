@@ -1,4 +1,5 @@
 name: Deploy Cloudflare Minute Scheduler
+# Auto portfolio deploy trigger
 
 on:
   workflow_dispatch:
