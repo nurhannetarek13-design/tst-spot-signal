@@ -25,6 +25,7 @@ const CFG = {
   paperPositionHours: 72,
   publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",
   vercelScanUrl: "https://tst-spot-signal.vercel.app/scan",
+  defaultExecutorUrl: "https://tst-spot-signal.vercel.app",
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -935,7 +936,8 @@ function hasBinanceKeys(_env) {
 async function portfolioStatus(env) {
   const cfg = liveConfig(env);
   try {
-    const r = await fetch(`${CFG.vercelScanUrl.replace(/\/scan$/, "")}/executor/status`, {
+    const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+    const r = await fetch(`${executorBase}/executor/status`, {
       headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-cloudflare-status/1.0" },
       signal: AbortSignal.timeout(10_000),
     });
@@ -972,7 +974,8 @@ async function executeLiveSpotBuy(env, symbol, signalHash) {
     return { ok: false, status: "RELAY_SECRET_MISSING", reason: "Telegram relay secret is missing." };
   }
 
-  const endpoint = `${CFG.vercelScanUrl.replace(/\/scan$/, "")}/execute/spot-buy`;
+  const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+  const endpoint = `${executorBase}/execute/spot-buy`;
   const body = JSON.stringify({
     symbol,
     signalHash,
