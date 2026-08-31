@@ -126,7 +126,7 @@ app.post("/execute/spot-buy", async (req, res) => {
 
     const body = JSON.parse(raw);
     const symbol = String(body.symbol || "").toUpperCase();
-    if (!/^[A-Z0-9]{4,20}USDT$/.test(symbol)) {
+    if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) {
       return res.status(400).json({ ok: false, status: "BAD_SYMBOL" });
     }
 
@@ -155,7 +155,7 @@ app.post("/executor/preflight", async (req, res) => {
     const body = JSON.parse(raw);
     const symbol = String(body.symbol || "BTCUSDT").toUpperCase();
     const quoteOrderQty = Math.max(5, Number(body.quoteOrderQty || 5)).toFixed(2);
-    if (!/^[A-Z0-9]{4,20}USDT$/.test(symbol)) {
+    if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) {
       return res.status(400).json({ ok: false, status: "BAD_SYMBOL", orderPlaced: false });
     }
 
@@ -260,7 +260,7 @@ app.post("/executor/account-status", async (req, res) => {
 app.get("/signal/:symbol", async (req, res) => {
   try {
     const symbol = String(req.params.symbol || "").toUpperCase();
-    if (!/^[A-Z0-9]{4,20}USDT$/.test(symbol)) return res.status(400).json({ ok: false, error: "Use a Binance USDT spot symbol such as BTCUSDT" });
+    if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) return res.status(400).json({ ok: false, error: "Use a Binance USDT spot symbol such as BTCUSDT" });
     const [ticker, book, klines] = await Promise.all([
       binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
       binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
