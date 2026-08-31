@@ -39,7 +39,14 @@ app.get("/", (_req, res) => {
 
 app.get("/telegram/test", async (_req, res) => {
   try {
-    const result = await telegram("✅ TST Spot Signal is connected to Telegram.\nSignal-only mode — no live orders.");
+    const result = await telegram(
+      "✅ اختبار الرسالة الجديدة\nاضغطي الزر تحت للتأكد إنه بيفتح Binance Spot مباشرة.",
+      {
+        inline_keyboard: [[
+          { text: "🚀 افتحي BTC/USDT على Binance Spot", url: "https://www.binance.com/en/trade/BTC_USDT?type=spot" },
+        ]],
+      }
+    );
     return res.json({ ok: true, telegram: "sent", result, liveTrading: false });
   } catch (error) {
     return res.status(500).json({ ok: false, telegram: "failed", error: String(error?.message || error), liveTrading: false });
