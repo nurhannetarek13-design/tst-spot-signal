@@ -137,6 +137,68 @@ app.post("/execute/spot-buy", async (req, res) => {
   }
 });
 
+
+app.post("/executor/account-status", async (req, res) => {
+  try {
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY" });
+
+    const auth = await verifyExecutorRelay(req, raw);
+    if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
+
+    const cfg = executorConfig();
+    if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+      return res.status(409).json({ ok: false, status: "API_NOT_CONNECTED" });
+    }
+
+    const [account, prices, openOrders] = await Promise.all([
+      signedBinance("GET", "/api/v3/account", {}),
+      binance("/api/v3/ticker/price"),
+      signedBinance("GET", "/api/v3/openOrders", {}),
+    ]);
+    const priceMap = new Map((prices || []).map(p => [p.symbol, Number(p.price || 0)]));
+    const dollarStables = new Set(["USDC", "FDUSD", "TUSD", "USDP", "DAI", "BUSD"]);
+    let equityUSDT = 0;
+    for (const balance of account.balances || []) {
+      const asset = String(balance.asset || "");
+      const total = Number(balance.free || 0) + Number(balance.locked || 0);
+      if (!(total > 0)) continue;
+      if (asset === "USDT" || dollarStables.has(asset)) equityUSDT += total;
+      else {
+        const px = priceMap.get(`${asset}USDT`) || 0;
+        if (px > 0) equityUSDT += total * px;
+      }
+    }
+
+    const usdt = (account.balances || []).find(b => b.asset === "USDT") || {};
+    const freeUSDT = Number(usdt.free || 0);
+    const lockedUSDT = Number(usdt.locked || 0);
+    const botOpenSymbols = [...new Set((openOrders || [])
+      .filter(o => String(o.clientOrderId || "").startsWith("TST"))
+      .map(o => o.symbol))];
+
+    return res.json({
+      ok: true,
+      status: "ACCOUNT_READ_OK",
+      freeUSDT: round(freeUSDT, 2),
+      lockedUSDT: round(lockedUSDT, 2),
+      equityUSDT: round(equityUSDT, 2),
+      availableAfterReserveUSDT: round(Math.max(0, freeUSDT - cfg.reserveUSDT), 2),
+      botOpenPositions: botOpenSymbols.length,
+      maxOpenPositions: cfg.maxOpenPositions,
+      liveTradingEnabled: cfg.enabled,
+      readOnlyCheck: true,
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      status: "ACCOUNT_READ_FAILED",
+      reason: String(error?.message || error),
+      readOnlyCheck: true,
+    });
+  }
+});
+
 app.get("/signal/:symbol", async (req, res) => {
   try {
     const symbol = String(req.params.symbol || "").toUpperCase();
@@ -599,9 +661,11 @@ async function telegram(text, replyMarkup = undefined) {
 }
 
 async function analyze(symbol, ticker, book, rawKlines) {
-  const candles = rawKlines.map(k => ({
+  const allCandles = rawKlines.map(k => ({
     openTime: Number(k[0]), open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]), closeTime: Number(k[6]),
-  })).filter(c => c.closeTime < Date.now());
+  }));
+  const forming = allCandles.at(-1)?.closeTime >= Date.now() ? allCandles.at(-1) : null;
+  const candles = allCandles.filter(c => c.closeTime < Date.now());
   if (candles.length < 60) throw new Error("Not enough closed candles");
 
   const closes = candles.map(c => c.close);
@@ -665,6 +729,25 @@ async function analyze(symbol, ticker, book, rawKlines) {
   if (!notChasing) score -= 20;
   score = Math.max(0, Math.min(100, score));
 
+  const formingClose = Number(forming?.close || last.close);
+  const formingRsi14 = rsi([...closes, formingClose], 14);
+  const formingDuration = forming ? Math.max(1, forming.closeTime - forming.openTime) : 1;
+  const formingProgress = forming ? Math.min(1, Math.max(0.1, (Date.now() - forming.openTime) / formingDuration)) : 1;
+  const projectedVolumeRatio20 = forming && avgVol20 > 0 ? (forming.volume / formingProgress) / avgVol20 : 0;
+  const minutesToClose = forming ? Math.max(1, Math.ceil((forming.closeTime - Date.now()) / 60_000)) : 0;
+  const formingNearBreakout = formingClose >= resistance20 * 0.997 && formingClose <= resistance20 * 1.01;
+  const earlyPotential = decision !== "BUY" && Boolean(forming) && minutesToClose <= 15 &&
+    trendUp && formingNearBreakout && formingRsi14 >= 50 && formingRsi14 <= 72 &&
+    projectedVolumeRatio20 >= 0.8 && liquid && spreadOk && notChasing;
+  const earlyScore = Math.max(0, Math.min(100,
+    (trendUp ? 25 : 0) +
+    (formingNearBreakout ? 25 : 0) +
+    (formingRsi14 >= 50 && formingRsi14 <= 72 ? 15 : 0) +
+    (projectedVolumeRatio20 >= 0.8 ? 15 : 0) +
+    (liquid ? 10 : 0) +
+    (spreadOk ? 10 : 0)
+  ));
+
   return {
     ok: true,
     symbol,
@@ -675,6 +758,15 @@ async function analyze(symbol, ticker, book, rawKlines) {
     market: { change24hPct: round(change24hPct, 2), quoteVolume24hUSDT: round(Number(ticker.quoteVolume || 0), 0), spreadPct: round(spreadPct, 4) },
     indicators: { ema20: round(ema20, 8), ema50: round(ema50, 8), rsi14: round(rsi14, 2), atr14: round(atr, 8), volumeRatio20: round(volumeRatio, 2), resistance20: round(resistance20, 8), support20: round(support20, 8) },
     checks: { trendUp, breakout, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing },
+    earlyWatch: {
+      potential: earlyPotential,
+      minutesToClose,
+      score: earlyScore,
+      projectedEntry: round(ask || formingClose, 8),
+      formingRsi14: round(formingRsi14, 2),
+      projectedVolumeRatio20: round(projectedVolumeRatio20, 2),
+      resistance20: round(resistance20, 8),
+    },
     signalId: `${symbol}:${last.openTime}:${round(resistance20, 8)}`,
     paperPlan: decision === "BUY" ? { entry: round(entry, 8), stop: round(stop, 8), target1: round(target1, 8), target2: round(target2, 8), maxPositionUSDT: round(positionUSDT, 2), maxRiskUSDT: CFG.maxRiskPerTradeUSDT, estimatedRoundTripFeesUSDT: round(estFees, 4) } : null,
     liveTrading: false,
