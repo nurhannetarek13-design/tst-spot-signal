@@ -1,4 +1,4 @@
-name: Binance Demo Auto Trader
+name: Spot Signal Scheduler
 
 on:
   workflow_dispatch:
@@ -6,28 +6,35 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/demo-trader.yml"
-      - "scripts/demo-trader.mjs"
-      - "src/index.js"
   schedule:
     - cron: "*/15 * * * *"
 
 concurrency:
-  group: binance-demo-auto-trader-v2
+  group: spot-signal-scheduler
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  scan-and-demo-trade:
-    runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 8
+  trigger-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Run local Spot scanner
+      - name: Trigger Vercel Spot scanner
         env:
-          BINANCE_DEMO_API_KEY: ${{ secrets.BINANCE_DEMO_API_KEY }}
-          BINANCE_DEMO_SECRET_KEY: ${{ secrets.BINANCE_DEMO_SECRET_KEY }}
-        run: node scripts/demo-trader.mjs
+          SCAN_URL: https://tst-spot-signal.vercel.app/cron/scan
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AUTH_ARGS=()
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH_ARGS=(-H "Authorization: Bearer ${CRON_SECRET}")
+          fi
+
+          RESPONSE=$(curl             --silent             --show-error             --fail-with-body             --retry 3             --retry-delay 5             --max-time 120             "${AUTH_ARGS[@]}"             "${SCAN_URL}")
+
+          echo "${RESPONSE}"
+          echo "${RESPONSE}" | grep -q '"ok":true'
