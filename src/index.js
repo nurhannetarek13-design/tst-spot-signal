@@ -145,10 +145,43 @@ async function scanVercelAndAlert(env) {
     const pair = x.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : x.symbol;
     const openText = `up to ${live.maxOpenPositions}`;
 
+    if (live.autoExecute && live.enabled) {
+      const execution = await executeLiveSpotBuy(env, x.symbol, signalHash);
+      if (execution.ok) {
+        const stats = await recordAutoExecution(env, { ...execution, symbol: x.symbol });
+        await telegram(env, [
+          `🤖 AUTO BUY — ${pair} — SPOT`,
+          `💵 المستخدم: ${execution.quoteSpentUSDT ?? "—"} USDT`,
+          execution.avgFillPrice != null ? `💲 متوسط التنفيذ: ${execution.avgFillPrice}` : null,
+          execution.stop != null ? `🛑 Stop: ${execution.stop}` : null,
+          execution.takeProfit != null ? `🎯 Take Profit: ${execution.takeProfit}` : null,
+          execution.openPositionsAfter != null ? `📂 الصفقات المفتوحة: ${execution.openPositionsAfter}/${execution.maxOpenPositions}` : null,
+          execution.equityUSDT != null ? `💰 إجمالي الرصيد الحالي: ${execution.equityUSDT} USDT` : null,
+          stats.lastKnownPnlUSDT != null ? `📈 التغير من بداية التتبع: ${stats.lastKnownPnlUSDT >= 0 ? "+" : ""}${stats.lastKnownPnlUSDT} USDT` : null,
+          "",
+          "الحجم بيتعاد حسابه من الرصيد والمخاطرة قبل كل صفقة؛ الربح لا يعني إن الصفقة التالية مضمونة."
+        ].filter(Boolean).join("\n"));
+        await caches.default.put(cacheKey, new Response("executed", {
+          headers: { "Cache-Control": "max-age=3600" },
+        }));
+        return { ok: true, status: "AUTO_EXECUTED", symbol: x.symbol, signalId, execution };
+      }
+
+      if (["MAX_OPEN_POSITIONS","INSUFFICIENT_BALANCE","BELOW_MIN_NOTIONAL","CAPITAL_CONSTRAINED"].includes(execution.status)) {
+        await sendCapitalConstraintAlert(env, x.symbol, execution);
+      }
+      await caches.default.put(cacheKey, new Response("auto-rejected", {
+        headers: { "Cache-Control": "max-age=900" },
+      }));
+      return { ok: true, status: "AUTO_NOT_EXECUTED", symbol: x.symbol, reason: execution.reason || execution.status };
+    }
+
     const message = [
       `🟢 فرصة SPOT — ${pair}`,
       "",
-      `💵 حجم الصفقة المستهدف: حتى ${live.tradeUSDT} USDT`,
+      live.compoundEnabled
+        ? `💵 الحجم: ديناميكي — ${live.tradeEquityPct}% من الرصيد، بحد أقصى ${live.maxTradeUSDT} USDT وداخل حد المخاطرة`
+        : `💵 حجم الصفقة المستهدف: حتى ${live.tradeUSDT} USDT`,
       `📂 الصفقات المفتوحة: ${openText}`,
       `🛑 Stop: ${fmt(Number(p.stop))}`,
       `🎯 TP1: ${fmt(Number(p.target1))}`,
@@ -156,7 +189,7 @@ async function scanVercelAndAlert(env) {
       "",
       `✅ السعر صالح تقريبًا بين ${fmt(entryLow)} و ${fmt(entryHigh)}`,
       "",
-      "👇 دوسي BUY فقط — Vercel Executor يعيد الفحص وينفذ Spot ويحط الحماية تلقائيًا.",
+      "👇 دوسي BUY فقط — البوت يعيد الفحص قبل أي تنفيذ.",
       "",
       "❌ Spot فقط — لا Futures / Perp / Short.",
       `⏱️ الزر صالح ${live.approvalSeconds} ثانية فقط.`,
@@ -165,7 +198,7 @@ async function scanVercelAndAlert(env) {
     await ensureTelegramWebhook(env);
     await telegram(env, message, {
       inline_keyboard: [[
-        { text: `✅ BUY ≤ ${live.tradeUSDT} USDT`, callback_data: `live_buy:${x.symbol}:${signalHash}` },
+        { text: `✅ BUY`, callback_data: `live_buy:${x.symbol}:${signalHash}` },
         { text: "❌ تجاهل", callback_data: `live_no:${x.symbol}:${signalHash}` },
       ]],
     });
@@ -920,7 +953,11 @@ function liveConfig(env) {
   };
   return {
     enabled: ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
+    autoExecute: ["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE || "").toLowerCase()),
+    compoundEnabled: !["0", "false", "no", "off"].includes(String(env.COMPOUND_ENABLED || "true").toLowerCase()),
     tradeUSDT: num(env.TRADE_USDT, 5, 1, 100000),
+    tradeEquityPct: num(env.TRADE_EQUITY_PCT, 25, 5, 50),
+    maxTradeUSDT: num(env.MAX_TRADE_USDT, 10, 1, 100000),
     maxOpenPositions: Math.floor(num(env.MAX_OPEN_POSITIONS, 3, 1, 20)),
     reserveUSDT: num(env.RESERVE_USDT, 2, 0, 100000),
     maxRiskUSDT: num(env.MAX_RISK_USDT, 0.5, 0.01, 100000),
@@ -948,6 +985,10 @@ async function portfolioStatus(env) {
       executor: status,
       config: {
         tradeUSDT: cfg.tradeUSDT,
+        compoundEnabled: cfg.compoundEnabled,
+        tradeEquityPct: cfg.tradeEquityPct,
+        maxTradeUSDT: cfg.maxTradeUSDT,
+        autoExecute: cfg.autoExecute,
         maxOpenPositions: cfg.maxOpenPositions,
         reserveUSDT: cfg.reserveUSDT,
         maxRiskUSDT: cfg.maxRiskUSDT,
@@ -977,9 +1018,19 @@ async function executeLiveSpotBuy(env, symbol, signalHash) {
   const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
   const endpoint = `${executorBase}/execute/spot-buy`;
   const body = JSON.stringify({
+    action: "BUY",
     symbol,
     signalHash,
     timestamp: Date.now(),
+    sizing: {
+      compoundEnabled: cfg.compoundEnabled,
+      baseTradeUSDT: cfg.tradeUSDT,
+      equityPct: cfg.tradeEquityPct,
+      maxTradeUSDT: cfg.maxTradeUSDT,
+      reserveUSDT: cfg.reserveUSDT,
+      maxRiskUSDT: cfg.maxRiskUSDT,
+      maxOpenPositions: cfg.maxOpenPositions
+    }
   });
   const ts = String(Date.now());
   const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
@@ -1012,6 +1063,48 @@ async function executeLiveSpotBuy(env, symbol, signalHash) {
 
   if (Number(data.riskUSDT) > 0) await addLiveDailyRisk(env, Number(data.riskUSDT));
   return data;
+}
+
+async function getAutoStats(env) {
+  return await getState(env, "live:auto:stats") || {
+    startedAt: Date.now(),
+    entries: 0,
+    lastSymbol: null,
+    lastExecutionAt: null,
+    lastKnownEquityUSDT: null,
+    baselineEquityUSDT: null,
+    lastKnownPnlUSDT: null
+  };
+}
+
+async function recordAutoExecution(env, execution) {
+  const stats = await getAutoStats(env);
+  stats.entries = Number(stats.entries || 0) + 1;
+  stats.lastSymbol = execution.symbol || stats.lastSymbol;
+  stats.lastExecutionAt = Date.now();
+
+  const equity = Number(execution.equityUSDT);
+  if (Number.isFinite(equity) && equity > 0) {
+    if (!(Number(stats.baselineEquityUSDT) > 0)) stats.baselineEquityUSDT = equity;
+    stats.lastKnownEquityUSDT = equity;
+    stats.lastKnownPnlUSDT = round2(equity - Number(stats.baselineEquityUSDT));
+  }
+  await putState(env, "live:auto:stats", stats, 365 * 24 * 3600);
+  return stats;
+}
+
+async function sendCapitalConstraintAlert(env, symbol, execution) {
+  const key = `capital-alert:${symbol}:${new Date().toISOString().slice(0, 13)}`;
+  if (await getState(env, key)) return;
+  await putState(env, key, { sentAt: Date.now() }, 3600);
+  await telegram(env, [
+    `💡 فيه فرصة مؤهلة إضافية: ${symbol.replace("USDT", "/USDT")}`,
+    "لكن الرصيد/عدد الصفقات الحالي مش سامح بدخولها تحت حدود الأمان.",
+    execution?.freeUSDT != null ? `الرصيد الحر: ${execution.freeUSDT} USDT` : null,
+    execution?.requiredUSDT != null ? `المطلوب تقريبًا حسب الإعدادات: ${execution.requiredUSDT} USDT` : null,
+    "",
+    "مش مطلوب تزودي فلوس؛ لو حابة تزودي رأس المال، قوليلي ونحسب الحجم الجديد قبل أي إيداع."
+  ].filter(Boolean).join("\n"));
 }
 
 async function emergencyClose(env, symbol, quantity, token) {
