@@ -1,0 +1,18 @@
+[Unit]
+Description=TST Spot Signal Oracle Executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/tst-spot-signal
+EnvironmentFile=/etc/tst-spot-signal.env
+ExecStart=/usr/bin/npm run start:oracle
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
