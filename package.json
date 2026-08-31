@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node scripts/render-server.mjs",
     "check:render": "node --check scripts/render-server.mjs",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "start:oracle": "node scripts/oracle-executor.mjs"
   },
   "engines": {
     "node": ">=22"
