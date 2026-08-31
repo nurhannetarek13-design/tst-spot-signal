@@ -925,7 +925,7 @@ async function telegramWebhook(request, env) {
     }
 
     const data = String(query.data || "");
-    const liveMatch = data.match(/^live_(buy|no):([A-Z0-9]{4,20}USDT):([a-f0-9]{8})$/);
+    const liveMatch = data.match(/^live_(buy|no):([A-Z0-9]{1,20}USDT):([a-f0-9]{8})$/);
     if (liveMatch) {
       const [, action, symbol, signalHash] = liveMatch;
       const cfg = liveConfig(env);
