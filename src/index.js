@@ -55,7 +55,39 @@ export default {
       return relayTelegram(request, env);
     }
     if (url.searchParams.get("test") === "telegram") {
-      await telegram(env, "✅ اختبار الرسالة الجديدة — زر Binance Spot شغال.", {
+      const entry = 79000;
+      const amount = 5 / entry;
+      const text = [
+        "🧪 TEST فقط — متشتريش BTC من الرسالة دي",
+        "",
+        "🟢 BUY NOW — BTC/USDT — SPOT",
+        "",
+        "━━━ اكتبي في Binance بالظبط ━━━",
+        "",
+        "1️⃣ PRICE / السعر",
+        fmt(entry),
+        "",
+        "2️⃣ AMOUNT / الكمية",
+        `${fmt(amount)} BTC`,
+        "",
+        "3️⃣ TOTAL / المبلغ",
+        "5 USDT",
+        "",
+        "✅ بعد ما تحطيهم: دوسي BUY BTC",
+        "",
+        "━━━ بعد الشراء ━━━",
+        `🛑 STOP LOSS: ${fmt(78210)}`,
+        `🎯 TAKE PROFIT 1: ${fmt(80580)}`,
+        `🎯 TAKE PROFIT 2: ${fmt(81370)}`,
+        "",
+        "━━━ شرط الدخول ━━━",
+        "السعر الحالي لازم يكون بين:",
+        `${fmt(78842)} → ${fmt(79158)}`,
+        "",
+        "👇 الزر تحت يفتح BTC/USDT Spot مباشرة.",
+        "❌ TEST فقط — دي مش إشارة شراء حقيقية.",
+      ].join("\n");
+      await telegram(env, text, {
         inline_keyboard: [[
           { text: "🚀 افتحي BTC/USDT على Binance Spot", url: "https://www.binance.com/en/trade/BTC_USDT?type=spot" },
         ]],
