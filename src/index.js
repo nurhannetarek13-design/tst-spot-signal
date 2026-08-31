@@ -52,6 +52,9 @@ export default {
     if (url.pathname === "/portfolio-status") {
       return portfolioStatus(env);
     }
+    if (url.searchParams.get("test") === "preflight") {
+      return livePreflight(env);
+    }
     if (url.pathname === "/telegram-webhook") {
       return telegramWebhook(request, env);
     }
@@ -1173,6 +1176,66 @@ async function portfolioStatus(env) {
     }, r.ok ? 200 : 503);
   } catch (error) {
     return output({ ok: false, mode: "PORTFOLIO_MANAGER", error: String(error?.message || error) }, 503);
+  }
+}
+
+
+
+async function livePreflight(env) {
+  const cacheKey = new Request("https://preflight-cache.local/binance-spot");
+  if (await caches.default.match(cacheKey)) {
+    return output({ ok: false, status: "PREFLIGHT_RATE_LIMITED", orderPlaced: false, fundsUsed: false }, 429);
+  }
+  await caches.default.put(cacheKey, new Response("running", {
+    headers: { "Cache-Control": "max-age=60" },
+  }));
+
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    return output({ ok: false, status: "RELAY_SECRET_MISSING", orderPlaced: false, fundsUsed: false }, 503);
+  }
+
+  const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+  const body = JSON.stringify({ symbol: "BTCUSDT", quoteOrderQty: 5, timestamp: Date.now() });
+  const ts = String(Date.now());
+  const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+
+  try {
+    const response = await fetch(`${executorBase}/executor/preflight`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Executor-Timestamp": ts,
+        "X-Executor-Signature": signature,
+        "User-Agent": "tst-spot-signal-cloudflare-preflight/1.0",
+      },
+      body,
+      signal: AbortSignal.timeout(20_000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      const reason = data.reason || data.error || `Executor returned ${response.status}`;
+      await telegram(env, [
+        "❌ اختبار Binance Spot فشل",
+        reason,
+        "",
+        "لم يتم إنشاء أي أمر ولم تُخصم أي أموال."
+      ].join("\n"));
+      return output({ ok: false, status: data.status || "PREFLIGHT_FAILED", reason, orderPlaced: false, fundsUsed: false }, 409);
+    }
+
+    await telegram(env, [
+      "✅ اختبار Binance Spot نجح",
+      `تم قبول اختبار أمر بقيمة ${data.testedQuoteUSDT} USDT على ${data.symbol}.`,
+      `الرصيد الحر الذي قرأه Binance: ${data.freeUSDT} USDT`,
+      "",
+      "ده order/test فقط: لم يتم إنشاء صفقة ولم تُخصم أي أموال.",
+      "النظام جاهز لأول إشارة BUY حقيقية."
+    ].join("\n"));
+    return output(data);
+  } catch (error) {
+    const reason = String(error?.message || error);
+    await telegram(env, `❌ اختبار Binance Spot تعذر: ${reason}\nلم يتم إنشاء أي أمر ولم تُخصم أي أموال.`).catch(() => null);
+    return output({ ok: false, status: "PREFLIGHT_UNREACHABLE", reason, orderPlaced: false, fundsUsed: false }, 503);
   }
 }
 
