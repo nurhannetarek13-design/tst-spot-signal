@@ -143,7 +143,6 @@ app.get("/cron/scan", async (req, res) => {
     }
 
     const p = actionable.paperPlan;
-    const p = actionable.paperPlan;
     const baseAsset = actionable.symbol.endsWith("USDT") ? actionable.symbol.slice(0, -4) : actionable.symbol;
     const pair = actionable.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : actionable.symbol;
     const entry = Number(p?.entry);
