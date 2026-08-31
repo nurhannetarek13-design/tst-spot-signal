@@ -138,6 +138,64 @@ app.post("/execute/spot-buy", async (req, res) => {
 });
 
 
+
+app.post("/executor/preflight", async (req, res) => {
+  try {
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY", orderPlaced: false });
+
+    const auth = await verifyExecutorRelay(req, raw);
+    if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason, orderPlaced: false });
+
+    const cfg = executorConfig();
+    if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+      return res.status(409).json({ ok: false, status: "API_NOT_CONNECTED", orderPlaced: false });
+    }
+
+    const body = JSON.parse(raw);
+    const symbol = String(body.symbol || "BTCUSDT").toUpperCase();
+    const quoteOrderQty = Math.max(5, Number(body.quoteOrderQty || 5)).toFixed(2);
+    if (!/^[A-Z0-9]{4,20}USDT$/.test(symbol)) {
+      return res.status(400).json({ ok: false, status: "BAD_SYMBOL", orderPlaced: false });
+    }
+
+    const account = await signedBinance("GET", "/api/v3/account", {});
+    if (!account.canTrade) {
+      return res.status(409).json({ ok: false, status: "ACCOUNT_CANNOT_TRADE", orderPlaced: false });
+    }
+    const freeUSDT = Number((account.balances || []).find(b => b.asset === "USDT")?.free || 0);
+
+    await signedBinance("POST", "/api/v3/order/test", {
+      symbol,
+      side: "BUY",
+      type: "MARKET",
+      quoteOrderQty,
+      newClientOrderId: `TSTP${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`,
+      computeCommissionRates: false,
+    });
+
+    return res.json({
+      ok: true,
+      status: "PREFLIGHT_PASSED",
+      symbol,
+      testedQuoteUSDT: Number(quoteOrderQty),
+      freeUSDT: round(freeUSDT, 2),
+      liveTradingEnabled: cfg.enabled,
+      orderPlaced: false,
+      fundsUsed: false,
+      note: "Binance order/test accepted the signed Spot order parameters. No order was placed.",
+    });
+  } catch (error) {
+    return res.status(409).json({
+      ok: false,
+      status: "PREFLIGHT_FAILED",
+      reason: String(error?.message || error),
+      orderPlaced: false,
+      fundsUsed: false,
+    });
+  }
+});
+
 app.post("/executor/account-status", async (req, res) => {
   try {
     const raw = typeof req.body === "string" ? req.body : "";
