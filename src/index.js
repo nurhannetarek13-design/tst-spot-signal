@@ -120,20 +120,13 @@ async function handleMakeExecute(request, env) {
     if (request.method !== "POST") {
       return output({ ok: false, status: "METHOD_NOT_ALLOWED", reason: "POST required", liveTrading: false, orderPlaced: false }, 405);
     }
-    if (!env.WEBHOOK_SHARED_SECRET) {
-      return output({ ok: false, status: "EXECUTOR_NOT_CONFIGURED", reason: "WEBHOOK_SHARED_SECRET is missing", liveTrading: false, orderPlaced: false }, 503);
-    }
-
     const raw = await request.text();
     if (raw.length > 12_000) {
       return output({ ok: false, status: "PAYLOAD_TOO_LARGE", liveTrading: false, orderPlaced: false }, 413);
     }
     const body = JSON.parse(raw);
-    const suppliedSecret = String(body.secret || "");
-    if (!suppliedSecret || suppliedSecret !== String(env.WEBHOOK_SHARED_SECRET)) {
-      return output({ ok: false, status: "UNAUTHORIZED", reason: "Invalid shared secret", liveTrading: false, orderPlaced: false }, 401);
-    }
-
+    // Demo-only endpoint: deliberately performs no Binance action.
+    // Authentication becomes mandatory before live trading can ever be enabled.
     const signalId = String(body.signal_id || "").trim();
     const action = String(body.action || "").toUpperCase();
     const symbol = String(body.symbol || "").toUpperCase();
