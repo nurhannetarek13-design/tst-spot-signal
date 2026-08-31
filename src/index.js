@@ -23,7 +23,7 @@ const CFG = {
   duplicateHours: 6,
   approvalSeconds: 90,
   paperPositionHours: 72,
-  publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",
+  publicBaseUrl: "https://tst-spot-signal.nurhanne-tarek13.workers.dev",\n  vercelScanUrl: "https://tst-spot-signal.vercel.app/scan",
   sourceChannels: {
     binance: "binance_announcements",
     cryptoQuant: "cryptoquant_alert",
@@ -66,9 +66,68 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(Promise.all([ensureTelegramWebhook(env), monitorPaperPositions(env), scan(env)]));
+    ctx.waitUntil(scanVercelAndAlert(env));
   },
 };
+
+
+async function scanVercelAndAlert(env) {
+  try {
+    const response = await fetch(CFG.vercelScanUrl, {
+      headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-cloudflare/4.0" },
+      signal: AbortSignal.timeout(50_000),
+    });
+    if (!response.ok) throw new Error(`Vercel scan failed: ${response.status}`);
+    const scan = await response.json();
+
+    const x = (scan.buySignals || [])[0] || (scan.best?.decision === "BUY" ? scan.best : null);
+    if (!x || !x.paperPlan) {
+      return { ok: true, status: "NO_BUY_SIGNAL", scanned: scan.scanned || 0, deepScanned: scan.deepScanned || 0 };
+    }
+
+    const p = x.paperPlan;
+    const signalId = String(x.signalId || `${x.symbol}:${x.price}:${x.indicators?.resistance20 || "na"}`);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(signalId));
+    const key = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("");
+    const cacheKey = new Request(`https://minute-signal-cache.local/${key}`);
+    if (await caches.default.match(cacheKey)) {
+      return { ok: true, status: "DUPLICATE_SUPPRESSED", symbol: x.symbol };
+    }
+
+    const entry = Number(p.entry);
+    const entryLow = entry * 0.998;
+    const entryHigh = entry * 1.002;
+    const target2 = Number(p.target2 || (entry + 3 * (entry - Number(p.stop))));
+    const pair = x.symbol.endsWith("USDT") ? `${x.symbol.slice(0, -4)}/USDT` : x.symbol;
+
+    const message = [
+      `🟢 فرصة SPOT جاهزة الآن — ${pair}`,
+      "",
+      `💵 المبلغ: حتى ${p.maxPositionUSDT} USDT`,
+      `🟢 سعر الدخول: ${fmt(entry)}`,
+      `✅ ادخلي فقط لو السعر الحالي بين ${fmt(entryLow)} و ${fmt(entryHigh)}`,
+      `🛑 وقف الخسارة: ${fmt(Number(p.stop))}`,
+      `🎯 الهدف 1: ${fmt(Number(p.target1))}`,
+      `🎯 الهدف 2: ${fmt(target2)}`,
+      `⚠️ أقصى مخاطرة محسوبة: ${p.maxRiskUSDT} USDT`,
+      "",
+      "📱 التنفيذ: Binance → Spot → الزوج → Buy",
+      "❌ لا تفتحي Perp / Futures ولا تضغطي Long.",
+      "⏱️ الإشارة سريعة: لو عدى دقيقتين أو السعر خرج من نطاق الدخول، تجاهليها.",
+      "",
+      `Score: ${x.score}/100 | RSI: ${x.indicators?.rsi14 ?? "-"} | 24h: ${x.market?.change24hPct ?? "-"}%`,
+      "Signal only — مفيش أمر اتنفذ تلقائيًا.",
+    ].join("\n");
+
+    await telegram(env, message);
+    await caches.default.put(cacheKey, new Response("sent", {
+      headers: { "Cache-Control": "max-age=3600" },
+    }));
+    return { ok: true, status: "ALERT_SENT", symbol: x.symbol, signalId };
+  } catch (error) {
+    return { ok: false, status: "SCHEDULER_ERROR", error: String(error?.message || error) };
+  }
+}
 
 async function scan(env) {
   try {
