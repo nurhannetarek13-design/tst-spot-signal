@@ -200,6 +200,19 @@ async function scanVercelAndAlert(env) {
 
     const x = (scan.buySignals || [])[0] || (scan.best?.decision === "BUY" ? scan.best : null);
     if (!x || !x.paperPlan) {
+      const early = (scan.results || [])
+        .filter(candidate => candidate?.earlyWatch?.potential)
+        .sort((a, b) => Number(b.earlyWatch?.score || 0) - Number(a.earlyWatch?.score || 0))[0] || null;
+      if (early) {
+        const warning = await maybeSendEarlyCapitalAlert(env, early);
+        return {
+          ok: true,
+          status: warning.status,
+          scanned: scan.scanned || 0,
+          deepScanned: scan.deepScanned || 0,
+          early: { symbol: early.symbol, minutesToClose: early.earlyWatch?.minutesToClose },
+        };
+      }
       return { ok: true, status: "NO_BUY_SIGNAL", scanned: scan.scanned || 0, deepScanned: scan.deepScanned || 0 };
     }
 
@@ -292,6 +305,86 @@ async function scanVercelAndAlert(env) {
     };
   } catch (error) {
     return { ok: false, status: "SCHEDULER_ERROR", error: String(error?.message || error) };
+  }
+}
+
+
+async function maybeSendEarlyCapitalAlert(env, candidate) {
+  const cfg = liveConfig(env);
+  const symbol = String(candidate.symbol || "");
+  const early = candidate.earlyWatch || {};
+  const signalId = String(candidate.signalId || `${symbol}:${early.resistance20 || candidate.price || "na"}`);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(signalId));
+  const signalHash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("").slice(0, 8);
+  const cacheKey = new Request(`https://early-capital-alert.local/${symbol}/${signalHash}`);
+  if (await caches.default.match(cacheKey)) return { status: "EARLY_WARNING_DUPLICATE" };
+
+  const account = await fetchExecutorAccountStatus(env);
+  if (!account.ok) return { status: "EARLY_ACCOUNT_CHECK_FAILED", reason: account.reason || account.status };
+
+  const capUSDT = cfg.capitalCapEGP / cfg.egpPerUSDT;
+  const equityUSDT = Math.max(0, Number(account.equityUSDT || 0));
+  const targetEquityUSDT = Math.min(
+    capUSDT,
+    cfg.maxTradeUSDT / Math.max(0.05, cfg.tradeEquityPct / 100)
+  );
+  const suggestedAddUSDT = Math.max(0, Math.min(capUSDT - equityUSDT, targetEquityUSDT - equityUSDT));
+  const suggestedAddEGP = Math.floor((suggestedAddUSDT * cfg.egpPerUSDT) / 50) * 50;
+
+  if (suggestedAddEGP < 100) {
+    await caches.default.put(cacheKey, new Response("capital-sufficient", {
+      headers: { "Cache-Control": "max-age=3600" },
+    }));
+    return { status: "EARLY_CAPITAL_ALREADY_SUFFICIENT" };
+  }
+
+  const pair = symbol.endsWith("USDT") ? `${symbol.slice(0, -4)}/USDT` : symbol;
+  await telegram(env, [
+    `👀 تنبيه مبكر — ${pair}`,
+    `الفرصة قريبة من شروط الدخول وقد تتأكد خلال نحو ${Math.min(cfg.earlyWarningMinutes, Number(early.minutesToClose || cfg.earlyWarningMinutes))} دقيقة عند إغلاق الشمعة.`,
+    "",
+    `💰 إجمالي رصيد Spot التقريبي: ${round2(equityUSDT)} USDT`,
+    `💵 لو حابة تجهزي الحجم الأقصى المحدد للصفقة: حطي تقريبًا ${suggestedAddEGP} جنيه فقط.`,
+    `🧱 الحد الصارم لإجمالي رأس المال: ${cfg.capitalCapEGP} جنيه (حوالي ${round2(capUSDT)} USDT بسعر مرجعي ${cfg.egpPerUSDT} جنيه/USDT).`,
+    "",
+    "⚠️ دي مراقبة مبكرة وليست إشارة BUY مؤكدة. لا تشتري يدويًا؛ استني رسالة BUY النهائية وإعادة الفحص.",
+    "لن يتم أي إيداع أو شراء تلقائي من هذا التنبيه."
+  ].join("\n"));
+
+  await caches.default.put(cacheKey, new Response("sent", {
+    headers: { "Cache-Control": "max-age=3600" },
+  }));
+  return { status: "EARLY_CAPITAL_ALERT_SENT", symbol, suggestedAddEGP };
+}
+
+async function fetchExecutorAccountStatus(env) {
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    return { ok: false, status: "RELAY_SECRET_MISSING", reason: "Telegram relay secret is missing." };
+  }
+  const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+  const endpoint = `${executorBase}/executor/account-status`;
+  const body = JSON.stringify({ purpose: "EARLY_CAPITAL_CHECK", timestamp: Date.now() });
+  const ts = String(Date.now());
+  const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Executor-Timestamp": ts,
+        "X-Executor-Signature": signature,
+        "User-Agent": "tst-spot-signal-cloudflare-capital/1.0",
+      },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      return { ok: false, status: data.status || "ACCOUNT_CHECK_REJECTED", reason: data.reason || data.error || `Executor returned ${response.status}` };
+    }
+    return data;
+  } catch (error) {
+    return { ok: false, status: "ACCOUNT_CHECK_UNREACHABLE", reason: String(error?.message || error) };
   }
 }
 
@@ -1040,6 +1133,9 @@ function liveConfig(env) {
     maxRiskUSDT: num(env.MAX_RISK_USDT, 0.5, 0.01, 100000),
     dailyLossCapUSDT: num(env.DAILY_LOSS_CAP_USDT, 2, 0.1, 100000),
     approvalSeconds: Math.floor(num(env.APPROVAL_SECONDS, 90, 30, 300)),
+    earlyWarningMinutes: Math.floor(num(env.EARLY_WARNING_MINUTES, 15, 5, 60)),
+    capitalCapEGP: num(env.CAPITAL_CAP_EGP, 3000, 100, 1000000),
+    egpPerUSDT: num(env.EGP_PER_USDT, 51, 1, 1000),
   };
 }
 
@@ -1070,6 +1166,9 @@ async function portfolioStatus(env) {
         reserveUSDT: cfg.reserveUSDT,
         maxRiskUSDT: cfg.maxRiskUSDT,
         dailyLossCapUSDT: cfg.dailyLossCapUSDT,
+        earlyWarningMinutes: cfg.earlyWarningMinutes,
+        capitalCapEGP: cfg.capitalCapEGP,
+        egpPerUSDT: cfg.egpPerUSDT,
       },
     }, r.ok ? 200 : 503);
   } catch (error) {
