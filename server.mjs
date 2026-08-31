@@ -105,7 +105,7 @@ app.get("/executor/status", async (_req, res) => {
   return res.json({
     ok: true,
     executor: "VERCEL_SPOT_EXECUTOR",
-    apiConnected: Boolean(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET),
+    apiConnected: hasBinanceSigningKey(),
     liveTradingEnabled: cfg.enabled,
     tradeUSDT: cfg.tradeUSDT,
     maxOpenPositions: cfg.maxOpenPositions,
@@ -148,7 +148,7 @@ app.post("/executor/preflight", async (req, res) => {
     if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason, orderPlaced: false });
 
     const cfg = executorConfig();
-    if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+    if (!hasBinanceSigningKey()) {
       return res.status(409).json({ ok: false, status: "API_NOT_CONNECTED", orderPlaced: false });
     }
 
@@ -205,7 +205,7 @@ app.post("/executor/account-status", async (req, res) => {
     if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
 
     const cfg = executorConfig();
-    if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+    if (!hasBinanceSigningKey()) {
       return res.status(409).json({ ok: false, status: "API_NOT_CONNECTED" });
     }
 
@@ -464,7 +464,7 @@ function timingSafeEqualHex(a, b) {
 async function executeSpotOrder(symbol) {
   const cfg = executorConfig();
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
-  if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
+  if (!hasBinanceSigningKey()) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
   }
 
@@ -643,18 +643,26 @@ async function emergencyClose(symbol, quantity, token) {
   });
 }
 
+function hasBinanceSigningKey() {
+  return Boolean(process.env.BINANCE_API_KEY &&
+    (process.env.BINANCE_API_PRIVATE_KEY || process.env.BINANCE_API_SECRET));
+}
+
 async function signedBinance(method, path, params = {}) {
   const apiKey = process.env.BINANCE_API_KEY;
+  const privateKeyPem = process.env.BINANCE_API_PRIVATE_KEY;
   const secret = process.env.BINANCE_API_SECRET;
-  if (!apiKey || !secret) throw new Error("Binance API keys are missing");
+  if (!apiKey || (!privateKeyPem && !secret)) throw new Error("Binance API signing key is missing");
 
   const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
   const query = Object.entries(all)
     .filter(([, v]) => v !== undefined && v !== null)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     .join("&");
-  const signature = await hmacHex(secret, query);
-  const r = await fetch(`https://api.binance.com${path}?${query}&signature=${signature}`, {
+  const signature = privateKeyPem
+    ? await ed25519Base64(privateKeyPem, query)
+    : await hmacHex(secret, query);
+  const r = await fetch(`https://api.binance.com${path}?${query}&signature=${encodeURIComponent(signature)}`, {
     method,
     headers: { "X-MBX-APIKEY": apiKey, Accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
@@ -662,6 +670,24 @@ async function signedBinance(method, path, params = {}) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`${data.code || r.status}: ${data.msg || "Binance request failed"}`);
   return data;
+}
+
+async function ed25519Base64(privateKeyPem, text) {
+  const normalized = String(privateKeyPem).replace(/\\n/g, "\n").trim();
+  const base64 = normalized
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+  const der = Uint8Array.from(Buffer.from(base64, "base64"));
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    der,
+    { name: "Ed25519" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(text));
+  return Buffer.from(signature).toString("base64");
 }
 
 async function hmacHex(secret, text) {
