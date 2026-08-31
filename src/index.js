@@ -43,6 +43,9 @@ const EXCLUDED_BASES = new Set([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/execute") {
+      return handleMakeExecute(request, env);
+    }
     if (url.pathname === "/paper-status") {
       return paperStatus(env);
     }
@@ -110,6 +113,87 @@ export default {
     ctx.waitUntil(scanVercelAndAlert(env));
   },
 };
+
+
+async function handleMakeExecute(request, env) {
+  try {
+    if (request.method !== "POST") {
+      return output({ ok: false, status: "METHOD_NOT_ALLOWED", reason: "POST required", liveTrading: false, orderPlaced: false }, 405);
+    }
+    if (!env.WEBHOOK_SHARED_SECRET) {
+      return output({ ok: false, status: "EXECUTOR_NOT_CONFIGURED", reason: "WEBHOOK_SHARED_SECRET is missing", liveTrading: false, orderPlaced: false }, 503);
+    }
+
+    const raw = await request.text();
+    if (raw.length > 12_000) {
+      return output({ ok: false, status: "PAYLOAD_TOO_LARGE", liveTrading: false, orderPlaced: false }, 413);
+    }
+    const body = JSON.parse(raw);
+    const suppliedSecret = String(body.secret || "");
+    if (!suppliedSecret || suppliedSecret !== String(env.WEBHOOK_SHARED_SECRET)) {
+      return output({ ok: false, status: "UNAUTHORIZED", reason: "Invalid shared secret", liveTrading: false, orderPlaced: false }, 401);
+    }
+
+    const signalId = String(body.signal_id || "").trim();
+    const action = String(body.action || "").toUpperCase();
+    const symbol = String(body.symbol || "").toUpperCase();
+    const quoteAmount = Number(body.quote_amount_usdt);
+    const stopLoss = Number(body.stop_loss_price);
+    const takeProfit = Number(body.take_profit_price);
+    const rawTimestamp = Number(body.timestamp);
+    const timestampMs = rawTimestamp < 10_000_000_000 ? rawTimestamp * 1000 : rawTimestamp;
+    const allowedSymbols = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
+
+    if (!/^[A-Za-z0-9:_-]{6,128}$/.test(signalId)) {
+      return output({ ok: false, status: "INVALID_SIGNAL_ID", liveTrading: false, orderPlaced: false }, 400);
+    }
+    if (!["BUY", "SELL"].includes(action)) {
+      return output({ ok: false, status: "INVALID_ACTION", reason: "BUY or SELL only", liveTrading: false, orderPlaced: false }, 400);
+    }
+    if (!allowedSymbols.has(symbol)) {
+      return output({ ok: false, status: "SYMBOL_NOT_ALLOWED", reason: "BTCUSDT, ETHUSDT or SOLUSDT only", liveTrading: false, orderPlaced: false }, 400);
+    }
+    if (!Number.isFinite(quoteAmount) || quoteAmount <= 0 || quoteAmount > 10) {
+      return output({ ok: false, status: "QUOTE_LIMIT", reason: "quote_amount_usdt must be above 0 and at most 10", liveTrading: false, orderPlaced: false }, 400);
+    }
+    if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 120_000) {
+      return output({ ok: false, status: "STALE_SIGNAL", reason: "Signal must be newer than 120 seconds", liveTrading: false, orderPlaced: false }, 400);
+    }
+    if (action === "BUY" && (!Number.isFinite(stopLoss) || !Number.isFinite(takeProfit) || stopLoss <= 0 || takeProfit <= stopLoss)) {
+      return output({ ok: false, status: "INVALID_PROTECTION", reason: "Valid stop_loss_price and take_profit_price are required", liveTrading: false, orderPlaced: false }, 400);
+    }
+
+    const daily = await getDailyPaper(env);
+    if (Number(daily.realizedPnlUSDT || 0) <= -CFG.dailyLossCap) {
+      return output({ ok: false, status: "DAILY_LOSS_CAP", reason: "Daily loss cap reached", dailyLossCapUSDT: CFG.dailyLossCap, liveTrading: false, orderPlaced: false }, 429);
+    }
+
+    const dedupeKey = `make:signal:${signalId}`;
+    if (await getState(env, dedupeKey)) {
+      return output({ ok: false, status: "DUPLICATE_SIGNAL", signal_id: signalId, liveTrading: false, orderPlaced: false }, 409);
+    }
+    await putState(env, dedupeKey, { signalId, action, symbol, receivedAt: Date.now() }, 24 * 3600);
+
+    return output({
+      ok: true,
+      status: "DEMO_ACCEPTED",
+      mode: "PAPER_ONLY",
+      signal_id: signalId,
+      action,
+      symbol,
+      quote_amount_usdt: quoteAmount,
+      stop_loss_price: action === "BUY" ? stopLoss : null,
+      take_profit_price: action === "BUY" ? takeProfit : null,
+      dailyRealizedPnlUSDT: Number(daily.realizedPnlUSDT || 0),
+      dailyLossCapUSDT: CFG.dailyLossCap,
+      liveTrading: false,
+      orderPlaced: false,
+      message: "Signal validated. No Binance order was submitted."
+    });
+  } catch (error) {
+    return output({ ok: false, status: "BAD_REQUEST", error: String(error?.message || error), liveTrading: false, orderPlaced: false }, 400);
+  }
+}
 
 
 async function scanVercelAndAlert(env) {
