@@ -1,0 +1,26 @@
+name: Round 3 Step 2 Parallel
+on:
+  push:
+    paths:
+      - 'scripts/round3_runner_parallel.py'
+      - '.github/workflows/round3-step2-parallel.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas
+      - run: python -m py_compile scripts/round3_runner_parallel.py
+      - run: python scripts/round3_runner_parallel.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round3-step2-parallel
+          path: validation/round3-step2-parallel.json
+          if-no-files-found: error
