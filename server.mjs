@@ -301,6 +301,42 @@ app.post("/executor/position-status", async (req, res) => {
   }
 });
 
+async function botClosedPnlLast24h() {
+  const now = Date.now();
+  const exitCutoff = now - 24 * 60 * 60 * 1000;
+  const orderLookback = now - 48 * 60 * 60 * 1000;
+  let pnlUSDT = 0;
+  let closedTrades = 0;
+
+  for (const symbol of ALLOWED_SPOT_SYMBOLS) {
+    const orders = await signedBinance("GET", "/api/v3/allOrders", {
+      symbol,
+      startTime: orderLookback,
+      limit: 1000,
+    });
+    const filled = (orders || []).filter(o => o.status === "FILLED");
+    const buys = new Map();
+    for (const order of filled) {
+      const id = String(order.clientOrderId || "");
+      const match = id.match(/^TSTB([a-f0-9]{8})$/i);
+      if (match && order.side === "BUY") buys.set(match[1].toLowerCase(), order);
+    }
+    for (const order of filled) {
+      const id = String(order.clientOrderId || "");
+      const match = id.match(/^TST[TSX]([a-f0-9]{8})$/i);
+      if (!match || order.side !== "SELL" || Number(order.updateTime || 0) < exitCutoff) continue;
+      const buy = buys.get(match[1].toLowerCase());
+      if (!buy) continue;
+      const buyQuote = Number(buy.cummulativeQuoteQty || 0);
+      const sellQuote = Number(order.cummulativeQuoteQty || 0);
+      const estimatedFees = (buyQuote + sellQuote) * CFG.feeRate;
+      pnlUSDT += sellQuote - buyQuote - estimatedFees;
+      closedTrades += 1;
+    }
+  }
+  return { pnlUSDT: round(pnlUSDT, 5), closedTrades };
+}
+
 async function tradeFeesUSDT(trades, symbol, entryAvg, exitAvg) {
   const baseAsset = symbol.slice(0, -4);
   let total = 0;
@@ -595,6 +631,17 @@ async function executeSpotOrder(symbol) {
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
   if (!hasBinanceSigningKey()) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
+  }
+
+  const riskWindow = await botClosedPnlLast24h();
+  if (riskWindow.pnlUSDT <= -CFG.maxDailyLossUSDT) {
+    return {
+      ok: false,
+      status: "DAILY_LOSS_KILL_SWITCH",
+      reason: `Trading locked: bot net P&L over the last 24 hours is ${riskWindow.pnlUSDT} USDT, at or below the -${CFG.maxDailyLossUSDT} USDT limit.`,
+      orderPlaced: false,
+      closedTrades: riskWindow.closedTrades,
+    };
   }
 
   const [ticker, book, klines, info, hourlyKlines, depth] = await Promise.all([
