@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-09-01T13:23:22.807Z",
+  "source": "Binance Spot closed OHLCV",
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "days": 365,
+  "assumptions": {
+    "feeEachSide": 0.001,
+    "slippageEachSide": 0.0005,
+    "sameBarStopAndTarget": "STOP_FIRST",
+    "parameters": "PRE_REGISTERED_NO_POST_RESULT_TUNING"
+  },
+  "results": [
+    {"strategy":"BREAKOUT_RETEST","trades":73,"netReturnPct":-20.295,"profitFactor":0.63,"outOfSampleReturnPct":-3.356,"outOfSampleProfitFactor":0.78,"approved":false},
+    {"strategy":"TREND_PULLBACK","trades":276,"netReturnPct":-45.379,"profitFactor":0.742,"outOfSampleReturnPct":-11.121,"outOfSampleProfitFactor":0.77,"approved":false},
+    {"strategy":"MOMENTUM_CONTINUATION","trades":100,"netReturnPct":-30.923,"profitFactor":0.576,"outOfSampleReturnPct":-1.485,"outOfSampleProfitFactor":0.922,"approved":false},
+    {"strategy":"RANGE_MEAN_REVERSION","trades":103,"netReturnPct":-52.919,"profitFactor":0.285,"outOfSampleReturnPct":-16.304,"outOfSampleProfitFactor":0.215,"approved":false}
+  ],
+  "releaseApproved": false,
+  "reason": "No strategy passed positive out-of-sample expectancy, Profit Factor above 1.2, sufficient sample size, and all positive walk-forward folds."
+}
