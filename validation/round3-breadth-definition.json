@@ -1,0 +1,33 @@
+{
+  "registeredAt": "2026-09-01T15:34:00Z",
+  "status": "LOCKED_BEFORE_BREADTH_RESULTS",
+  "category": "MARKET_BREADTH_AGGREGATED_LEAD_LAG",
+  "data": {
+    "barInterval": "1h",
+    "universe": "Round 3 discovery symbols excluding clean unseen-symbol holdout",
+    "btcDominance": "OMITTED_NO_CREDIBLE_BINANCE_NATIVE_HISTORICAL_SERIES"
+  },
+  "event": {
+    "breadthSmaHours": 50,
+    "minFractionAboveSma50": 0.70,
+    "breadthImpulseLookbackHours": 24,
+    "minBreadthImpulse": 0.15,
+    "leaderBasket": ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT"],
+    "leaderReturnHorizonHours": 24,
+    "minLeaderMedianReturn": 0.03,
+    "minPositive24hReturnBreadth": 0.70
+  },
+  "rawForwardHorizonsHours": [48,72,120,168],
+  "rawGate": {
+    "minMeanGrossReturn": 0.015,
+    "requireMedianPositive": true,
+    "minHitRate": 0.55,
+    "minMedianMfeMaeRatio": 2.0
+  },
+  "executionMeasurement": {
+    "eventKnownAt": "BAR_T_CLOSE",
+    "entryReference": "NEXT_BAR_OPEN",
+    "mfeMaeWindow": "T_PLUS_1_THROUGH_T_PLUS_H"
+  },
+  "liveTrading": false
+}
