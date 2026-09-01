@@ -1,0 +1,14 @@
+{
+  "round":12,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "purpose":"Independent unseen-symbol replication of the exact Round 11 ROTATION_30D signal; no parameter changes permitted.",
+  "source_candidate":"Round 11 ROTATION_30D",
+  "selection_rule":"At runtime select the top 50 Binance Spot USDT symbols by current 24h quote volume excluding the 24 Round-11 discovery symbols, the 8 reserved final-holdout symbols, stable/fiat-like bases, leveraged-token suffixes, and wrapped/gold proxies. BTCUSDT is context only.",
+  "signal":{"timeframe":"4h","market_regime":"BTC close > EMA600 and BTC 30d return > 0","rebalance_bars":42,"rank":"top 2 by 30d return","minimum_momentum":0.10,"entry":"next bar open","stop_pct":0.0275,"target_pct":0.12,"hold_bars":42,"intrabar":"STOP_FIRST"},
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "replication_gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "paper_gate":{"min_pooled_oos_trades":200,"min_pf":1.20,"positive_final_holdout":true,"max_top_two_profit_share":0.50},
+  "capital":{"account_usdt":20.12,"order_usdt":7,"reserve_usdt":2,"max_risk_usdt":0.20,"equity_floor":0,"positions_to_test":[1,2]},
+  "rule":"Final holdout must not be downloaded unless the independent replication gate passes. Live trading remains disabled."
+}
