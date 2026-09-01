@@ -8,6 +8,7 @@ const API_BASES = [
 ];
 
 const CFG = {
+  validationMode: true,
   capital: 20.08,
   maxPosition: 7,
   maxRisk: 0.25,
@@ -240,6 +241,23 @@ async function scanVercelAndAlert(env) {
     const baseAsset = x.symbol.endsWith("USDT") ? x.symbol.slice(0, -4) : x.symbol;
     const pair = x.symbol.endsWith("USDT") ? `${baseAsset}/USDT` : x.symbol;
     const openText = `up to ${live.maxOpenPositions}`;
+
+    if (CFG.validationMode) {
+      await telegram(env, [
+        `🧪 PAPER فقط — ${pair}`,
+        `💵 حجم الاختبار: حتى ${live.tradeUSDT} USDT`,
+        `🛑 Stop: ${fmt(Number(p.stop))}`,
+        `🎯 TP1: ${fmt(Number(p.target1))}`,
+        `🎯 TP2: ${fmt(target2)}`,
+        "",
+        "لا يوجد زر BUY ولن يتم إرسال أي أمر إلى Binance.",
+        "الفرصة تُسجل للتحقق من أداء الاستراتيجية فقط."
+      ].join("\n"));
+      await caches.default.put(cacheKey, new Response("paper-alert", {
+        headers: { "Cache-Control": "max-age=3600" },
+      }));
+      return { ok: true, status: "PAPER_ALERT_SENT", symbol: x.symbol, signalId };
+    }
 
     if (live.autoExecute && live.enabled) {
       const execution = await executeLiveSpotBuy(env, x.symbol, signalHash);
@@ -1126,8 +1144,8 @@ function liveConfig(env) {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
-    autoExecute: ["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE || "").toLowerCase()),
+    enabled: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
+    autoExecute: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE || "").toLowerCase()),
     compoundEnabled: ["1", "true", "yes", "on"].includes(String(env.COMPOUND_ENABLED || "false").toLowerCase()),
     // Environment settings may only reduce the agreed hard safety limits.
     tradeUSDT: num(env.TRADE_USDT, CFG.maxPosition, 1, CFG.maxPosition),
