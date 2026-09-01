@@ -2,10 +2,12 @@
   "name": "tst-spot-signal",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "node scripts/render-server.mjs",
     "check:render": "node --check scripts/render-server.mjs",
     "test": "node --test",
+    "backtest": "node scripts/backtest.mjs",
     "deploy": "wrangler deploy",
     "start:oracle": "node scripts/oracle-executor.mjs"
   },
