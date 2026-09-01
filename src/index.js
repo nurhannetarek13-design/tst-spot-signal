@@ -1328,8 +1328,42 @@ async function trackLivePosition(env, execution) {
   await putState(env, "live:positions:active", active, 30 * 24 * 3600);
 }
 
+async function discoverLivePositions(env) {
+  if (!env.TELEGRAM_BOT_TOKEN) return;
+  try {
+    const body = JSON.stringify({ timestamp: Date.now() });
+    const ts = String(Date.now());
+    const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+    const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+    const response = await fetch(`${executorBase}/executor/discover-open-positions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Executor-Timestamp": ts,
+        "X-Executor-Signature": signature,
+      },
+      body,
+      signal: AbortSignal.timeout(20_000),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) return;
+    for (const position of data.positions || []) {
+      await trackLivePosition(env, {
+        symbol: position.symbol,
+        orderId: position.entryOrderId,
+        avgFillPrice: position.entryPrice,
+        quantity: position.quantity,
+        quoteSpentUSDT: position.quoteSpentUSDT,
+      });
+    }
+  } catch {
+    // Discovery is retried by the next scheduled run.
+  }
+}
+
 async function monitorLivePositions(env) {
   try {
+    await discoverLivePositions(env);
     const active = await getState(env, "live:positions:active") || [];
     if (!active.length || !env.TELEGRAM_BOT_TOKEN) return { checked: 0, closed: 0 };
     const remaining = [];
