@@ -197,6 +197,40 @@ app.post("/executor/preflight", async (req, res) => {
   }
 });
 
+app.post("/executor/discover-open-positions", async (req, res) => {
+  try {
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY" });
+    const auth = await verifyExecutorRelay(req, raw);
+    if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
+
+    const openOrders = await signedBinance("GET", "/api/v3/openOrders", {});
+    const symbols = [...new Set((openOrders || [])
+      .filter(o => o.side === "SELL" && /^TST[TS]/.test(String(o.clientOrderId || "")))
+      .map(o => o.symbol))];
+    const positions = [];
+    for (const symbol of symbols) {
+      const orders = await signedBinance("GET", "/api/v3/allOrders", { symbol, limit: 1000 });
+      const entry = (orders || [])
+        .filter(o => o.side === "BUY" && o.status === "FILLED" && String(o.clientOrderId || "").startsWith("TSTB"))
+        .sort((a, b) => Number(b.updateTime || 0) - Number(a.updateTime || 0))[0];
+      if (entry) {
+        positions.push({
+          symbol,
+          entryOrderId: Number(entry.orderId),
+          entryPrice: Number(entry.executedQty || 0) > 0 ? Number(entry.cummulativeQuoteQty || 0) / Number(entry.executedQty) : 0,
+          quantity: entry.executedQty,
+          quoteSpentUSDT: entry.cummulativeQuoteQty,
+          openedAt: Number(entry.time || entry.updateTime || Date.now()),
+        });
+      }
+    }
+    return res.json({ ok: true, status: "DISCOVERY_OK", positions });
+  } catch (error) {
+    return res.status(503).json({ ok: false, status: "DISCOVERY_FAILED", reason: String(error?.message || error) });
+  }
+});
+
 app.post("/executor/position-status", async (req, res) => {
   try {
     const raw = typeof req.body === "string" ? req.body : "";
