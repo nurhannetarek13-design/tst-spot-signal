@@ -15,10 +15,10 @@ const API_BASES = [
 const CFG = {
   capitalUSDT: 20.08,
   maxDailyLossUSDT: 0.5,
-  maxRiskPerTradeUSDT: 0.25,
+  maxRiskPerTradeUSDT: 0.20,
   maxPositionUSDT: 7,
-  minQuoteVolume24h: 5_000_000,
-  maxSpreadPct: 0.15,
+  minQuoteVolume24h: 15_000_000,
+  maxSpreadPct: 0.12,
   scanAllSpotUSDT: false,
   feeRate: 0.001,
 };
