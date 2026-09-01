@@ -1,0 +1,23 @@
+name: Round 12 rotation replication
+on:
+  push:
+    paths:
+      - 'scripts/research-round12.mjs'
+      - 'validation/evidence-gate-round12.json'
+      - '.github/workflows/research-round12.yml'
+  workflow_dispatch:
+jobs:
+  replication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/research-round12.mjs
+      - run: node scripts/research-round12.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round12-replication
+          path: validation/round12-replication.json
