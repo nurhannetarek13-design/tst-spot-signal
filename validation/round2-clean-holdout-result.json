@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-09-01T14:23:32.456Z",
+  "status": "UNTOUCHED_SYMBOL_HOLDOUT",
+  "holdout": ["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "capital": {"account":20.12,"quote":7,"reserve":2,"maxRisk":0.2},
+  "reports": [
+    {"id":"BTC_LEAD_POS_4H","eventCount":4944,"onePosition":{"base":{"trades":479,"expectancy":-0.02449,"profitFactor":0.576,"netPnl":-11.7289,"maxDrawdownPct":59.727,"winRate":0.38},"stress":{"trades":479,"expectancy":-0.04969,"profitFactor":0.334,"netPnl":-23.7997,"maxDrawdownPct":118.086,"winRate":0.286}},"twoPositions":{"base":{"trades":958,"expectancy":-0.02385,"profitFactor":0.577,"netPnl":-22.8472,"maxDrawdownPct":112.95,"winRate":0.3789},"stress":{"trades":958,"expectancy":-0.04905,"profitFactor":0.331,"netPnl":-46.9888,"maxDrawdownPct":229.16,"winRate":0.2829}}},
+    {"id":"VOL_EXPANSION_UP_CONT_4H","eventCount":2660,"onePosition":{"base":{"trades":590,"expectancy":-0.02563,"profitFactor":0.602,"netPnl":-15.1219,"maxDrawdownPct":75.471,"winRate":0.3492},"stress":{"trades":590,"expectancy":-0.05083,"profitFactor":0.38,"netPnl":-29.9899,"maxDrawdownPct":149.117,"winRate":0.2644}},"twoPositions":{"base":{"trades":1020,"expectancy":-0.02574,"profitFactor":0.594,"netPnl":-26.2522,"maxDrawdownPct":132.786,"winRate":0.3471},"stress":{"trades":1020,"expectancy":-0.05094,"profitFactor":0.372,"netPnl":-51.9562,"maxDrawdownPct":258.232,"winRate":0.2647}}},
+    {"id":"TREND_24H_CONT_12H","eventCount":6434,"onePosition":{"base":{"trades":349,"expectancy":-0.0404,"profitFactor":0.616,"netPnl":-14.0979,"maxDrawdownPct":70.566,"winRate":0.2779},"stress":{"trades":349,"expectancy":-0.0656,"profitFactor":0.47,"netPnl":-22.8927,"maxDrawdownPct":113.602,"winRate":0.2378}},"twoPositions":{"base":{"trades":663,"expectancy":-0.04703,"profitFactor":0.562,"netPnl":-31.1827,"maxDrawdownPct":155.896,"winRate":0.2685},"stress":{"trades":663,"expectancy":-0.07223,"profitFactor":0.428,"netPnl":-47.8903,"maxDrawdownPct":238.024,"winRate":0.2353}}}
+  ],
+  "verdict": "NO_SELECTED_SIGNAL_SURVIVED_CLEAN_HOLDOUT",
+  "note": "Drawdowns above 100% reveal that the research simulator must add an equity-floor/ruin stop before drawdown is used as a capital-feasibility metric. This does not change the rejection because expectancy is negative and PF is below 1 under both cost models."
+}
