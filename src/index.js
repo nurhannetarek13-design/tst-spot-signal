@@ -44,6 +44,7 @@ const CFG = {
   },
   telegramLookbackMessages: 15,
 };
+const VALIDATED_STRATEGY_RELEASE = null;
 
 const EXCLUDED_BASES = new Set([
   "USDC", "FDUSD", "TUSD", "USDP", "DAI", "EUR", "AEUR", "TRY", "BRL",
@@ -71,6 +72,8 @@ export default {
         ok: true,
         mode: live.enabled ? (live.autoExecute ? "LIVE_AUTO" : "CONFIRM_BEFORE_BUY") : "SIGNAL_ONLY",
         liveTrading: live.enabled,
+        strategyValidated: live.strategyValidated,
+        strategyRelease: VALIDATED_STRATEGY_RELEASE,
         autoExecute: live.autoExecute,
         universe: "ALL_BINANCE_SPOT_USDT",
         cadence: "EVERY_MINUTE",
@@ -596,6 +599,7 @@ async function scan(env, options = {}) {
           signalHash,
           createdAt: Date.now(),
           expiresAt: Date.now() + live.approvalSeconds * 1000,
+          candidate: { ...best, approvedAt: Date.now() },
         }, live.approvalSeconds + 300);
         await telegram(env, [
           `🟢 فرصة SPOT — ${pair}`,
@@ -837,6 +841,8 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     };
 
     const sourceRisk = assessSourceRisk(riskSources, summary.base, summary.symbol);
+    // Scraped public-channel text is advisory telemetry only. It must never
+    // silently masquerade as an authoritative, complete risk feed.
     checks.noOfficialBinanceRisk = !sourceRisk.binance.blocked;
     checks.noOnChainMarketRisk = !sourceRisk.cryptoQuant.blocked;
     checks.noLargeExchangeDepositRisk = !sourceRisk.whaleAlert.blocked;
@@ -848,8 +854,7 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       "bidDepthSufficient", "askDepthSufficient", "bidDepthDominates", "noSingleSellWall",
       "rsiHealthy", "atrHealthy", "stopBelowEntry", "stopWithin3Pct",
       "minimumOrderMet", "ocoSupported", "protectedLegsMeetNotional", "positionAtMost7USDT",
-      "riskAtMost020USDT", "netRewardRiskAtLeast30", "scoreAtLeast90", "noOfficialBinanceRisk",
-      "noOnChainMarketRisk", "noLargeExchangeDepositRisk",
+      "riskAtMost020USDT", "netRewardRiskAtLeast30", "scoreAtLeast90",
     ];
     const hardChecksPassed = hardCheckKeys.every(key => checks[key]);
     const valid = hardChecksPassed && score >= CFG.minScore;
@@ -1305,7 +1310,7 @@ async function telegramWebhook(request, env) {
       }
       await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "جاري فحص السعر والحساب ثم تنفيذ Spot…" });
 
-      const execution = await executeLiveSpotBuy(env, symbol, signalHash);
+      const execution = await executeLiveSpotBuy(env, symbol, signalHash, claim.value?.candidate);
       await putState(env, `live:approval:${signalHash}`, {
         ...claim.value,
         status: execution.ok ? "DONE" : "FAILED",
@@ -1494,7 +1499,8 @@ function liveConfig(env) {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
+    strategyValidated: Boolean(VALIDATED_STRATEGY_RELEASE) && env.STRATEGY_RELEASE === VALIDATED_STRATEGY_RELEASE,
+    enabled: !CFG.validationMode && Boolean(VALIDATED_STRATEGY_RELEASE) && env.STRATEGY_RELEASE === VALIDATED_STRATEGY_RELEASE && ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
       !["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
     // Human confirmation is mandatory: a valid setup sends a Telegram BUY button.
     autoExecute: false,
@@ -1612,7 +1618,7 @@ async function livePreflight(env) {
 }
 
 
-async function executeLiveSpotBuy(env, symbol, signalHash) {
+async function executeLiveSpotBuy(env, symbol, signalHash, approvedSignal = null) {
   const cfg = liveConfig(env);
   const daily = await getLiveDailyRisk(env);
   const pnl = await getLiveDailyPnl(env);
@@ -1636,10 +1642,15 @@ async function executeLiveSpotBuy(env, symbol, signalHash) {
 
   const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
   const endpoint = `${executorBase}/execute/spot-buy`;
+  const knownSymbols = await getState(env, "live:traded-symbols") || [];
+  if (!knownSymbols.includes(symbol)) knownSymbols.push(symbol);
+  await putState(env, "live:traded-symbols", knownSymbols.slice(-250), 3650 * 24 * 3600);
   const body = JSON.stringify({
     action: "BUY",
     symbol,
     signalHash,
+    approvedSignal,
+    knownSymbols: knownSymbols.slice(-250),
     timestamp: Date.now(),
     sizing: {
       compoundEnabled: cfg.compoundEnabled,
