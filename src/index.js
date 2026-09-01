@@ -157,6 +157,49 @@ export default {
   },
 };
 
+export class SignalState {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const key = url.searchParams.get("key") || "";
+    if (!key || key.length > 300) return new Response("bad key", { status: 400 });
+    if (request.method === "GET" && url.pathname === "/get") {
+      const row = await this.ctx.storage.get(key);
+      if (!row) return Response.json(null);
+      if (row.expiresAt && Date.now() >= row.expiresAt) {
+        await this.ctx.storage.delete(key);
+        return Response.json(null);
+      }
+      return Response.json(row.value);
+    }
+    if (request.method === "PUT" && url.pathname === "/put") {
+      const row = await request.json();
+      await this.ctx.storage.put(key, row);
+      return Response.json({ ok: true });
+    }
+    if (request.method === "POST" && url.pathname === "/claim") {
+      const body = await request.json();
+      const result = await this.ctx.storage.transaction(async txn => {
+        const row = await txn.get(key);
+        if (!row || (row.expiresAt && Date.now() >= row.expiresAt)) {
+          return { claimed: false, reason: "MISSING_OR_EXPIRED" };
+        }
+        if (row.value?.status !== "PENDING") {
+          return { claimed: false, reason: row.value?.status || "ALREADY_USED" };
+        }
+        row.value = { ...row.value, status: "EXECUTING", claimedAt: Date.now(), claimId: body.claimId || null };
+        await txn.put(key, row);
+        return { claimed: true, value: row.value };
+      });
+      return Response.json(result);
+    }
+    return new Response("not found", { status: 404 });
+  }
+}
+
 
 async function handleMakeExecute(request, env) {
   try {
@@ -345,6 +388,13 @@ async function scanVercelAndAlert(env) {
     ].join("\n");
 
     await ensureTelegramWebhook(env);
+    await putState(env, `live:approval:${signalHash}`, {
+      status: "PENDING",
+      symbol: x.symbol,
+      signalHash,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + live.approvalSeconds * 1000,
+    }, live.approvalSeconds + 300);
     await telegram(env, message, {
       inline_keyboard: [[
         { text: `✅ BUY`, callback_data: `live_buy:${x.symbol}:${signalHash}` },
@@ -540,6 +590,13 @@ async function scan(env, options = {}) {
         const plan = best.paperPlan;
         const pair = best.symbol.replace("USDT", "/USDT");
         await ensureTelegramWebhook(env);
+        await putState(env, `live:approval:${signalHash}`, {
+          status: "PENDING",
+          symbol: best.symbol,
+          signalHash,
+          createdAt: Date.now(),
+          expiresAt: Date.now() + live.approvalSeconds * 1000,
+        }, live.approvalSeconds + 300);
         await telegram(env, [
           `🟢 فرصة SPOT — ${pair}`,
           `درجة التأكيد: ${best.score}/100`,
@@ -688,9 +745,11 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     const spread = ((ask - bid) / mid) * 100;
     const depthStats = orderBookStats(depth, mid);
     const trend = symbolTrend(c1h, c4h);
-    const breakout = summary.symbol === "TSTUSDT" ? tstBreakoutRetest(c15, ask) : breakoutRetest(c15);
-    const pullback = summary.symbol !== "TSTUSDT" && trend.aligned ? pullbackBounce(c15) : null;
-    const setup = breakout || pullback;
+    // Keep one explicit, testable setup in live alerts. The previous pullback
+    // path did not match the executor's final breakout revalidation, producing
+    // buttons that were guaranteed to be rejected at execution time.
+    const breakout = breakoutRetest(c15);
+    const setup = breakout;
     const atr = atr14(c15);
     const entry = ask;
     const atrPct = entry > 0 ? (atr / entry) * 100 : 999;
@@ -1226,6 +1285,16 @@ async function telegramWebhook(request, env) {
         return output({ ok: true, status: "LIVE_REJECTED", symbol });
       }
 
+      const claim = await claimState(env, `live:approval:${signalHash}`, query.id);
+      if (!claim.claimed || claim.value?.symbol !== symbol) {
+        await telegramApi(env, "answerCallbackQuery", {
+          callback_query_id: query.id,
+          text: claim.reason === "DURABLE_STATE_REQUIRED" ? "التنفيذ مقفول: التخزين الآمن غير متاح" : "تم استخدام الإشارة أو انتهت",
+          show_alert: true,
+        });
+        return output({ ok: false, status: "APPROVAL_NOT_CLAIMED", reason: claim.reason, orderPlaced: false }, 409);
+      }
+
       // Remove the button immediately to avoid accidental double taps.
       if (query.message?.message_id) {
         await telegramApi(env, "editMessageReplyMarkup", {
@@ -1237,6 +1306,12 @@ async function telegramWebhook(request, env) {
       await telegramApi(env, "answerCallbackQuery", { callback_query_id: query.id, text: "جاري فحص السعر والحساب ثم تنفيذ Spot…" });
 
       const execution = await executeLiveSpotBuy(env, symbol, signalHash);
+      await putState(env, `live:approval:${signalHash}`, {
+        ...claim.value,
+        status: execution.ok ? "DONE" : "FAILED",
+        finishedAt: Date.now(),
+        resultStatus: execution.status || null,
+      }, 7 * 24 * 3600);
       if (!execution.ok) {
         await finalizeTelegramButton(env, query, [
           `⚠️ لم يتم الشراء — ${symbol.replace("USDT", "/USDT")}`,
@@ -1647,8 +1722,21 @@ async function discoverLivePositions(env) {
       signal: AbortSignal.timeout(20_000),
     });
     const data = await response.json();
+    if (data.critical || data.incidents?.length) {
+      await putState(env, "live:critical-incident", {
+        at: Date.now(),
+        status: data.status,
+        incidents: data.incidents || [],
+      }, 30 * 24 * 3600);
+      await telegram(env, `🛑 CRITICAL: فشل تأمين/إغلاق مركز بعد المصالحة. التداول سيظل مقفولًا حتى مراجعة Binance.\n${JSON.stringify(data.incidents || []).slice(0, 2500)}`).catch(() => null);
+      return;
+    }
     if (!response.ok || !data.ok) return;
     for (const position of data.positions || []) {
+      if (position.recoveryAction === "EMERGENCY_CLOSED_NAKED_POSITION") {
+        await telegram(env, `🛡️ تم اكتشاف مركز ${position.symbol.replace("USDT", "/USDT")} بلا حماية بعد الاسترجاع وإغلاقه فورًا على Binance.`).catch(() => null);
+        continue;
+      }
       await trackLivePosition(env, {
         symbol: position.symbol,
         orderId: position.entryOrderId,
@@ -1881,12 +1969,28 @@ function round2(value) {
 }
 
 async function getState(env, key) {
+  if (env.STATE_COORDINATOR) {
+    const id = env.STATE_COORDINATOR.idFromName("tst-spot-global");
+    const response = await env.STATE_COORDINATOR.get(id).fetch(`https://state.local/get?key=${encodeURIComponent(key)}`);
+    if (!response.ok) throw new Error(`State read failed: ${response.status}`);
+    return response.json();
+  }
   if (env.SIGNAL_STATE) return env.SIGNAL_STATE.get(key, "json");
   const response = await caches.default.match(new Request(`https://paper-state.local/${encodeURIComponent(key)}`));
   return response ? response.json() : null;
 }
 
 async function putState(env, key, value, ttlSeconds) {
+  if (env.STATE_COORDINATOR) {
+    const id = env.STATE_COORDINATOR.idFromName("tst-spot-global");
+    const response = await env.STATE_COORDINATOR.get(id).fetch(`https://state.local/put?key=${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value, expiresAt: Date.now() + Math.max(60, Math.floor(ttlSeconds)) * 1000 }),
+    });
+    if (!response.ok) throw new Error(`State write failed: ${response.status}`);
+    return;
+  }
   if (env.SIGNAL_STATE) {
     await env.SIGNAL_STATE.put(key, JSON.stringify(value), { expirationTtl: Math.max(60, Math.floor(ttlSeconds)) });
     return;
@@ -1895,6 +1999,18 @@ async function putState(env, key, value, ttlSeconds) {
     new Request(`https://paper-state.local/${encodeURIComponent(key)}`),
     new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${Math.max(60, Math.floor(ttlSeconds))}` } })
   );
+}
+
+async function claimState(env, key, claimId) {
+  if (!env.STATE_COORDINATOR) return { claimed: false, reason: "DURABLE_STATE_REQUIRED" };
+  const id = env.STATE_COORDINATOR.idFromName("tst-spot-global");
+  const response = await env.STATE_COORDINATOR.get(id).fetch(`https://state.local/claim?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ claimId }),
+  });
+  if (!response.ok) throw new Error(`State claim failed: ${response.status}`);
+  return response.json();
 }
 
 async function relayTelegram(request, env) {
