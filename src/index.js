@@ -14,17 +14,17 @@ const CFG = {
   maxRisk: 0.20,
   dailyLossCap: 0.5,
   fee: 0.001,
-  minVolume24h: 15_000_000,
+  minVolume24h: 20_000_000,
   minDepthEachSide: 15_000,
-  maxSpreadPct: 0.12,
+  maxSpreadPct: 0.10,
   maxRise24hPct: 8,
   maxStopPct: 3,
-  minNetRR: 2.5,
-  minScore: 85,
+  minNetRR: 3.0,
+  minScore: 90,
   minAgeDays: 90,
-  minRelativeVolume: 1.20,
-  minTakerBuyRatio: 0.54,
-  minBidAskDepthRatio: 1.15,
+  minRelativeVolume: 1.50,
+  minTakerBuyRatio: 0.56,
+  minBidAskDepthRatio: 1.20,
   maxLargestAskShare: 0.35,
   scanCount: 7,
   priorityCount: 2,
@@ -626,6 +626,8 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       ? flowWindow.reduce((sum, x) => sum + Number(x.takerBuyQuote || 0), 0) / flowQuote
       : 0;
     const momentumRsi = rsi14(c15.map(x => x.close));
+    const close15 = c15.map(x => x.close);
+    const trend15m = close15.at(-1) > ema(close15, 20) && ema(close15, 20) > ema(close15, 50);
     const swingLow = setup?.retest?.low || setup?.trigger?.low || c15.at(-2).low;
     const stopRaw = summary.symbol === "TSTUSDT"
       ? 0.01794
@@ -663,7 +665,7 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       orderBookSupport: depthStats.bidAskRatio >= CFG.minBidAskDepthRatio && depthStats.largestAskShare <= CFG.maxLargestAskShare ? 10 : 0,
       tightSpread: spread <= CFG.maxSpreadPct ? 5 : 0,
       deepLiquidity: depthStats.bid >= CFG.minDepthEachSide && depthStats.ask >= CFG.minDepthEachSide ? 5 : 0,
-      healthyMomentum: momentumRsi >= 50 && momentumRsi <= 68 ? 5 : 0,
+      healthyMomentum: momentumRsi >= 52 && momentumRsi <= 66 ? 5 : 0,
       notOverextended: summary.change <= CFG.maxRise24hPct && atrPct >= 0.15 && atrPct <= 3.5 ? 5 : 0,
       protectableOrder: protectedStopNotional >= minNotional * 1.02 && protectedTargetNotional >= minNotional * 1.02 ? 5 : 0,
     };
@@ -673,18 +675,19 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       btcMarketAllowsLongs: regime.longAllowed,
       cryptoProductOnly: true,
       ageAtLeast90Days: c1d.length >= CFG.minAgeDays,
-      volume24hAbove15M: summary.volume >= CFG.minVolume24h,
+      volume24hAbove20M: summary.volume >= CFG.minVolume24h,
       notOverextended24h: summary.change <= CFG.maxRise24hPct,
+      trend15mAligned: trend15m,
       multiTimeframeTrendAligned: trend.aligned,
       confirmedSetup: Boolean(setup),
       relativeVolumeConfirmed: relativeVolume >= CFG.minRelativeVolume,
       takerBuyPressureConfirmed: takerBuyRatio >= CFG.minTakerBuyRatio,
-      spreadBelow012Pct: spread <= CFG.maxSpreadPct,
+      spreadBelow010Pct: spread <= CFG.maxSpreadPct,
       bidDepthSufficient: depthStats.bid >= CFG.minDepthEachSide,
       askDepthSufficient: depthStats.ask >= CFG.minDepthEachSide,
       bidDepthDominates: depthStats.bidAskRatio >= CFG.minBidAskDepthRatio,
       noSingleSellWall: depthStats.largestAskShare <= CFG.maxLargestAskShare,
-      rsiHealthy: momentumRsi >= 50 && momentumRsi <= 68,
+      rsiHealthy: momentumRsi >= 52 && momentumRsi <= 66,
       atrHealthy: atrPct >= 0.15 && atrPct <= 3.5,
       stopBelowEntry: stop > 0 && stop < entry,
       stopWithin3Pct: stopPct > 0 && stopPct <= CFG.maxStopPct,
@@ -693,8 +696,8 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       protectedLegsMeetNotional: protectedStopNotional >= minNotional * 1.02 && protectedTargetNotional >= minNotional * 1.02,
       positionAtMost7USDT: position <= CFG.maxPosition + 0.000001,
       riskAtMost020USDT: riskFees <= CFG.maxRisk,
-      netRewardRiskAtLeast25: netRR >= CFG.minNetRR,
-      scoreAtLeast85: score >= CFG.minScore,
+      netRewardRiskAtLeast30: netRR >= CFG.minNetRR,
+      scoreAtLeast90: score >= CFG.minScore,
     };
 
     const sourceRisk = assessSourceRisk(riskSources, summary.base, summary.symbol);
@@ -703,11 +706,13 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     checks.noLargeExchangeDepositRisk = !sourceRisk.whaleAlert.blocked;
 
     const hardCheckKeys = [
-      "btcMarketAllowsLongs", "cryptoProductOnly", "ageAtLeast90Days", "volume24hAbove15M",
-      "notOverextended24h", "multiTimeframeTrendAligned", "confirmedSetup", "spreadBelow012Pct",
-      "bidDepthSufficient", "askDepthSufficient", "atrHealthy", "stopBelowEntry", "stopWithin3Pct",
+      "btcMarketAllowsLongs", "cryptoProductOnly", "ageAtLeast90Days", "volume24hAbove20M",
+      "notOverextended24h", "trend15mAligned", "multiTimeframeTrendAligned", "confirmedSetup",
+      "relativeVolumeConfirmed", "takerBuyPressureConfirmed", "spreadBelow010Pct",
+      "bidDepthSufficient", "askDepthSufficient", "bidDepthDominates", "noSingleSellWall",
+      "rsiHealthy", "atrHealthy", "stopBelowEntry", "stopWithin3Pct",
       "minimumOrderMet", "ocoSupported", "protectedLegsMeetNotional", "positionAtMost7USDT",
-      "riskAtMost020USDT", "netRewardRiskAtLeast25", "noOfficialBinanceRisk",
+      "riskAtMost020USDT", "netRewardRiskAtLeast30", "scoreAtLeast90", "noOfficialBinanceRisk",
       "noOnChainMarketRisk", "noLargeExchangeDepositRisk",
     ];
     const hardChecksPassed = hardCheckKeys.every(key => checks[key]);
