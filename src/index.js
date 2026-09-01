@@ -69,7 +69,7 @@ export default {
       const live = liveConfig(env);
       return output({
         ok: true,
-        mode: live.enabled && live.autoExecute ? "LIVE_AUTO" : "SIGNAL_ONLY",
+        mode: live.enabled ? (live.autoExecute ? "LIVE_AUTO" : "CONFIRM_BEFORE_BUY") : "SIGNAL_ONLY",
         liveTrading: live.enabled,
         autoExecute: live.autoExecute,
         universe: "ALL_BINANCE_SPOT_USDT",
@@ -528,6 +528,40 @@ async function scan(env, options = {}) {
           ].filter(Boolean).join("\n"));
           alertSent = true;
         }
+      }
+    } else if (sendAlerts && best && live.enabled && !live.autoExecute && activeLive.length < live.maxOpenPositions) {
+      const daily = await getLiveDailyRisk(env);
+      const pnl = await getLiveDailyPnl(env);
+      const cache = caches.default;
+      const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
+      if (daily.trades < CFG.maxLiveTradesPerDay && pnl.netPnlUSDT > -live.dailyLossCapUSDT && !(await cache.match(cacheKey))) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(best.signalId));
+        const signalHash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("").slice(0, 8);
+        const plan = best.paperPlan;
+        const pair = best.symbol.replace("USDT", "/USDT");
+        await ensureTelegramWebhook(env);
+        await telegram(env, [
+          `🟢 فرصة SPOT — ${pair}`,
+          `درجة التأكيد: ${best.score}/100`,
+          `💵 الحد الأقصى: ${live.tradeUSDT} USDT`,
+          `🛑 Stop: ${fmt(Number(plan.stop))}`,
+          `🎯 TP1: ${fmt(Number(plan.target1))}`,
+          `🎯 TP2: ${fmt(Number(plan.target2))}`,
+          `📊 صفقات اليوم: ${daily.trades}/${CFG.maxLiveTradesPerDay}`,
+          "",
+          "👇 لن يتم الشراء إلا بعد ضغط BUY.",
+          "عند الضغط سيُعاد فحص السعر والسيولة والاتجاه والحساب والحماية قبل التنفيذ.",
+          `⏱️ الزر صالح ${live.approvalSeconds} ثانية فقط.`,
+        ].join("\n"), {
+          inline_keyboard: [[
+            { text: "✅ BUY", callback_data: `live_buy:${best.symbol}:${signalHash}` },
+            { text: "❌ تجاهل", callback_data: `live_no:${best.symbol}:${signalHash}` },
+          ]],
+        });
+        await cache.put(cacheKey, new Response("approval-sent", {
+          headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` },
+        }));
+        alertSent = true;
       }
     } else if (sendAlerts && best && !live.enabled && activePaper.length < CFG.maxOpenPaperPositions) {
       const cache = caches.default;
@@ -1386,7 +1420,8 @@ function liveConfig(env) {
   };
   return {
     enabled: !CFG.validationMode && !["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
-    autoExecute: !CFG.validationMode && !["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE_KILL_SWITCH || "").toLowerCase()),
+    // Human confirmation is mandatory: a valid setup sends a Telegram BUY button.
+    autoExecute: false,
     compoundEnabled: ["1", "true", "yes", "on"].includes(String(env.COMPOUND_ENABLED || "false").toLowerCase()),
     // Environment settings may only reduce the agreed hard safety limits.
     tradeUSDT: num(env.TRADE_USDT, CFG.maxPosition, 1, CFG.maxPosition),
