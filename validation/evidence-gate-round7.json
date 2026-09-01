@@ -1,0 +1,25 @@
+{
+  "registeredAt":"2026-09-01T16:08:00Z",
+  "status":"LOCKED_BEFORE_ROUND7_RESULTS",
+  "goal":"Test slow daily trend/carry-style Spot strategies designed to reduce fee drag and 4h whipsaw.",
+  "data":{"source":"Binance Spot closed 1d OHLCV","historyDays":1825,"entry":"next daily open","intrabarConflict":"STOP_FIRST","discoveryOosFraction":0.30},
+  "discoveryUniverse":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "candidates":{
+    "DAILY_EMA_RECLAIM":{"regime":"EMA50>EMA200 and close>EMA200","entry":"prior close<=EMA50, current close>EMA50, EMA50 rising over 5 days, RSI14 between 50 and 70","stopAtr":2.0,"trailAtr":3.0,"maxHoldDays":120,"exit":"STOP_FIRST; trailing ATR from peak; close<EMA50; maxHold"},
+    "DAILY_DONCHIAN_TREND":{"regime":"close>EMA200 and EMA50>EMA200","entry":"close breaks prior 55-day high","stopAtr":2.5,"trailAtr":3.5,"maxHoldDays":180,"exit":"STOP_FIRST; trailing ATR; close below prior 20-day low; maxHold"},
+    "DAILY_MOMENTUM_BREAKOUT":{"regime":"close>EMA200 and 90d return>0 and BTC close>BTC EMA200","entry":"close breaks prior 20-day high and 20d return>0","stopAtr":2.0,"trailAtr":3.0,"maxHoldDays":90,"exit":"STOP_FIRST; trailing ATR; 20d return<0; maxHold"}
+  },
+  "parameterNeighborhoods":{
+    "DAILY_EMA_RECLAIM":{"stopAtr":[1.75,2.0,2.25],"trailAtr":[2.75,3.0,3.25],"rsiUpper":[65,70,75]},
+    "DAILY_DONCHIAN_TREND":{"entryBars":[45,55,65],"exitBars":[15,20,25],"trailAtr":[3.0,3.5,4.0]},
+    "DAILY_MOMENTUM_BREAKOUT":{"breakoutBars":[15,20,25],"momentumBars":[60,90,120],"trailAtr":[2.75,3.0,3.25]}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "drawdownMeasurement":"sequential fixed-7-USDT trade PnL against 20.12-USDT starting equity during discovery",
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "capital":{"accountUSDT":20.12,"orderUSDT":7,"reserveUSDT":2,"maxRiskUSDT":0.20,"simultaneousPositions":[1,2]},
+  "liveTrading":false,
+  "validatedStrategyRelease":null
+}
