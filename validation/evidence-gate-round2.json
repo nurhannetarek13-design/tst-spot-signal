@@ -1,0 +1,41 @@
+{
+  "registeredAt": "2026-09-01T13:34:00Z",
+  "status": "LOCKED_BEFORE_ROUND2_RESULTS",
+  "discoveryCandidate": {
+    "minOosTrades": 100,
+    "minProfitFactor": 1.15,
+    "requirePositiveExpectancyBaseCosts": true,
+    "requirePositiveExpectancyDoubleCosts": true,
+    "walkForwardPositiveFoldsRequired": 4,
+    "walkForwardTotalFolds": 5,
+    "maxDrawdownPct": 20
+  },
+  "paperApproval": {
+    "minAggregateOosTrades": 200,
+    "minProfitFactor": 1.20,
+    "requirePositiveFinalHoldout": true,
+    "maxTopTwoTradeProfitShare": 0.50
+  },
+  "parameterRobustness": {
+    "minPositiveNeighborFraction": 0.70,
+    "singleMagicParameterAllowed": false
+  },
+  "eventStudies": {
+    "multipleTestingCorrection": "BENJAMINI_HOCHBERG",
+    "fdr": 0.10
+  },
+  "capital": {
+    "accountUSDT": 20.12,
+    "orderUSDT": 7.00,
+    "reserveUSDT": 2.00,
+    "maxRiskUSDT": 0.20,
+    "simultaneousPositionsToTest": [1, 2]
+  },
+  "holdout": {
+    "timeHoldoutRequired": true,
+    "symbolHoldoutRequired": true,
+    "reason": "Round 1 already observed the final time segment of BTC/ETH/SOL; untouched validation now also requires unseen symbols."
+  },
+  "liveTrading": false,
+  "validatedStrategyRelease": null
+}
