@@ -113,7 +113,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(scanVercelAndAlert(env));
+    ctx.waitUntil((async () => {
+      await monitorLivePositions(env);
+      await scanVercelAndAlert(env);
+    })());
   },
 };
 
@@ -1302,7 +1305,112 @@ async function executeLiveSpotBuy(env, symbol, signalHash) {
   }
 
   if (Number(data.riskUSDT) > 0) await addLiveDailyRisk(env, Number(data.riskUSDT));
+  if (data.status === "LIVE_SPOT_OPENED" && Number(data.orderId) > 0) {
+    await trackLivePosition(env, data);
+  }
   return data;
+}
+
+async function trackLivePosition(env, execution) {
+  const id = `${execution.symbol}:${execution.orderId}`;
+  const active = await getState(env, "live:positions:active") || [];
+  if (!active.includes(id)) active.push(id);
+  await putState(env, `live:position:${id}`, {
+    id,
+    symbol: execution.symbol,
+    entryOrderId: Number(execution.orderId),
+    entryPrice: execution.avgFillPrice,
+    quantity: execution.quantity,
+    quoteSpentUSDT: execution.quoteSpentUSDT,
+    openedAt: Date.now(),
+    status: "OPEN",
+  }, 30 * 24 * 3600);
+  await putState(env, "live:positions:active", active, 30 * 24 * 3600);
+}
+
+async function monitorLivePositions(env) {
+  try {
+    const active = await getState(env, "live:positions:active") || [];
+    if (!active.length || !env.TELEGRAM_BOT_TOKEN) return { checked: 0, closed: 0 };
+    const remaining = [];
+    let closed = 0;
+
+    for (const id of active) {
+      const position = await getState(env, `live:position:${id}`);
+      if (!position || position.status !== "OPEN") continue;
+      const body = JSON.stringify({
+        symbol: position.symbol,
+        entryOrderId: position.entryOrderId,
+        timestamp: Date.now(),
+      });
+      const ts = String(Date.now());
+      const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+      const executorBase = String(env.EXECUTOR_URL || CFG.defaultExecutorUrl).replace(/\/$/, "");
+      let data;
+      try {
+        const response = await fetch(`${executorBase}/executor/position-status`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Executor-Timestamp": ts,
+            "X-Executor-Signature": signature,
+          },
+          body,
+          signal: AbortSignal.timeout(20_000),
+        });
+        data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.reason || `HTTP ${response.status}`);
+      } catch {
+        remaining.push(id);
+        continue;
+      }
+
+      if (!data.closed) {
+        remaining.push(id);
+        continue;
+      }
+
+      const closedKey = `live:closed-notified:${data.symbol}:${data.exitOrderId}`;
+      if (!(await getState(env, closedKey))) {
+        const day = new Date(Number(data.closedAt || Date.now())).toISOString().slice(0, 10);
+        const pnlKey = `live:pnl:${day}`;
+        const daily = await getState(env, pnlKey) || { day, netPnlUSDT: 0, wins: 0, losses: 0, trades: 0 };
+        const pnl = Number(data.netPnlUSDT || 0);
+        daily.netPnlUSDT = Math.round((Number(daily.netPnlUSDT || 0) + pnl) * 100000) / 100000;
+        daily.trades += 1;
+        if (pnl > 0) daily.wins += 1;
+        else if (pnl < 0) daily.losses += 1;
+        await putState(env, pnlKey, daily, 7 * 24 * 3600);
+        await putState(env, closedKey, { notifiedAt: Date.now() }, 30 * 24 * 3600);
+
+        const won = pnl >= 0;
+        await telegram(env, [
+          won ? `✅ الصفقة كسبت — ${data.symbol.replace("USDT", "/USDT")}` : `🔴 الصفقة خسرت — ${data.symbol.replace("USDT", "/USDT")}`,
+          `سبب الإغلاق: ${data.reason === "TAKE_PROFIT" ? "Take Profit" : data.reason === "STOP_LOSS" ? "Stop Loss" : "إغلاق حماية"}`,
+          `سعر الدخول: ${data.entryPrice}`,
+          `سعر الخروج: ${data.exitPrice}`,
+          `الكمية: ${data.quantity}`,
+          `رسوم Binance: ${data.feesUSDT} USDT`,
+          `صافي النتيجة: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(5)} USDT`,
+          "",
+          `إجمالي اليوم: ${daily.netPnlUSDT >= 0 ? "+" : ""}${daily.netPnlUSDT.toFixed(5)} USDT`,
+          `صفقات اليوم: ${daily.trades} | كسب: ${daily.wins} | خسارة: ${daily.losses}`,
+        ].join("\n"));
+      }
+
+      position.status = "CLOSED";
+      position.closedAt = Number(data.closedAt || Date.now());
+      position.netPnlUSDT = Number(data.netPnlUSDT || 0);
+      position.exitReason = data.reason;
+      await putState(env, `live:position:${id}`, position, 30 * 24 * 3600);
+      closed += 1;
+    }
+
+    await putState(env, "live:positions:active", remaining, 30 * 24 * 3600);
+    return { checked: active.length, closed };
+  } catch (error) {
+    return { checked: 0, closed: 0, error: String(error?.message || error) };
+  }
 }
 
 async function getAutoStats(env) {
