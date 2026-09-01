@@ -1,0 +1,26 @@
+{
+  "registeredAt":"2026-09-01T16:11:00Z",
+  "status":"LOCKED_BEFORE_ROUND9_RESULTS",
+  "goal":"Turn the previously observed but sub-gate residual-reversal tendency into a capital-compatible cross-sectional rank strategy without tuning the old z-score event definition.",
+  "data":{"source":"Binance Spot closed 4h OHLCV","historyDays":1825,"entry":"next bar open","intrabarConflict":"STOP_FIRST","rebalanceBars":3,"discoveryOosFraction":0.30},
+  "discoveryUniverse":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "commonRiskRegime":"BTC close>EMA200 and BTC 24h return>-2%",
+  "candidates":{
+    "RANK_REVERSAL_24H":{"residual":"asset 24h return minus cross-sectional median 24h return","select":"bottom 2 residuals, residual<=-5%, current 4h return>0","stopPct":0.0275,"targetPct":0.06,"holdBars":6},
+    "RANK_REVERSAL_48H":{"residual":"asset 48h return minus cross-sectional median 48h return","select":"bottom 2 residuals, residual<=-7%, current 4h return>0","stopPct":0.0275,"targetPct":0.07,"holdBars":8},
+    "RANK_REVERSAL_VOLUME":{"residual":"asset 24h return minus cross-sectional median 24h return","select":"bottom 3 residuals, residual<=-4%, current candle closes in upper half, log-volume z>=1 over prior 42 bars","stopPct":0.0275,"targetPct":0.06,"holdBars":6}
+  },
+  "parameterNeighborhoods":{
+    "RANK_REVERSAL_24H":{"residualCut":[-0.04,-0.05,-0.06],"holdBars":[4,6,8],"stopPct":[0.025,0.0275,0.03]},
+    "RANK_REVERSAL_48H":{"residualCut":[-0.06,-0.07,-0.08],"holdBars":[6,8,10],"stopPct":[0.025,0.0275,0.03]},
+    "RANK_REVERSAL_VOLUME":{"residualCut":[-0.03,-0.04,-0.05],"volumeZ":[0.75,1.0,1.25],"holdBars":[4,6,8]}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "riskNote":"base stop 2.75% implies 0.1925 USDT price risk on a 7 USDT order, below the 0.20 USDT cap before fees/slippage",
+  "drawdownMeasurement":"sequential fixed-7-USDT trade PnL against 20.12-USDT starting equity during discovery; exact 2-position overlap simulated after holdout pass",
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "capital":{"accountUSDT":20.12,"orderUSDT":7,"reserveUSDT":2,"maxRiskUSDT":0.20,"simultaneousPositions":[1,2]},
+  "liveTrading":false,"validatedStrategyRelease":null
+}
