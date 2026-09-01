@@ -22,8 +22,12 @@ const CFG = {
   scanAllSpotUSDT: false,
   feeRate: 0.001,
 };
+// No strategy release is promoted until it passes the documented evidence
+// gates. This intentionally cannot be bypassed with an environment typo.
+const VALIDATED_STRATEGY_RELEASE = null;
 
 const ALLOWED_SPOT_SYMBOLS = new Set(["BTCUSDT","ETHUSDT","SOLUSDT"]);
+const inFlightSignals = new Set();
 const STABLES = new Set(["USDC","FDUSD","TUSD","USDP","DAI","EUR","AEUR","TRY","BRL","BIDR","IDRT","UAH","NGN","RUB","GBP","AUD","BUSD"]);
 const PUBLIC_MARKET_PATHS = new Set([
   "/api/v3/time",
@@ -184,8 +188,22 @@ app.post("/execute/spot-buy", async (req, res) => {
       return res.status(400).json({ ok: false, status: "BAD_SIGNAL_ID", reason: "A stable 8-character signal hash is required." });
     }
 
-    const result = await executeSpotOrder(symbol, signalHash);
-    return res.status(result.ok ? 200 : 409).json(result);
+    const knownSymbols = normalizeKnownSymbols(body.knownSymbols, symbol);
+    const approvedSignal = validateApprovedSignal(body.approvedSignal, symbol, signalHash);
+    if (!approvedSignal.ok) {
+      return res.status(400).json({ ok: false, status: "INVALID_APPROVED_SIGNAL", reason: approvedSignal.reason });
+    }
+    const lockKey = `${symbol}:${signalHash}`;
+    if (inFlightSignals.has(lockKey)) {
+      return res.status(409).json({ ok: false, status: "EXECUTION_IN_PROGRESS", reason: "This signal is already being reconciled." });
+    }
+    inFlightSignals.add(lockKey);
+    try {
+      const result = await executeSpotOrder(symbol, signalHash, knownSymbols, approvedSignal.value);
+      return res.status(result.ok ? 200 : 409).json(result);
+    } finally {
+      inFlightSignals.delete(lockKey);
+    }
   } catch (error) {
     return res.status(500).json({ ok: false, status: "EXECUTOR_ERROR", error: String(error?.message || error) });
   }
@@ -419,14 +437,45 @@ app.post("/executor/position-status", async (req, res) => {
   }
 });
 
-async function botClosedPnlLast24h() {
+function normalizeKnownSymbols(values, currentSymbol) {
+  const out = new Set(ALLOWED_SPOT_SYMBOLS);
+  if (isSafeLiveSpotSymbol(currentSymbol)) out.add(currentSymbol);
+  for (const value of Array.isArray(values) ? values : []) {
+    const symbol = String(value || "").toUpperCase();
+    // Historical accounting must include every syntactically valid symbol the
+    // bot traded, even if that product is now excluded from new entries.
+    if (/^[A-Z0-9]{2,20}USDT$/.test(symbol)) out.add(symbol);
+    if (out.size >= 250) break;
+  }
+  return [...out];
+}
+
+function validateApprovedSignal(value, symbol, signalHash) {
+  if (!value || value.symbol !== symbol || value.valid !== true || Number(value.score) < 90) {
+    return { ok: false, reason: "The signed scanner candidate is missing or no longer qualifies." };
+  }
+  const plan = value.plan || value.paperPlan;
+  const entry = Number(plan?.entry);
+  const stop = Number(plan?.stop);
+  const target1 = Number(plan?.target1);
+  if (!(entry > 0 && stop > 0 && stop < entry && target1 > entry)) {
+    return { ok: false, reason: "The signed scanner plan has invalid protection levels." };
+  }
+  const createdAt = Number(value.approvedAt || value.generatedAt || 0);
+  if (!Number.isFinite(createdAt) || Math.abs(Date.now() - createdAt) > 5 * 60_000) {
+    return { ok: false, reason: "The signed scanner candidate is stale." };
+  }
+  return { ok: true, value: { ...value, plan, signalHash } };
+}
+
+async function botClosedPnlLast24h(knownSymbols = []) {
   const now = Date.now();
   const exitCutoff = now - 24 * 60 * 60 * 1000;
   const orderLookback = now - 48 * 60 * 60 * 1000;
   let pnlUSDT = 0;
   let closedTrades = 0;
 
-  for (const symbol of ALLOWED_SPOT_SYMBOLS) {
+  for (const symbol of normalizeKnownSymbols(knownSymbols, "")) {
     const orders = await signedBinance("GET", "/api/v3/allOrders", {
       symbol,
       startTime: orderLookback,
@@ -524,7 +573,9 @@ app.post("/executor/account-status", async (req, res) => {
       availableAfterReserveUSDT: round(Math.max(0, freeUSDT - cfg.reserveUSDT), 2),
       botOpenPositions: botOpenSymbols.length,
       maxOpenPositions: cfg.maxOpenPositions,
-      liveTradingEnabled: cfg.enabled,
+    liveTradingEnabled: cfg.enabled,
+    strategyValidated: cfg.strategyValidated,
+    strategyRelease: VALIDATED_STRATEGY_RELEASE,
       readOnlyCheck: true,
     });
   } catch (error) {
@@ -711,7 +762,9 @@ function executorConfig() {
   };
   return {
     // Fail closed: a deployment is non-trading unless explicitly promoted.
-    enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
+    strategyValidated: Boolean(VALIDATED_STRATEGY_RELEASE) && process.env.STRATEGY_RELEASE === VALIDATED_STRATEGY_RELEASE,
+    enabled: Boolean(VALIDATED_STRATEGY_RELEASE) && process.env.STRATEGY_RELEASE === VALIDATED_STRATEGY_RELEASE &&
+      ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
       !["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
     // Hard safety limits: environment variables may only reduce these values.
     tradeUSDT: num(process.env.TRADE_USDT, CFG.maxPositionUSDT, 1, CFG.maxPositionUSDT),
@@ -745,7 +798,7 @@ function timingSafeEqualHex(a, b) {
   return diff === 0;
 }
 
-async function executeSpotOrder(symbol, signalHash) {
+async function executeSpotOrder(symbol, signalHash, knownSymbols = [], approvedSignal) {
   const cfg = executorConfig();
   if (!isSafeLiveSpotSymbol(symbol)) return { ok: false, status: "UNIVERSE_RESTRICTED", reason: "Symbol is not an eligible crypto Spot/USDT product." };
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
@@ -766,7 +819,8 @@ async function executeSpotOrder(symbol, signalHash) {
     };
   }
 
-  const riskWindow = await botClosedPnlLast24h();
+  const discoveredSymbols = reconciliation.positions.map(position => position.symbol);
+  const riskWindow = await botClosedPnlLast24h([...knownSymbols, ...discoveredSymbols]);
   if (riskWindow.pnlUSDT <= -CFG.maxDailyLossUSDT) {
     return {
       ok: false,
@@ -777,25 +831,28 @@ async function executeSpotOrder(symbol, signalHash) {
     };
   }
 
-  const [ticker, book, klines, info, hourlyKlines, depth] = await Promise.all([
+  const [ticker, book, info, hourlyKlines, fourHourKlines, btcHourly, btcFourHour, depth] = await Promise.all([
     binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
     binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
-    binance(`/api/v3/klines?symbol=${symbol}&interval=15m&limit=120`),
     binance(`/api/v3/exchangeInfo?symbol=${symbol}`),
     binance(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=80`),
+    binance(`/api/v3/klines?symbol=${symbol}&interval=4h&limit=80`),
+    binance(`/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=80`),
+    binance(`/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=80`),
     binance(`/api/v3/depth?symbol=${symbol}&limit=100`),
   ]);
-  const fresh = await analyze(symbol, ticker, book, klines);
-  if (!fresh.ok || fresh.decision !== "BUY" || !fresh.paperPlan || !fresh.checks?.successfulRetest) {
-    return { ok: false, status: "SIGNAL_NO_LONGER_VALID", reason: "A completed 15m breakout and a separate successful retest are both required." };
-  }
-
   const closedHourly = hourlyKlines
     .filter(k => Number(k[6]) < Date.now())
     .map(k => Number(k[4]));
   const hourlyEma20 = ema(closedHourly, 20);
   const hourlyEma50 = ema(closedHourly, 50);
   const hourlyTrendUp = closedHourly.at(-1) > hourlyEma20 && hourlyEma20 > hourlyEma50;
+  const trendCloses = rows => rows.filter(k => Number(k[6]) < Date.now()).map(k => Number(k[4]));
+  const fourCloses = trendCloses(fourHourKlines);
+  const btcHourCloses = trendCloses(btcHourly);
+  const btcFourCloses = trendCloses(btcFourHour);
+  const fourTrendUp = fourCloses.at(-1) > ema(fourCloses, 20) && ema(fourCloses, 20) > ema(fourCloses, 50);
+  const btcRiskOn = btcHourCloses.at(-1) > ema(btcHourCloses, 50) && btcFourCloses.at(-1) > ema(btcFourCloses, 50);
   const bid = Number(book.bidPrice || 0);
   const askNow = Number(book.askPrice || 0);
   const mid = (bid + askNow) / 2;
@@ -806,8 +863,8 @@ async function executeSpotOrder(symbol, signalHash) {
   const askDepth05 = (depth.asks || [])
     .filter(([price]) => Number(price) <= mid * 1.005)
     .reduce((sum, [price, qty]) => sum + Number(price) * Number(qty), 0);
-  if (!hourlyTrendUp) {
-    return { ok: false, status: "HOURLY_TREND_NOT_CONFIRMED", reason: "1h trend is not strictly rising above EMA20 and EMA50.", orderPlaced: false };
+  if (!hourlyTrendUp || !fourTrendUp || !btcRiskOn) {
+    return { ok: false, status: "MULTI_TIMEFRAME_TREND_NOT_CONFIRMED", reason: "1h/4h symbol trend or BTC market context no longer allows a Spot long.", orderPlaced: false };
   }
   if (spreadPct > CFG.maxSpreadPct || bidDepth05 < 10_000 || askDepth05 < 10_000) {
     return {
@@ -841,9 +898,9 @@ async function executeSpotOrder(symbol, signalHash) {
   const freeUSDT = Number((account.balances || []).find(b => b.asset === "USDT")?.free || 0);
   const availableUSDT = Math.max(0, freeUSDT - cfg.reserveUSDT);
 
-  const entry = Number(fresh.paperPlan.entry);
-  const stopRaw = Number(fresh.paperPlan.stop);
-  const targetRaw = Number(fresh.paperPlan.target1);
+  const entry = Number(approvedSignal.plan.entry);
+  const stopRaw = Number(approvedSignal.plan.stop);
+  const targetRaw = Number(approvedSignal.plan.target1);
   const riskPct = entry > stopRaw ? (entry - stopRaw) / entry : 1;
   const riskSizedUSDT = riskPct > 0 ? cfg.maxRiskUSDT / riskPct : cfg.tradeUSDT;
   let quoteToSpend = Math.min(CFG.maxPositionUSDT, cfg.tradeUSDT, riskSizedUSDT, availableUSDT);
@@ -857,6 +914,10 @@ async function executeSpotOrder(symbol, signalHash) {
   const priceFilter = symbolInfo.filters?.find(f => f.filterType === "PRICE_FILTER");
   const tickSize = Number(priceFilter?.tickSize || 0.00000001);
   const ask = Number(book.askPrice || entry);
+  const entryDriftPct = Math.abs(ask - entry) / entry * 100;
+  if (entryDriftPct > 0.20) {
+    return { ok: false, status: "ENTRY_PRICE_MOVED", reason: `Entry moved ${round(entryDriftPct, 3)}%, beyond the 0.20% approval window.`, orderPlaced: false };
+  }
   const plannedStop = Number(floorToStep(Math.min(stopRaw, ask * 0.998), tickSize));
   const plannedTakeProfit = Number(ceilToStep(Math.max(targetRaw, ask * 1.002), tickSize));
   const grossQty = ask > 0 ? quoteToSpend / ask : 0;
@@ -935,6 +996,21 @@ async function executeSpotOrder(symbol, signalHash) {
   const buy = await submitOrderOnceAndReconcile(buyParams);
   const terminalBuy = await waitForKnownOrderState(symbol, buyClientOrderId, buy);
   if (!terminalBuy.known) {
+    const partialQty = Number(terminalBuy.order?.executedQty || 0);
+    if (partialQty > 0) {
+      const partialSellQty = floorToStep(partialQty * (1 - CFG.feeRate), stepSize);
+      const closed = await emergencyClose(symbol, partialSellQty, token).catch(() => null);
+      return {
+        ok: Boolean(closed),
+        status: closed ? "PARTIAL_FILL_SAFETY_CLOSED" : "CRITICAL_PARTIAL_FILL_EXPOSURE",
+        reason: closed
+          ? "The market buy did not reach a terminal state; the confirmed partial fill was closed for safety."
+          : "A partial fill exists and its emergency close could not be confirmed. New entries must remain blocked.",
+        orderPlaced: true,
+        clientOrderId: buyClientOrderId,
+        executedQty: partialQty,
+      };
+    }
     return {
       ok: false,
       status: "EXECUTION_STATE_UNKNOWN",
@@ -1215,16 +1291,17 @@ async function submitOrderOnceAndReconcile(params) {
 
 async function waitForKnownOrderState(symbol, clientOrderId, initial) {
   let order = initial;
-  const terminal = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"]);
   for (let attempt = 0; attempt < 5; attempt++) {
-    if (order && terminal.has(String(order.status || ""))) return { known: true, order };
+    if (isTerminalOrder(order)) return { known: true, order };
     if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
     order = await findOrderByClientId(symbol, clientOrderId).catch(() => null);
   }
-  // A positive executed quantity is known exposure even if the remaining state
-  // is still pending; protect exactly that filled quantity and keep monitoring.
-  if (order && Number(order.executedQty || 0) > 0) return { known: true, order };
   return { known: false, order: order || initial || null };
+}
+
+function isTerminalOrder(order) {
+  return new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
+    .has(String(order?.status || ""));
 }
 
 function hasBinanceSigningKey() {
@@ -1507,5 +1584,5 @@ function average(values) { return values.reduce((a, b) => a + b, 0) / Math.max(v
 function round(value, digits = 4) { const p = 10 ** digits; return Math.round(value * p) / p; }
 function fmt(value) { if (!Number.isFinite(value)) return String(value); if (value >= 1000) return value.toFixed(2); if (value >= 1) return value.toFixed(4); return value.toPrecision(6); }
 
-export { isStepAligned, validateOrderFilters, isUnknownExecutionError };
+export { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder };
 export default app;
