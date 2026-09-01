@@ -15,14 +15,14 @@ Paper-only, multi-factor Binance Spot scanner for liquid USDT pairs.
 
 ## Required confirmation
 
-A Telegram paper signal needs a score of at least 85/100 plus all hard safety checks:
+A Telegram paper signal needs a score of at least 90/100 plus all hard safety checks:
 
 - BTC 1h/4h market regime allows Spot longs.
-- Pair has at least 90 completed daily candles and 15M USDT 24h volume.
+- Pair has at least 90 completed daily candles and 20M USDT 24h volume.
 - Symbol trend agrees on 1h and 4h.
 - Completed breakout/retest or confirmed trend pullback on 15m.
 - Relative volume, taker-buy pressure, RSI, spread, depth imbalance, and nearby sell-wall checks.
-- Net reward/risk of at least 2.5 after estimated entry and exit fees.
+- Net reward/risk of at least 3.0 after estimated entry and exit fees.
 - Binance OCO support and both protected exit legs remain above the pair's live minimum notional.
 - Revalidation after the Telegram paper button is pressed.
 
