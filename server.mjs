@@ -14,15 +14,16 @@ const API_BASES = [
 
 const CFG = {
   capitalUSDT: 20.08,
-  maxDailyLossUSDT: 2,
-  maxRiskPerTradeUSDT: 0.5,
+  maxDailyLossUSDT: 0.5,
+  maxRiskPerTradeUSDT: 0.25,
   maxPositionUSDT: 7,
   minQuoteVolume24h: 5_000_000,
   maxSpreadPct: 0.15,
-  scanAllSpotUSDT: true,
+  scanAllSpotUSDT: false,
   feeRate: 0.001,
 };
 
+const ALLOWED_SPOT_SYMBOLS = new Set(["BTCUSDT","ETHUSDT","SOLUSDT"]);
 const STABLES = new Set(["USDC","FDUSD","TUSD","USDP","DAI","EUR","AEUR","TRY","BRL","BIDR","IDRT","UAH","NGN","RUB","GBP","AUD","BUSD"]);
 let lastAlertKey = null;
 let lastAlertAt = 0;
@@ -558,7 +559,7 @@ function executorConfig() {
     enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING || "").toLowerCase()),
     // Hard safety limits: environment variables may only reduce these values.
     tradeUSDT: num(process.env.TRADE_USDT, CFG.maxPositionUSDT, 1, CFG.maxPositionUSDT),
-    maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 3, 1, 20)),
+    maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 1, 1, 1)),
     reserveUSDT: num(process.env.RESERVE_USDT, 2, 0, 100000),
     maxRiskUSDT: num(process.env.MAX_RISK_USDT, CFG.maxRiskPerTradeUSDT, 0.01, CFG.maxRiskPerTradeUSDT),
     minNetRewardRisk: 2.5,
@@ -590,6 +591,7 @@ function timingSafeEqualHex(a, b) {
 
 async function executeSpotOrder(symbol) {
   const cfg = executorConfig();
+  if (!ALLOWED_SPOT_SYMBOLS.has(symbol)) return { ok: false, status: "UNIVERSE_RESTRICTED", reason: "Safe mode allows BTCUSDT, ETHUSDT and SOLUSDT only." };
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
   if (!hasBinanceSigningKey()) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
@@ -1074,6 +1076,7 @@ async function analyze(symbol, ticker, book, rawKlines) {
 }
 
 function isAllowed(symbol) {
+  if (!ALLOWED_SPOT_SYMBOLS.has(symbol)) return false;
   const base = symbol.slice(0, -4);
   if (STABLES.has(base)) return false;
   if (/UP$|DOWN$|BULL$|BEAR$/.test(base)) return false;
