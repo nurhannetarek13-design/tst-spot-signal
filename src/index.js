@@ -8,7 +8,7 @@ const API_BASES = [
 ];
 
 const CFG = {
-  validationMode: true,
+  validationMode: false,
   capital: 20.08,
   maxPosition: 7,
   maxRisk: 0.20,
@@ -29,6 +29,7 @@ const CFG = {
   scanCount: 7,
   priorityCount: 2,
   maxOpenPaperPositions: 1,
+  maxLiveTradesPerDay: 6,
   maxHoldHours: 48,
   duplicateHours: 6,
   approvalSeconds: 90,
@@ -65,10 +66,12 @@ export default {
       return portfolioStatus(env);
     }
     if (url.pathname === "/scanner-status") {
+      const live = liveConfig(env);
       return output({
         ok: true,
-        mode: "PAPER_ONLY",
-        liveTrading: false,
+        mode: live.enabled && live.autoExecute ? "LIVE_AUTO" : "SIGNAL_ONLY",
+        liveTrading: live.enabled,
+        autoExecute: live.autoExecute,
         universe: "ALL_BINANCE_SPOT_USDT",
         cadence: "EVERY_MINUTE",
         deepScanPerRun: CFG.scanCount,
@@ -78,6 +81,7 @@ export default {
           maxRiskUSDT: CFG.maxRisk,
           dailyLossCapUSDT: CFG.dailyLossCap,
           maxOpenPositions: CFG.maxOpenPaperPositions,
+          maxTradesPerDay: CFG.maxLiveTradesPerDay,
         },
       });
     }
@@ -491,8 +495,41 @@ async function scan(env, options = {}) {
     const best = valid[0] || null;
     let alertSent = false;
     const activePaper = (await getState(env, "paper:active") || []).filter(Boolean);
+    const activeLive = (await getState(env, "live:positions:active") || []).filter(Boolean);
+    const live = liveConfig(env);
+    let liveExecution = null;
 
-    if (sendAlerts && best && activePaper.length < CFG.maxOpenPaperPositions) {
+    if (sendAlerts && best && live.enabled && live.autoExecute && activeLive.length < live.maxOpenPositions) {
+      const daily = await getLiveDailyRisk(env);
+      const pnl = await getLiveDailyPnl(env);
+      const cache = caches.default;
+      const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
+      if (daily.trades < CFG.maxLiveTradesPerDay && pnl.netPnlUSDT > -live.dailyLossCapUSDT && !(await cache.match(cacheKey))) {
+        await cache.put(cacheKey, new Response("executing", {
+          headers: { "Cache-Control": `max-age=${CFG.duplicateHours * 3600}` },
+        }));
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(best.signalId));
+        const signalHash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("").slice(0, 8);
+        liveExecution = await executeLiveSpotBuy(env, best.symbol, signalHash);
+        if (liveExecution.ok) {
+          const stats = await recordAutoExecution(env, { ...liveExecution, symbol: best.symbol });
+          await telegram(env, [
+            `✅ تم شراء ${best.symbol.replace("USDT", "/USDT")} — SPOT`,
+            `درجة الإشارة: ${best.score}/100`,
+            `💵 المستخدم: ${liveExecution.quoteSpentUSDT} USDT`,
+            `📦 الكمية: ${liveExecution.quantity}`,
+            `💲 متوسط التنفيذ: ${liveExecution.avgFillPrice}`,
+            `🛑 Stop: ${liveExecution.stop}`,
+            `🎯 Take Profit: ${liveExecution.takeProfit}`,
+            `📂 الصفقات المفتوحة: ${liveExecution.openPositionsAfter}/${liveExecution.maxOpenPositions}`,
+            `📊 صفقات اليوم: ${daily.trades + 1}/${CFG.maxLiveTradesPerDay}`,
+            liveExecution.protection === "OCO" ? "🛡️ الحماية مفعلة: Take Profit + Stop Loss (OCO)." : "🛡️ تم تطبيق مسار الحماية البديل.",
+            stats.lastKnownPnlUSDT != null ? `📈 التغير من بداية التتبع: ${stats.lastKnownPnlUSDT >= 0 ? "+" : ""}${stats.lastKnownPnlUSDT} USDT` : null,
+          ].filter(Boolean).join("\n"));
+          alertSent = true;
+        }
+      }
+    } else if (sendAlerts && best && !live.enabled && activePaper.length < CFG.maxOpenPaperPositions) {
       const cache = caches.default;
       const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
       if (!(await cache.match(cacheKey))) {
@@ -522,15 +559,21 @@ async function scan(env, options = {}) {
 
     return resultBase({
       status: best
-        ? activePaper.length >= CFG.maxOpenPaperPositions ? "POSITION_LIMIT_WAIT" : "VALID_SETUP_FOUND"
+        ? liveExecution?.ok ? "LIVE_EXECUTED"
+          : activeLive.length >= live.maxOpenPositions ? "POSITION_LIMIT_WAIT"
+            : "VALID_SETUP_FOUND"
         : "NO_VALID_SETUP",
+      liveTrading: live.enabled,
+      autoExecute: live.autoExecute,
       marketRegime: regime,
       surfaceUniverseSize: selection.eligibleCount,
       rotationCursor: selection.cursor,
       candidatesScanned: candidates.map(x => x.symbol),
       deepScanned: analyses.length,
       activePaperPositions: activePaper.length,
+      activeLivePositions: activeLive.length,
       alertSent,
+      liveExecution,
       selected: best,
       results: analyses,
     });
@@ -1342,8 +1385,8 @@ function liveConfig(env) {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
-    autoExecute: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE || "").toLowerCase()),
+    enabled: !CFG.validationMode && !["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
+    autoExecute: !CFG.validationMode && !["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE_KILL_SWITCH || "").toLowerCase()),
     compoundEnabled: ["1", "true", "yes", "on"].includes(String(env.COMPOUND_ENABLED || "false").toLowerCase()),
     // Environment settings may only reduce the agreed hard safety limits.
     tradeUSDT: num(env.TRADE_USDT, CFG.maxPosition, 1, CFG.maxPosition),
@@ -1461,11 +1504,19 @@ async function livePreflight(env) {
 async function executeLiveSpotBuy(env, symbol, signalHash) {
   const cfg = liveConfig(env);
   const daily = await getLiveDailyRisk(env);
-  if (daily.riskUsedUSDT >= cfg.dailyLossCapUSDT) {
+  const pnl = await getLiveDailyPnl(env);
+  if (daily.trades >= CFG.maxLiveTradesPerDay) {
     return {
       ok: false,
-      status: "DAILY_RISK_CAP",
-      reason: `وصلنا لحد المخاطرة اليومي ${cfg.dailyLossCapUSDT} USDT.`,
+      status: "DAILY_TRADE_LIMIT",
+      reason: `وصلنا للحد اليومي ${CFG.maxLiveTradesPerDay} صفقات.`,
+    };
+  }
+  if (pnl.netPnlUSDT <= -cfg.dailyLossCapUSDT) {
+    return {
+      ok: false,
+      status: "DAILY_LOSS_CAP",
+      reason: `وصلنا لحد الخسارة اليومي ${cfg.dailyLossCapUSDT} USDT.`,
     };
   }
   if (!env.TELEGRAM_BOT_TOKEN) {
@@ -1719,6 +1770,11 @@ async function getLiveDailyRisk(env) {
   const day = new Date().toISOString().slice(0, 10);
   const key = `live:risk:${day}`;
   return await getState(env, key) || { day, riskUsedUSDT: 0, trades: 0 };
+}
+
+async function getLiveDailyPnl(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  return await getState(env, `live:pnl:${day}`) || { day, netPnlUSDT: 0, wins: 0, losses: 0, trades: 0 };
 }
 
 async function addLiveDailyRisk(env, riskUSDT) {
