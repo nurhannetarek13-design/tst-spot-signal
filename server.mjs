@@ -17,8 +17,8 @@ const CFG = {
   maxDailyLossUSDT: 0.5,
   maxRiskPerTradeUSDT: 0.20,
   maxPositionUSDT: 7,
-  minQuoteVolume24h: 15_000_000,
-  maxSpreadPct: 0.12,
+  minQuoteVolume24h: 20_000_000,
+  maxSpreadPct: 0.10,
   scanAllSpotUSDT: false,
   feeRate: 0.001,
 };
@@ -647,7 +647,7 @@ function executorConfig() {
     maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 1, 1, 1)),
     reserveUSDT: num(process.env.RESERVE_USDT, 2, 0, 100000),
     maxRiskUSDT: num(process.env.MAX_RISK_USDT, CFG.maxRiskPerTradeUSDT, 0.01, CFG.maxRiskPerTradeUSDT),
-    minNetRewardRisk: 2.5,
+    minNetRewardRisk: 3.0,
   };
 }
 
