@@ -1,0 +1,17 @@
+{
+  "round":15,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "hypothesis":"A causal 4h proxy for realized signed variation (positive semivariance minus negative semivariance, normalized by total realized variance) negatively predicts future returns cross-sectionally; low signed-variation assets may carry a long-side premium.",
+  "universe_rule":"Top 80 current Binance Spot USDT symbols excluding stable/fiat-like bases, leveraged tokens, wrapped/gold proxies and reserved holdout. Signal-time eligibility requires >=365 days prior 4h history and >=10M USDT average daily quote volume over prior 30 days.",
+  "data":{"timeframe":"4h","history_days":1825,"oos_fraction":0.30,"entry":"next bar open","intrabar":"STOP_FIRST"},
+  "candidates":{
+    "RSJ_PROXY_LOW":{"formation_bars":180,"rebalance_bars":42,"score":"(sum positive r^2 - sum negative r^2) / sum r^2","select":"2 lowest scores","market_regime":"none","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180},
+    "RSJ_PROXY_LOW_BULL":{"formation_bars":180,"rebalance_bars":42,"score":"normalized signed variation","select":"2 lowest scores","market_regime":"BTC close > EMA600 and BTC 30d return > 0","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180},
+    "RSJ_PROXY_LOW_MOM":{"formation_bars":180,"rebalance_bars":42,"filter":"bottom 25% signed-variation score and positive 30d momentum","select":"top 2 by 30d momentum","market_regime":"BTC close > EMA600 and BTC 30d return > 0","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180}
+  },
+  "parameter_neighborhoods":{"formation_bars":[150,180,210],"target_pct":[0.10,0.12,0.14],"hold_bars":[150,180,210]},
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20,"positive_neighbor_fraction":0.70},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "rule":"This is an OHLCV proxy, not a claim to reproduce tick-level realized jumps. No changes after results; holdout remains untouched unless discovery passes."
+}
