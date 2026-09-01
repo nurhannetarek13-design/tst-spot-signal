@@ -1,0 +1,17 @@
+{
+  "lockedAt": "2026-09-01T14:22:00Z",
+  "status": "LOCKED_BEFORE_RETRIEVAL",
+  "symbols": [
+    "XLMUSDT",
+    "HBARUSDT",
+    "ICPUSDT",
+    "ALGOUSDT",
+    "VETUSDT",
+    "THETAUSDT",
+    "RUNEUSDT",
+    "GRTUSDT"
+  ],
+  "selectionRule": "Established non-stable Binance Spot USDT altcoins not present in the 24-symbol Round 1 discovery universe; chosen before their Round 2 historical data is retrieved.",
+  "excluded": ["stablecoins", "fiat pegs", "leveraged tokens", "commodities"],
+  "note": "This replaces the flawed automatic liquidity holdout that admitted stablecoins. No data from these eight symbols was inspected before this lock file was committed."
+}
