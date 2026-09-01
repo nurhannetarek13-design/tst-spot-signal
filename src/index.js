@@ -11,16 +11,25 @@ const CFG = {
   validationMode: true,
   capital: 20.08,
   maxPosition: 7,
-  maxRisk: 0.25,
+  maxRisk: 0.20,
   dailyLossCap: 0.5,
   fee: 0.001,
-  minVolume24h: 10_000_000,
-  minDepthEachSide: 10_000,
-  maxSpreadPct: 0.15,
-  maxRise24hPct: 10,
+  minVolume24h: 15_000_000,
+  minDepthEachSide: 15_000,
+  maxSpreadPct: 0.12,
+  maxRise24hPct: 8,
   maxStopPct: 3,
   minNetRR: 2.5,
-  scanCount: 3,
+  minScore: 85,
+  minAgeDays: 90,
+  minRelativeVolume: 1.20,
+  minTakerBuyRatio: 0.54,
+  minBidAskDepthRatio: 1.15,
+  maxLargestAskShare: 0.35,
+  scanCount: 7,
+  priorityCount: 2,
+  maxOpenPaperPositions: 1,
+  maxHoldHours: 48,
   duplicateHours: 6,
   approvalSeconds: 90,
   paperPositionHours: 72,
@@ -36,10 +45,12 @@ const CFG = {
 };
 
 const EXCLUDED_BASES = new Set([
-  "BTC", "ETH", "BNB", "SOL",
   "USDC", "FDUSD", "TUSD", "USDP", "DAI", "EUR", "AEUR", "TRY", "BRL",
   "BIDR", "IDRT", "UAH", "NGN", "RUB", "GBP", "AUD", "BUSD",
 ]);
+
+const SAFE_B_SUFFIX_CRYPTO = new Set(["BNB", "ARB", "KUB", "WBB"]);
+const PRODUCT_METADATA_URL = "https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true";
 
 export default {
   async fetch(request, env) {
@@ -52,6 +63,26 @@ export default {
     }
     if (url.pathname === "/portfolio-status") {
       return portfolioStatus(env);
+    }
+    if (url.pathname === "/scanner-status") {
+      return output({
+        ok: true,
+        mode: "PAPER_ONLY",
+        liveTrading: false,
+        universe: "ALL_BINANCE_SPOT_USDT",
+        cadence: "EVERY_MINUTE",
+        deepScanPerRun: CFG.scanCount,
+        minimumScore: CFG.minScore,
+        risk: {
+          maxPositionUSDT: CFG.maxPosition,
+          maxRiskUSDT: CFG.maxRisk,
+          dailyLossCapUSDT: CFG.dailyLossCap,
+          maxOpenPositions: CFG.maxOpenPaperPositions,
+        },
+      });
+    }
+    if (url.pathname === "/scan-preview") {
+      return output(await scan(env, { sendAlerts: false }));
     }
     if (url.searchParams.get("test") === "preflight") {
       return livePreflight(env);
@@ -116,7 +147,8 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       await monitorLivePositions(env);
-      await scanVercelAndAlert(env);
+      await monitorPaperPositions(env);
+      await scan(env);
     })());
   },
 };
@@ -142,7 +174,6 @@ async function handleMakeExecute(request, env) {
     const takeProfit = Number(body.take_profit_price);
     const rawTimestamp = Number(body.timestamp);
     const timestampMs = rawTimestamp < 10_000_000_000 ? rawTimestamp * 1000 : rawTimestamp;
-    const allowedSymbols = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
 
     if (!/^[A-Za-z0-9:_-]{6,128}$/.test(signalId)) {
       return output({ ok: false, status: "INVALID_SIGNAL_ID", liveTrading: false, orderPlaced: false }, 400);
@@ -150,8 +181,8 @@ async function handleMakeExecute(request, env) {
     if (!["BUY", "SELL"].includes(action)) {
       return output({ ok: false, status: "INVALID_ACTION", reason: "BUY or SELL only", liveTrading: false, orderPlaced: false }, 400);
     }
-    if (!allowedSymbols.has(symbol)) {
-      return output({ ok: false, status: "SYMBOL_NOT_ALLOWED", reason: "BTCUSDT, ETHUSDT or SOLUSDT only", liveTrading: false, orderPlaced: false }, 400);
+    if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol)) {
+      return output({ ok: false, status: "SYMBOL_NOT_ALLOWED", reason: "A Binance Spot USDT symbol is required", liveTrading: false, orderPlaced: false }, 400);
     }
     if (!Number.isFinite(quoteAmount) || quoteAmount <= 0 || quoteAmount > CFG.maxPosition) {
       return output({ ok: false, status: "QUOTE_LIMIT", reason: `quote_amount_usdt must be above 0 and at most ${CFG.maxPosition}`, liveTrading: false, orderPlaced: false }, 400);
@@ -412,17 +443,22 @@ async function fetchExecutorAccountStatus(env) {
   }
 }
 
-async function scan(env) {
+async function scan(env, options = {}) {
   try {
-    const dailyLoss = Number(env.DAILY_LOSS_USDT || 0);
-    if (dailyLoss >= CFG.dailyLossCap) {
-      return resultBase({ status: "DAILY_LOSS_CAP", dailyLossUSDT: dailyLoss });
+    const sendAlerts = options.sendAlerts !== false;
+    const paperDaily = await getDailyPaper(env);
+    if (Number(paperDaily.realizedPnlUSDT || 0) <= -CFG.dailyLossCap) {
+      return resultBase({
+        status: "DAILY_LOSS_CAP",
+        dailyRealizedPnlUSDT: Number(paperDaily.realizedPnlUSDT || 0),
+      });
     }
 
-    const [tickers, books, exchangeInfo, btc1h, btc4h, riskSources] = await Promise.all([
+    const [tickers, books, exchangeInfo, products, btc1h, btc4h, riskSources] = await Promise.all([
       binance("/api/v3/ticker/24hr"),
       binance("/api/v3/ticker/bookTicker"),
       binance("/api/v3/exchangeInfo"),
+      getBinanceProductMetadata().catch(() => new Map()),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=100"),
       getRiskSources().catch(() => ({ binance: [], cryptoQuant: [], whaleAlert: [] })),
@@ -435,15 +471,16 @@ async function scan(env) {
 
     const tradable = new Map(
       exchangeInfo.symbols
-        .filter(s => s.status === "TRADING" && s.quoteAsset === "USDT" && s.isSpotTradingAllowed)
+        .filter(s => s.status === "TRADING" && s.quoteAsset === "USDT" && s.isSpotTradingAllowed && s.ocoAllowed)
         .map(s => [s.symbol, s])
     );
     const bookMap = new Map(books.map(b => [b.symbol, b]));
-    const candidates = shortlist(tickers, tradable, bookMap);
+    const selection = await shortlist(env, tickers, tradable, bookMap, products);
+    const candidates = selection.candidates;
     const analyses = [];
 
-    for (let i = 0; i < candidates.length; i += 5) {
-      const group = candidates.slice(i, i + 5);
+    for (let i = 0; i < candidates.length; i += 3) {
+      const group = candidates.slice(i, i + 3);
       const groupResults = await Promise.all(
         group.map(x => analyzeSymbol(x, tradable.get(x.symbol), bookMap.get(x.symbol), regime, riskSources))
       );
@@ -453,8 +490,9 @@ async function scan(env) {
     const valid = analyses.filter(x => x.valid).sort((a, b) => b.score - a.score);
     const best = valid[0] || null;
     let alertSent = false;
+    const activePaper = (await getState(env, "paper:active") || []).filter(Boolean);
 
-    if (best) {
+    if (sendAlerts && best && activePaper.length < CFG.maxOpenPaperPositions) {
       const cache = caches.default;
       const cacheKey = new Request(`https://scanner-cache.local/${best.symbol}/${best.signalId}`);
       if (!(await cache.match(cacheKey))) {
@@ -483,9 +521,15 @@ async function scan(env) {
     }
 
     return resultBase({
-      status: best ? "VALID_SETUP_FOUND" : "NO_VALID_SETUP",
+      status: best
+        ? activePaper.length >= CFG.maxOpenPaperPositions ? "POSITION_LIMIT_WAIT" : "VALID_SETUP_FOUND"
+        : "NO_VALID_SETUP",
       marketRegime: regime,
+      surfaceUniverseSize: selection.eligibleCount,
+      rotationCursor: selection.cursor,
       candidatesScanned: candidates.map(x => x.symbol),
+      deepScanned: analyses.length,
+      activePaperPositions: activePaper.length,
       alertSent,
       selected: best,
       results: analyses,
@@ -495,7 +539,7 @@ async function scan(env) {
   }
 }
 
-function shortlist(tickers, tradable, bookMap) {
+async function shortlist(env, tickers, tradable, bookMap, products) {
   const eligible = tickers
     .filter(t => tradable.has(t.symbol) && bookMap.has(t.symbol))
     .map(t => ({
@@ -505,44 +549,83 @@ function shortlist(tickers, tradable, bookMap) {
       change: Number(t.priceChangePercent),
       trades: Number(t.count || 0),
     }))
-    .filter(x => isAllowedBase(x.base))
+    .filter(x => isAllowedProduct(x, products.get(x.symbol)))
     .filter(x => x.volume >= CFG.minVolume24h)
     .filter(x => x.change >= -8 && x.change <= CFG.maxRise24hPct);
 
-  const liquid = [...eligible].sort((a, b) => b.volume - a.volume).slice(0, 10);
-  const active = [...eligible]
+  const byVolume = [...eligible].sort((a, b) => b.volume - a.volume)[0];
+  const byMomentum = [...eligible]
     .filter(x => x.change > 0)
-    .sort((a, b) => (b.change * Math.log10(b.volume)) - (a.change * Math.log10(a.volume)))
-    .slice(0, 12);
-  const priority = eligible.filter(x => x.symbol === "TSTUSDT" || x.symbol === "VIRTUALUSDT");
-  const unique = new Map([...priority, ...liquid, ...active].map(x => [x.symbol, x]));
-  return [...unique.values()].slice(0, CFG.scanCount);
+    .sort((a, b) => (b.change * Math.log10(Math.max(b.volume, 1))) - (a.change * Math.log10(Math.max(a.volume, 1))))[0];
+  const leaders = [...new Map([byVolume, byMomentum].filter(Boolean).map(x => [x.symbol, x])).values()]
+    .slice(0, CFG.priorityCount);
+  const leaderSymbols = new Set(leaders.map(x => x.symbol));
+  const rotationPool = eligible.filter(x => !leaderSymbols.has(x.symbol)).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const state = await getState(env, "scanner:rotation") || { cursor: 0 };
+  const cursor = rotationPool.length ? Number(state.cursor || 0) % rotationPool.length : 0;
+  const remaining = Math.max(0, CFG.scanCount - leaders.length);
+  const rotated = [];
+  for (let i = 0; i < Math.min(remaining, rotationPool.length); i++) {
+    rotated.push(rotationPool[(cursor + i) % rotationPool.length]);
+  }
+  const nextCursor = rotationPool.length ? (cursor + rotated.length) % rotationPool.length : 0;
+  await putState(env, "scanner:rotation", { cursor: nextCursor, updatedAt: Date.now() }, 7 * 24 * 3600);
+  return { candidates: [...leaders, ...rotated], eligibleCount: eligible.length, cursor: nextCursor };
 }
 
-function isAllowedBase(base) {
-  return ["BTC", "ETH", "SOL"].includes(base);
+function isAllowedProduct(summary, product) {
+  const base = String(summary.base || "").toUpperCase();
+  if (!base || EXCLUDED_BASES.has(base)) return false;
+  if (/(UP|DOWN|BULL|BEAR)$/.test(base)) return false;
+
+  const tags = (product?.tags || []).map(x => String(x).toLowerCase());
+  const name = String(product?.name || "").toLowerCase();
+  if (product?.etf || tags.some(x => x.includes("bstock") || x.includes("leveraged"))) return false;
+  if (/bstock|tokenized stock|leveraged token/.test(name)) return false;
+
+  // If Binance's product tags are temporarily unavailable, fail closed on the
+  // naming convention used by bStocks while preserving known crypto symbols.
+  if (!product && base.endsWith("B") && !SAFE_B_SUFFIX_CRYPTO.has(base)) return false;
+  return true;
 }
 
 async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}) {
   try {
-    const [raw15, raw1h, depth] = await Promise.all([
+    const [raw15, raw1h, raw4h, raw1d, depth] = await Promise.all([
       binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=120`),
       binance(`/api/v3/klines?symbol=${summary.symbol}&interval=1h&limit=100`),
+      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=4h&limit=100`),
+      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=1d&limit=${CFG.minAgeDays + 5}`),
       binance(`/api/v3/depth?symbol=${summary.symbol}&limit=100`),
     ]);
     const c15 = closed(raw15.map(candle));
     const c1h = closed(raw1h.map(candle));
+    const c4h = closed(raw4h.map(candle));
+    const c1d = closed(raw1d.map(candle));
+    if (c15.length < 60 || c1h.length < 60 || c4h.length < 60) {
+      return { symbol: summary.symbol, valid: false, status: "INSUFFICIENT_HISTORY" };
+    }
     const bid = Number(book.bidPrice);
     const ask = Number(book.askPrice);
     const mid = (bid + ask) / 2;
     const spread = ((ask - bid) / mid) * 100;
-    const depthSides = onePctDepth(depth, mid);
-    const trend = symbolTrend(c1h);
+    const depthStats = orderBookStats(depth, mid);
+    const trend = symbolTrend(c1h, c4h);
     const breakout = summary.symbol === "TSTUSDT" ? tstBreakoutRetest(c15, ask) : breakoutRetest(c15);
-    const pullback = summary.symbol !== "TSTUSDT" && trend.rising ? pullbackBounce(c15) : null;
+    const pullback = summary.symbol !== "TSTUSDT" && trend.aligned ? pullbackBounce(c15) : null;
     const setup = breakout || pullback;
     const atr = atr14(c15);
     const entry = ask;
+    const atrPct = entry > 0 ? (atr / entry) * 100 : 999;
+    const last15 = c15.at(-1);
+    const volumeMedian = median(c15.slice(-21, -1).map(x => x.quoteVolume));
+    const relativeVolume = volumeMedian > 0 ? last15.quoteVolume / volumeMedian : 0;
+    const flowWindow = c15.slice(-8);
+    const flowQuote = flowWindow.reduce((sum, x) => sum + x.quoteVolume, 0);
+    const takerBuyRatio = flowQuote > 0
+      ? flowWindow.reduce((sum, x) => sum + Number(x.takerBuyQuote || 0), 0) / flowQuote
+      : 0;
+    const momentumRsi = rsi14(c15.map(x => x.close));
     const swingLow = setup?.retest?.low || setup?.trigger?.low || c15.at(-2).low;
     const stopRaw = summary.symbol === "TSTUSDT"
       ? 0.01794
@@ -563,27 +646,55 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     const entryFee = position * CFG.fee;
     const stopFee = quantity * stop * CFG.fee;
     const riskFees = quantity * riskUnit + entryFee + stopFee;
-    const target1 = roundPrice(entry + 2.25 * riskUnit, entry);
-    const target2 = roundPrice(entry + 3 * riskUnit, entry);
+    const target1 = roundPrice(entry + 2.75 * riskUnit, entry);
+    const target2 = roundPrice(entry + 3.5 * riskUnit, entry);
     const exitFee1 = quantity * target1 * CFG.fee;
     const netReward1 = quantity * (target1 - entry) - entryFee - exitFee1;
     const netRR = riskFees > 0 ? netReward1 / riskFees : 0;
 
+    const protectedStopNotional = quantity * stop;
+    const protectedTargetNotional = quantity * target1;
+    const scoreBreakdown = {
+      marketRegime: regime.longAllowed ? 10 : 0,
+      multiTimeframeTrend: trend.aligned ? 15 : 0,
+      confirmedRetest: setup ? 20 : 0,
+      relativeVolume: relativeVolume >= CFG.minRelativeVolume ? 10 : 0,
+      takerBuyPressure: takerBuyRatio >= CFG.minTakerBuyRatio ? 10 : 0,
+      orderBookSupport: depthStats.bidAskRatio >= CFG.minBidAskDepthRatio && depthStats.largestAskShare <= CFG.maxLargestAskShare ? 10 : 0,
+      tightSpread: spread <= CFG.maxSpreadPct ? 5 : 0,
+      deepLiquidity: depthStats.bid >= CFG.minDepthEachSide && depthStats.ask >= CFG.minDepthEachSide ? 5 : 0,
+      healthyMomentum: momentumRsi >= 50 && momentumRsi <= 68 ? 5 : 0,
+      notOverextended: summary.change <= CFG.maxRise24hPct && atrPct >= 0.15 && atrPct <= 3.5 ? 5 : 0,
+      protectableOrder: protectedStopNotional >= minNotional * 1.02 && protectedTargetNotional >= minNotional * 1.02 ? 5 : 0,
+    };
+    const score = Object.values(scoreBreakdown).reduce((sum, value) => sum + value, 0);
+
     const checks = {
       btcMarketAllowsLongs: regime.longAllowed,
-      volume24hAbove2M: summary.volume >= CFG.minVolume24h,
+      cryptoProductOnly: true,
+      ageAtLeast90Days: c1d.length >= CFG.minAgeDays,
+      volume24hAbove15M: summary.volume >= CFG.minVolume24h,
       notOverextended24h: summary.change <= CFG.maxRise24hPct,
-      oneHourTrendRising: trend.rising,
+      multiTimeframeTrendAligned: trend.aligned,
       confirmedSetup: Boolean(setup),
-      spreadBelow05Pct: spread < CFG.maxSpreadPct,
-      bidDepthSufficient: depthSides.bid >= CFG.minDepthEachSide,
-      askDepthSufficient: depthSides.ask >= CFG.minDepthEachSide,
+      relativeVolumeConfirmed: relativeVolume >= CFG.minRelativeVolume,
+      takerBuyPressureConfirmed: takerBuyRatio >= CFG.minTakerBuyRatio,
+      spreadBelow012Pct: spread <= CFG.maxSpreadPct,
+      bidDepthSufficient: depthStats.bid >= CFG.minDepthEachSide,
+      askDepthSufficient: depthStats.ask >= CFG.minDepthEachSide,
+      bidDepthDominates: depthStats.bidAskRatio >= CFG.minBidAskDepthRatio,
+      noSingleSellWall: depthStats.largestAskShare <= CFG.maxLargestAskShare,
+      rsiHealthy: momentumRsi >= 50 && momentumRsi <= 68,
+      atrHealthy: atrPct >= 0.15 && atrPct <= 3.5,
       stopBelowEntry: stop > 0 && stop < entry,
-      stopWithin8Pct: stopPct > 0 && stopPct <= CFG.maxStopPct,
+      stopWithin3Pct: stopPct > 0 && stopPct <= CFG.maxStopPct,
       minimumOrderMet: position + 0.000001 >= minNotional,
-      positionAtMost5USDT: position <= CFG.maxPosition + 0.000001,
-      riskAtMost050USDT: riskFees <= CFG.maxRisk,
-      netRewardRiskAtLeast2: netRR >= CFG.minNetRR,
+      ocoSupported: Boolean(symbolInfo.ocoAllowed),
+      protectedLegsMeetNotional: protectedStopNotional >= minNotional * 1.02 && protectedTargetNotional >= minNotional * 1.02,
+      positionAtMost7USDT: position <= CFG.maxPosition + 0.000001,
+      riskAtMost020USDT: riskFees <= CFG.maxRisk,
+      netRewardRiskAtLeast25: netRR >= CFG.minNetRR,
+      scoreAtLeast85: score >= CFG.minScore,
     };
 
     const sourceRisk = assessSourceRisk(riskSources, summary.base, summary.symbol);
@@ -591,11 +702,16 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
     checks.noOnChainMarketRisk = !sourceRisk.cryptoQuant.blocked;
     checks.noLargeExchangeDepositRisk = !sourceRisk.whaleAlert.blocked;
 
-    const valid = Object.values(checks).every(Boolean);
-    const baseScore = valid
-      ? netRR * 10 + Math.min(summary.volume / 1_000_000, 25) + trend.strength * 5 - spread * 8
-      : 0;
-    const score = Math.max(0, baseScore);
+    const hardCheckKeys = [
+      "btcMarketAllowsLongs", "cryptoProductOnly", "ageAtLeast90Days", "volume24hAbove15M",
+      "notOverextended24h", "multiTimeframeTrendAligned", "confirmedSetup", "spreadBelow012Pct",
+      "bidDepthSufficient", "askDepthSufficient", "atrHealthy", "stopBelowEntry", "stopWithin3Pct",
+      "minimumOrderMet", "ocoSupported", "protectedLegsMeetNotional", "positionAtMost7USDT",
+      "riskAtMost020USDT", "netRewardRiskAtLeast25", "noOfficialBinanceRisk",
+      "noOnChainMarketRisk", "noLargeExchangeDepositRisk",
+    ];
+    const hardChecksPassed = hardCheckKeys.every(key => checks[key]);
+    const valid = hardChecksPassed && score >= CFG.minScore;
 
     return {
       symbol: summary.symbol,
@@ -604,11 +720,14 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
       setup: setup?.type || null,
       officialSources: sourceRisk,
       checks,
+      scoreBreakdown,
       market: {
         bid: fmt(bid), ask: fmt(ask), spreadPct: round(spread, 4),
         change24hPct: round(summary.change, 3), volume24hUSDT: round(summary.volume, 2),
-        bidDepth1PctUSDT: round(depthSides.bid, 2), askDepth1PctUSDT: round(depthSides.ask, 2),
-        atr15m: fmt(atr), stopDistancePct: round(stopPct, 2),
+        bidDepth1PctUSDT: round(depthStats.bid, 2), askDepth1PctUSDT: round(depthStats.ask, 2),
+        bidAskDepthRatio: round(depthStats.bidAskRatio, 3), largestAskShare: round(depthStats.largestAskShare, 3),
+        takerBuyRatio: round(takerBuyRatio, 3), relativeVolume: round(relativeVolume, 2), rsi15m: round(momentumRsi, 2),
+        atr15m: fmt(atr), atrPct: round(atrPct, 3), stopDistancePct: round(stopPct, 2), ageDaysObserved: c1d.length,
       },
       plan: valid ? {
         entry: fmt(entry), stop: fmt(stop), target1: fmt(target1), target2: fmt(target2),
@@ -619,7 +738,7 @@ async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}
         invalidation: `إلغاء الفكرة تحت ${fmt(stop)} أو عند فقد مستوى إعادة الاختبار`,
       } : null,
       signalId: `${setup?.type || "none"}-${setup?.time || 0}-${round(entry, 8)}`,
-      score: round(score, 3),
+      score,
     };
   } catch (error) {
     return { symbol: summary.symbol, valid: false, status: "DATA_ERROR", error: String(error?.message || error) };
@@ -641,12 +760,20 @@ function marketRegime(h1, h4) {
   };
 }
 
-function symbolTrend(candles) {
-  const closes = candles.map(x => x.close);
-  const e9 = ema(closes, 9), e20 = ema(closes, 20), e50 = ema(closes, 50);
-  const last = candles.at(-1), prev = candles.at(-2);
-  const rising = e9 > e20 && e20 > e50 && last.close > e20 && last.close >= prev.close * 0.995;
-  return { rising, strength: (e9 - e20) / e20 };
+function symbolTrend(h1, h4) {
+  const closes1h = h1.map(x => x.close);
+  const closes4h = h4.map(x => x.close);
+  const e9_1h = ema(closes1h, 9), e20_1h = ema(closes1h, 20), e50_1h = ema(closes1h, 50);
+  const e20_4h = ema(closes4h, 20), e50_4h = ema(closes4h, 50);
+  const last1h = h1.at(-1), prev1h = h1.at(-2), last4h = h4.at(-1);
+  const rising1h = e9_1h > e20_1h && e20_1h > e50_1h && last1h.close > e20_1h && last1h.close >= prev1h.close * 0.995;
+  const rising4h = e20_4h > e50_4h && last4h.close > e20_4h;
+  return {
+    aligned: rising1h && rising4h,
+    rising1h,
+    rising4h,
+    strength: e20_1h > 0 ? (e9_1h - e20_1h) / e20_1h : 0,
+  };
 }
 
 function breakoutRetest(candles) {
@@ -776,12 +903,38 @@ function containsToken(text, token) {
   return new RegExp(`(^|[^A-Z0-9])${escaped}([^A-Z0-9]|$)`, "i").test(text);
 }
 
-function onePctDepth(depth, mid) {
-  const bid = depth.bids.filter(([p]) => Number(p) >= mid * 0.99)
-    .reduce((s, [p, q]) => s + Number(p) * Number(q), 0);
-  const ask = depth.asks.filter(([p]) => Number(p) <= mid * 1.01)
-    .reduce((s, [p, q]) => s + Number(p) * Number(q), 0);
-  return { bid, ask };
+function orderBookStats(depth, mid) {
+  const bids = (depth.bids || [])
+    .filter(([p]) => Number(p) >= mid * 0.99)
+    .map(([p, q]) => Number(p) * Number(q));
+  const asks = (depth.asks || [])
+    .filter(([p]) => Number(p) <= mid * 1.01)
+    .map(([p, q]) => Number(p) * Number(q));
+  const bid = bids.reduce((sum, value) => sum + value, 0);
+  const ask = asks.reduce((sum, value) => sum + value, 0);
+  const largestAsk = asks.length ? Math.max(...asks) : ask;
+  return {
+    bid,
+    ask,
+    bidAskRatio: ask > 0 ? bid / ask : 0,
+    largestAskShare: ask > 0 ? largestAsk / ask : 1,
+  };
+}
+
+async function getBinanceProductMetadata() {
+  const response = await fetch(PRODUCT_METADATA_URL, {
+    headers: { Accept: "application/json", "User-Agent": "tst-spot-signal-product-filter/1.0" },
+    cf: { cacheTtl: 300, cacheEverything: true },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`Binance product metadata failed: ${response.status}`);
+  const payload = await response.json();
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  return new Map(rows.map(row => [String(row.s || ""), {
+    name: String(row.an || row.adn || ""),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    etf: Boolean(row.etf),
+  }]));
 }
 
 async function binance(path) {
@@ -798,7 +951,8 @@ async function binance(path) {
 
 function candle(k) {
   return { openTime: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4],
-    volume: +k[5], closeTime: +k[6], quoteVolume: +k[7] };
+    volume: +k[5], closeTime: +k[6], quoteVolume: +k[7],
+    takerBuyBase: +k[9], takerBuyQuote: +k[10] };
 }
 function closed(x) { return x.filter(c => c.closeTime < Date.now()); }
 function ema(values, period) {
@@ -816,6 +970,19 @@ function atr14(c) {
   for (let i = 1; i < s.length; i++) tr.push(Math.max(s[i].high - s[i].low,
     Math.abs(s[i].high - s[i - 1].close), Math.abs(s[i].low - s[i - 1].close)));
   return tr.reduce((a, b) => a + b, 0) / Math.max(tr.length, 1);
+}
+function rsi14(values) {
+  if (values.length < 15) return 50;
+  const recent = values.slice(-15);
+  let gains = 0, losses = 0;
+  for (let i = 1; i < recent.length; i++) {
+    const change = recent[i] - recent[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  if (losses === 0) return gains > 0 ? 100 : 50;
+  const rs = gains / losses;
+  return 100 - (100 / (1 + rs));
 }
 function median(v) {
   const s = [...v].sort((a, b) => a - b), m = Math.floor(s.length / 2);
@@ -836,7 +1003,8 @@ function trim(v) { return Number(v.toFixed(8)).toString(); }
 function alertText(x, regime) {
   const p = x.plan;
   return [
-    `🚨 أفضل إشارة Binance Spot: ${x.symbol}`,
+    `🚨 إشارة Paper مؤهلة: ${x.symbol.replace("USDT", "/USDT")}`,
+    `درجة التأكيد: ${x.score}/100 — الحد الأدنى ${CFG.minScore}`,
     `نوع الفرصة: ${x.setup}`,
     `الدخول المشروط الآن: ${p.entry}`,
     `الكمية: ${p.quantity} — قيمة الصفقة: ${p.positionUSDT} USDT`,
@@ -847,10 +1015,13 @@ function alertText(x, regime) {
     `الرسوم المتوقعة دخول + هدف أول: ${p.feesEntryAndTarget1USDT} USDT`,
     `R:R الصافي: ${p.netRewardRisk}`,
     `تغير 24س: ${x.market.change24hPct}% | السبريد: ${x.market.spreadPct}%`,
+    `تأكيد الحجم: ${x.market.relativeVolume}x | ضغط شراء Taker: ${(Number(x.market.takerBuyRatio) * 100).toFixed(1)}%`,
+    `دعم دفتر الأوامر Bid/Ask: ${x.market.bidAskDepthRatio}x | RSI: ${x.market.rsi15m}`,
+    `العمر المرصود: ${x.market.ageDaysObserved}+ يوم | OCO قابل للتنفيذ: ${x.checks.protectedLegsMeetNotional ? "نعم" : "لا"}`,
     `حالة BTC: ${regime.state}`,
     `المصادر الرسمية: Binance آمن=${!x.officialSources.binance.blocked} | CryptoQuant آمن=${!x.officialSources.cryptoQuant.blocked} | Whale Alert آمن=${!x.officialSources.whaleAlert.blocked}`,
     `الإلغاء: ${p.invalidation}`,
-    "⚠️ اختبار ورقي فقط وليست ضمان مكسب. لا يتم إرسال أي أمر إلى Binance.",
+    "⚠️ اختبار ورقي فقط، ولا توجد استراتيجية تضمن المكسب. لا يتم إرسال أي أمر إلى Binance.",
   ].join("\n");
 }
 
@@ -1021,6 +1192,11 @@ async function telegramWebhook(request, env) {
       await finalizeTelegramButton(env, query, `🛑 مرفوض: تم بلوغ حد الخسارة الورقي اليومي ${CFG.dailyLossCap} USDT.`);
       return output({ ok: true, status: "DAILY_LOSS_CAP", paperOnly: true });
     }
+    const activeBeforeOpen = (await getState(env, "paper:active") || []).filter(Boolean);
+    if (activeBeforeOpen.length >= CFG.maxOpenPaperPositions) {
+      await finalizeTelegramButton(env, query, "🛑 لم تُفتح الصفقة الورقية: يوجد بالفعل مركز مفتوح. ننتظر إغلاقه أولًا.");
+      return output({ ok: true, status: "MAX_OPEN_PAPER_POSITIONS", paperOnly: true });
+    }
     const fresh = await revalidateCandidate(pending.symbol);
     if (!fresh.valid) {
       await finalizeTelegramButton(env, query, `⚠️ لم تُنفذ ورقيًا: شروط ${pending.symbol} لم تعد صالحة بعد إعادة الفحص.\nالسبب: ${fresh.reason}`);
@@ -1071,19 +1247,24 @@ async function finalizeTelegramButton(env, query, text) {
 
 async function revalidateCandidate(symbol) {
   try {
-    const [tickers, books, exchangeInfo, btc1h, btc4h] = await Promise.all([
+    const [tickers, books, exchangeInfo, products, btc1h, btc4h, riskSources] = await Promise.all([
       binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
       binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
       binance("/api/v3/exchangeInfo"),
+      getBinanceProductMetadata().catch(() => new Map()),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
       binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=100"),
+      getRiskSources().catch(() => ({ binance: [], cryptoQuant: [], whaleAlert: [] })),
     ]);
-    const info = exchangeInfo.symbols.find(x => x.symbol === symbol && x.status === "TRADING" && x.isSpotTradingAllowed);
+    const info = exchangeInfo.symbols.find(x => x.symbol === symbol && x.status === "TRADING" && x.isSpotTradingAllowed && x.ocoAllowed);
     if (!info) return { valid: false, reason: "الزوج غير متاح Spot حاليًا" };
     const regime = marketRegime(btc1h.map(candle), btc4h.map(candle));
     if (!regime.longAllowed) return { valid: false, reason: "اتجاه BTC أصبح غير مناسب" };
     const summary = { symbol, base: info.baseAsset, volume: Number(tickers.quoteVolume), change: Number(tickers.priceChangePercent) };
-    const candidate = await analyzeSymbol(summary, info, books, regime, {});
+    if (!isAllowedProduct(summary, products.get(symbol))) {
+      return { valid: false, reason: "الزوج ليس عملة Crypto Spot مؤهلة أو مصنف bStocks/Leveraged" };
+    }
+    const candidate = await analyzeSymbol(summary, info, books, regime, riskSources);
     if (!candidate.valid) {
       const failed = Object.entries(candidate.checks || {}).filter(([, value]) => !value).map(([key]) => key).join(", ");
       return { valid: false, reason: failed || candidate.status || "فشل التحقق", candidate };
@@ -1109,6 +1290,7 @@ async function monitorPaperPositions(env) {
       if (exit <= position.stop) reason = "STOP";
       else if (exit >= position.target2) reason = "TARGET_2";
       else if (exit >= position.target1) reason = "TARGET_1";
+      else if (Date.now() - Number(position.openedAt || 0) >= CFG.maxHoldHours * 3600 * 1000) reason = "TIME_EXIT";
       if (!reason) { remaining.push(id); continue; }
       const exitFee = position.quantity * exit * CFG.fee;
       const pnl = position.quantity * (exit - position.entry) - position.entryFeeUSDT - exitFee;
