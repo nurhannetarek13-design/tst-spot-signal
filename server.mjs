@@ -161,6 +161,8 @@ app.get("/executor/status", async (_req, res) => {
     executor: "VERCEL_SPOT_EXECUTOR",
     apiConnected: hasBinanceSigningKey(),
     liveTradingEnabled: cfg.enabled,
+    strategyValidated: cfg.strategyValidated,
+    strategyRelease: VALIDATED_STRATEGY_RELEASE,
     tradeUSDT: cfg.tradeUSDT,
     maxOpenPositions: cfg.maxOpenPositions,
     reserveUSDT: cfg.reserveUSDT,
