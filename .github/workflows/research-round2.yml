@@ -1,0 +1,29 @@
+name: Round 2 research
+on:
+  push:
+    paths:
+      - 'scripts/research-round2.mjs'
+      - 'validation/evidence-gate-round2.json'
+      - '.github/workflows/research-round2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check scripts/research-round2.mjs
+      - name: Run Round 2
+        run: node scripts/research-round2.mjs
+      - name: Upload Round 2 result
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-round2
+          path: validation/research-round2.json
+          if-no-files-found: error
