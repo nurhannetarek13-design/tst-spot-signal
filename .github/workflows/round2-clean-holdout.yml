@@ -1,0 +1,26 @@
+name: Round 2 clean holdout
+on:
+  push:
+    paths:
+      - 'scripts/round2-clean-holdout.mjs'
+      - 'validation/round2-symbol-holdout.json'
+      - '.github/workflows/round2-clean-holdout.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/round2-clean-holdout.mjs
+      - run: node scripts/round2-clean-holdout.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round2-clean-holdout
+          path: validation/round2-clean-holdout-result.json
+          if-no-files-found: error
