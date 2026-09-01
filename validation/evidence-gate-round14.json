@@ -1,0 +1,23 @@
+{
+  "round":14,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "hypothesis":"Among seasoned liquid spot cryptocurrencies, lower ex-ante realized volatility may carry a persistent long-side premium over multi-week horizons; test it independently from momentum families.",
+  "universe_rule":"Top 80 current Binance Spot USDT symbols excluding stable/fiat-like bases, leveraged tokens, wrapped/gold proxies and reserved holdout. Causal signal-time eligibility: >=365 days prior 4h history and >=10M USDT average daily quote volume over prior 30 days.",
+  "data":{"timeframe":"4h","history_days":1825,"oos_fraction":0.30,"entry":"next bar open","intrabar":"STOP_FIRST"},
+  "market_regime":"BTC close > EMA600 and BTC 30d return > 0",
+  "candidates":{
+    "LOWVOL_60D":{"rebalance_bars":42,"formation_bars":360,"select":"2 lowest realized volatility","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180},
+    "LOWVOL_90D":{"rebalance_bars":42,"formation_bars":540,"select":"2 lowest realized volatility","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180},
+    "LOWVOL_MOM_INTERACTION":{"rebalance_bars":42,"formation_bars":360,"filter":"bottom 25% realized volatility then positive 30d momentum","select":"top 2 30d momentum within low-volatility subset","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180}
+  },
+  "parameter_neighborhoods":{
+    "LOWVOL_60D":{"formation_bars":[300,360,420],"target_pct":[0.10,0.12,0.14],"hold_bars":[150,180,210]},
+    "LOWVOL_90D":{"formation_bars":[480,540,600],"target_pct":[0.10,0.12,0.14],"hold_bars":[150,180,210]},
+    "LOWVOL_MOM_INTERACTION":{"formation_bars":[300,360,420],"target_pct":[0.10,0.12,0.14],"hold_bars":[150,180,210]}
+  },
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20,"positive_neighbor_fraction":0.70},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "capital":{"account_usdt":20.12,"order_usdt":7,"reserve_usdt":2,"max_risk_usdt":0.20,"equity_floor":0,"positions_to_test":[1,2]},
+  "rule":"No parameter changes after results. Do not test final holdout unless discovery passes."
+}
