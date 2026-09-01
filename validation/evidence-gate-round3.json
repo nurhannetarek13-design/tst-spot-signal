@@ -1,0 +1,51 @@
+{
+  "registeredAt": "2026-09-01T15:24:00Z",
+  "status": "LOCKED_BEFORE_ROUND3_RESULTS",
+  "priorityOrder": [
+    "LIQUIDITY_CRASH_EXHAUSTION",
+    "EXTREME_RESIDUAL_DISPERSION_REVERSAL",
+    "MARKET_BREADTH_AGGREGATED_LEAD_LAG"
+  ],
+  "rawForwardHorizonsHours": [24, 48, 72],
+  "rawEventGate": {
+    "minMeanGrossReturn": 0.015,
+    "requireMedianPositive": true,
+    "minHitRate": 0.55,
+    "minMedianMfeMaeRatio": 2.0,
+    "strategyRulesAllowedBeforeGate": false,
+    "transactionCostsAppliedBeforeGate": false,
+    "positionSizingAppliedBeforeGate": false
+  },
+  "liquidityCrashExhaustion": {
+    "marketReturnZMax": -2.5,
+    "marketCrashBreadthMin": 0.60,
+    "assetOneHourReturnMax": -0.03,
+    "volumeZMin": 2.5,
+    "requireDownsideDeceleration": true,
+    "historicalOrderBookOrLiquidationsFabricated": false
+  },
+  "residualDispersion": {
+    "residualZThreshold": -3.0,
+    "returnHorizonHours": 24,
+    "betaLookbackHours": 720,
+    "residualZLookbackHours": 1440,
+    "requireResidualImprovement": true,
+    "requirePositiveOneHourReturn": true,
+    "volumeZMin": 2.0
+  },
+  "oos": {
+    "unseenSymbolHoldout": ["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+    "walkForwardRequired": true
+  },
+  "capitalSimulation": {
+    "initialEquityUSDT": 20.12,
+    "orderUSDT": 7.0,
+    "reserveUSDT": 2.0,
+    "roundTripCost": 0.0036,
+    "absoluteEquityFloor": 0.0,
+    "stopAtTheoreticalRuin": true,
+    "maxDrawdownCappedAtPct": 100
+  },
+  "liveTrading": false,
+  "validatedStrategyRelease": null
+}
