@@ -1,0 +1,20 @@
+{
+  "registeredAt": "2026-09-01T16:03:00Z",
+  "status": "LOCKED_BEFORE_ROUND4_RESULTS",
+  "goal": "Find a medium-turnover Binance Spot long-only strategy that survives realistic costs and the existing Round 2 evidence gate.",
+  "data": {"source":"Binance Spot closed 4h OHLCV","historyDays":1825,"entry":"next bar open","intrabarConflict":"STOP_FIRST"},
+  "discoveryUniverse": ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "untouchedSymbolHoldout": ["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "candidates": {
+    "MTF_TREND_BREAKOUT":{"emaFast":50,"emaSlow":200,"breakoutBars":30,"atr":14,"initialStopAtr":2.5,"trailAtr":3.0,"maxHoldBars":90},
+    "TREND_PULLBACK_RECLAIM":{"emaFast":50,"emaSlow":200,"atr":14,"rsi":14,"pullbackAtr":0.60,"reclaimBars":3,"initialStopAtr":2.25,"trailAtr":3.0,"maxHoldBars":72},
+    "VOLATILITY_EXPANSION_TREND":{"emaSlow":200,"atr":14,"compressionLookback":120,"compressionQuantile":0.25,"breakoutBars":20,"initialStopAtr":2.5,"trailAtr":3.25,"maxHoldBars":90}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "timeOosFraction":0.30,
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "capital":{"accountUSDT":20.12,"orderUSDT":7,"reserveUSDT":2,"maxRiskUSDT":0.20,"simultaneousPositions":[1,2]},
+  "liveTrading":false,
+  "validatedStrategyRelease":null
+}
