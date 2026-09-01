@@ -1,0 +1,26 @@
+{
+  "registeredAt":"2026-09-01T16:05:00Z",
+  "status":"LOCKED_BEFORE_ROUND6_RESULTS",
+  "goal":"Test conditional dip-recovery strategies only on highly liquid Spot majors; reduce altcoin noise and turnover while preserving enough OOS trades.",
+  "data":{"source":"Binance Spot closed 4h OHLCV","historyDays":1825,"entry":"next bar open","intrabarConflict":"STOP_FIRST","discoveryOosFraction":0.30},
+  "discoveryUniverse":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","LINKUSDT","LTCUSDT","BCHUSDT"],
+  "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "commonRegime":"close>EMA200, EMA50>EMA200, EMA50 rising over 6 bars",
+  "candidates":{
+    "RSI_RECLAIM_TREND":{"rsi":14,"oversold":35,"reclaim":40,"lookbackBars":3,"stopAtr":1.5,"targetAtr":3.0,"maxHoldBars":30,"trendExit":"close<EMA50"},
+    "BB_RECLAIM_TREND":{"bbPeriod":20,"bbStd":2.0,"touchLookbackBars":2,"stopAtr":1.5,"targetAtr":2.5,"maxHoldBars":30,"trendExit":"close<EMA50"},
+    "SHOCK_RECLAIM_TREND":{"shockBars":3,"shockReturnMax":-0.04,"requirePositiveReclaim":true,"stopAtr":1.75,"targetAtr":3.5,"maxHoldBars":36,"trendExit":"close<EMA50"}
+  },
+  "parameterNeighborhoods":{
+    "RSI_RECLAIM_TREND":{"oversold":[32,35,38],"stopAtr":[1.25,1.5,1.75],"targetAtr":[2.5,3.0,3.5]},
+    "BB_RECLAIM_TREND":{"bbStd":[1.8,2.0,2.2],"stopAtr":[1.25,1.5,1.75],"targetAtr":[2.25,2.5,2.75]},
+    "SHOCK_RECLAIM_TREND":{"shockReturnMax":[-0.03,-0.04,-0.05],"stopAtr":[1.5,1.75,2.0],"targetAtr":[3.0,3.5,4.0]}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "drawdownMeasurement":"sequential fixed-7-USDT trade PnL against 20.12-USDT starting equity for discovery; exact concurrency tested only after holdout pass",
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "capital":{"accountUSDT":20.12,"orderUSDT":7,"reserveUSDT":2,"maxRiskUSDT":0.20,"simultaneousPositions":[1,2]},
+  "liveTrading":false,
+  "validatedStrategyRelease":null
+}
