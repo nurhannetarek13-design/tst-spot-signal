@@ -1,0 +1,23 @@
+name: Round 15 signed-variation factor
+on:
+  push:
+    paths:
+      - 'scripts/research-round15.mjs'
+      - 'validation/evidence-gate-round15.json'
+      - '.github/workflows/research-round15.yml'
+  workflow_dispatch:
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/research-round15.mjs
+      - run: node scripts/research-round15.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round15-discovery
+          path: validation/round15-discovery.json
