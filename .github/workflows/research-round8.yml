@@ -1,0 +1,22 @@
+name: Round 8 12h continuation
+on:
+  push:
+    paths:
+      - 'scripts/research-round8.mjs'
+      - '.github/workflows/research-round8.yml'
+  workflow_dispatch:
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round8.mjs
+      - run: node scripts/research-round8.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round8-discovery
+          path: validation/round8-discovery.json
