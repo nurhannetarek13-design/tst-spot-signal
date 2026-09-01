@@ -1,0 +1,17 @@
+{
+  "round":16,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "source_candidate":"Round 14 LOWVOL_MOM_INTERACTION",
+  "selection_reason":"It was the only Round-14 candidate with positive base and 2x-cost expectancy, acceptable drawdown, and 4/5 positive walk-forward folds; it failed approval only because OOS n=49 was below 100 and the neighbor stage was not reached.",
+  "seen_round14_symbols":["BTCUSDT","ETHUSDT","SOLUSDT","ZECUSDT","XRPUSDT","ENSOUSDT","UNIUSDT","ARBUSDT","BNBUSDT","ENAUSDT","UUSDT","SNDKBUSDT","NEARUSDT","DOGEUSDT","TRXUSDT","LINKUSDT","SUIUSDT","DASHUSDT","PUMPUSDT","0GUSDT","PEPEUSDT","TRUMPUSDT","CRCLBUSDT","ADAUSDT","HEMIUSDT","CRVUSDT","OPUSDT","GRAMUSDT","WLDUSDT","SPCXBUSDT","TUTUSDT","AAVEUSDT","ONGUSDT","LTCUSDT","AVAXUSDT","TAOUSDT","XPLUSDT","BMTUSDT","MSTRBUSDT","SCUSDT","ACEUSDT","ONDOUSDT","PROMUSDT","INJUSDT","ZROUSDT","SNXXBUSDT","QQQBUSDT","FETUSDT","FFUSDT","FILUSDT","ASTERUSDT","APTUSDT","POLUSDT","BONKUSDT","BCHUSDT","DOTUSDT","SOXLBUSDT","ACTUSDT","MORPHOUSDT","MUBUSDT","PENGUUSDT","CHIPUSDT","TWTUSDT","ZENUSDT","DOGSUSDT","SKYUSDT","CAKEUSDT","ARUSDT","BICOUSDT","JSTUSDT","SKHYBUSDT","ETHFIUSDT","ATMUSDT","NOTUSDT","WLFIUSDT","ZKCUSDT","VIRTUALUSDT","DEXEUSDT","ZKUSDT","GIGGLEUSDT"],
+  "replication_universe_rule":"Select the next 80 most liquid current Binance Spot USDT symbols after excluding every Round-14 symbol, reserved final-holdout symbols, stable/fiat-like bases, leveraged tokens and wrapped/gold proxies. Signal-time causal eligibility remains >=365 days of prior 4h history and >=10M USDT average daily quote volume over prior 30 days.",
+  "signal":{"timeframe":"4h","formation_bars":360,"rebalance_bars":42,"low_vol_subset":"bottom 25% realized volatility","momentum_filter":"30d return > 0","selection":"top 2 by 30d momentum inside low-vol subset","market_regime":"BTC close > EMA600 and BTC 30d return > 0","entry":"next bar open","stop_pct":0.0275,"target_pct":0.12,"hold_bars":180,"intrabar":"STOP_FIRST"},
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "replication_gate":{"positive_expectancy_base":true,"min_pf_base":1.15,"positive_expectancy_stress":true,"positive_folds":4,"folds":5,"max_drawdown":0.20},
+  "pooled_discovery_gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"max_drawdown":0.20},
+  "parameter_neighborhood":{"formation_bars":[300,360,420],"target_pct":[0.10,0.12,0.14],"hold_bars":[150,180,210],"min_positive_fraction":0.70},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "paper_gate":{"min_pooled_oos_trades":200,"min_pf":1.20,"positive_final_holdout":true,"max_top_two_profit_share":0.50},
+  "capital":{"account_usdt":20.12,"order_usdt":7,"reserve_usdt":2,"max_risk_usdt":0.20,"equity_floor":0,"positions_to_test":[1,2]},
+  "rule":"No signal/threshold changes after replication results. Final holdout remains untouched unless replication + pooled discovery + neighborhood gates all pass."
+}
