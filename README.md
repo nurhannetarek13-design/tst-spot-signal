@@ -4,7 +4,7 @@ Fail-closed, multi-factor Binance Spot scanner and live executor for liquid USDT
 
 ## Current operating mode
 
-- `LIVE_AUTO`: a real Spot order is created only after every hard filter passes.
+- `CONFIRM_BEFORE_BUY`: a qualified setup sends a Telegram BUY button; no Spot order is created before the user presses it.
 - No Futures, leverage, perpetuals, shorts, bStocks, tokenized stocks, leveraged tokens, or stablecoin-to-stablecoin trades.
 - Surface-scan every eligible Binance Spot USDT pair every minute using Binance's bulk ticker and book data.
 - Deep-scan seven pairs per run with a rotating cursor so the complete liquid universe is covered without exceeding Cloudflare's free request budget.
