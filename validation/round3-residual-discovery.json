@@ -1,0 +1,15 @@
+{
+  "status": "RESEARCH_ONLY",
+  "protocol": "validation/evidence-gate-round3.json",
+  "category": "EXTREME_RESIDUAL_DISPERSION_REVERSAL",
+  "days": 1825,
+  "thresholds": {"z":-3,"volumeZ":2},
+  "eventCount": 189,
+  "horizons": {
+    "24": {"n":189,"meanGross":0.007455500680616676,"medianGross":0.012976981306967339,"hitRate":0.5714285714285714,"medianMFE":0.05062166962699832,"medianMAE":0.03125751382543884,"medianMfeMaeRatio":1.6195040306052753,"pass":false},
+    "48": {"n":189,"meanGross":0.010040972176374511,"medianGross":0.004818447771467893,"hitRate":0.5291005291005291,"medianMFE":0.06818181818181812,"medianMAE":0.04137447405329597,"medianMfeMaeRatio":1.6479198767334329,"pass":false},
+    "72": {"n":189,"meanGross":0.008899485039097876,"medianGross":0.006871609403255041,"hitRate":0.5396825396825397,"medianMFE":0.07574206755373591,"medianMAE":0.05627258647392874,"medianMfeMaeRatio":1.3459851821246467,"pass":false}
+  },
+  "rawGatePassed": false,
+  "verdict": "REJECT_BEFORE_STRATEGY_CONSTRUCTION"
+}
