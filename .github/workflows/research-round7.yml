@@ -1,0 +1,22 @@
+name: Round 7 slow daily trend
+on:
+  push:
+    paths:
+      - 'scripts/research-round7.mjs'
+      - '.github/workflows/research-round7.yml'
+  workflow_dispatch:
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round7.mjs
+      - run: node scripts/research-round7.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round7-discovery
+          path: validation/round7-discovery.json
