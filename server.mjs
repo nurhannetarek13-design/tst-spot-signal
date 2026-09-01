@@ -154,7 +154,8 @@ app.post("/executor/preflight", async (req, res) => {
 
     const body = JSON.parse(raw);
     const symbol = String(body.symbol || "BTCUSDT").toUpperCase();
-    const quoteOrderQty = Math.max(5, Number(body.quoteOrderQty || 5)).toFixed(2);
+    const requestedQuote = Number(body.quoteOrderQty || CFG.maxPositionUSDT);
+    const quoteOrderQty = Math.min(CFG.maxPositionUSDT, Math.max(0, requestedQuote)).toFixed(2);
     if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) {
       return res.status(400).json({ ok: false, status: "BAD_SYMBOL", orderPlaced: false });
     }
@@ -431,10 +432,12 @@ function executorConfig() {
   };
   return {
     enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING || "").toLowerCase()),
-    tradeUSDT: num(process.env.TRADE_USDT, 5, 1, 100000),
+    // Hard safety limits: environment variables may only reduce these values.
+    tradeUSDT: num(process.env.TRADE_USDT, CFG.maxPositionUSDT, 1, CFG.maxPositionUSDT),
     maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 3, 1, 20)),
     reserveUSDT: num(process.env.RESERVE_USDT, 2, 0, 100000),
-    maxRiskUSDT: num(process.env.MAX_RISK_USDT, 0.5, 0.01, 100000),
+    maxRiskUSDT: num(process.env.MAX_RISK_USDT, CFG.maxRiskPerTradeUSDT, 0.01, CFG.maxRiskPerTradeUSDT),
+    minNetRewardRisk: 2,
   };
 }
 
@@ -507,17 +510,59 @@ async function executeSpotOrder(symbol) {
   const targetRaw = Number(fresh.paperPlan.target1);
   const riskPct = entry > stopRaw ? (entry - stopRaw) / entry : 1;
   const riskSizedUSDT = riskPct > 0 ? cfg.maxRiskUSDT / riskPct : cfg.tradeUSDT;
-  let quoteToSpend = Math.min(cfg.tradeUSDT, riskSizedUSDT, availableUSDT);
+  let quoteToSpend = Math.min(CFG.maxPositionUSDT, cfg.tradeUSDT, riskSizedUSDT, availableUSDT);
   quoteToSpend = Math.floor(quoteToSpend * 100) / 100;
 
   const notionalFilter = symbolInfo.filters?.find(f => f.filterType === "NOTIONAL") ||
     symbolInfo.filters?.find(f => f.filterType === "MIN_NOTIONAL");
   const minNotional = Number(notionalFilter?.minNotional || 5);
-  if (quoteToSpend < minNotional) {
+  const lot = symbolInfo.filters?.find(f => f.filterType === "LOT_SIZE");
+  const stepSize = Number(lot?.stepSize || 0.00000001);
+  const priceFilter = symbolInfo.filters?.find(f => f.filterType === "PRICE_FILTER");
+  const tickSize = Number(priceFilter?.tickSize || 0.00000001);
+  const ask = Number(book.askPrice || entry);
+  const plannedStop = Number(floorToStep(Math.min(stopRaw, ask * 0.998), tickSize));
+  const plannedTakeProfit = Number(ceilToStep(Math.max(targetRaw, ask * 1.002), tickSize));
+  const grossQty = ask > 0 ? quoteToSpend / ask : 0;
+  const protectedQty = Number(floorToStep(grossQty * (1 - CFG.feeRate), stepSize));
+  const stopDistancePct = ask > plannedStop ? ((ask - plannedStop) / ask) * 100 : 999;
+  const estimatedEntryFee = quoteToSpend * CFG.feeRate;
+  const estimatedStopFee = protectedQty * plannedStop * CFG.feeRate;
+  const estimatedTargetFee = protectedQty * plannedTakeProfit * CFG.feeRate;
+  const estimatedRisk = protectedQty * (ask - plannedStop) + estimatedEntryFee + estimatedStopFee;
+  const estimatedReward = protectedQty * (plannedTakeProfit - ask) - estimatedEntryFee - estimatedTargetFee;
+  const estimatedNetRR = estimatedRisk > 0 ? estimatedReward / estimatedRisk : 0;
+
+  if (quoteToSpend > CFG.maxPositionUSDT || quoteToSpend < minNotional) {
     return {
       ok: false,
-      status: "BELOW_MIN_NOTIONAL",
-      reason: `Allowed order size ${quoteToSpend} USDT is below Binance minimum ${minNotional} USDT.`,
+      status: "POSITION_SIZE_REJECTED",
+      reason: `Safe order size ${quoteToSpend} USDT must be between Binance minimum ${minNotional} and the hard 5 USDT cap.`,
+      requiredUSDT: minNotional,
+      maxAllowedUSDT: CFG.maxPositionUSDT,
+    };
+  }
+  if (!(plannedStop > 0 && plannedStop < ask && plannedTakeProfit > ask) || stopDistancePct > 8) {
+    return { ok: false, status: "INVALID_PROTECTION_LEVELS", reason: "Stop/target levels are invalid or the stop exceeds 8%." };
+  }
+  if (protectedQty * plannedStop < minNotional || protectedQty * plannedTakeProfit < minNotional) {
+    return {
+      ok: false,
+      status: "PROTECTION_BELOW_MIN_NOTIONAL",
+      reason: `Trade rejected before buying: a protected 5 USDT position would fall below Binance's ${minNotional} USDT minimum on an OCO leg.`,
+      orderPlaced: false,
+      maxAllowedUSDT: CFG.maxPositionUSDT,
+    };
+  }
+  if (estimatedRisk > cfg.maxRiskUSDT) {
+    return { ok: false, status: "RISK_LIMIT", reason: `Estimated risk ${round(estimatedRisk, 4)} USDT exceeds the 0.50 USDT cap.`, orderPlaced: false };
+  }
+  if (estimatedNetRR < cfg.minNetRewardRisk) {
+    return {
+      ok: false,
+      status: "NET_RR_TOO_LOW",
+      reason: `Net reward/risk ${round(estimatedNetRR, 2)} is below the required 2.00 after fees and exchange rounding.`,
+      orderPlaced: false,
     };
   }
 
@@ -543,12 +588,7 @@ async function executeSpotOrder(symbol) {
   const baseCommission = (buy.fills || [])
     .filter(f => f.commissionAsset === baseAsset)
     .reduce((sum, f) => sum + Number(f.commission || 0), 0);
-  const lot = symbolInfo.filters?.find(f => f.filterType === "LOT_SIZE");
-  const stepSize = Number(lot?.stepSize || 0.00000001);
   const sellQty = floorToStep(Math.max(0, executedQty - baseCommission), stepSize);
-
-  const priceFilter = symbolInfo.filters?.find(f => f.filterType === "PRICE_FILTER");
-  const tickSize = Number(priceFilter?.tickSize || 0.00000001);
   const currentBook = await binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`);
   const currentBid = Number(currentBook.bidPrice || avgFill);
   const takeProfit = ceilToStep(Math.max(targetRaw, currentBid * 1.002), tickSize);
@@ -798,8 +838,9 @@ async function analyze(symbol, ticker, book, rawKlines) {
   const budgetQty = CFG.maxPositionUSDT / entry;
   const qty = Math.max(0, Math.min(riskQty, budgetQty));
   const positionUSDT = qty * entry;
-  const target1 = entry + 2 * stopDistance;
-  const target2 = entry + 3 * stopDistance;
+  // Gross targets are wider so the first target still clears 2:1 after Spot fees.
+  const target1 = entry + 2.25 * stopDistance;
+  const target2 = entry + 3.25 * stopDistance;
   const estFees = positionUSDT * CFG.feeRate * 2;
 
   let score = 0;
