@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-09-01T13:04:01.907Z",
+  "source": "Binance Spot closed OHLCV",
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "days": 365,
+  "assumptions": {
+    "feeEachSide": 0.001,
+    "slippageEachSide": 0.0005,
+    "sameBarStopAndTarget": "STOP_FIRST",
+    "historicalOrderBook": "UNAVAILABLE_NOT_SIMULATED"
+  },
+  "all": {
+    "trades": 73,
+    "netReturnPct": -20.295,
+    "winRatePct": 26.03,
+    "expectancy": -2.78013,
+    "profitFactor": 0.63,
+    "maxDrawdownPct": 28.301,
+    "longestLosingStreak": 14
+  },
+  "outOfSample": {
+    "trades": 22,
+    "netReturnPct": -3.356,
+    "expectancy": -1.52555,
+    "profitFactor": 0.78
+  },
+  "pass": {
+    "minTrades200": false,
+    "outOfSampleExpectancyPositive": false,
+    "outOfSampleProfitFactorAbove1_2": false,
+    "releaseApproved": false
+  }
+}
