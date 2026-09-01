@@ -1,0 +1,22 @@
+name: Round 4 strategy discovery
+on:
+  push:
+    paths:
+      - 'scripts/research-round4.mjs'
+      - '.github/workflows/research-round4.yml'
+  workflow_dispatch:
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round4.mjs
+      - run: node scripts/research-round4.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round4-discovery
+          path: validation/round4-discovery.json
