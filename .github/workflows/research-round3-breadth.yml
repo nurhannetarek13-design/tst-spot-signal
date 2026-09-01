@@ -1,0 +1,26 @@
+name: Round 3 breadth discovery
+on:
+  push:
+    paths:
+      - 'scripts/research-round3-breadth.mjs'
+      - 'validation/round3-breadth-definition.json'
+      - '.github/workflows/research-round3-breadth.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/research-round3-breadth.mjs
+      - run: node scripts/research-round3-breadth.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round3-breadth-discovery
+          path: validation/round3-breadth-discovery.json
+          if-no-files-found: error
