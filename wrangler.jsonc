@@ -8,5 +8,13 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "STATE_COORDINATOR", "class_name": "SignalState" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SignalState"] }
+  ]
 }
