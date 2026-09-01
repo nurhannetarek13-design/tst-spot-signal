@@ -1,0 +1,17 @@
+{
+  "round":11,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "universe":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "data":{"timeframe":"4h","history_days":1825,"oos_fraction":0.30,"entry":"next bar open","intrabar":"STOP_FIRST"},
+  "market_regime":"BTC close > EMA600 and BTC 30d return > 0",
+  "candidates":{
+    "ROTATION_30D":{"rebalance_bars":42,"rank":"top 2 by 30d return","minimum_momentum":0.10,"stop_pct":0.0275,"target_pct":0.12,"hold_bars":42},
+    "ROTATION_90D":{"rebalance_bars":84,"rank":"top 2 by 90d return","minimum_momentum":0.20,"stop_pct":0.0275,"target_pct":0.18,"hold_bars":84},
+    "BREAKOUT_20D":{"event":"close > prior 20d high","minimum_30d_momentum":0.08,"stop_pct":0.0275,"target_pct":0.10,"hold_bars":42,"cooldown_bars":42}
+  },
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20,"positive_neighbor_fraction":0.70},
+  "capital":{"account_usdt":20.12,"order_usdt":7,"reserve_usdt":2,"max_risk_usdt":0.20,"equity_floor":0},
+  "rule":"No threshold changes after results. Final holdout remains untouched unless discovery passes."
+}
