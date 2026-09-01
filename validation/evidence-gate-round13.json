@@ -10,6 +10,11 @@
     "QUALITY_MOM_VOLADJ":{"rebalance_bars":42,"score":"30d return / 30d realized volatility","select":"top 2 among positive 30d momentum","min_30d_return":0.06,"stop_pct":0.0275,"target_pct":0.12,"hold_bars":42},
     "QUALITY_MOM_TREND":{"rebalance_bars":42,"score":"30d return","select":"top 2","min_score":0.08,"asset_trend":"close > EMA200","stop_pct":0.0275,"target_pct":0.12,"hold_bars":42}
   },
+  "parameter_neighborhoods":{
+    "QUALITY_MOM_30D":{"min_score":[0.06,0.08,0.10],"target_pct":[0.10,0.12,0.14],"hold_bars":[36,42,48]},
+    "QUALITY_MOM_VOLADJ":{"min_30d_return":[0.04,0.06,0.08],"target_pct":[0.10,0.12,0.14],"hold_bars":[36,42,48]},
+    "QUALITY_MOM_TREND":{"min_score":[0.06,0.08,0.10],"target_pct":[0.10,0.12,0.14],"hold_bars":[36,42,48]}
+  },
   "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
   "gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20,"positive_neighbor_fraction":0.70},
   "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
