@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node scripts/render-server.mjs",
     "check:render": "node --check scripts/render-server.mjs",
+    "test": "node --test",
     "deploy": "wrangler deploy",
     "start:oracle": "node scripts/oracle-executor.mjs"
   },
