@@ -17,8 +17,8 @@ const CFG = {
   maxDailyLossUSDT: 2,
   maxRiskPerTradeUSDT: 0.5,
   maxPositionUSDT: 7,
-  minQuoteVolume24h: 2_000_000,
-  maxSpreadPct: 0.25,
+  minQuoteVolume24h: 5_000_000,
+  maxSpreadPct: 0.15,
   scanAllSpotUSDT: true,
   feeRate: 0.001,
 };
@@ -561,7 +561,7 @@ function executorConfig() {
     maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 3, 1, 20)),
     reserveUSDT: num(process.env.RESERVE_USDT, 2, 0, 100000),
     maxRiskUSDT: num(process.env.MAX_RISK_USDT, CFG.maxRiskPerTradeUSDT, 0.01, CFG.maxRiskPerTradeUSDT),
-    minNetRewardRisk: 2,
+    minNetRewardRisk: 2.5,
   };
 }
 
@@ -696,8 +696,8 @@ async function executeSpotOrder(symbol) {
       maxAllowedUSDT: CFG.maxPositionUSDT,
     };
   }
-  if (!(plannedStop > 0 && plannedStop < ask && plannedTakeProfit > ask) || stopDistancePct > 8) {
-    return { ok: false, status: "INVALID_PROTECTION_LEVELS", reason: "Stop/target levels are invalid or the stop exceeds 8%." };
+  if (!(plannedStop > 0 && plannedStop < ask && plannedTakeProfit > ask) || stopDistancePct > 5) {
+    return { ok: false, status: "INVALID_PROTECTION_LEVELS", reason: "Stop/target levels are invalid or the stop exceeds 5%." };
   }
   if (protectedQty * plannedStop < minNotional || protectedQty * plannedTakeProfit < minNotional) {
     return {
@@ -715,7 +715,7 @@ async function executeSpotOrder(symbol) {
     return {
       ok: false,
       status: "NET_RR_TOO_LOW",
-      reason: `Net reward/risk ${round(estimatedNetRR, 2)} is below the required 2.00 after fees and exchange rounding.`,
+      reason: `Net reward/risk ${round(estimatedNetRR, 2)} is below the required ${cfg.minNetRewardRisk.toFixed(2)} after fees and exchange rounding.`,
       orderPlaced: false,
     };
   }
@@ -975,12 +975,12 @@ async function analyze(symbol, ticker, book, rawKlines) {
     last.close >= resistance20 &&
     last.close <= previous.close * 1.015;
   const nearBreakout = last.close >= resistance20 * 0.997;
-  const healthyMomentum = rsi14 >= 52 && rsi14 <= 68;
+  const healthyMomentum = rsi14 >= 54 && rsi14 <= 64;
   const breakoutVolumeRatio = avgVol20 > 0 ? previous.volume / avgVol20 : 0;
-  const volumeConfirm = breakoutVolumeRatio >= 1.25;
+  const volumeConfirm = breakoutVolumeRatio >= 1.5;
   const liquid = Number(ticker.quoteVolume || 0) >= CFG.minQuoteVolume24h;
   const spreadOk = spreadPct <= CFG.maxSpreadPct;
-  const notChasing = change24hPct <= 25;
+  const notChasing = change24hPct <= 15;
 
   let decision = "WAIT";
   let reason = "No confirmed entry";
@@ -1000,8 +1000,8 @@ async function analyze(symbol, ticker, book, rawKlines) {
   const qty = Math.max(0, Math.min(riskQty, budgetQty));
   const positionUSDT = qty * entry;
   // Gross targets are wider so the first target still clears 2:1 after Spot fees.
-  const target1 = entry + 2.25 * stopDistance;
-  const target2 = entry + 3.25 * stopDistance;
+  const target1 = entry + 2.75 * stopDistance;
+  const target2 = entry + 4 * stopDistance;
   const estFees = positionUSDT * CFG.feeRate * 2;
 
   let score = 0;
