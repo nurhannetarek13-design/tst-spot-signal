@@ -18,8 +18,28 @@ function dd(rs){let eq=ACCOUNT,pk=ACCOUNT,m=0;for(const x of rs){eq=Math.max(0,e
 function met(t,cost){const r=t.map(x=>x.gross-cost),w=r.filter(x=>x>0),l=r.filter(x=>x<0),gp=w.reduce((s,x)=>s+x,0),gl=Math.abs(l.reduce((s,x)=>s+x,0));return {n:r.length,expectancy:mean(r),pf:gl?gp/gl:(gp>0?999:0),winRate:r.length?w.length/r.length:0,maxDD:dd(r)}}
 function folds(t,c,start,end){const w=(end-start)/5,o=[];for(let f=0;f<5;f++){const a=start+f*w,b=f===4?end+1:start+(f+1)*w,x=t.filter(z=>z.entryT>=a&&z.entryT<b);o.push({n:x.length,expectancy:mean(x.map(z=>z.gross-c))})}return o}
 function buildPanel(rows){const maps=new Map([...rows].map(([s,r])=>[s,new Map(r.map((x,i)=>[x.t,{...x,i}]))]));const ts=[...new Set([...rows.values()].flatMap(r=>r.map(x=>x.t)))].sort((a,b)=>a-b);return {maps,ts}}
-function simulateCandidate(rows,preps,cfg,onlyAfter=-Infinity){const {maps,ts}=buildPanel(rows),btc=maps.get('BTCUSDT'),out=[];for(let ti=0;ti<ts.length;ti+=3){const t=ts[ti],b=btc?.get(t);if(!b||b.i<200)continue;const br=rows.get('BTCUSDT');if(!(b.c>preps.get('BTCUSDT').e200[b.i]))continue;const b24=b.i>=6?b.c/br[b.i-6].c-1:NaN;if(!(b24>-.02))continue;const candidates=[];for(const [s,r] of rows){const q=maps.get(s).get(t);if(!q||q.i<Math.max(42,cfg.h))continue;const ret=q.c/r[q.i-cfg.h].c-1;if(!Number.isFinite(ret))continue;candidates.push({s,q,r,ret})}if(candidates.length<8)continue;const basket=med(candidates.map(x=>x.ret));for(const x of candidates)x.res=x.ret-basket;candidates.sort((a,b)=>a.res-b.res);for(const x of candidates.slice(0,cfg.k)){const {s,q,r,res}=x;if(!(res<=cfg.cut))continue;const cur4=q.i>0?q.c/r[q.i-1].c-1:NaN;if(!(cur4>0))continue;if(cfg.vol){const candlePos=(q.c-q.l)/(Math.max(1e-12,q.h-q.l));if(!(candlePos>=.5&&preps.get(s).vz[q.i]>=cfg.vz))continue}const enI=q.i+1;if(enI>=r.length)continue;const en=r[enI].o;if(!(en>0))continue;const stop=en*(1-cfg.stop),target=en*(1+cfg.target);let exit=r[Math.min(enI+cfg.hold,r.length-1)].c,exitT=r[Math.min(enI+cfg.hold,r.length-1)].t,reason='TIME';for(let j=enI;j<Math.min(r.length,enI+cfg.hold+1);j++){if(r[j].l<=stop){exit=stop;exitT=r[j].t;reason='STOP';break}if(r[j].h>=target){exit=target;exitT=r[j].t;reason='TARGET';break}}const entryT=r[enI].t;if(entryT>=onlyAfter)out.push({sym:s,signalT:t,entryT,exitT,gross:exit/en-1,reason,residual:res})}}
-}return out.sort((a,b)=>a.entryT-b.entryT)}
+function simulateCandidate(rows,preps,cfg,onlyAfter=-Infinity){
+ const {maps,ts}=buildPanel(rows),btc=maps.get('BTCUSDT'),out=[];
+ for(let ti=0;ti<ts.length;ti+=3){
+  const t=ts[ti],b=btc?.get(t);if(!b||b.i<200)continue;
+  const br=rows.get('BTCUSDT');if(!(b.c>preps.get('BTCUSDT').e200[b.i]))continue;
+  const b24=b.i>=6?b.c/br[b.i-6].c-1:NaN;if(!(b24>-.02))continue;
+  const candidates=[];
+  for(const [s,r] of rows){const q=maps.get(s).get(t);if(!q||q.i<Math.max(42,cfg.h))continue;const ret=q.c/r[q.i-cfg.h].c-1;if(!Number.isFinite(ret))continue;candidates.push({s,q,r,ret})}
+  if(candidates.length<8)continue;
+  const basket=med(candidates.map(x=>x.ret));for(const x of candidates)x.res=x.ret-basket;candidates.sort((a,b)=>a.res-b.res);
+  for(const x of candidates.slice(0,cfg.k)){
+   const {s,q,r,res}=x;if(!(res<=cfg.cut))continue;
+   const cur4=q.i>0?q.c/r[q.i-1].c-1:NaN;if(!(cur4>0))continue;
+   if(cfg.vol){const candlePos=(q.c-q.l)/(Math.max(1e-12,q.h-q.l));if(!(candlePos>=.5&&preps.get(s).vz[q.i]>=cfg.vz))continue}
+   const enI=q.i+1;if(enI>=r.length)continue;const en=r[enI].o;if(!(en>0))continue;
+   const stop=en*(1-cfg.stop),target=en*(1+cfg.target);let exit=r[Math.min(enI+cfg.hold,r.length-1)].c,exitT=r[Math.min(enI+cfg.hold,r.length-1)].t,reason='TIME';
+   for(let j=enI;j<Math.min(r.length,enI+cfg.hold+1);j++){if(r[j].l<=stop){exit=stop;exitT=r[j].t;reason='STOP';break}if(r[j].h>=target){exit=target;exitT=r[j].t;reason='TARGET';break}}
+   const entryT=r[enI].t;if(entryT>=onlyAfter)out.push({sym:s,signalT:t,entryT,exitT,gross:exit/en-1,reason,residual:res});
+  }
+ }
+ return out.sort((a,b)=>a.entryT-b.entryT);
+}
 function nbrs(name){const o=[];if(name==='RANK_REVERSAL_24H')for(const cut of [-.04,-.05,-.06])for(const hold of [4,6,8])for(const stop of [.025,.0275,.03])o.push({...CFG[name],cut,hold,stop});if(name==='RANK_REVERSAL_48H')for(const cut of [-.06,-.07,-.08])for(const hold of [6,8,10])for(const stop of [.025,.0275,.03])o.push({...CFG[name],cut,hold,stop});if(name==='RANK_REVERSAL_VOLUME')for(const cut of [-.03,-.04,-.05])for(const vz of [.75,1,1.25])for(const hold of [4,6,8])o.push({...CFG[name],cut,vz,hold});return o}
 function top2share(trades,cost=BASE){const p=trades.map(x=>Math.max(0,x.gross-cost)).sort((a,b)=>b-a),tot=p.reduce((s,x)=>s+x,0);return tot?((p[0]||0)+(p[1]||0))/tot:1}
 async function load(symbols){const rows=new Map(),preps=new Map();for(const s of symbols){try{const r=await klines(s);if(r.length>1200){rows.set(s,r);preps.set(s,prep(r));console.error('downloaded',s,r.length)}}catch(e){console.error('skip',s,e.message)}}return {rows,preps}}
