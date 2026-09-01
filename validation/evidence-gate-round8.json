@@ -1,0 +1,24 @@
+{
+  "registeredAt":"2026-09-01T16:10:00Z",
+  "status":"LOCKED_BEFORE_ROUND8_RESULTS",
+  "goal":"Test slower 12h time-series continuation on liquid/current Binance Spot universe, distinct from failed 4h breakout and daily crossover families.",
+  "data":{"source":"Binance Spot closed 12h OHLCV","historyDays":1825,"entry":"next bar open","intrabarConflict":"STOP_FIRST","discoveryOosFraction":0.30},
+  "discoveryUniverse":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "candidates":{
+    "TSMOM_60_REGIME":{"regime":"close>EMA200 and EMA50>EMA200","entry":"60-bar return>8%, 20-bar return>0, close>prior 10-bar high","stopAtr":2.0,"trailAtr":3.5,"maxHoldBars":120,"exit":"STOP_FIRST; ATR trail; 20-bar return<0; maxHold"},
+    "EMA50_RECLAIM_12H":{"regime":"EMA50>EMA200 and EMA50 rising 10 bars","entry":"low touches EMA50 within 0.4 ATR during prior 4 bars; close breaks prior 4-bar high","stopAtr":1.75,"trailAtr":3.0,"maxHoldBars":96,"exit":"STOP_FIRST; ATR trail; close<EMA50; maxHold"},
+    "HIGH52_TREND_12H":{"regime":"close>EMA200 and EMA50>EMA200","entry":"close breaks prior 40-bar high and ATR/close below 12%","stopAtr":2.25,"trailAtr":3.75,"maxHoldBars":160,"exit":"STOP_FIRST; ATR trail; close<EMA50; maxHold"}
+  },
+  "parameterNeighborhoods":{
+    "TSMOM_60_REGIME":{"momentumBars":[48,60,72],"triggerReturn":[0.06,0.08,0.10],"trailAtr":[3.0,3.5,4.0]},
+    "EMA50_RECLAIM_12H":{"touchAtr":[0.25,0.40,0.55],"reclaimBars":[3,4,5],"trailAtr":[2.75,3.0,3.25]},
+    "HIGH52_TREND_12H":{"breakoutBars":[32,40,48],"stopAtr":[2.0,2.25,2.5],"trailAtr":[3.25,3.75,4.25]}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "drawdownMeasurement":"sequential fixed-7-USDT trade PnL against 20.12-USDT starting equity during discovery",
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "capital":{"accountUSDT":20.12,"orderUSDT":7,"reserveUSDT":2,"maxRiskUSDT":0.20,"simultaneousPositions":[1,2]},
+  "liveTrading":false,"validatedStrategyRelease":null
+}
