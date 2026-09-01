@@ -1003,6 +1003,20 @@ async function analyze(symbol, ticker, book, rawKlines) {
   const target1 = entry + 2.75 * stopDistance;
   const target2 = entry + 4 * stopDistance;
   const estFees = positionUSDT * CFG.feeRate * 2;
+  const estimatedRiskUSDT = qty * stopDistance + estFees;
+  const estimatedNetProfitUSDT = qty * (target1 - entry) - estFees;
+  const scannerNetRR = estimatedRiskUSDT > 0 ? estimatedNetProfitUSDT / estimatedRiskUSDT : 0;
+  const profitableAfterFees = estimatedNetProfitUSDT > 0 && scannerNetRR >= 2.5;
+  const protectionBudgetSafe = positionUSDT >= 5.5;
+
+  // Never alert a BUY unless the planned trade has positive net expectancy,
+  // clears the minimum reward/risk threshold after fees, and can support protection.
+  if (decision === "BUY" && (!profitableAfterFees || !protectionBudgetSafe)) {
+    decision = "WAIT";
+    reason = !protectionBudgetSafe
+      ? "Position budget is too small for reliable Binance protection"
+      : "Expected net profit or reward/risk is below the required threshold after fees";
+  }
 
   let score = 0;
   if (trendUp) score += 25;
@@ -1043,7 +1057,7 @@ async function analyze(symbol, ticker, book, rawKlines) {
     price: last.close,
     market: { change24hPct: round(change24hPct, 2), quoteVolume24hUSDT: round(Number(ticker.quoteVolume || 0), 0), spreadPct: round(spreadPct, 4) },
     indicators: { ema20: round(ema20, 8), ema50: round(ema50, 8), rsi14: round(rsi14, 2), atr14: round(atr, 8), volumeRatio20: round(volumeRatio, 2), resistance20: round(resistance20, 8), support20: round(support20, 8) },
-    checks: { trendUp, breakout, successfulRetest, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing },
+    checks: { trendUp, breakout, successfulRetest, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing, profitableAfterFees, protectionBudgetSafe, scannerNetRR: round(scannerNetRR, 2) },
     earlyWatch: {
       potential: earlyPotential,
       minutesToClose,
