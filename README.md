@@ -1,14 +1,31 @@
 # TST Spot Signal
 
-Signal-only Binance Spot scanner for liquid USDT pairs.
+Paper-only, multi-factor Binance Spot scanner for liquid USDT pairs.
 
-- No leverage
-- No automatic trading or order placement
-- Maximum planned position: 5 USDT
-- Maximum planned risk: 0.50 USDT
-- Automatic scan endpoint: `/cron/scan`
-- Scheduled scan target: every 15 minutes
-- Telegram alerts only when a confirmed BUY setup passes all configured checks
-- SELL remains a spot exit signal in `/scan` and `/signal/:symbol`; it never opens a short
+## Current operating mode
 
-Runtime Telegram secrets are stored in Vercel Environment Variables and are never committed to GitHub.
+- `PAPER_ONLY`: no Binance order is created and no funds are used.
+- No Futures, leverage, perpetuals, shorts, bStocks, tokenized stocks, leveraged tokens, or stablecoin-to-stablecoin trades.
+- Surface-scan every eligible Binance Spot USDT pair every minute using Binance's bulk ticker and book data.
+- Deep-scan seven pairs per run with a rotating cursor so the complete liquid universe is covered without exceeding Cloudflare's free request budget.
+- Maximum paper position: 7 USDT.
+- Maximum modeled risk: 0.20 USDT per trade.
+- Daily paper loss stop: 0.50 USDT.
+- Maximum open paper positions: one.
+
+## Required confirmation
+
+A Telegram paper signal needs a score of at least 85/100 plus all hard safety checks:
+
+- BTC 1h/4h market regime allows Spot longs.
+- Pair has at least 90 completed daily candles and 15M USDT 24h volume.
+- Symbol trend agrees on 1h and 4h.
+- Completed breakout/retest or confirmed trend pullback on 15m.
+- Relative volume, taker-buy pressure, RSI, spread, depth imbalance, and nearby sell-wall checks.
+- Net reward/risk of at least 2.5 after estimated entry and exit fees.
+- Binance OCO support and both protected exit legs remain above the pair's live minimum notional.
+- Revalidation after the Telegram paper button is pressed.
+
+Scanner status: `/scanner-status` on the Cloudflare Worker.
+
+Runtime secrets are stored in deployment environment variables and are never committed to GitHub.
