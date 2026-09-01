@@ -1,0 +1,11 @@
+{
+  "round":10,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "purpose":"Independent symbol replication of the exact Round 9 RANK_REVERSAL_48H definition; no threshold changes allowed.",
+  "selection_rule":"At runtime select the top 40 Binance Spot USDT symbols by current 24h quote volume, excluding the 24 prior discovery symbols, the 8 reserved final-holdout symbols, stable/fiat-like bases, and leveraged-token suffixes. BTCUSDT is used only as market-regime context.",
+  "signal":{"timeframe":"4h","residual":"asset 48h return minus cross-sectional median 48h return","rank":"bottom 2","residual_cut":-0.07,"confirmation":"current 4h return > 0","btc_regime":"BTC close > EMA200 and BTC 24h return > -2%","entry":"next 4h open","stop_pct":0.0275,"target_pct":0.07,"max_hold_bars":8,"intrabar_conflict":"STOP_FIRST","rebalance_bars":3},
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "replication_gate":{"min_oos_trades":100,"min_profit_factor":1.15,"positive_expectancy_base":true,"positive_expectancy_stress":true,"positive_walk_forward_folds":4,"walk_forward_folds":5,"max_drawdown":0.20},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "rule":"Do not download or test final-holdout symbols unless the unseen-symbol replication gate passes. Live trading remains disabled."
+}
