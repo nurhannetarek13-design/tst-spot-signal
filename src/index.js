@@ -939,6 +939,17 @@ async function getBinanceProductMetadata() {
 
 async function binance(path) {
   let last = "unknown";
+  try {
+    const relay = `${CFG.defaultExecutorUrl}/market-data?path=${encodeURIComponent(path)}`;
+    const r = await fetch(relay, {
+      headers: { Accept: "application/json", "User-Agent": "tst-cloudflare-market-relay/1.0" },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (r.ok) return await r.json();
+    last = `Vercel market relay: ${r.status}`;
+  } catch (e) {
+    last = `Vercel market relay: ${e.message}`;
+  }
   for (const base of API_BASES) {
     try {
       const r = await fetch(base + path, { headers: { "User-Agent": "Mozilla/5.0 spot-market-scanner" } });
