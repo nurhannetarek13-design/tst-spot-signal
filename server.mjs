@@ -25,6 +25,16 @@ const CFG = {
 
 const ALLOWED_SPOT_SYMBOLS = new Set(["BTCUSDT","ETHUSDT","SOLUSDT"]);
 const STABLES = new Set(["USDC","FDUSD","TUSD","USDP","DAI","EUR","AEUR","TRY","BRL","BIDR","IDRT","UAH","NGN","RUB","GBP","AUD","BUSD"]);
+const PUBLIC_MARKET_PATHS = new Set([
+  "/api/v3/time",
+  "/api/v3/exchangeInfo",
+  "/api/v3/ticker/24hr",
+  "/api/v3/ticker/bookTicker",
+  "/api/v3/ticker/price",
+  "/api/v3/klines",
+  "/api/v3/depth",
+]);
+const PUBLIC_MARKET_QUERY_KEYS = new Set(["symbol", "interval", "limit"]);
 let lastAlertKey = null;
 let lastAlertAt = 0;
 
@@ -98,6 +108,45 @@ app.get("/health", async (_req, res) => {
     return res.json({ ok: true, binance: "reachable", serverTime: data.serverTime, region: process.env.VERCEL_REGION || "unknown", liveTrading: false });
   } catch (error) {
     return res.status(503).json({ ok: false, binance: "blocked", error: String(error?.message || error), liveTrading: false });
+  }
+});
+
+// Read-only relay for the Cloudflare scanner. Binance blocks some Cloudflare
+// egress ranges, while the same public endpoints are reachable from Vercel.
+// Only a small allowlist of unsigned market-data routes and query keys is
+// accepted, so this endpoint can never access an account or place an order.
+app.get("/market-data", async (req, res) => {
+  try {
+    const rawPath = String(req.query.path || "");
+    if (!rawPath || rawPath.length > 300) {
+      return res.status(400).json({ ok: false, error: "BAD_MARKET_PATH" });
+    }
+    const parsed = new URL(rawPath, "https://binance.invalid");
+    if (!PUBLIC_MARKET_PATHS.has(parsed.pathname)) {
+      return res.status(403).json({ ok: false, error: "MARKET_PATH_NOT_ALLOWED" });
+    }
+    for (const [key, value] of parsed.searchParams) {
+      if (!PUBLIC_MARKET_QUERY_KEYS.has(key) || value.length > 30) {
+        return res.status(403).json({ ok: false, error: "MARKET_QUERY_NOT_ALLOWED" });
+      }
+    }
+    const symbol = parsed.searchParams.get("symbol");
+    const interval = parsed.searchParams.get("interval");
+    const limit = parsed.searchParams.get("limit");
+    if (symbol && !/^[A-Z0-9]{2,20}$/.test(symbol)) {
+      return res.status(400).json({ ok: false, error: "BAD_SYMBOL" });
+    }
+    if (interval && !/^(1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w|1M)$/.test(interval)) {
+      return res.status(400).json({ ok: false, error: "BAD_INTERVAL" });
+    }
+    if (limit && (!/^\d{1,4}$/.test(limit) || Number(limit) > 1000)) {
+      return res.status(400).json({ ok: false, error: "BAD_LIMIT" });
+    }
+    const data = await binance(`${parsed.pathname}${parsed.search}`);
+    res.set("Cache-Control", "public, s-maxage=5, stale-while-revalidate=10");
+    return res.json(data);
+  } catch (error) {
+    return res.status(503).json({ ok: false, error: String(error?.message || error) });
   }
 });
 
