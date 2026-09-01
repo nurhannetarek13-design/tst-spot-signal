@@ -1419,7 +1419,8 @@ function liveConfig(env) {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: !CFG.validationMode && !["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
+    enabled: !CFG.validationMode && ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
+      !["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
     // Human confirmation is mandatory: a valid setup sends a Telegram BUY button.
     autoExecute: false,
     compoundEnabled: ["1", "true", "yes", "on"].includes(String(env.COMPOUND_ENABLED || "false").toLowerCase()),
