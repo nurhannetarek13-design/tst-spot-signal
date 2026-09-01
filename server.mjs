@@ -16,7 +16,7 @@ const CFG = {
   capitalUSDT: 20.08,
   maxDailyLossUSDT: 2,
   maxRiskPerTradeUSDT: 0.5,
-  maxPositionUSDT: 5,
+  maxPositionUSDT: 7,
   minQuoteVolume24h: 2_000_000,
   maxSpreadPct: 0.25,
   scanAllSpotUSDT: true,
@@ -691,7 +691,7 @@ async function executeSpotOrder(symbol) {
     return {
       ok: false,
       status: "POSITION_SIZE_REJECTED",
-      reason: `Safe order size ${quoteToSpend} USDT must be between Binance minimum ${minNotional} and the hard 5 USDT cap.`,
+      reason: `Safe order size ${quoteToSpend} USDT must be between Binance minimum ${minNotional} and the hard ${CFG.maxPositionUSDT} USDT cap.`,
       requiredUSDT: minNotional,
       maxAllowedUSDT: CFG.maxPositionUSDT,
     };
@@ -703,7 +703,7 @@ async function executeSpotOrder(symbol) {
     return {
       ok: false,
       status: "PROTECTION_BELOW_MIN_NOTIONAL",
-      reason: `Trade rejected before buying: a protected 5 USDT position would fall below Binance's ${minNotional} USDT minimum on an OCO leg.`,
+      reason: `Trade rejected before buying: the protected ${quoteToSpend} USDT position would fall below Binance's ${minNotional} USDT minimum on an OCO leg.`,
       orderPlaced: false,
       maxAllowedUSDT: CFG.maxPositionUSDT,
     };
