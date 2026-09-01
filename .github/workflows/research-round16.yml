@@ -1,0 +1,23 @@
+name: Round 16 exact low-vol momentum replication
+on:
+  push:
+    paths:
+      - 'scripts/research-round16.mjs'
+      - 'validation/evidence-gate-round16.json'
+      - '.github/workflows/research-round16.yml'
+  workflow_dispatch:
+jobs:
+  replication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/research-round16.mjs
+      - run: node scripts/research-round16.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round16-replication
+          path: validation/round16-replication.json
