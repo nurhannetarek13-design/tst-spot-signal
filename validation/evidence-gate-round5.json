@@ -1,0 +1,20 @@
+{
+  "registeredAt":"2026-09-01T16:04:00Z",
+  "status":"LOCKED_BEFORE_ROUND5_RESULTS",
+  "goal":"Test low-turnover cross-sectional momentum rotation on Binance Spot with only two concurrent positions, matching the real 20.12 USDT account constraint.",
+  "data":{"source":"Binance Spot closed 1d OHLCV","historyDays":1825,"rebalanceAt":"next daily open","survivorshipBias":"current listed universe acknowledged"},
+  "discoveryUniverse":["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","DOTUSDT","LTCUSDT","BCHUSDT","NEARUSDT","UNIUSDT","AAVEUSDT","ETCUSDT","FILUSDT","ATOMUSDT","APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT"],
+  "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "portfolio":{"positions":2,"quotePerPositionUSDT":7,"reserveUSDT":2,"rebalanceDays":7,"btcRegime":"BTC close>EMA200 and EMA50>EMA200"},
+  "candidates":{
+    "XSMOM_90_30":{"score":"0.65*90d return + 0.35*30d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"},
+    "XSMOM_180_60":{"score":"0.65*180d return + 0.35*60d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"},
+    "XSMOM_60_20":{"score":"0.65*60d return + 0.35*20d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"}
+  },
+  "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
+  "timeOosFraction":0.30,
+  "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
+  "paperGate":{"minAggregateOosTrades":200,"minProfitFactor":1.20,"positiveFinalHoldout":true,"maxTopTwoTradeProfitShare":0.50},
+  "liveTrading":false,
+  "validatedStrategyRelease":null
+}
