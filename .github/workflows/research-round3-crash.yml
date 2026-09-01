@@ -1,0 +1,29 @@
+name: Round 3 crash discovery
+on:
+  push:
+    paths:
+      - 'scripts/research-round3-crash.mjs'
+      - 'validation/evidence-gate-round3.json'
+      - '.github/workflows/research-round3-crash.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check scripts/research-round3-crash.mjs
+      - name: Run Round 3 crash discovery
+        run: node scripts/research-round3-crash.mjs
+      - name: Upload discovery result
+        uses: actions/upload-artifact@v4
+        with:
+          name: round3-crash-discovery
+          path: validation/round3-crash-discovery.json
+          if-no-files-found: error
