@@ -1,0 +1,23 @@
+{
+  "round":17,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "strategy_name":"RISK_MANAGED_TSMOM_SPOT_H6",
+  "research_basis":[
+    "Han, Kang & Ryu (SSRN, revised 2026): strong evidence for time-series momentum in crypto under realistic assumptions; cross-sectional momentum evidence is weak.",
+    "Yang (Finance Research Letters, 2025): risk-managed momentum improves average weekly return and Sharpe; robustness includes transaction costs and short-sale constraints.",
+    "Bui & Nguyen (arXiv, 2026): H6 trend-following with ATR trailing stop and adaptive asset selection outperformed H1/H4/H8/H12/D1 benchmarks OOS; dynamic trailing stop was the largest ablation contributor."
+  ],
+  "execution_scope":"Binance Spot long-only; no leverage; no futures; no shorts",
+  "universe_rule":"Top 15 current Binance Spot USDT pairs by rolling 30d quote-volume, excluding stablecoins, leveraged tokens, wrapped/gold proxies; require >=365d history and >=10M USDT rolling 30d average daily quote volume",
+  "signal_timeframe":"6h",
+  "signal":{"momentum_lookback_bars":120,"rule":"long only when 30d return > 0 and close > EMA200","market_regime":"BTCUSDT close > EMA200 and BTC 30d return > 0","entry":"next 6h bar open","initial_stop":"2.5 * ATR14 below entry","trailing_stop":"highest close since entry - 2.5 * ATR14; stop never loosens","time_exit_bars":120,"secondary_exit":"close below EMA50"},
+  "selection":{"rebalance":"weekly","max_candidates":3,"rank":"highest 30d return divided by 30d realized volatility among eligible assets","max_concurrent_positions":2},
+  "risk":{"account_usdt":20.12,"reserve_usdt":2,"default_order_usdt":7,"max_risk_per_trade_usdt":0.20,"position_size_rule":"min(7 USDT, 0.20 USDT / stop_distance_fraction); never violate reserve","equity_floor":0,"stop_at_ruin":true},
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "oos_gate":{"min_trades":100,"profit_factor_min":1.15,"expectancy_positive_base":true,"expectancy_positive_stress":true,"walk_forward_positive_folds":4,"walk_forward_folds":5,"max_drawdown":0.20},
+  "robustness":{"atr_multiplier":[2.0,2.5,3.0],"momentum_bars":[96,120,144],"ema_trend":[150,200,250],"min_positive_neighbor_fraction":0.70},
+  "paper_gate":{"min_pooled_oos_trades":200,"profit_factor_min":1.20,"positive_final_holdout":true,"max_top_two_profit_share":0.50},
+  "live_trading":false,
+  "validated_strategy_release":null,
+  "rule":"No threshold changes after seeing results; if it fails, reject it rather than tune it post hoc."
+}
