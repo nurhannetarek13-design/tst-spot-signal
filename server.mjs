@@ -641,7 +641,9 @@ function executorConfig() {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: !["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
+    // Fail closed: a deployment is non-trading unless explicitly promoted.
+    enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_ENABLED || "").toLowerCase()) &&
+      !["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
     // Hard safety limits: environment variables may only reduce these values.
     tradeUSDT: num(process.env.TRADE_USDT, CFG.maxPositionUSDT, 1, CFG.maxPositionUSDT),
     maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 1, 1, 1)),
