@@ -1,0 +1,30 @@
+name: Round 3 Step 2 Discovery
+on:
+  push:
+    paths:
+      - 'scripts/round3_runner.py'
+      - '.github/workflows/round3-step2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install research deps
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile scripts/round3_runner.py
+      - name: Run Round 3 Step 2
+        run: python scripts/round3_runner.py
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: round3-step2
+          path: validation/round3-step2.json
+          if-no-files-found: error
