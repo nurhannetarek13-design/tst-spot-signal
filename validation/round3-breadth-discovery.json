@@ -1,0 +1,16 @@
+{
+  "status": "RESEARCH_ONLY",
+  "protocol": "validation/round3-breadth-definition.json",
+  "category": "MARKET_BREADTH_AGGREGATED_LEAD_LAG",
+  "days": 1825,
+  "thresholds": {"breadth50":0.7,"impulse24":0.15,"leader24":0.03,"pos24":0.7},
+  "eventCount": 3532,
+  "horizons": {
+    "48": {"n":65766,"meanGross":0.006308180744008042,"medianGross":-0.0018598003228974536,"hitRate":0.4834260864276374,"medianMFE":0.038372156446701555,"medianMAE":0.03867330032828048,"medianMfeMaeRatio":0.9922131320827897,"pass":false},
+    "72": {"n":65766,"meanGross":0.004661192715903138,"medianGross":-0.003910487312655031,"hitRate":0.4743484475260773,"medianMFE":0.048241206030150696,"medianMAE":0.048727152308742416,"medianMfeMaeRatio":0.9900271972490268,"pass":false},
+    "120": {"n":65746,"meanGross":0.002197667734633311,"medianGross":-0.009690910288928545,"hitRate":0.4570316064855657,"medianMFE":0.0609010313182784,"medianMAE":0.06359612872033005,"medianMfeMaeRatio":0.9576216751509578,"pass":false},
+    "168": {"n":65706,"meanGross":0.0003452600367531484,"medianGross":-0.008794153173009467,"hitRate":0.4594861960855934,"medianMFE":0.07227465167143221,"medianMAE":0.07511028216111337,"medianMfeMaeRatio":0.9622471064134912,"pass":false}
+  },
+  "rawGatePassed": false,
+  "verdict": "REJECT_BEFORE_STRATEGY_CONSTRUCTION"
+}
