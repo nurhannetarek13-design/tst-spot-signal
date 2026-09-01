@@ -641,7 +641,7 @@ function executorConfig() {
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
   return {
-    enabled: ["1","true","yes","on"].includes(String(process.env.LIVE_TRADING || "").toLowerCase()),
+    enabled: !["1","true","yes","on"].includes(String(process.env.LIVE_TRADING_KILL_SWITCH || "").toLowerCase()),
     // Hard safety limits: environment variables may only reduce these values.
     tradeUSDT: num(process.env.TRADE_USDT, CFG.maxPositionUSDT, 1, CFG.maxPositionUSDT),
     maxOpenPositions: Math.floor(num(process.env.MAX_OPEN_POSITIONS, 1, 1, 1)),
@@ -676,7 +676,7 @@ function timingSafeEqualHex(a, b) {
 
 async function executeSpotOrder(symbol) {
   const cfg = executorConfig();
-  if (!ALLOWED_SPOT_SYMBOLS.has(symbol)) return { ok: false, status: "UNIVERSE_RESTRICTED", reason: "Safe mode allows BTCUSDT, ETHUSDT and SOLUSDT only." };
+  if (!isSafeLiveSpotSymbol(symbol)) return { ok: false, status: "UNIVERSE_RESTRICTED", reason: "Symbol is not an eligible crypto Spot/USDT product." };
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
   if (!hasBinanceSigningKey()) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
@@ -921,6 +921,14 @@ async function executeSpotOrder(symbol) {
     maxOpenPositions: cfg.maxOpenPositions,
     riskUSDT: round(quoteSpent * riskPct + quoteSpent * CFG.feeRate * 2, 4),
   };
+}
+
+function isSafeLiveSpotSymbol(symbol) {
+  if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol)) return false;
+  const base = symbol.slice(0, -4);
+  if (STABLES.has(base) || /(UP|DOWN|BULL|BEAR)$/.test(base)) return false;
+  if (base.endsWith("B") && !new Set(["BNB", "ARB", "KUB", "WBB"]).has(base)) return false;
+  return true;
 }
 
 async function emergencyClose(symbol, quantity, token) {
