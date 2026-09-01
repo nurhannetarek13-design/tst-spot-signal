@@ -9,17 +9,17 @@ const API_BASES = [
 
 const CFG = {
   capital: 20.08,
-  maxPosition: 5,
-  maxRisk: 0.50,
-  dailyLossCap: 2,
+  maxPosition: 7,
+  maxRisk: 0.25,
+  dailyLossCap: 0.5,
   fee: 0.001,
-  minVolume24h: 2_000_000,
+  minVolume24h: 10_000_000,
   minDepthEachSide: 10_000,
-  maxSpreadPct: 0.50,
-  maxRise24hPct: 25,
-  maxStopPct: 8,
-  minNetRR: 2,
-  scanCount: 18,
+  maxSpreadPct: 0.15,
+  maxRise24hPct: 10,
+  maxStopPct: 3,
+  minNetRR: 2.5,
+  scanCount: 3,
   duplicateHours: 6,
   approvalSeconds: 90,
   paperPositionHours: 72,
@@ -152,8 +152,8 @@ async function handleMakeExecute(request, env) {
     if (!allowedSymbols.has(symbol)) {
       return output({ ok: false, status: "SYMBOL_NOT_ALLOWED", reason: "BTCUSDT, ETHUSDT or SOLUSDT only", liveTrading: false, orderPlaced: false }, 400);
     }
-    if (!Number.isFinite(quoteAmount) || quoteAmount <= 0 || quoteAmount > 10) {
-      return output({ ok: false, status: "QUOTE_LIMIT", reason: "quote_amount_usdt must be above 0 and at most 10", liveTrading: false, orderPlaced: false }, 400);
+    if (!Number.isFinite(quoteAmount) || quoteAmount <= 0 || quoteAmount > CFG.maxPosition) {
+      return output({ ok: false, status: "QUOTE_LIMIT", reason: `quote_amount_usdt must be above 0 and at most ${CFG.maxPosition}`, liveTrading: false, orderPlaced: false }, 400);
     }
     if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 120_000) {
       return output({ ok: false, status: "STALE_SIGNAL", reason: "Signal must be newer than 120 seconds", liveTrading: false, orderPlaced: false }, 400);
@@ -502,9 +502,7 @@ function shortlist(tickers, tradable, bookMap) {
 }
 
 function isAllowedBase(base) {
-  if (EXCLUDED_BASES.has(base)) return false;
-  if (/UP$|DOWN$|BULL$|BEAR$/.test(base)) return false;
-  return true;
+  return ["BTC", "ETH", "SOL"].includes(base);
 }
 
 async function analyzeSymbol(summary, symbolInfo, book, regime, riskSources = {}) {
@@ -1130,12 +1128,12 @@ function liveConfig(env) {
   return {
     enabled: ["1", "true", "yes", "on"].includes(String(env.LIVE_TRADING || "").toLowerCase()),
     autoExecute: ["1", "true", "yes", "on"].includes(String(env.AUTO_EXECUTE || "").toLowerCase()),
-    compoundEnabled: !["0", "false", "no", "off"].includes(String(env.COMPOUND_ENABLED || "true").toLowerCase()),
+    compoundEnabled: ["1", "true", "yes", "on"].includes(String(env.COMPOUND_ENABLED || "false").toLowerCase()),
     // Environment settings may only reduce the agreed hard safety limits.
     tradeUSDT: num(env.TRADE_USDT, CFG.maxPosition, 1, CFG.maxPosition),
     tradeEquityPct: num(env.TRADE_EQUITY_PCT, 25, 5, 50),
     maxTradeUSDT: num(env.MAX_TRADE_USDT, CFG.maxPosition, 1, CFG.maxPosition),
-    maxOpenPositions: Math.floor(num(env.MAX_OPEN_POSITIONS, 3, 1, 20)),
+    maxOpenPositions: Math.floor(num(env.MAX_OPEN_POSITIONS, 1, 1, 1)),
     reserveUSDT: num(env.RESERVE_USDT, 2, 0, 100000),
     maxRiskUSDT: num(env.MAX_RISK_USDT, CFG.maxRisk, 0.01, CFG.maxRisk),
     dailyLossCapUSDT: num(env.DAILY_LOSS_CAP_USDT, CFG.dailyLossCap, 0.1, CFG.dailyLossCap),
