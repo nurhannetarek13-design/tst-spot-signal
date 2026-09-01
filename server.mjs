@@ -176,11 +176,15 @@ app.post("/execute/spot-buy", async (req, res) => {
 
     const body = JSON.parse(raw);
     const symbol = String(body.symbol || "").toUpperCase();
+    const signalHash = String(body.signalHash || "").toLowerCase();
     if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) {
       return res.status(400).json({ ok: false, status: "BAD_SYMBOL" });
     }
+    if (!/^[a-f0-9]{8}$/.test(signalHash)) {
+      return res.status(400).json({ ok: false, status: "BAD_SIGNAL_ID", reason: "A stable 8-character signal hash is required." });
+    }
 
-    const result = await executeSpotOrder(symbol);
+    const result = await executeSpotOrder(symbol, signalHash);
     return res.status(result.ok ? 200 : 409).json(result);
   } catch (error) {
     return res.status(500).json({ ok: false, status: "EXECUTOR_ERROR", error: String(error?.message || error) });
@@ -254,32 +258,97 @@ app.post("/executor/discover-open-positions", async (req, res) => {
     const auth = await verifyExecutorRelay(req, raw);
     if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
 
-    const openOrders = await signedBinance("GET", "/api/v3/openOrders", {});
-    const symbols = [...new Set((openOrders || [])
-      .filter(o => o.side === "SELL" && /^TST[TS]/.test(String(o.clientOrderId || "")))
-      .map(o => o.symbol))];
-    const positions = [];
-    for (const symbol of symbols) {
-      const orders = await signedBinance("GET", "/api/v3/allOrders", { symbol, limit: 1000 });
-      const entry = (orders || [])
-        .filter(o => o.side === "BUY" && o.status === "FILLED" && String(o.clientOrderId || "").startsWith("TSTB"))
-        .sort((a, b) => Number(b.updateTime || 0) - Number(a.updateTime || 0))[0];
-      if (entry) {
-        positions.push({
-          symbol,
-          entryOrderId: Number(entry.orderId),
-          entryPrice: Number(entry.executedQty || 0) > 0 ? Number(entry.cummulativeQuoteQty || 0) / Number(entry.executedQty) : 0,
-          quantity: entry.executedQty,
-          quoteSpentUSDT: entry.cummulativeQuoteQty,
-          openedAt: Number(entry.time || entry.updateTime || Date.now()),
-        });
-      }
-    }
-    return res.json({ ok: true, status: "DISCOVERY_OK", positions });
+    const result = await discoverAndRepairBotPositions();
+    return res.status(result.critical ? 409 : 200).json(result);
   } catch (error) {
     return res.status(503).json({ ok: false, status: "DISCOVERY_FAILED", reason: String(error?.message || error) });
   }
 });
+
+async function discoverAndRepairBotPositions() {
+  const [account, openOrders, exchangeInfo, prices] = await Promise.all([
+    signedBinance("GET", "/api/v3/account", {}),
+    signedBinance("GET", "/api/v3/openOrders", {}),
+    binance("/api/v3/exchangeInfo"),
+    binance("/api/v3/ticker/price"),
+  ]);
+  const priceMap = new Map((prices || []).map(p => [p.symbol, Number(p.price || 0)]));
+  const symbolByBase = new Map((exchangeInfo.symbols || [])
+    .filter(s => s.status === "TRADING" && s.quoteAsset === "USDT" && s.isSpotTradingAllowed)
+    .map(s => [s.baseAsset, s]));
+  const balanceByAsset = new Map((account.balances || []).map(b => [b.asset, Number(b.free || 0) + Number(b.locked || 0)]));
+  const candidates = new Set((openOrders || [])
+    .filter(o => /^TST/.test(String(o.clientOrderId || "")))
+    .map(o => o.symbol));
+  for (const [asset, balance] of balanceByAsset) {
+    const info = symbolByBase.get(asset);
+    if (info && balance * Number(priceMap.get(info.symbol) || 0) >= 1) candidates.add(info.symbol);
+  }
+
+  const positions = [];
+  const incidents = [];
+  for (const symbol of candidates) {
+    const info = (exchangeInfo.symbols || []).find(s => s.symbol === symbol);
+    if (!info) continue;
+    const orders = await signedBinance("GET", "/api/v3/allOrders", { symbol, limit: 1000 });
+    const entry = (orders || [])
+      .filter(o => o.side === "BUY" && Number(o.executedQty || 0) > 0 && /^TSTB[a-f0-9]{8}$/i.test(String(o.clientOrderId || "")))
+      .sort((a, b) => Number(b.updateTime || 0) - Number(a.updateTime || 0))[0];
+    if (!entry) continue;
+    const token = String(entry.clientOrderId).slice(4);
+    const exits = (orders || []).filter(o =>
+      o.side === "SELL" && Number(o.updateTime || 0) >= Number(entry.updateTime || entry.time || 0) &&
+      new RegExp(`^TST[TSX]${token}$`, "i").test(String(o.clientOrderId || ""))
+    );
+    const exitedQty = exits.filter(o => o.status === "FILLED").reduce((sum, o) => sum + Number(o.executedQty || 0), 0);
+    const remainingFromOrders = Math.max(0, Number(entry.executedQty || 0) - exitedQty);
+    const currentBalance = Number(balanceByAsset.get(info.baseAsset) || 0);
+    const remainingQty = Math.min(remainingFromOrders, currentBalance);
+    const protection = (openOrders || []).filter(o =>
+      o.symbol === symbol && o.side === "SELL" && new RegExp(`^TST[TS]${token}$`, "i").test(String(o.clientOrderId || ""))
+    );
+    if (!(remainingQty > 0)) continue;
+
+    let recoveryAction = null;
+    let recoveredExitOrderId = null;
+    if (!protection.length) {
+      try {
+        const lot = info.filters?.find(f => f.filterType === "LOT_SIZE");
+        const qty = floorToStep(remainingQty, Number(lot?.stepSize || 0.00000001));
+        const close = await submitOrderOnceAndReconcile({
+          symbol,
+          side: "SELL",
+          type: "MARKET",
+          quantity: qty,
+          newClientOrderId: `TSTX${token}`,
+          newOrderRespType: "FULL",
+        });
+        recoveryAction = "EMERGENCY_CLOSED_NAKED_POSITION";
+        recoveredExitOrderId = close.orderId;
+      } catch (error) {
+        incidents.push({ symbol, entryOrderId: entry.orderId, status: "CRITICAL_UNPROTECTED", reason: String(error?.message || error) });
+      }
+    }
+    positions.push({
+      symbol,
+      entryOrderId: Number(entry.orderId),
+      entryPrice: Number(entry.executedQty || 0) > 0 ? Number(entry.cummulativeQuoteQty || 0) / Number(entry.executedQty) : 0,
+      quantity: remainingQty,
+      quoteSpentUSDT: entry.cummulativeQuoteQty,
+      openedAt: Number(entry.time || entry.updateTime || Date.now()),
+      protected: protection.length > 0,
+      recoveryAction,
+      recoveredExitOrderId,
+    });
+  }
+  return {
+    ok: incidents.length === 0,
+    status: incidents.length ? "CRITICAL_RECONCILIATION_INCIDENT" : "DISCOVERY_OK",
+    critical: incidents.length > 0,
+    positions,
+    incidents,
+  };
+}
 
 app.post("/executor/position-status", async (req, res) => {
   try {
@@ -676,12 +745,25 @@ function timingSafeEqualHex(a, b) {
   return diff === 0;
 }
 
-async function executeSpotOrder(symbol) {
+async function executeSpotOrder(symbol, signalHash) {
   const cfg = executorConfig();
   if (!isSafeLiveSpotSymbol(symbol)) return { ok: false, status: "UNIVERSE_RESTRICTED", reason: "Symbol is not an eligible crypto Spot/USDT product." };
   if (!cfg.enabled) return { ok: false, status: "LIVE_DISABLED", reason: "LIVE_TRADING is not enabled." };
   if (!hasBinanceSigningKey()) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
+  }
+
+  const reconciliation = await discoverAndRepairBotPositions();
+  if (reconciliation.critical || reconciliation.positions.some(p => p.recoveryAction)) {
+    return {
+      ok: false,
+      status: reconciliation.critical ? "CRITICAL_RECONCILIATION_INCIDENT" : "RECOVERY_ACTION_TAKEN",
+      reason: reconciliation.critical
+        ? "An unresolved bot position exists without confirmed protection. New entries are blocked."
+        : "A naked bot position was emergency-closed during reconciliation. Review the account before a new entry.",
+      orderPlaced: false,
+      incidents: reconciliation.incidents,
+    };
   }
 
   const riskWindow = await botClosedPnlLast24h();
@@ -786,6 +868,23 @@ async function executeSpotOrder(symbol) {
   const estimatedRisk = protectedQty * (ask - plannedStop) + estimatedEntryFee + estimatedStopFee;
   const estimatedReward = protectedQty * (plannedTakeProfit - ask) - estimatedEntryFee - estimatedTargetFee;
   const estimatedNetRR = estimatedRisk > 0 ? estimatedReward / estimatedRisk : 0;
+  const filterErrors = validateOrderFilters(symbolInfo, {
+    marketQuantity: grossQty,
+    usesQuoteOrderQty: true,
+    quoteOrderQty: quoteToSpend,
+    sellQuantity: protectedQty,
+    stopPrice: plannedStop,
+    takeProfitPrice: plannedTakeProfit,
+  });
+
+  if (filterErrors.length) {
+    return {
+      ok: false,
+      status: "EXCHANGE_FILTER_REJECTED",
+      reason: filterErrors.join("; "),
+      orderPlaced: false,
+    };
+  }
 
   if (quoteToSpend > CFG.maxPositionUSDT || quoteToSpend < minNotional) {
     return {
@@ -820,29 +919,86 @@ async function executeSpotOrder(symbol) {
     };
   }
 
-  const token = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+  // Deterministic IDs make Binance the final idempotency barrier. Replaying the
+  // same approved signal must reconcile the first order, never create a new BUY.
+  const token = signalHash;
+  const buyClientOrderId = `TSTB${token}`;
   const buyParams = {
     symbol,
     side: "BUY",
     type: "MARKET",
     quoteOrderQty: quoteToSpend.toFixed(2),
-    newClientOrderId: `TSTB${token}`,
+    newClientOrderId: buyClientOrderId,
     newOrderRespType: "FULL",
   };
 
-  const buy = await signedBinance("POST", "/api/v3/order", buyParams);
-  const executedQty = Number(buy.executedQty || 0);
-  const quoteSpent = Number(buy.cummulativeQuoteQty || quoteToSpend);
+  const buy = await submitOrderOnceAndReconcile(buyParams);
+  const terminalBuy = await waitForKnownOrderState(symbol, buyClientOrderId, buy);
+  if (!terminalBuy.known) {
+    return {
+      ok: false,
+      status: "EXECUTION_STATE_UNKNOWN",
+      reason: "Binance order state is unknown. New entries are blocked until reconciliation succeeds.",
+      orderPlaced: null,
+      clientOrderId: buyClientOrderId,
+    };
+  }
+  const confirmedBuy = terminalBuy.order;
+  const executedQty = Number(confirmedBuy.executedQty || 0);
+  const quoteSpent = Number(confirmedBuy.cummulativeQuoteQty || quoteToSpend);
   const avgFill = executedQty > 0 ? quoteSpent / executedQty : entry;
   if (!(executedQty > 0)) {
-    return { ok: false, status: "NO_FILL", reason: "Buy order returned no executed quantity.", orderId: buy.orderId };
+    return { ok: false, status: "NO_FILL", reason: `Buy finished with status ${confirmedBuy.status || "UNKNOWN"} and no executed quantity.`, orderId: confirmedBuy.orderId };
   }
 
   const baseAsset = symbolInfo.baseAsset;
-  const baseCommission = (buy.fills || [])
+  const buyTrades = await signedBinance("GET", "/api/v3/myTrades", {
+    symbol,
+    orderId: confirmedBuy.orderId,
+    limit: 1000,
+  }).catch(() => []);
+  const commissionRows = buyTrades?.length ? buyTrades : (confirmedBuy.fills || []);
+  const baseCommission = commissionRows
     .filter(f => f.commissionAsset === baseAsset)
     .reduce((sum, f) => sum + Number(f.commission || 0), 0);
   const sellQty = floorToStep(Math.max(0, executedQty - baseCommission), stepSize);
+  const existingOrders = await signedBinance("GET", "/api/v3/allOrders", { symbol, limit: 1000 }).catch(() => []);
+  const tokenExitOrders = (existingOrders || []).filter(order =>
+    order.side === "SELL" && new RegExp(`^TST[TSX]${token}$`, "i").test(String(order.clientOrderId || ""))
+  );
+  const alreadyExited = tokenExitOrders.find(order => order.status === "FILLED");
+  if (alreadyExited) {
+    return {
+      ok: true,
+      status: "SIGNAL_ALREADY_CLOSED",
+      symbol,
+      orderId: confirmedBuy.orderId,
+      exitOrderId: alreadyExited.orderId,
+      quoteSpentUSDT: round(quoteSpent, 2),
+      quantity: sellQty,
+      avgFillPrice: fmt(avgFill),
+      protection: "ALREADY_CLOSED",
+      riskUSDT: 0,
+      replayed: true,
+    };
+  }
+  const existingProtection = tokenExitOrders.filter(order => ["NEW", "PARTIALLY_FILLED", "PENDING_NEW"].includes(order.status));
+  if (existingProtection.length) {
+    return {
+      ok: true,
+      status: "LIVE_SPOT_OPENED",
+      symbol,
+      orderId: confirmedBuy.orderId,
+      quoteSpentUSDT: round(quoteSpent, 2),
+      quantity: sellQty,
+      avgFillPrice: fmt(avgFill),
+      protection: existingProtection.some(order => String(order.clientOrderId).startsWith("TSTT")) ? "OCO" : "STOP_ONLY",
+      riskUSDT: 0,
+      replayed: true,
+      openPositionsAfter: openSymbols.includes(symbol) ? openSymbols.length : openSymbols.length + 1,
+      maxOpenPositions: cfg.maxOpenPositions,
+    };
+  }
   const currentBook = await binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`);
   const currentBid = Number(currentBook.bidPrice || avgFill);
   const takeProfit = ceilToStep(Math.max(targetRaw, currentBid * 1.002), tickSize);
@@ -854,7 +1010,7 @@ async function executeSpotOrder(symbol) {
       ok: Boolean(close),
       status: close ? "BOUGHT_THEN_SAFETY_CLOSED" : "UNPROTECTED_POSITION",
       reason: close ? "Protection values were invalid, so the position was closed immediately for safety." : "Bought but failed to protect or close the position.",
-      orderId: buy.orderId,
+      orderId: confirmedBuy.orderId,
       quoteSpentUSDT: round(quoteSpent, 2),
       quantity: sellQty,
       avgFillPrice: fmt(avgFill),
@@ -867,7 +1023,7 @@ async function executeSpotOrder(symbol) {
 
   let protection = "OCO";
   try {
-    await signedBinance("POST", "/api/v3/orderList/oco", {
+    await submitOcoOnceAndReconcile({
       symbol,
       side: "SELL",
       quantity: sellQty,
@@ -881,7 +1037,7 @@ async function executeSpotOrder(symbol) {
     });
   } catch (ocoError) {
     try {
-      await signedBinance("POST", "/api/v3/order", {
+      await submitOrderOnceAndReconcile({
         symbol,
         side: "SELL",
         type: "STOP_LOSS",
@@ -897,7 +1053,7 @@ async function executeSpotOrder(symbol) {
           ok: false,
           status: "UNPROTECTED_POSITION",
           reason: `Bought, but protection and emergency close failed. OCO: ${ocoError.message}; Stop: ${stopError.message}`,
-          orderId: buy.orderId,
+          orderId: confirmedBuy.orderId,
           quoteSpentUSDT: round(quoteSpent, 2),
           quantity: sellQty,
           avgFillPrice: fmt(avgFill),
@@ -912,7 +1068,7 @@ async function executeSpotOrder(symbol) {
     ok: true,
     status: protection === "CLOSED_FAILSAFE" ? "BOUGHT_THEN_SAFETY_CLOSED" : "LIVE_SPOT_OPENED",
     symbol,
-    orderId: buy.orderId,
+    orderId: confirmedBuy.orderId,
     quoteSpentUSDT: round(quoteSpent, 2),
     quantity: sellQty,
     avgFillPrice: fmt(avgFill),
@@ -933,9 +1089,63 @@ function isSafeLiveSpotSymbol(symbol) {
   return true;
 }
 
+function isStepAligned(value, min, step) {
+  if (!(step > 0)) return true;
+  const units = (Number(value) - Number(min || 0)) / step;
+  return Math.abs(units - Math.round(units)) <= 1e-7;
+}
+
+function validateOrderFilters(symbolInfo, order) {
+  const errors = [];
+  const filters = symbolInfo?.filters || [];
+  const marketLot = filters.find(f => f.filterType === "MARKET_LOT_SIZE");
+  const lot = filters.find(f => f.filterType === "LOT_SIZE");
+  const price = filters.find(f => f.filterType === "PRICE_FILTER");
+  const notional = filters.find(f => f.filterType === "NOTIONAL") || filters.find(f => f.filterType === "MIN_NOTIONAL");
+
+  if (marketLot) {
+    const q = Number(order.marketQuantity);
+    const min = Number(marketLot.minQty || 0);
+    const max = Number(marketLot.maxQty || Number.MAX_VALUE);
+    const step = Number(marketLot.stepSize || 0);
+    // quoteOrderQty market buys let Binance derive the base quantity. Its
+    // estimate must be inside min/max, but requiring the estimate itself to
+    // align to stepSize would reject valid quote-sized orders.
+    if (!(q >= min && q <= max) || (!order.usesQuoteOrderQty && !isStepAligned(q, min, step))) {
+      errors.push("MARKET_LOT_SIZE would reject the estimated market quantity");
+    }
+  }
+  if (lot) {
+    const q = Number(order.sellQuantity);
+    const min = Number(lot.minQty || 0);
+    const max = Number(lot.maxQty || Number.MAX_VALUE);
+    const step = Number(lot.stepSize || 0);
+    if (!(q >= min && q <= max) || !isStepAligned(q, min, step)) errors.push("LOT_SIZE would reject the protection quantity");
+  }
+  if (price) {
+    const min = Number(price.minPrice || 0);
+    const max = Number(price.maxPrice || Number.MAX_VALUE);
+    const tick = Number(price.tickSize || 0);
+    for (const [label, value] of [["stop", order.stopPrice], ["take-profit", order.takeProfitPrice]]) {
+      const p = Number(value);
+      if (!(p >= min && p <= max) || !isStepAligned(p, min, tick)) errors.push(`PRICE_FILTER would reject ${label}`);
+    }
+  }
+  if (notional) {
+    const min = Number(notional.minNotional || 0);
+    const max = Number(notional.maxNotional || Number.MAX_VALUE);
+    const quote = Number(order.quoteOrderQty);
+    if (!(quote >= min && quote <= max)) errors.push("NOTIONAL would reject the market order");
+    for (const [label, value] of [["stop", Number(order.sellQuantity) * Number(order.stopPrice)], ["take-profit", Number(order.sellQuantity) * Number(order.takeProfitPrice)]]) {
+      if (!(value >= min && value <= max)) errors.push(`NOTIONAL would reject the ${label} leg`);
+    }
+  }
+  return errors;
+}
+
 async function emergencyClose(symbol, quantity, token) {
   if (!(Number(quantity) > 0)) return null;
-  return signedBinance("POST", "/api/v3/order", {
+  return submitOrderOnceAndReconcile({
     symbol,
     side: "SELL",
     type: "MARKET",
@@ -943,6 +1153,78 @@ async function emergencyClose(symbol, quantity, token) {
     newClientOrderId: `TSTX${token}`,
     newOrderRespType: "FULL",
   });
+}
+
+async function findOrderListByClientId(listClientOrderId) {
+  try {
+    return await signedBinance("GET", "/api/v3/orderList", { origClientOrderId: listClientOrderId });
+  } catch (error) {
+    if (error?.code === -2022 || error?.code === -2013) return null;
+    throw error;
+  }
+}
+
+async function submitOcoOnceAndReconcile(params) {
+  const existing = await findOrderListByClientId(params.listClientOrderId);
+  if (existing) return existing;
+  try {
+    return await signedBinance("POST", "/api/v3/orderList/oco", params);
+  } catch (error) {
+    if (error?.code === -2010 || isUnknownExecutionError(error)) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const reconciled = await findOrderListByClientId(params.listClientOrderId).catch(() => null);
+        if (reconciled) return reconciled;
+        if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+    throw error;
+  }
+}
+
+function isUnknownExecutionError(error) {
+  return error?.code === -1006 || error?.code === -1007 ||
+    error?.name === "AbortError" || /timeout|timed out|execution status unknown/i.test(String(error?.message || error));
+}
+
+async function findOrderByClientId(symbol, clientOrderId) {
+  try {
+    return await signedBinance("GET", "/api/v3/order", { symbol, origClientOrderId: clientOrderId });
+  } catch (error) {
+    if (error?.code === -2013) return null;
+    throw error;
+  }
+}
+
+async function submitOrderOnceAndReconcile(params) {
+  const existing = await findOrderByClientId(params.symbol, params.newClientOrderId);
+  if (existing) return existing;
+  try {
+    return await signedBinance("POST", "/api/v3/order", params);
+  } catch (error) {
+    // Duplicate client ID means a concurrent/replayed request won the race.
+    if (error?.code === -2010 || isUnknownExecutionError(error)) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const reconciled = await findOrderByClientId(params.symbol, params.newClientOrderId).catch(() => null);
+        if (reconciled) return reconciled;
+        if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+    throw error;
+  }
+}
+
+async function waitForKnownOrderState(symbol, clientOrderId, initial) {
+  let order = initial;
+  const terminal = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"]);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (order && terminal.has(String(order.status || ""))) return { known: true, order };
+    if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+    order = await findOrderByClientId(symbol, clientOrderId).catch(() => null);
+  }
+  // A positive executed quantity is known exposure even if the remaining state
+  // is still pending; protect exactly that filled quantity and keep monitoring.
+  if (order && Number(order.executedQty || 0) > 0) return { known: true, order };
+  return { known: false, order: order || initial || null };
 }
 
 function hasBinanceSigningKey() {
@@ -964,13 +1246,27 @@ async function signedBinance(method, path, params = {}) {
   const signature = privateKeyPem
     ? await ed25519Base64(privateKeyPem, query)
     : await hmacHex(secret, query);
-  const r = await fetch(`https://api.binance.com${path}?${query}&signature=${encodeURIComponent(signature)}`, {
-    method,
-    headers: { "X-MBX-APIKEY": apiKey, Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
+  let r;
+  try {
+    r = await fetch(`https://api.binance.com${path}?${query}&signature=${encodeURIComponent(signature)}`, {
+      method,
+      headers: { "X-MBX-APIKEY": apiKey, Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (cause) {
+    const error = new Error(`Binance transport error: ${String(cause?.message || cause)}`);
+    error.name = cause?.name || "BinanceTransportError";
+    error.cause = cause;
+    throw error;
+  }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${data.code || r.status}: ${data.msg || "Binance request failed"}`);
+  if (!r.ok) {
+    const error = new Error(`${data.code || r.status}: ${data.msg || "Binance request failed"}`);
+    error.code = Number(data.code || r.status);
+    error.httpStatus = r.status;
+    error.binanceMessage = data.msg || null;
+    throw error;
+  }
   return data;
 }
 
@@ -1211,4 +1507,5 @@ function average(values) { return values.reduce((a, b) => a + b, 0) / Math.max(v
 function round(value, digits = 4) { const p = 10 ** digits; return Math.round(value * p) / p; }
 function fmt(value) { if (!Number.isFinite(value)) return String(value); if (value >= 1000) return value.toFixed(2); if (value >= 1) return value.toFixed(4); return value.toPrecision(6); }
 
+export { isStepAligned, validateOrderFilters, isUnknownExecutionError };
 export default app;
