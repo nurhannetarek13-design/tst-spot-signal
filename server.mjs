@@ -197,6 +197,96 @@ app.post("/executor/preflight", async (req, res) => {
   }
 });
 
+app.post("/executor/position-status", async (req, res) => {
+  try {
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY" });
+    const auth = await verifyExecutorRelay(req, raw);
+    if (!auth.ok) return res.status(401).json({ ok: false, status: "UNAUTHORIZED", reason: auth.reason });
+
+    const body = JSON.parse(raw);
+    const symbol = String(body.symbol || "").toUpperCase();
+    const entryOrderId = Number(body.entryOrderId);
+    if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol) || !(entryOrderId > 0)) {
+      return res.status(400).json({ ok: false, status: "BAD_POSITION_REFERENCE" });
+    }
+
+    const entryOrder = await signedBinance("GET", "/api/v3/order", { symbol, orderId: entryOrderId });
+    const orders = await signedBinance("GET", "/api/v3/allOrders", {
+      symbol,
+      startTime: Math.max(0, Number(entryOrder.time || 0) - 60_000),
+      limit: 1000,
+    });
+    const exitOrder = (orders || [])
+      .filter(o => o.side === "SELL" && o.status === "FILLED" && Number(o.updateTime || 0) >= Number(entryOrder.updateTime || entryOrder.time || 0))
+      .filter(o => /^TST[TSX]/.test(String(o.clientOrderId || "")))
+      .sort((a, b) => Number(a.updateTime || 0) - Number(b.updateTime || 0))[0];
+
+    if (!exitOrder) {
+      return res.json({ ok: true, status: "OPEN", symbol, entryOrderId, closed: false });
+    }
+
+    const [entryTrades, exitTrades] = await Promise.all([
+      signedBinance("GET", "/api/v3/myTrades", { symbol, orderId: entryOrderId, limit: 1000 }),
+      signedBinance("GET", "/api/v3/myTrades", { symbol, orderId: exitOrder.orderId, limit: 1000 }),
+    ]);
+    const entryQty = (entryTrades || []).reduce((n, t) => n + Number(t.qty || 0), 0);
+    const exitQty = (exitTrades || []).reduce((n, t) => n + Number(t.qty || 0), 0);
+    const entryQuote = (entryTrades || []).reduce((n, t) => n + Number(t.quoteQty || Number(t.price || 0) * Number(t.qty || 0)), 0);
+    const exitQuote = (exitTrades || []).reduce((n, t) => n + Number(t.quoteQty || Number(t.price || 0) * Number(t.qty || 0)), 0);
+    const entryAvg = entryQty > 0 ? entryQuote / entryQty : 0;
+    const exitAvg = exitQty > 0 ? exitQuote / exitQty : 0;
+    const feesUSDT = await tradeFeesUSDT([...entryTrades, ...exitTrades], symbol, entryAvg, exitAvg);
+    const netPnlUSDT = exitQuote - entryQuote - feesUSDT;
+    const reason = String(exitOrder.clientOrderId || "").startsWith("TSTT")
+      ? "TAKE_PROFIT"
+      : String(exitOrder.clientOrderId || "").startsWith("TSTS")
+        ? "STOP_LOSS"
+        : "SAFETY_CLOSE";
+
+    return res.json({
+      ok: true,
+      status: "CLOSED",
+      closed: true,
+      symbol,
+      entryOrderId,
+      exitOrderId: exitOrder.orderId,
+      reason,
+      entryPrice: fmt(entryAvg),
+      exitPrice: fmt(exitAvg),
+      quantity: floorToStep(exitQty, 0.00000001),
+      entryQuoteUSDT: round(entryQuote, 5),
+      exitQuoteUSDT: round(exitQuote, 5),
+      feesUSDT: round(feesUSDT, 5),
+      netPnlUSDT: round(netPnlUSDT, 5),
+      closedAt: Number(exitOrder.updateTime || Date.now()),
+    });
+  } catch (error) {
+    return res.status(503).json({ ok: false, status: "POSITION_STATUS_FAILED", reason: String(error?.message || error) });
+  }
+});
+
+async function tradeFeesUSDT(trades, symbol, entryAvg, exitAvg) {
+  const baseAsset = symbol.slice(0, -4);
+  let total = 0;
+  for (const trade of trades || []) {
+    const amount = Number(trade.commission || 0);
+    const asset = String(trade.commissionAsset || "");
+    if (!(amount > 0)) continue;
+    if (asset === "USDT") total += amount;
+    else if (asset === baseAsset) total += amount * (trade.isBuyer ? entryAvg : exitAvg);
+    else {
+      try {
+        const px = await binance(`/api/v3/ticker/price?symbol=${asset}USDT`);
+        total += amount * Number(px.price || 0);
+      } catch {
+        // Unknown fee asset is deliberately not guessed.
+      }
+    }
+  }
+  return total;
+}
+
 app.post("/executor/account-status", async (req, res) => {
   try {
     const raw = typeof req.body === "string" ? req.body : "";
