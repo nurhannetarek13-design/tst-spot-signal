@@ -1,0 +1,18 @@
+{
+  "round":13,
+  "status":"LOCKED_BEFORE_RESULTS",
+  "hypothesis":"Cross-sectional momentum requires causal seasoning and liquidity eligibility; newly listed/high-noise assets should not be allowed into the rank universe.",
+  "universe_rule":"At runtime take top 80 currently liquid Binance Spot USDT symbols excluding stable/fiat-like bases, leveraged tokens, gold/wrapped proxies and the reserved final holdout. Signal-time eligibility is causal and requires >=365 days of prior 4h history and >=10M USDT average daily quote volume over the prior 30 days.",
+  "data":{"timeframe":"4h","history_days":1825,"oos_fraction":0.30,"entry":"next bar open","intrabar":"STOP_FIRST"},
+  "market_regime":"BTC close > EMA600 and BTC 30d return > 0",
+  "candidates":{
+    "QUALITY_MOM_30D":{"rebalance_bars":42,"score":"30d return","select":"top 2","min_score":0.08,"stop_pct":0.0275,"target_pct":0.12,"hold_bars":42},
+    "QUALITY_MOM_VOLADJ":{"rebalance_bars":42,"score":"30d return / 30d realized volatility","select":"top 2 among positive 30d momentum","min_30d_return":0.06,"stop_pct":0.0275,"target_pct":0.12,"hold_bars":42},
+    "QUALITY_MOM_TREND":{"rebalance_bars":42,"score":"30d return","select":"top 2","min_score":0.08,"asset_trend":"close > EMA200","stop_pct":0.0275,"target_pct":0.12,"hold_bars":42}
+  },
+  "costs":{"base_round_trip":0.0036,"stress_round_trip":0.0072},
+  "gate":{"min_oos_trades":100,"min_pf":1.15,"positive_base_expectancy":true,"positive_stress_expectancy":true,"positive_folds":4,"folds":5,"max_drawdown":0.20,"positive_neighbor_fraction":0.70},
+  "final_holdout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "capital":{"account_usdt":20.12,"order_usdt":7,"reserve_usdt":2,"max_risk_usdt":0.20,"equity_floor":0},
+  "rule":"No filter or threshold changes after results. Final holdout remains untouched unless discovery passes."
+}
