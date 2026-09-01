@@ -471,15 +471,45 @@ async function executeSpotOrder(symbol) {
     return { ok: false, status: "API_NOT_CONNECTED", reason: "Binance trading API keys are not connected." };
   }
 
-  const [ticker, book, klines, info] = await Promise.all([
+  const [ticker, book, klines, info, hourlyKlines, depth] = await Promise.all([
     binance(`/api/v3/ticker/24hr?symbol=${symbol}`),
     binance(`/api/v3/ticker/bookTicker?symbol=${symbol}`),
     binance(`/api/v3/klines?symbol=${symbol}&interval=15m&limit=120`),
     binance(`/api/v3/exchangeInfo?symbol=${symbol}`),
+    binance(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=80`),
+    binance(`/api/v3/depth?symbol=${symbol}&limit=100`),
   ]);
   const fresh = await analyze(symbol, ticker, book, klines);
-  if (!fresh.ok || fresh.decision !== "BUY" || !fresh.paperPlan) {
-    return { ok: false, status: "SIGNAL_NO_LONGER_VALID", reason: "The signal is no longer BUY after revalidation." };
+  if (!fresh.ok || fresh.decision !== "BUY" || !fresh.paperPlan || !fresh.checks?.successfulRetest) {
+    return { ok: false, status: "SIGNAL_NO_LONGER_VALID", reason: "A completed 15m breakout and a separate successful retest are both required." };
+  }
+
+  const closedHourly = hourlyKlines
+    .filter(k => Number(k[6]) < Date.now())
+    .map(k => Number(k[4]));
+  const hourlyEma20 = ema(closedHourly, 20);
+  const hourlyEma50 = ema(closedHourly, 50);
+  const hourlyTrendUp = closedHourly.at(-1) > hourlyEma20 && hourlyEma20 > hourlyEma50;
+  const bid = Number(book.bidPrice || 0);
+  const askNow = Number(book.askPrice || 0);
+  const mid = (bid + askNow) / 2;
+  const spreadPct = mid > 0 ? ((askNow - bid) / mid) * 100 : 999;
+  const bidDepth05 = (depth.bids || [])
+    .filter(([price]) => Number(price) >= mid * 0.995)
+    .reduce((sum, [price, qty]) => sum + Number(price) * Number(qty), 0);
+  const askDepth05 = (depth.asks || [])
+    .filter(([price]) => Number(price) <= mid * 1.005)
+    .reduce((sum, [price, qty]) => sum + Number(price) * Number(qty), 0);
+  if (!hourlyTrendUp) {
+    return { ok: false, status: "HOURLY_TREND_NOT_CONFIRMED", reason: "1h trend is not strictly rising above EMA20 and EMA50.", orderPlaced: false };
+  }
+  if (spreadPct > CFG.maxSpreadPct || bidDepth05 < 10_000 || askDepth05 < 10_000) {
+    return {
+      ok: false,
+      status: "LIQUIDITY_NOT_CONFIRMED",
+      reason: `Spread/depth failed: spread ${round(spreadPct, 3)}%, bid depth ${round(bidDepth05, 0)}, ask depth ${round(askDepth05, 0)} USDT.`,
+      orderPlaced: false,
+    };
   }
 
   const symbolInfo = info.symbols?.[0];
@@ -802,9 +832,10 @@ async function analyze(symbol, ticker, book, rawKlines) {
   const atr = atr14(candles);
   const avgVol20 = average(volumes.slice(-21, -1));
   const volumeRatio = avgVol20 > 0 ? last.volume / avgVol20 : 0;
-  const prior20 = candles.slice(-21, -1);
+  // The breakout candle and retest candle are excluded from the resistance base.
+  const prior20 = candles.slice(-22, -2);
   const resistance20 = Math.max(...prior20.map(c => c.high));
-  const support20 = Math.min(...prior20.map(c => c.low));
+  const support20 = Math.min(...candles.slice(-21, -1).map(c => c.low));
   const bid = Number(book.bidPrice);
   const ask = Number(book.askPrice);
   const mid = (bid + ask) / 2;
@@ -813,19 +844,25 @@ async function analyze(symbol, ticker, book, rawKlines) {
 
   const trendUp = last.close > ema20 && ema20 > ema50;
   const trendDown = last.close < ema20 && ema20 < ema50;
-  const breakout = last.close > resistance20 && previous.close <= resistance20;
+  const preBreakout = candles.at(-3);
+  const breakout = previous.close > resistance20 && preBreakout.close <= resistance20;
+  const successfulRetest = breakout &&
+    last.low <= resistance20 * 1.0025 &&
+    last.close >= resistance20 &&
+    last.close <= previous.close * 1.015;
   const nearBreakout = last.close >= resistance20 * 0.997;
   const healthyMomentum = rsi14 >= 52 && rsi14 <= 68;
-  const volumeConfirm = volumeRatio >= 1.25;
+  const breakoutVolumeRatio = avgVol20 > 0 ? previous.volume / avgVol20 : 0;
+  const volumeConfirm = breakoutVolumeRatio >= 1.25;
   const liquid = Number(ticker.quoteVolume || 0) >= CFG.minQuoteVolume24h;
   const spreadOk = spreadPct <= CFG.maxSpreadPct;
   const notChasing = change24hPct <= 25;
 
   let decision = "WAIT";
   let reason = "No confirmed entry";
-  if (trendUp && breakout && healthyMomentum && volumeConfirm && liquid && spreadOk && notChasing) {
+  if (trendUp && breakout && successfulRetest && healthyMomentum && volumeConfirm && liquid && spreadOk && notChasing) {
     decision = "BUY";
-    reason = "15m breakout confirmed by trend, momentum and volume";
+    reason = "Completed 15m breakout followed by a separate successful retest, with trend, volume and liquidity confirmation";
   } else if (trendDown && rsi14 < 45) {
     decision = "SELL";
     reason = "Spot exit signal: bearish trend and weak momentum; this is not a short signal";
@@ -882,7 +919,7 @@ async function analyze(symbol, ticker, book, rawKlines) {
     price: last.close,
     market: { change24hPct: round(change24hPct, 2), quoteVolume24hUSDT: round(Number(ticker.quoteVolume || 0), 0), spreadPct: round(spreadPct, 4) },
     indicators: { ema20: round(ema20, 8), ema50: round(ema50, 8), rsi14: round(rsi14, 2), atr14: round(atr, 8), volumeRatio20: round(volumeRatio, 2), resistance20: round(resistance20, 8), support20: round(support20, 8) },
-    checks: { trendUp, breakout, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing },
+    checks: { trendUp, breakout, successfulRetest, nearBreakout, healthyMomentum, volumeConfirm, liquid, spreadOk, notChasing },
     earlyWatch: {
       potential: earlyPotential,
       minutesToClose,
