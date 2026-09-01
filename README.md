@@ -2,6 +2,24 @@
 
 Fail-closed, multi-factor Binance Spot scanner and live executor for liquid USDT pairs.
 
+## Release safety status
+
+Real-money execution is fail-closed. There is currently **no validated strategy release**.
+The 365-day Binance OHLCV audit in `validation/backtest-365d.json` failed the
+pre-registered release gates (negative out-of-sample expectancy and Profit
+Factor below 1.2), so environment variables alone cannot enable live orders.
+
+```bash
+npm ci
+npm test
+BACKTEST_DAYS=365 npm run backtest
+```
+
+Promotion requires at least 200 trades, positive out-of-sample expectancy,
+out-of-sample Profit Factor above 1.2, acceptable walk-forward folds, then
+shadow and tiny-live validation. A passing preflight proves API signing only;
+it does not prove a trading edge.
+
 ## Current operating mode
 
 - `CONFIRM_BEFORE_BUY`: a qualified setup sends a Telegram BUY button; no Spot order is created before the user presses it.
