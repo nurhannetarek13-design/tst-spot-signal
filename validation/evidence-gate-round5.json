@@ -7,10 +7,11 @@
   "untouchedSymbolHoldout":["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
   "portfolio":{"positions":2,"quotePerPositionUSDT":7,"reserveUSDT":2,"rebalanceDays":7,"btcRegime":"BTC close>EMA200 and EMA50>EMA200"},
   "candidates":{
-    "XSMOM_90_30":{"score":"0.65*90d return + 0.35*30d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"},
-    "XSMOM_180_60":{"score":"0.65*180d return + 0.35*60d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"},
-    "XSMOM_60_20":{"score":"0.65*60d return + 0.35*20d return - 0.20*20d realized volatility","assetFilter":"close>EMA100 and score>0"}
+    "XSMOM_90_30":{"lookbacks":[90,30],"scoreWeights":[0.65,0.35],"volPenalty":0.20,"volLookback":20,"assetFilter":"close>EMA100 and score>0"},
+    "XSMOM_180_60":{"lookbacks":[180,60],"scoreWeights":[0.65,0.35],"volPenalty":0.20,"volLookback":20,"assetFilter":"close>EMA100 and score>0"},
+    "XSMOM_60_20":{"lookbacks":[60,20],"scoreWeights":[0.65,0.35],"volPenalty":0.20,"volLookback":20,"assetFilter":"close>EMA100 and score>0"}
   },
+  "parameterNeighborhood":{"rebalanceDays":[5,7,10],"momentumWeight1":[0.55,0.65,0.75],"momentumWeight2":"1-weight1","volPenalty":0.20,"positiveMeans":"OOS expectancy > 0 under base costs"},
   "costs":{"baseRoundTrip":0.003,"doubleRoundTrip":0.006},
   "timeOosFraction":0.30,
   "gate":{"minOosTrades":100,"minProfitFactor":1.15,"positiveExpectancyBase":true,"positiveExpectancyDouble":true,"positiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdownPct":20,"positiveNeighborFraction":0.70},
