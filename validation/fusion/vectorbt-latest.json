@@ -1,0 +1,10 @@
+{
+  "engine": "VECTORBT",
+  "strategyId": "TST_DISCOVERY_VECTORBT_V1",
+  "status": "PENDING_FIRST_DISCOVERY",
+  "pass": false,
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "selected": null,
+  "generatedAt": null
+}
