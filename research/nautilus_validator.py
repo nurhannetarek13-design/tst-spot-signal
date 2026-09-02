@@ -14,7 +14,7 @@ from decimal import Decimal
 import numpy as np
 import pandas as pd
 
-from nautilus_trader.backtest import BacktestEngine
+from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.config import BacktestEngineConfig, StrategyConfig
 from nautilus_trader.model import (
     AccountType,
