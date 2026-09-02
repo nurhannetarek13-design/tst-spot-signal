@@ -1,0 +1,47 @@
+name: Validate Freqtrade Adaptive Bot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "freqtrade/**"
+      - ".github/workflows/freqtrade-validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate config JSON
+        run: python -m json.tool freqtrade/user_data/config.json > /dev/null
+
+      - name: Pull Freqtrade stable
+        run: docker pull freqtradeorg/freqtrade:stable
+
+      - name: Load strategy with Freqtrade
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            list-strategies \
+            --strategy-path /freqtrade/user_data/strategies \
+            | tee /tmp/strategies.txt
+          grep -q "AdaptiveRegimeStrategy" /tmp/strategies.txt
+
+      - name: Validate effective config in dry-run mode
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            show-config \
+            --config /freqtrade/user_data/config.json \
+            --strategy AdaptiveRegimeStrategy \
+            --strategy-path /freqtrade/user_data/strategies \
+            > /tmp/config.txt
+          grep -q 'dry_run.*true' /tmp/config.txt || grep -q '"dry_run": true' /tmp/config.txt
