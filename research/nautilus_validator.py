@@ -309,7 +309,9 @@ def child_main(symbol: str, fee: float, family: str, params_json: str):
 
 def run_child(symbol: str, fee: float, family: str, params: dict):
     cmd = [sys.executable, str(pathlib.Path(__file__).resolve()), "--child", symbol, str(fee), family, json.dumps(params, separators=(",", ":"))]
-    proc = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    proc = subprocess.run(cmd, check=False, text=True, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"child failed {symbol} fee={fee}: {proc.stderr[-5000:]}\n{proc.stdout[-1500:]}")
     for line in reversed(proc.stdout.splitlines()):
         if line.startswith("CHILD_RESULT="):
             return json.loads(line.split("=", 1)[1])
