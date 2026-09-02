@@ -1,0 +1,12 @@
+{
+  "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+  "mode": "FORWARD_PAPER_SEMI_LIVE",
+  "liveTrading": false,
+  "startedAt": null,
+  "initialCashUSDT": 20.12,
+  "cashUSDT": 20.12,
+  "realizedPnLUSDT": 0,
+  "openPositions": [],
+  "closedTrades": [],
+  "daily": {}
+}
