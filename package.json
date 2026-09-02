@@ -9,7 +9,9 @@
     "test": "node --test",
     "backtest": "node scripts/backtest.mjs",
     "deploy": "wrangler deploy",
-    "start:oracle": "node scripts/oracle-executor.mjs"
+    "start:oracle": "node scripts/oracle-executor.mjs",
+    "start:fusion": "node fusion/server.mjs",
+    "check:fusion": "node --check fusion/server.mjs"
   },
   "engines": {
     "node": ">=22"
