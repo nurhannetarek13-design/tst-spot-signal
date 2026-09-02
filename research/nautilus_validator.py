@@ -267,7 +267,7 @@ def run_symbol(symbol: str, df: pd.DataFrame, family: str, params: dict, fee: fl
     )))
     engine.run()
 
-    rep = engine.generate_positions_report()
+    rep = engine.trader.generate_positions_report()
     out = []
     if rep is not None and not rep.empty:
         if "ts_closed" in rep.columns:
