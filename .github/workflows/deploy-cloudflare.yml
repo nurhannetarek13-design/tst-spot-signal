@@ -1,5 +1,5 @@
 name: Deploy Cloudflare Minute Scheduler
-# Auto portfolio deploy trigger
+# Deploy the production minute scanner, verify Telegram, then force an immediate scan.
 
 on:
   workflow_dispatch:
@@ -33,3 +33,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
+
+      - name: Verify Telegram connection
+        run: |
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/?test=telegram"
+
+      - name: Trigger immediate opportunity scan
+        run: |
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/"
