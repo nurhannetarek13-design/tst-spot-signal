@@ -1,0 +1,24 @@
+name: Round 20 pre-live holdout challenge
+on:
+  push:
+    paths:
+      - 'scripts/research-round20-holdout.mjs'
+      - 'validation/evidence-gate-round20.json'
+      - '.github/workflows/research-round20-holdout.yml'
+  workflow_dispatch:
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round20-holdout.mjs
+      - run: node scripts/research-round20-holdout.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round20-holdout
+          path: validation/round20-holdout.json
+          if-no-files-found: error
