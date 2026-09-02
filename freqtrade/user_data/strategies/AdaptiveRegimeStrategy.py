@@ -26,6 +26,14 @@ class AdaptiveRegimeStrategy(IStrategy):
     trailing_stop_positive_offset = 0.014
     trailing_only_offset_is_reached = True
 
+    @property
+    def protections(self):
+        return [
+            {"method": "CooldownPeriod", "stop_duration_candles": 2},
+            {"method": "StoplossGuard", "lookback_period_candles": 24, "trade_limit": 2, "stop_duration_candles": 12, "only_per_pair": False},
+            {"method": "MaxDrawdown", "lookback_period_candles": 96, "trade_limit": 4, "stop_duration_candles": 24, "max_allowed_drawdown": 0.025},
+        ]
+
     use_exit_signal = True
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
