@@ -1,49 +1,88 @@
-# TST Spot Signal
+# TST Fusion Spot Research Bot
 
-Fail-closed, multi-factor Binance Spot scanner and live executor for liquid USDT pairs.
+The project is now organized as **one master bot with three specialist engines**:
 
-## Release safety status
+- **Hummingbot V2 + Condor** — market-data / order-book layer and future deterministic execution engine.
+- **Freqtrade** — primary strategy, backtesting, and dry-run validator.
+- **Jesse** — independent second validator.
+- **Fusion Master** — final decision and risk gate that combines the three.
 
-Real-money execution is fail-closed. There is currently **no validated strategy release**.
-The 365-day Binance OHLCV audit in `validation/backtest-365d.json` failed the
-pre-registered release gates (negative out-of-sample expectancy and Profit
-Factor below 1.2), so environment variables alone cannot enable live orders.
+## Current safety status
+
+Real-money execution is **disabled**.
+
+The current release is:
+
+```text
+TST_FUSION_V1
+mode: PAPER_ONLY
+liveTrading: false
+executorAllowed: false
+```
+
+The historical validation already performed on the older strategy family did not justify automatic live execution, so the new architecture starts fail-closed rather than inheriting a live flag.
+
+## Shared account limits
+
+- Binance Spot only
+- USDT quote / long only
+- no Futures
+- no leverage
+- no withdrawals
+- capital baseline: 20.08 USDT
+- maximum open positions: 1
+- maximum position: 7 USDT
+- maximum risk per trade: 0.20 USDT
+- daily realized loss stop: 0.50 USDT
+
+## Fusion decision flow
+
+```text
+Hummingbot market candidate
+        |
+        v
+Fusion Master
+   |         |
+   v         v
+Freqtrade   Jesse
+validator   validator
+   \         /
+    \       /
+     v     v
+Shared risk gate
+        |
+        +--> PAPER_APPROVED
+        |
+        +--> NO_TRADE
+```
+
+Both validators must refer to the same strategy release, be fresh, and pass the configured evidence checks. Missing evidence, stale evidence, risk-limit breaches, or disagreement fails closed.
+
+## Main files
+
+- `fusion/policy.json` — shared trading/risk policy
+- `fusion/server.mjs` — master decision layer
+- `hummingbot/controllers/directional_trading/tst_fusion_signal.py` — Hummingbot V2 candidate controller
+- `freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py` — Freqtrade strategy/validator
+- `jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py` — Jesse independent validator
+- `.github/workflows/fusion-validate.yml` — syntax and fail-closed CI checks
+
+## Run Fusion Master
 
 ```bash
 npm ci
-npm test
-BACKTEST_DAYS=365 npm run backtest
+export FUSION_INGEST_TOKEN="store-this-as-a-secret-on-the-host"
+npm run start:fusion
 ```
 
-Promotion requires at least 200 trades, positive out-of-sample expectancy,
-out-of-sample Profit Factor above 1.2, acceptable walk-forward folds, then
-shadow and tiny-live validation. A passing preflight proves API signing only;
-it does not prove a trading edge.
+Status:
 
-## Current operating mode
+```bash
+curl http://127.0.0.1:8787/status
+```
 
-- `CONFIRM_BEFORE_BUY`: a qualified setup sends a Telegram BUY button; no Spot order is created before the user presses it.
-- No Futures, leverage, perpetuals, shorts, bStocks, tokenized stocks, leveraged tokens, or stablecoin-to-stablecoin trades.
-- Surface-scan every eligible Binance Spot USDT pair every minute using Binance's bulk ticker and book data.
-- Deep-scan seven pairs per run with a rotating cursor so the complete liquid universe is covered without exceeding Cloudflare's free request budget.
-- Maximum live position: 7 USDT.
-- Maximum live risk: 0.20 USDT per trade.
-- Daily realized loss stop: 0.50 USDT.
-- Maximum open positions: one; maximum six entries per day.
+Secrets must stay in the deployment secret store. Do not commit Binance, Telegram, Condor, Freqtrade, Jesse, or Fusion credentials to GitHub.
 
-## Required confirmation
+## Deployment requirement
 
-A live order needs a score of at least 90/100 plus all hard safety checks:
-
-- BTC 1h/4h market regime allows Spot longs.
-- Pair has at least 90 completed daily candles and 20M USDT 24h volume.
-- Symbol trend agrees on 1h and 4h.
-- Completed breakout/retest or confirmed trend pullback on 15m.
-- Relative volume, taker-buy pressure, RSI, spread, depth imbalance, and nearby sell-wall checks.
-- Net reward/risk of at least 3.0 after estimated entry and exit fees.
-- Binance OCO support and both protected exit legs remain above the pair's live minimum notional.
-- Revalidation immediately before the executor places the order.
-
-Scanner status: `/scanner-status` on the Cloudflare Worker.
-
-Runtime secrets are stored in deployment environment variables and are never committed to GitHub.
+The three-engine stack needs a persistent Docker host for Hummingbot/Condor and Freqtrade. Cloudflare Worker / Vercel remain useful for lightweight services, but they are not a replacement for a long-running Hummingbot container.
