@@ -1,0 +1,23 @@
+name: Round 21 dual horizon validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/research-round21.mjs'
+      - 'validation/evidence-gate-round21.json'
+      - '.github/workflows/research-round21.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round21.mjs
+      - run: node scripts/research-round21.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round21
+          path: artifacts/round21.json
