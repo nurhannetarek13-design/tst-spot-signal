@@ -1,0 +1,10 @@
+{
+  "engine": "NAUTILUS_TRADER",
+  "strategyId": "TST_NAUTILUS_EXECUTION_VALIDATOR_V1",
+  "status": "PENDING_VECTORBT_CANDIDATE",
+  "pass": false,
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "candidateId": null,
+  "generatedAt": null
+}
