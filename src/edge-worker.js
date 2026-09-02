@@ -25,8 +25,16 @@ const SAFE_B_SUFFIX = new Set(["BNB","ARB","KUB","WBB"]);
 const FUSION_VALIDATORS = {
   freqtrade: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/freqtrade-latest.json",
   jesse: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/jesse-latest.json",
+  vectorbt: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/vectorbt-latest.json",
+  nautilus: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/nautilus-latest.json",
 };
 const FUSION_STRATEGY_ID = "TST_ADAPTIVE_FUSION_V1";
+const EXPECTED_VALIDATOR_IDS = {
+  freqtrade: "TST_ADAPTIVE_FUSION_V1",
+  jesse: "TST_ADAPTIVE_FUSION_V1",
+  vectorbt: "TST_DISCOVERY_VECTORBT_V1",
+  nautilus: "TST_NAUTILUS_EXECUTION_VALIDATOR_V1",
+};
 const VALIDATOR_CACHE_SECONDS = 30 * 60;
 
 export default {
@@ -36,12 +44,12 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","FREQTRADE_VALIDATOR","JESSE_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
       const validators = await getFusionValidators(env, url.searchParams.get("refresh") === "1");
-      return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, validators, note:"Cloudflare executes paper scanning; Freqtrade and Jesse run as scheduled GitHub Actions validators." });
+      return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, validators, note:"Cloudflare runs the paper/order-book scanner. VectorBT discovers candidates; Freqtrade and Jesse validate; NautilusTrader stress-tests event-driven execution. No engine can authorize live trading." });
     }
     if (url.pathname === "/scan-preview") return json(await scan(env,false));
     if (url.searchParams.get("test") === "telegram") {
@@ -103,7 +111,7 @@ async function scan(env,sendAlert){
 
     if(sendAlert){
       const pair=best.symbol.replace("USDT","/USDT");
-      const vline=`🧪 Freqtrade: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"}`; await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,vline,"","Cloudflare هو منفذ الـpaper scan؛ Freqtrade وJesse validators مستقلين.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
+      const vline=`🧪 VBT: ${validators.vectorbt?.status||"PENDING"} | FT: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"} | Nautilus: ${validators.nautilus?.status||"PENDING"}`; await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,vline,"","Cloudflare للـpaper scan؛ VectorBT discovery؛ Freqtrade + Jesse validation؛ Nautilus execution stress.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
     }
     return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false};
   }catch(error){ return {ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; }
@@ -255,7 +263,8 @@ async function getFusionValidators(env,force=false){
       const r=await fetch(url,{headers:{Accept:"application/json","User-Agent":"tst-fusion-worker/1.0"},signal:AbortSignal.timeout(8000),cf:{cacheTtl:300,cacheEverything:true}});
       if(!r.ok) throw new Error(String(r.status));
       const report=await r.json();
-      const same=report?.strategyId===FUSION_STRATEGY_ID;
+      const expected=EXPECTED_VALIDATOR_IDS[name]||FUSION_STRATEGY_ID;
+      const same=report?.strategyId===expected;
       return [name,{...report,strategyMatch:same,usable:Boolean(same&&report?.generatedAt)}];
     }catch(error){
       return [name,{engine:name.toUpperCase(),status:"UNAVAILABLE",pass:false,strategyMatch:false,usable:false,error:String(error?.message||error)}];
