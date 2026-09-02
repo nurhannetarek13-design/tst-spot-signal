@@ -22,7 +22,7 @@
       "enableRateLimit": true,
       "urls": {
         "api": {
-          "public": "https://data-api.binance.vision/api",
+          "public": "https://data-api.binance.vision/api/v3",
           "private": "https://api.binance.com/api",
           "sapi": "https://api.binance.com/sapi"
         }
@@ -32,7 +32,7 @@
       "enableRateLimit": true,
       "urls": {
         "api": {
-          "public": "https://data-api.binance.vision/api",
+          "public": "https://data-api.binance.vision/api/v3",
           "private": "https://api.binance.com/api",
           "sapi": "https://api.binance.com/sapi"
         }
