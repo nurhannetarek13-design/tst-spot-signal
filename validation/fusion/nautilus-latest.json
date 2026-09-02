@@ -1,10 +1,45 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_NAUTILUS_EXECUTION_VALIDATOR_V1",
-  "status": "NO_VECTORBT_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
+  "independentEnginePass": false,
+  "vectorbtDiscoveryPass": false,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "candidateId": null,
-  "generatedAt": "2026-09-02T23:37:05.454053+00:00"
+  "candidateId": "VBT-024",
+  "family": "MEAN_REVERSION",
+  "params": {
+    "bb": 1.6,
+    "rsi_in": 34,
+    "rsi_out": 55,
+    "sl": 0.02,
+    "tp": 0.025
+  },
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "days": 75,
+  "base": {
+    "trades": 361,
+    "wins": 213,
+    "winRate": 0.590027700831025,
+    "netPnlUSDT": -2.35363403,
+    "expectancyUSDT": -0.0065197618559556785,
+    "profitFactor": 0.6892410416337571,
+    "maxDrawdownUSDT": 2.4195667300000037
+  },
+  "stress2x": {
+    "trades": 361,
+    "wins": 137,
+    "winRate": 0.37950138504155123,
+    "netPnlUSDT": -6.3261299499999994,
+    "expectancyUSDT": -0.01752390567867036,
+    "profitFactor": 0.3464769757705469,
+    "maxDrawdownUSDT": 6.344636969999993
+  },
+  "generatedAt": "2026-09-02T23:42:33.850607+00:00",
+  "notes": "NautilusTrader event-driven Binance Spot CASH backtest. Each symbol runs in its own process to isolate the engine logger. Market orders, long-only, 5.5 USDT notional, no leverage."
 }
