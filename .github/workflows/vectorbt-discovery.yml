@@ -15,12 +15,12 @@ permissions:
 
 concurrency:
   group: vectorbt-discovery
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
