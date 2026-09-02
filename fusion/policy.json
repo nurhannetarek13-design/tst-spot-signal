@@ -6,7 +6,9 @@
   "engines": {
     "executionAndMarketData": "HUMMINGBOT_V2_CONDOR",
     "primaryValidator": "FREQTRADE",
-    "independentValidator": "JESSE"
+    "independentValidator": "JESSE",
+    "discovery": "VECTORBT",
+    "executionValidator": "NAUTILUS_TRADER"
   },
   "account": {
     "exchange": "BINANCE",
@@ -15,23 +17,32 @@
     "longOnly": true,
     "capitalUSDT": 20.08,
     "maxOpenPositions": 1,
-    "maxPositionUSDT": 7.0,
+    "maxPositionUSDT": 7,
     "maxRiskUSDT": 0.2,
     "dailyLossCapUSDT": 0.5
   },
   "decisionGate": {
-    "validatorsRequired": ["freqtrade", "jesse"],
+    "validatorsRequired": [
+      "freqtrade",
+      "jesse",
+      "vectorbt",
+      "nautilus"
+    ],
     "validatorMaxAgeHours": 48,
     "minTrades": 100,
     "minProfitFactor": 1.15,
     "requirePositiveExpectancy": true,
     "requireStressPass": true,
-    "minCandidateScore": 90
+    "minCandidateScore": 90,
+    "requireAllPass": true
   },
   "execution": {
     "executorAllowed": false,
     "withdrawalsAllowed": false,
     "futuresAllowed": false,
-    "leverageAllowed": false
+    "leverageAllowed": false,
+    "liveReady": false,
+    "autoEnableLive": false,
+    "liveEnableCondition": "ALL_REQUIRED_VALIDATORS_PASS_AND_EXPLICIT_USER_ENABLE"
   }
 }
