@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { scoreCandidate, STRATEGY_ID } from '../src/strategies/regime-adaptive-momentum.mjs';
 
 const BASES=['https://api.binance.com','https://api-gcp.binance.com','https://api1.binance.com','https://api2.binance.com','https://api3.binance.com','https://api4.binance.com','https://data-api.binance.vision'];
-const STABLE_BASES=new Set(['USDC','FDUSD','TUSD','USDP','DAI','BUSD','EUR','AEUR','TRY','BRL','GBP','AUD']);
+const EXCLUDED_BASES=new Set(['USDC','FDUSD','TUSD','USDP','DAI','BUSD','USD1','RLUSD','U','EUR','AEUR','TRY','BRL','GBP','AUD','PAXG','XAUT']);
 const LEVERAGED_SUFFIXES=['UP','DOWN','BULL','BEAR'];
 async function get(path){let last;for(const b of BASES){try{const r=await fetch(b+path);if(r.ok)return r.json();last=new Error(`${r.status}`);}catch(e){last=e}}throw last||new Error('NO_MARKET_DATA');}
 async function candles(symbol,limit=260){const x=await get(`/api/v3/klines?symbol=${symbol}&interval=4h&limit=${limit}`);return x.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5],q:+k[7],tbq:+k[10]}));}
@@ -18,7 +18,7 @@ const bookMap=new Map(books.map(x=>[x.symbol,x]));
 const tickerMap=new Map(tickers.map(x=>[x.symbol,x]));
 const universe=(exchangeInfo.symbols||[])
   .filter(s=>s.status==='TRADING'&&s.quoteAsset==='USDT'&&s.isSpotTradingAllowed)
-  .filter(s=>!STABLE_BASES.has(s.baseAsset))
+  .filter(s=>!EXCLUDED_BASES.has(s.baseAsset))
   .filter(s=>!LEVERAGED_SUFFIXES.some(sfx=>s.baseAsset.endsWith(sfx)))
   .map(s=>tickerMap.get(s.symbol))
   .filter(Boolean)
@@ -27,8 +27,6 @@ const universe=(exchangeInfo.symbols||[])
 
 const btc=await candles('BTCUSDT');
 let out=[];
-// Scan every eligible liquid Binance Spot USDT pair, in small parallel batches
-// to avoid hammering public market-data endpoints.
 for(const batch of chunks(universe,8)){
   const rows=await Promise.all(batch.map(async t=>{
     try{
