@@ -1,0 +1,25 @@
+name: Regime-adaptive paper scanner
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/strategies/regime-adaptive-momentum.mjs'
+      - 'scripts/paper-regime-adaptive.mjs'
+      - '.github/workflows/paper-regime-adaptive.yml'
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check src/strategies/regime-adaptive-momentum.mjs
+      - run: node --check scripts/paper-regime-adaptive.mjs
+      - run: node scripts/paper-regime-adaptive.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paper-regime-adaptive
+          path: artifacts/paper-regime-adaptive.json
