@@ -1,0 +1,42 @@
+name: Fusion Jesse Validator
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 2 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "jesse/**"
+      - ".github/workflows/fusion-jesse-validator.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Jesse
+        run: pip install --disable-pip-version-check jesse
+
+      - name: Run independent Jesse backtest
+        env:
+          PYTHONPATH: jesse
+        run: python jesse/run_fusion_validator.py
+
+      - name: Commit latest public validator snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/jesse-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update Jesse fusion validator snapshot"
+          git push
