@@ -7,6 +7,24 @@
   "openPositions": [],
   "closedTrades": [],
   "seenSignals": [],
-  "lastRunAt": null,
-  "liveTrading": false
+  "lastRunAt": "2026-09-02T11:55:58.874Z",
+  "liveTrading": false,
+  "config": {
+    "startingEquity": 20.12,
+    "reserve": 2,
+    "maxPositions": 2,
+    "maxPositionUSDT": 7,
+    "maxRiskUSDT": 0.2,
+    "roundTripCostPct": 0.36,
+    "dailyLossLimitUSDT": 0.5,
+    "atrStopMult": 2.5,
+    "maxHoldBars": 120
+  },
+  "todayRealizedPnLUSDT": 0,
+  "dailyLossGateOpen": true,
+  "openExposureUSDT": 0,
+  "closedTradeCount": 0,
+  "winCount": 0,
+  "lossCount": 0,
+  "winRate": null
 }
