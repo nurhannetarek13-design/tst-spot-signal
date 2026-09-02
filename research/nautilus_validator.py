@@ -7,6 +7,8 @@ import math
 import pathlib
 import re
 import time
+import subprocess
+import sys
 import urllib.parse
 import urllib.request
 from decimal import Decimal
@@ -14,25 +16,15 @@ from decimal import Decimal
 import numpy as np
 import pandas as pd
 
-from nautilus_trader.backtest.engine import BacktestEngine
-from nautilus_trader.config import BacktestEngineConfig, StrategyConfig
-from nautilus_trader.model import (
-    AccountType,
-    Bar,
-    BarType,
-    Currency,
-    CurrencyPair,
-    InstrumentId,
-    Money,
-    OmsType,
-    OrderSide,
-    Price,
-    Quantity,
-    Symbol,
-    Venue,
-)
+from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
+from nautilus_trader.model.data import Bar, BarType
+from nautilus_trader.model.enums import AccountType, OmsType, OrderSide
+from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
+from nautilus_trader.model.instruments import CurrencyPair
+from nautilus_trader.model.objects import Currency, Money, Price, Quantity
 from nautilus_trader.persistence.wranglers import BarDataWrangler
-from nautilus_trader.trading import Strategy
+from nautilus_trader.trading.config import StrategyConfig
+from nautilus_trader.trading.strategy import Strategy
 
 VECTOR_PATH = pathlib.Path("validation/fusion/vectorbt-latest.json")
 OUT = pathlib.Path("validation/fusion/nautilus-latest.json")
@@ -309,6 +301,24 @@ def aggregate(trades):
         "maxDrawdownUSDT": float(max(0.0, dd.max(initial=0.0))),
     }
 
+def child_main(symbol: str, fee: float, family: str, params_json: str):
+    params = json.loads(params_json)
+    df = fetch_klines(symbol)
+    trades = run_symbol(symbol, df, family, params, fee)
+    print("CHILD_RESULT=" + json.dumps(trades))
+
+def run_child(symbol: str, fee: float, family: str, params: dict):
+    cmd = [sys.executable, str(pathlib.Path(__file__).resolve()), "--child", symbol, str(fee), family, json.dumps(params, separators=(",", ":"))]
+    proc = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    for line in reversed(proc.stdout.splitlines()):
+        if line.startswith("CHILD_RESULT="):
+            return json.loads(line.split("=", 1)[1])
+    raise RuntimeError(f"child result missing for {symbol}: {proc.stdout[-1000:]}")
+
+if len(sys.argv) >= 6 and sys.argv[1] == "--child":
+    child_main(sys.argv[2], float(sys.argv[3]), sys.argv[4], sys.argv[5])
+    raise SystemExit(0)
+
 vector = json.loads(VECTOR_PATH.read_text())
 selected = vector.get("selected")
 if not selected:
@@ -325,11 +335,10 @@ if not selected:
 else:
     family = selected["family"]
     params = selected["params"]
-    data = {s: fetch_klines(s) for s in SYMBOLS}
     base_trades, stress_trades = [], []
-    for symbol, df in data.items():
-        base_trades += run_symbol(symbol, df, family, params, BASE_FEE)
-        stress_trades += run_symbol(symbol, df, family, params, STRESS_FEE)
+    for symbol in SYMBOLS:
+        base_trades += run_child(symbol, BASE_FEE, family, params)
+        stress_trades += run_child(symbol, STRESS_FEE, family, params)
     base = aggregate(base_trades)
     stress = aggregate(stress_trades)
     independent_pass = (
@@ -358,7 +367,7 @@ else:
         "base":base,
         "stress2x":stress,
         "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
-        "notes":"NautilusTrader event-driven Binance Spot CASH backtest. Market orders, one long position per engine, 5.5 USDT notional, no leverage."
+        "notes":"NautilusTrader event-driven Binance Spot CASH backtest. Each symbol runs in its own process to isolate the engine logger. Market orders, long-only, 5.5 USDT notional, no leverage."
     }
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
