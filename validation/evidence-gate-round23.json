@@ -1,0 +1,26 @@
+{
+  "round": 23,
+  "status": "PREREGISTERED",
+  "strategy": "HYBRID_TSMOM_RISK_FLOW_V1",
+  "purpose": "Test whether adding regime, risk-adjusted trend, volume/flow confirmation and ATR exits improves the previously weak dual-horizon edge.",
+  "market": "Binance Spot USDT long-only",
+  "liveTrading": false,
+  "validatedStrategyRelease": null,
+  "costs": {"baseRoundTrip":0.0036,"stressRoundTrip":0.0072},
+  "risk": {"accountUSDT":20.12,"maxOrderUSDT":7,"reserveUSDT":2,"maxRiskPerTradeUSDT":0.20,"maxConcurrentPositions":2},
+  "researchRules": {
+    "closedCandlesOnly": true,
+    "btcRegime": "BTC close above EMA200 and 30d momentum positive",
+    "assetTrend": "close above EMA200",
+    "timeSeriesMomentum": "30d and 90d positive",
+    "riskAdjustedRanking": "(30d return + 0.7*90d return) / 30d realized volatility",
+    "flowProxy": "taker-buy quote volume ratio on closed 4h bars",
+    "relativeVolume": "current closed 4h quote volume / trailing 20-bar mean",
+    "entryConfirmation": "takerBuyRatio >= 0.54 and relativeVolume >= 1.10",
+    "atrTrailingStopMultiplier": 2.5,
+    "maxHoldBars": 120,
+    "rebalanceBars": 6
+  },
+  "discoveryGate": {"minOosTrades":100,"minProfitFactor":1.15,"positiveBaseExpectancy":true,"positiveStressExpectancy":true,"minPositiveWalkForwardFolds":4,"walkForwardFolds":5,"maxDrawdown":0.20},
+  "notes":"Thresholds frozen before result. Binance kline taker-buy volume is an exchange-local proxy, not the world-order-flow measure used in the cited academic paper. Passing this gate permits forward paper testing only."
+}
