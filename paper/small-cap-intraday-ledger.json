@@ -4,9 +4,34 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 20.12,
+  "cashUSDT": 14.620000000000001,
   "realizedPnLUSDT": 0,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "JSTUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-02T19:32:34.499Z",
+      "entry": 0.10799,
+      "stop": 0.107504045,
+      "target": 0.1090699,
+      "qty": 50.930641726085746,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 82,
+      "metrics": {
+        "spreadPct": 0.027780350032412488,
+        "mom1h": 0.010665169800729846,
+        "mom4h": 0.012275112443778102,
+        "btc1h": -0.0035975440325340946,
+        "atrPct": 0.0034884161791437574,
+        "takerBuyRatio": 0.7413175602705694,
+        "relativeVolume": 1.4592729541814105,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [],
   "daily": {}
 }
