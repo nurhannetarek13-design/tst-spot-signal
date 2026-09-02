@@ -1,0 +1,26 @@
+name: Small-cap intraday paper scanner
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/strategies/small-cap-intraday.mjs'
+      - 'scripts/paper-small-cap-intraday.mjs'
+      - '.github/workflows/paper-small-cap-intraday.yml'
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check src/strategies/small-cap-intraday.mjs
+      - run: node --check scripts/paper-small-cap-intraday.mjs
+      - run: node scripts/paper-small-cap-intraday.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-small-cap-intraday
+          path: artifacts/paper-small-cap-intraday.json
