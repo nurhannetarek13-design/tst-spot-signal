@@ -1,10 +1,275 @@
 {
   "engine": "VECTORBT",
   "strategyId": "TST_DISCOVERY_VECTORBT_V1",
-  "status": "PENDING_FIRST_DISCOVERY",
+  "status": "NO_DISCOVERY_PASS",
   "pass": false,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "selected": null,
-  "generatedAt": null
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "DOGEUSDT",
+    "LINKUSDT",
+    "AVAXUSDT",
+    "DOTUSDT"
+  ],
+  "timeframe": "15m",
+  "days": 120,
+  "split": {
+    "train": 0.6,
+    "validation": 0.2,
+    "finalHoldout": 0.2
+  },
+  "fees": {
+    "basePerSide": 0.001,
+    "stressPerSide": 0.002
+  },
+  "candidateCount": 48,
+  "selected": {
+    "family": "MEAN_REVERSION",
+    "params": {
+      "bb": 1.6,
+      "rsi_in": 34,
+      "rsi_out": 55,
+      "sl": 0.02,
+      "tp": 0.025
+    },
+    "candidateId": "VBT-024",
+    "validation": {
+      "trades": 256,
+      "wins": 152,
+      "winRate": 0.59375,
+      "netPnlUSDT": -0.9403496214242988,
+      "expectancyUSDT": -0.003673240708688667,
+      "profitFactor": 0.7868956749468458,
+      "maxDrawdownUSDT": 1.841431100130675
+    },
+    "score": 4.757960212497673,
+    "holdoutBase": {
+      "trades": 258,
+      "wins": 152,
+      "winRate": 0.5891472868217055,
+      "netPnlUSDT": 0.4526972797588914,
+      "expectancyUSDT": 0.0017546406192205093,
+      "profitFactor": 1.0991096707143417,
+      "maxDrawdownUSDT": 1.0273357624221717
+    },
+    "holdoutStress2x": {
+      "trades": 258,
+      "wins": 109,
+      "winRate": 0.42248062015503873,
+      "netPnlUSDT": -2.3885967115121383,
+      "expectancyUSDT": -0.009258126788806737,
+      "profitFactor": 0.6007916614799206,
+      "maxDrawdownUSDT": 2.4329450230929046
+    },
+    "discoveryPass": false
+  },
+  "finalists": [
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 34,
+        "rsi_out": 55,
+        "sl": 0.02,
+        "tp": 0.025
+      },
+      "candidateId": "VBT-024",
+      "validation": {
+        "trades": 256,
+        "wins": 152,
+        "winRate": 0.59375,
+        "netPnlUSDT": -0.9403496214242988,
+        "expectancyUSDT": -0.003673240708688667,
+        "profitFactor": 0.7868956749468458,
+        "maxDrawdownUSDT": 1.841431100130675
+      },
+      "score": 4.757960212497673,
+      "holdoutBase": {
+        "trades": 258,
+        "wins": 152,
+        "winRate": 0.5891472868217055,
+        "netPnlUSDT": 0.4526972797588914,
+        "expectancyUSDT": 0.0017546406192205093,
+        "profitFactor": 1.0991096707143417,
+        "maxDrawdownUSDT": 1.0273357624221717
+      },
+      "holdoutStress2x": {
+        "trades": 258,
+        "wins": 109,
+        "winRate": 0.42248062015503873,
+        "netPnlUSDT": -2.3885967115121383,
+        "expectancyUSDT": -0.009258126788806737,
+        "profitFactor": 0.6007916614799206,
+        "maxDrawdownUSDT": 2.4329450230929046
+      },
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 34,
+        "rsi_out": 55,
+        "sl": 0.015,
+        "tp": 0.025
+      },
+      "candidateId": "VBT-023",
+      "validation": {
+        "trades": 271,
+        "wins": 161,
+        "winRate": 0.5940959409594095,
+        "netPnlUSDT": -1.1599298887674243,
+        "expectancyUSDT": -0.00428018409139271,
+        "profitFactor": 0.7657678429949054,
+        "maxDrawdownUSDT": 2.1630071935960906
+      },
+      "score": 4.748109567490473,
+      "holdoutBase": {
+        "trades": 266,
+        "wins": 156,
+        "winRate": 0.5864661654135338,
+        "netPnlUSDT": 0.24802441873623637,
+        "expectancyUSDT": 0.0009324226268279563,
+        "profitFactor": 1.0493396309346747,
+        "maxDrawdownUSDT": 0.9289192820906748
+      },
+      "holdoutStress2x": {
+        "trades": 266,
+        "wins": 114,
+        "winRate": 0.42857142857142855,
+        "netPnlUSDT": -2.6811527828841197,
+        "expectancyUSDT": -0.010079521740165864,
+        "profitFactor": 0.5865898474372429,
+        "maxDrawdownUSDT": 2.710062557803903
+      },
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 34,
+        "rsi_out": 50,
+        "sl": 0.02,
+        "tp": 0.025
+      },
+      "candidateId": "VBT-022",
+      "validation": {
+        "trades": 256,
+        "wins": 152,
+        "winRate": 0.59375,
+        "netPnlUSDT": -1.0311915741257738,
+        "expectancyUSDT": -0.004028092086428804,
+        "profitFactor": 0.7663088500299212,
+        "maxDrawdownUSDT": 1.8577371087934664
+      },
+      "score": 4.685920347653061,
+      "holdoutBase": {
+        "trades": 258,
+        "wins": 152,
+        "winRate": 0.5891472868217055,
+        "netPnlUSDT": 0.434848876903623,
+        "expectancyUSDT": 0.0016854607631923372,
+        "profitFactor": 1.095202094042565,
+        "maxDrawdownUSDT": 1.027335762422172
+      },
+      "holdoutStress2x": {
+        "trades": 258,
+        "wins": 110,
+        "winRate": 0.4263565891472868,
+        "netPnlUSDT": -2.4064272480982822,
+        "expectancyUSDT": -0.009327237395729776,
+        "profitFactor": 0.5980322522568633,
+        "maxDrawdownUSDT": 2.4541790630118645
+      },
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 34,
+        "rsi_out": 50,
+        "sl": 0.015,
+        "tp": 0.025
+      },
+      "candidateId": "VBT-021",
+      "validation": {
+        "trades": 271,
+        "wins": 161,
+        "winRate": 0.5940959409594095,
+        "netPnlUSDT": -1.250771841468899,
+        "expectancyUSDT": -0.004615394248962727,
+        "profitFactor": 0.7474235389693993,
+        "maxDrawdownUSDT": 2.1793132022588813
+      },
+      "score": 4.682363447580361,
+      "holdoutBase": {
+        "trades": 266,
+        "wins": 156,
+        "winRate": 0.5864661654135338,
+        "netPnlUSDT": 0.23017601588096814,
+        "expectancyUSDT": 0.0008653233679735645,
+        "profitFactor": 1.04578903856099,
+        "maxDrawdownUSDT": 0.9289192820906748
+      },
+      "holdoutStress2x": {
+        "trades": 266,
+        "wins": 115,
+        "winRate": 0.4323308270676692,
+        "netPnlUSDT": -2.6989833194702637,
+        "expectancyUSDT": -0.010146553832594976,
+        "profitFactor": 0.5840511584768435,
+        "maxDrawdownUSDT": 2.7278930943900472
+      },
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 2.0,
+        "rsi_in": 34,
+        "rsi_out": 55,
+        "sl": 0.02,
+        "tp": 0.025
+      },
+      "candidateId": "VBT-032",
+      "validation": {
+        "trades": 235,
+        "wins": 142,
+        "winRate": 0.6042553191489362,
+        "netPnlUSDT": -0.9102623441039851,
+        "expectancyUSDT": -0.0038734567834212133,
+        "profitFactor": 0.7785102631806404,
+        "maxDrawdownUSDT": 1.7033880014523843
+      },
+      "score": 4.4840106698056665,
+      "holdoutBase": {
+        "trades": 237,
+        "wins": 138,
+        "winRate": 0.5822784810126582,
+        "netPnlUSDT": 0.992812366859839,
+        "expectancyUSDT": 0.004189081716708181,
+        "profitFactor": 1.2587086256614963,
+        "maxDrawdownUSDT": 0.7837218604435753
+      },
+      "holdoutStress2x": {
+        "trades": 237,
+        "wins": 104,
+        "winRate": 0.4388185654008439,
+        "netPnlUSDT": -1.6177910489228027,
+        "expectancyUSDT": -0.006826122569294526,
+        "profitFactor": 0.6840072042123889,
+        "maxDrawdownUSDT": 1.7721290342946203
+      },
+      "discoveryPass": false
+    }
+  ],
+  "generatedAt": "2026-09-02T23:37:35.502714+00:00"
 }
