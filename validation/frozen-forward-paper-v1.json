@@ -1,0 +1,37 @@
+{
+  "release": "HARDENED_EDGE_WORKER_FROZEN_V1",
+  "source": "src/edge-worker.js",
+  "status": "FORWARD_PAPER_LOCKED",
+  "frozen_at": "2026-09-03",
+  "purpose": "Stop round-chasing and evaluate one unchanged strategy under forward market conditions.",
+  "live_trading": false,
+  "validated_strategy_release": null,
+  "rules": {
+    "no_parameter_tuning_during_forward_test": true,
+    "no_backtest_optimization_for_promotion": true,
+    "spot_only": true,
+    "long_only": true,
+    "max_open_positions": 1,
+    "daily_loss_cap_usdt": 0.5,
+    "max_position_usdt_large": 7,
+    "max_position_usdt_small": 5.5,
+    "max_risk_usdt_large": 0.2,
+    "max_risk_usdt_small": 0.1
+  },
+  "promotion_gate": {
+    "min_closed_forward_trades": 100,
+    "min_profit_factor": 1.2,
+    "positive_net_pnl_after_fees": true,
+    "max_drawdown": 0.2,
+    "max_top2_profit_share": 0.5,
+    "no_daily_loss_cap_breach": true
+  },
+  "round26_reference": {
+    "trades": 105,
+    "profit_factor": 0.6811493719544489,
+    "net_pnl_usdt": -1.781967786776704,
+    "double_cost_net_pnl_usdt": -4.329644943522704,
+    "positive_folds": 1,
+    "verdict": "NO_LIVE_APPROVAL"
+  }
+}
