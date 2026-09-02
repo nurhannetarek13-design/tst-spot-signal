@@ -1,0 +1,51 @@
+name: VectorBT Strategy Discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 1 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "research/vectorbt_discovery.py"
+      - ".github/workflows/vectorbt-discovery.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vectorbt-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install VectorBT
+        run: pip install --disable-pip-version-check vectorbt pandas numpy
+
+      - name: Run multi-family discovery
+        run: python research/vectorbt_discovery.py
+
+      - name: Commit discovery snapshot
+        run: |
+          cp validation/fusion/vectorbt-latest.json /tmp/vectorbt-latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p validation/fusion
+          cp /tmp/vectorbt-latest.json validation/fusion/vectorbt-latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/vectorbt-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update VectorBT discovery snapshot"
+          git push
