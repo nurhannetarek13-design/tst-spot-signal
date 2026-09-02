@@ -1,0 +1,16 @@
+{
+  "round":21,
+  "status":"PREREGISTERED",
+  "purpose":"Independent expansion test of the Round20 DUAL_HORIZON_MOM lead; no live trading",
+  "strategy":"DUAL_HORIZON_MOM",
+  "market":"Binance Spot USDT long-only",
+  "timeframe":"4h",
+  "universe":["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","DOTUSDT","LTCUSDT","TRXUSDT","XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "signal":{"shortMomentumBars":42,"longMomentumBars":126,"requireBothPositive":true,"emaTrend":200,"btcRegime":true},
+  "execution":{"entry":"next_open","atrPeriod":14,"atrStop":2.5,"trailing":true,"emaFailureExit":50,"maxHoldBars":90},
+  "costs":{"baseRoundTripPct":0.36,"stressRoundTripPct":0.72},
+  "validation":{"minimumOosTrades":100,"minimumProfitFactor":1.15,"positiveBaseExpectancy":true,"positiveStressExpectancy":true,"minimumPositiveWalkForwardFolds":4,"walkForwardFolds":5,"maximumDrawdownPct":20,"minimumPositiveSymbolsFraction":0.60},
+  "capital":{"accountUSDT":20.12,"reserveUSDT":2,"maxOrderUSDT":7,"maxRiskPerTradeUSDT":0.20,"maxPositions":2},
+  "liveTrading":false,
+  "validatedStrategyRelease":null
+}
