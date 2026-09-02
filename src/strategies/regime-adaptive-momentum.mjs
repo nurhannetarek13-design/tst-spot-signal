@@ -1,4 +1,4 @@
-const STABLES = new Set(['USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','BUSDUSDT']);
+const STABLES = new Set(['USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','BUSDUSDT','USD1USDT','RLUSDUSDT','UUSDT','EURUSDT','AEURUSDT','TRYUSDT','BRLUSDT','GBPUSDT','AUDUSDT','PAXGUSDT','XAUTUSDT']);
 
 export const STRATEGY_ID = 'REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1';
 export const LIVE_APPROVED = false;
@@ -59,7 +59,7 @@ export function scoreCandidate({ symbol, candles, btcCandles, quoteVolume24h, bi
   const volumeOk = Number.isFinite(relativeVolume) ? relativeVolume >= cfg.minRelativeVolume : false;
 
   let score = 0;
-  score += 25; // BTC regime
+  score += 25;
   score += Math.min(25, Math.max(0, riskAdjusted * 2));
   score += c[i] > e200[i] ? 15 : 0;
   score += spreadPct <= cfg.maxSpreadPct/2 ? 10 : 5;
