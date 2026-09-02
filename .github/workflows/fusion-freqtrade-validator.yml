@@ -46,6 +46,9 @@ jobs:
       - name: Build validator report
         run: python scripts/fusion-freqtrade-report.py /tmp/freqtrade-base.zip /tmp/freqtrade-stress.zip validation/fusion/freqtrade-latest.json
 
+      - name: Restore repository file ownership
+        run: sudo chown -R "$(id -u):$(id -g)" freqtrade/user_data
+
       - name: Commit latest public validator snapshot
         run: |
           git config user.name "github-actions[bot]"
