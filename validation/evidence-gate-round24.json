@@ -1,0 +1,25 @@
+{
+  "round": 24,
+  "strategy": "COMMUNITY_TREND_BREAKOUT_V1",
+  "status": "PREREGISTERED_BEFORE_RESULTS",
+  "market": "Binance Spot USDT long-only",
+  "timeframe": "1h",
+  "design": {
+    "entry": "20-bar Donchian breakout + EMA50>EMA200 + ADX14>=20 + relative quote-volume>=1.20 + BTC bull regime",
+    "exit": "10-bar Donchian exit or 2.5 ATR trailing stop or 120h maximum hold",
+    "portfolio": "rank valid breakouts by ADX + normalized breakout strength; max 2 concurrent",
+    "costs_roundtrip": 0.0036,
+    "stress_costs_roundtrip": 0.0072
+  },
+  "discovery_gate": {
+    "min_oos_trades": 100,
+    "min_profit_factor": 1.15,
+    "positive_expectancy_base_cost": true,
+    "positive_expectancy_double_cost": true,
+    "min_positive_walk_forward_folds": "4/5",
+    "max_drawdown": 0.20
+  },
+  "authorization_if_pass": "FORWARD_PAPER_ONLY",
+  "live_trading": false,
+  "validated_strategy_release": null
+}
