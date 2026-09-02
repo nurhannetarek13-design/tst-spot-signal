@@ -1,0 +1,52 @@
+services:
+  fusion-master:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.fusion
+    container_name: tst-fusion-master
+    restart: unless-stopped
+    environment:
+      - PORT=8787
+      - FUSION_BIND=0.0.0.0
+      - FUSION_INGEST_TOKEN=${FUSION_INGEST_TOKEN}
+      - FUSION_STATE_FILE=/data/fusion-state.json
+    volumes:
+      - fusion_state:/data
+    networks:
+      - tstnet
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: tst-freqtrade
+    restart: unless-stopped
+    depends_on:
+      fusion-master:
+        condition: service_healthy
+    volumes:
+      - ../freqtrade/user_data:/freqtrade/user_data
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+      --config /freqtrade/user_data/config.json
+      --strategy AdaptiveRegimeStrategy
+    environment:
+      - TZ=Africa/Cairo
+      - FREQTRADE__EXCHANGE__KEY=${FREQTRADE__EXCHANGE__KEY:-}
+      - FREQTRADE__EXCHANGE__SECRET=${FREQTRADE__EXCHANGE__SECRET:-}
+      - FREQTRADE__TELEGRAM__TOKEN=${FREQTRADE__TELEGRAM__TOKEN:-}
+      - FREQTRADE__TELEGRAM__CHAT_ID=${FREQTRADE__TELEGRAM__CHAT_ID:-}
+    networks:
+      - tstnet
+
+volumes:
+  fusion_state:
+
+networks:
+  tstnet:
+    name: tst-fusion-net
