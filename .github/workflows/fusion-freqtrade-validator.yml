@@ -30,14 +30,14 @@ jobs:
 
       - name: Base-cost backtest
         run: |
-          rm -rf /tmp/ft-base freqtrade/user_data/backtest_results
+          sudo rm -rf /tmp/ft-base freqtrade/user_data/backtest_results
           mkdir -p freqtrade/user_data/backtest_results
           docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy AdaptiveRegimeStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe 15m             --fee 0.001             --cache none             --export trades             --backtest-directory /freqtrade/user_data/backtest_results
           cp "$(ls -1t freqtrade/user_data/backtest_results/*.zip | head -1)" /tmp/freqtrade-base.zip
 
       - name: Double-cost stress backtest
         run: |
-          rm -rf freqtrade/user_data/backtest_results
+          sudo rm -rf freqtrade/user_data/backtest_results
           mkdir -p freqtrade/user_data/backtest_results
           docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy AdaptiveRegimeStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe 15m             --fee 0.002             --cache none             --export trades             --backtest-directory /freqtrade/user_data/backtest_results
           cp "$(ls -1t freqtrade/user_data/backtest_results/*.zip | head -1)" /tmp/freqtrade-stress.zip
