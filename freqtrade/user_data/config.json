@@ -26,6 +26,12 @@
           "private": "https://api.binance.com/api",
           "sapi": "https://api.binance.com/sapi"
         }
+      },
+      "options": {
+        "defaultType": "spot",
+        "fetchMarkets": [
+          "spot"
+        ]
       }
     },
     "ccxt_async_config": {
@@ -36,6 +42,12 @@
           "private": "https://api.binance.com/api",
           "sapi": "https://api.binance.com/sapi"
         }
+      },
+      "options": {
+        "defaultType": "spot",
+        "fetchMarkets": [
+          "spot"
+        ]
       }
     },
     "pair_whitelist": [
