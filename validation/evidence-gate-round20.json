@@ -1,0 +1,23 @@
+{
+  "round": 20,
+  "status": "LOCKED_BEFORE_RESULTS",
+  "purpose": "Pre-live challenge for the 10 Round 19 hybrid strategies on a disjoint holdout universe",
+  "holdout_symbols": ["XLMUSDT","HBARUSDT","ICPUSDT","ALGOUSDT","VETUSDT","THETAUSDT","RUNEUSDT","GRTUSDT"],
+  "strategies": ["RMOM_LOWVOL_BREAKOUT","RMOM_DUAL_TREND","LOWVOL_MOM_TREND","DUAL_HORIZON_MOM","DONCHIAN55_RMOM","VOL_SQUEEZE_MOM","ADX_RMOM","VOLUME_BREAKOUT_TREND","PULLBACK_RMOM_TREND","MULTIFACTOR_MOM"],
+  "rules": {
+    "no_retraining": true,
+    "no_threshold_changes_after_results": true,
+    "fees_round_trip": 0.0036,
+    "stress_round_trip": 0.0072,
+    "min_trades": 30,
+    "profit_factor_min": 1.10,
+    "expectancy_positive_base": true,
+    "expectancy_positive_stress": true,
+    "positive_walk_forward_folds_min": 3,
+    "walk_forward_folds": 5,
+    "max_drawdown": 0.20
+  },
+  "execution": "research/paper only",
+  "live_trading": false,
+  "validated_strategy_release": null
+}
