@@ -1,0 +1,24 @@
+name: Research Round25 Hardened Edge Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/research-round25.mjs'
+      - '.github/workflows/research-round25.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round25.mjs
+      - run: node scripts/research-round25.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-round25
+          path: validation/round25.json
