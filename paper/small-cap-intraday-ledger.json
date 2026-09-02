@@ -2,7 +2,7 @@
   "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
   "mode": "FORWARD_PAPER_SEMI_LIVE",
   "liveTrading": false,
-  "startedAt": null,
+  "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
   "cashUSDT": 20.12,
   "realizedPnLUSDT": 0,
