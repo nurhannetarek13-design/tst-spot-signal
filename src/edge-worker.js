@@ -17,6 +17,7 @@ const CFG = {
   scanPerRun: 8,
   big: { minVolume:20_000_000,maxSpreadPct:0.10,minDepth:15_000,minRelVol:1.25,minTaker:0.54,minDepthRatio:1.10,minScore:88,maxPosition:7,maxRisk:0.20,maxStopPct:2.5 },
   small:{ minVolume:5_000_000,maxVolume:150_000_000,maxSpreadPct:0.15,minDepth:5_000,minRelVol:1.30,minTaker:0.56,minDepthRatio:1.15,minScore:90,maxPosition:5.5,maxRisk:0.10,maxStopPct:2.2 },
+  newListing:{ maxAgeDays:30,minVolume:500_000,maxSpreadPct:0.20,minDepth:2_500,minRelVol:1.45,minTaker:0.58,minDepthRatio:1.18,minScore:95,maxPosition:5.0,maxRisk:0.08,maxStopPct:2.0 },
 };
 
 const EXCLUDED = new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","EUR","AEUR","TRY","BRL","GBP","AUD","USD1","RLUSD","USDE"]);
@@ -44,7 +45,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -96,7 +97,9 @@ async function scan(env,sendAlert){
     const summaries=tickers.map(t=>summarize(t,tradable.get(t.symbol),bookMap.get(t.symbol))).filter(Boolean);
     const bigPool=summaries.filter(x=>x.volume>=CFG.big.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const smallPool=summaries.filter(x=>!MAJORS.has(x.base)&&x.volume>=CFG.small.minVolume&&x.volume<=CFG.small.maxVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
-    const selected=await rotateSelection(env,bigPool,smallPool);
+    const newPool=summaries.filter(x=>x.isNewListing&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
+    const allPool=summaries.slice().sort((a,b)=>opportunityRank(b)-opportunityRank(a));
+    const selected=await rotateSelection(env,bigPool,smallPool,newPool,allPool);
     const analyses=[];
     for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime))));
     const valid=analyses.filter(x=>x.valid).sort((a,b)=>b.score-a.score||b.edge-a.edge);
@@ -123,26 +126,34 @@ function summarize(t,info,book){
   const base=symbol.slice(0,-4); if(!allowedBase(base)) return null;
   const bid=Number(book.bidPrice),ask=Number(book.askPrice); if(!(bid>0&&ask>bid)) return null;
   const mid=(bid+ask)/2,spreadPct=((ask-bid)/mid)*100;
-  return {symbol,base,bid,ask,spreadPct,volume:Number(t.quoteVolume||0),change:Number(t.priceChangePercent||0),trades:Number(t.count||0)};
+  const onboard=Number(info?.onboardDate||info?.onboardingDate||0);
+  const listingAgeDays=onboard>0?(Date.now()-onboard)/86400000:null;
+  return {symbol,base,bid,ask,spreadPct,volume:Number(t.quoteVolume||0),change:Number(t.priceChangePercent||0),trades:Number(t.count||0),onboardDate:onboard||null,listingAgeDays,isNewListing:Number.isFinite(listingAgeDays)&&listingAgeDays<=CFG.newListing.maxAgeDays};
 }
 function allowedBase(base){ if(!base||EXCLUDED.has(base)) return false; if(/(UP|DOWN|BULL|BEAR)$/.test(base)) return false; if(base.endsWith("B")&&!SAFE_B_SUFFIX.has(base)) return false; return true; }
 function opportunityRank(x){ const vol=Math.log10(Math.max(1,x.volume)); const momentum=Math.max(-5,Math.min(5,x.change)); return vol*2+momentum-x.spreadPct*20; }
 
-async function rotateSelection(env,bigPool,smallPool){
-  const state=await getState(env,"scan:rotation")||{big:0,small:0}; const result=[];
+async function rotateSelection(env,bigPool,smallPool,newPool,allPool){
+  const state=await getState(env,"scan:rotation")||{big:0,small:0,new:0,all:0}; const result=[];
   const addFrom=(pool,cursor,count)=>{ if(!pool.length) return {cursor:0}; for(let i=0;i<Math.min(count,pool.length);i++){ const x=pool[(cursor+i)%pool.length]; if(!result.some(r=>r.symbol===x.symbol)) result.push(x); } return {cursor:(cursor+count)%pool.length}; };
-  const b=addFrom(bigPool,Number(state.big||0),4),s=addFrom(smallPool,Number(state.small||0),4);
-  await putState(env,"scan:rotation",{big:b.cursor,small:s.cursor,updatedAt:Date.now()},7*24*3600); return result.slice(0,CFG.scanPerRun);
+  const n=addFrom(newPool,Number(state.new||0),2);
+  const b=addFrom(bigPool,Number(state.big||0),2);
+  const s=addFrom(smallPool,Number(state.small||0),2);
+  const a=addFrom(allPool,Number(state.all||0),2);
+  await putState(env,"scan:rotation",{big:b.cursor,small:s.cursor,new:n.cursor,all:a.cursor,updatedAt:Date.now()},7*24*3600);
+  return result.slice(0,CFG.scanPerRun);
 }
 
 async function analyze(summary,symbolInfo,marketRegime){
-  const lane=MAJORS.has(summary.base)||summary.volume>CFG.small.maxVolume?"LARGE_CAP":"SMALL_CAP"; const cfg=lane==="LARGE_CAP"?CFG.big:CFG.small;
+  const lane=summary.isNewListing?"NEW_LISTING":(MAJORS.has(summary.base)||summary.volume>CFG.small.maxVolume?"LARGE_CAP":"SMALL_CAP");
+  const cfg=lane==="NEW_LISTING"?CFG.newListing:(lane==="LARGE_CAP"?CFG.big:CFG.small);
   try{
     const [raw15,raw1h,raw4h,depth]=await Promise.all([
       binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=160`),binance(`/api/v3/klines?symbol=${summary.symbol}&interval=1h&limit=140`),binance(`/api/v3/klines?symbol=${summary.symbol}&interval=4h&limit=120`),binance(`/api/v3/depth?symbol=${summary.symbol}&limit=100`)
     ]);
     const c15=closed(raw15.map(candle)),h1=closed(raw1h.map(candle)),h4=closed(raw4h.map(candle));
-    if(c15.length<100||h1.length<100||h4.length<80) return {symbol:summary.symbol,valid:false,status:"HISTORY"};
+    const minOk=lane==="NEW_LISTING"?(c15.length>=48&&h1.length>=12&&h4.length>=3):(c15.length>=100&&h1.length>=100&&h4.length>=80);
+    if(!minOk) return {symbol:summary.symbol,lane,valid:false,status:"HISTORY",listingAgeDays:summary.listingAgeDays};
     const closes15=c15.map(x=>x.close),closes1=h1.map(x=>x.close),closes4=h4.map(x=>x.close);
     const e20_15=ema(closes15,20),e50_15=ema(closes15,50),e20_1=ema(closes1,20),e50_1=ema(closes1,50),e20_4=ema(closes4,20),e50_4=ema(closes4,50);
     const atr=atr14(c15),atrPct=atr/closes15.at(-1)*100,last=c15.at(-1);
@@ -150,7 +161,7 @@ async function analyze(summary,symbolInfo,marketRegime){
     const flow=c15.slice(-8),totalQ=flow.reduce((s,x)=>s+x.quoteVolume,0),taker=totalQ>0?flow.reduce((s,x)=>s+x.takerBuyQuote,0)/totalQ:0;
     const rsi=rsi14(closes15),depthStats=orderBookStats(depth,summary.ask);
     const trendStrength=Math.abs(e20_1-e50_1)/e50_1*100;
-    const symbolRegime = classifySymbolRegime({trendStrength,atrPct,relVol,rsi,e20_1,e50_1,e20_4,e50_4,lastClose:closes15.at(-1),e20_15,e50_15});
+    const symbolRegime = lane==="NEW_LISTING"?"NEW_LISTING":classifySymbolRegime({trendStrength,atrPct,relVol,rsi,e20_1,e50_1,e20_4,e50_4,lastClose:closes15.at(-1),e20_15,e50_15});
     const candidate = chooseStrategy(symbolRegime,c15,{e20_15,e50_15,e20_1,e50_1,e20_4,e50_4,atr,relVol,taker,rsi,summary,cfg,marketRegime});
     if(!candidate) return {symbol:summary.symbol,lane,valid:false,status:"NO_SETUP",strategy:null,regime:symbolRegime};
 
@@ -178,6 +189,15 @@ function classifySymbolRegime(x){
 
 function chooseStrategy(regime,c,ctx){
   const last=c.at(-1),prev=c.at(-2);
+  if(regime==="NEW_LISTING"){
+    const lookback=Math.min(12,c.length-2);
+    const prior=c.slice(-(lookback+1),-1);
+    const hh=Math.max(...prior.map(x=>x.high));
+    const breakout=last.close>hh*1.001&&last.close>last.open&&ctx.rsi>=52&&ctx.rsi<=76&&ctx.relVol>=ctx.cfg.minRelVol&&ctx.taker>=ctx.cfg.minTaker;
+    if(!breakout) return null;
+    const swing=Math.min(...c.slice(-4).map(x=>x.low));
+    return {strategy:"NEW_LISTING_MOMENTUM",setup:"NEW_LISTING_12_BAR_BREAKOUT",signalBar:last.openTime,stop:Math.min(swing*0.997,ctx.summary.ask-1.0*ctx.atr),rewardR:2.5,minRelVol:ctx.cfg.minRelVol,minTaker:ctx.cfg.minTaker,score:80};
+  }
   if(regime==="TREND"){
     const s=detectTrendSetup(c,ctx.e20_15);
     if(!s) return null;
