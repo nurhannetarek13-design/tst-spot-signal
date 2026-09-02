@@ -1,0 +1,9 @@
+{
+  "engine": "JESSE",
+  "strategyId": "TST_ADAPTIVE_FUSION_V1",
+  "status": "PENDING_FIRST_BACKTEST",
+  "pass": false,
+  "base": {"trades":0,"profitFactor":0,"expectancyUSDT":0,"netPnlUSDT":0,"maxDrawdownUSDT":0},
+  "stress2x": {"trades":0,"profitFactor":0,"expectancyUSDT":0,"netPnlUSDT":0,"maxDrawdownUSDT":0},
+  "generatedAt": null
+}
