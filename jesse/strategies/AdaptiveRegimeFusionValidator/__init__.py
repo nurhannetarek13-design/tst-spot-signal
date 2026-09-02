@@ -75,7 +75,7 @@ class AdaptiveRegimeFusionValidator(Strategy):
         target = entry + 3.0 * max(entry - stop, 0)
 
         size_usd = min(5.5, max(0, self.balance))
-        qty = utils.size_to_qty(size_usd, entry, fee_rate=self.fee_rate)
+        qty = max(size_usd / entry, 1e-8)
 
         self.buy = qty, entry
         self.stop_loss = qty, stop
