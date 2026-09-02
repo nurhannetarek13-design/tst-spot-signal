@@ -1,0 +1,25 @@
+name: Research Round23 Hybrid Momentum Flow
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'validation/evidence-gate-round23.json'
+      - 'scripts/research-round23.mjs'
+      - '.github/workflows/research-round23.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round23.mjs
+      - run: node scripts/research-round23.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-round23
+          path: validation/round23.json
