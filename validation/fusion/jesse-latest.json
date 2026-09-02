@@ -1,9 +1,24 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_ADAPTIVE_FUSION_V1",
-  "status": "PENDING_FIRST_BACKTEST",
+  "status": "FAIL",
   "pass": false,
-  "base": {"trades":0,"profitFactor":0,"expectancyUSDT":0,"netPnlUSDT":0,"maxDrawdownUSDT":0},
-  "stress2x": {"trades":0,"profitFactor":0,"expectancyUSDT":0,"netPnlUSDT":0,"maxDrawdownUSDT":0},
-  "generatedAt": null
+  "base": {
+    "trades": 100,
+    "winRate": 0.22,
+    "profitFactor": 0,
+    "expectancyUSDT": -0.010789603599988724,
+    "netPnlUSDT": -1.0789603599988724,
+    "maxDrawdown": -5.373308565732082
+  },
+  "stress2x": {
+    "trades": 100,
+    "winRate": 0.2,
+    "profitFactor": 0,
+    "expectancyUSDT": -0.021789539229256093,
+    "netPnlUSDT": -2.178953922925609,
+    "maxDrawdown": -10.851364157995725
+  },
+  "generatedAt": "2026-09-02T23:24:38.082960+00:00",
+  "notes": "Independent Jesse research backtest on Binance Spot 1m candles aggregated by Jesse to 15m. Long-only strategy; 1x futures simulator is used only because Jesse permits bracket exits pre-entry in that mode."
 }
