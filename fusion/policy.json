@@ -1,0 +1,37 @@
+{
+  "release": "TST_FUSION_V1",
+  "mode": "PAPER_ONLY",
+  "liveTrading": false,
+  "strategyId": "TST_ADAPTIVE_FUSION_V1",
+  "engines": {
+    "executionAndMarketData": "HUMMINGBOT_V2_CONDOR",
+    "primaryValidator": "FREQTRADE",
+    "independentValidator": "JESSE"
+  },
+  "account": {
+    "exchange": "BINANCE",
+    "market": "SPOT",
+    "quote": "USDT",
+    "longOnly": true,
+    "capitalUSDT": 20.08,
+    "maxOpenPositions": 1,
+    "maxPositionUSDT": 7.0,
+    "maxRiskUSDT": 0.2,
+    "dailyLossCapUSDT": 0.5
+  },
+  "decisionGate": {
+    "validatorsRequired": ["freqtrade", "jesse"],
+    "validatorMaxAgeHours": 48,
+    "minTrades": 100,
+    "minProfitFactor": 1.15,
+    "requirePositiveExpectancy": true,
+    "requireStressPass": true,
+    "minCandidateScore": 90
+  },
+  "execution": {
+    "executorAllowed": false,
+    "withdrawalsAllowed": false,
+    "futuresAllowed": false,
+    "leverageAllowed": false
+  }
+}
