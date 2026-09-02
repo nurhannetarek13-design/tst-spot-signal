@@ -4,9 +4,10 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 14.620000000000001,
-  "realizedPnLUSDT": 0,
-  "openPositions": [
+  "cashUSDT": 20.087913695712565,
+  "realizedPnLUSDT": -0.05182854893971692,
+  "openPositions": [],
+  "closedTrades": [
     {
       "symbol": "JSTUSDT",
       "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
@@ -29,9 +30,15 @@
         "breakout": true,
         "trend15": true,
         "trend1h": true
-      }
+      },
+      "closedAt": "2026-09-02T21:58:00.981Z",
+      "exit": 0.10736,
+      "exitReason": "STOP",
+      "pnlUSDT": -0.05182854893971692,
+      "returnPct": -0.5833873506806198
     }
   ],
-  "closedTrades": [],
-  "daily": {}
+  "daily": {
+    "2026-09-02": -0.05182854893971692
+  }
 }
