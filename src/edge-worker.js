@@ -49,7 +49,7 @@ export default {
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
       const validators = await getFusionValidators(env, url.searchParams.get("refresh") === "1");
-      return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, validators, note:"Cloudflare runs the paper/order-book scanner. VectorBT discovers candidates; Freqtrade and Jesse validate; NautilusTrader stress-tests event-driven execution. No engine can authorize live trading." });
+      const liveGate=fusionLiveReady(validators); return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, liveReady:liveGate.ready, liveBlockReasons:liveGate.reasons, validators, note:"Cloudflare runs the paper/order-book scanner. VectorBT discovers candidates; Freqtrade and Jesse validate; NautilusTrader stress-tests event-driven execution. No engine can authorize live trading." });
     }
     if (url.pathname === "/scan-preview") return json(await scan(env,false));
     if (url.searchParams.get("test") === "telegram") {
@@ -254,6 +254,17 @@ function closed(c){const now=Date.now();return c.filter(x=>x.closeTime<now);} fu
 function rsi14(values){if(values.length<15)return 50;let g=0,l=0;for(let i=values.length-14;i<values.length;i++){const d=values[i]-values[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/14)/(l/14);return 100-100/(1+rs);} function atr14(c){if(c.length<15)return 0;const tr=[];for(let i=c.length-14;i<c.length;i++){const p=c[i-1].close,x=c[i];tr.push(Math.max(x.high-x.low,Math.abs(x.high-p),Math.abs(x.low-p)));}return tr.reduce((a,b)=>a+b,0)/tr.length;}
 function median(a){if(!a.length)return 0;const x=[...a].sort((m,n)=>m-n),h=Math.floor(x.length/2);return x.length%2?x[h]:(x[h-1]+x[h])/2;} function std(a){if(!a.length)return 0;const m=a.reduce((s,x)=>s+x,0)/a.length;return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length);} function orderBookStats(depth,mid){const bids=(depth.bids||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p>=mid*0.99),asks=(depth.asks||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p<=mid*1.01);const bid=bids.reduce((s,[p,q])=>s+p*q,0),ask=asks.reduce((s,[p,q])=>s+p*q,0);return{bid,ask,bidAskRatio:ask>0?bid/ask:0};}
 function floorStep(v,step){if(!(v>0&&step>0))return 0;const d=Math.max(0,(String(step).split(".")[1]||"").length);return Number((Math.floor((v+1e-12)/step)*step).toFixed(d));} function roundPrice(v,ref){const d=ref>=1000?2:ref>=1?4:8;return Number(v.toFixed(d));} function round(v,d=2){const f=10**d;return Math.round(Number(v)*f)/f;} function fmt(v){const n=Number(v);if(!Number.isFinite(n))return"-";if(Math.abs(n)>=1000)return n.toFixed(2);if(Math.abs(n)>=1)return n.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');return n.toFixed(8).replace(/0+$/,'').replace(/\.$/,'');} function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
+
+function fusionLiveReady(validators){
+  const required=["freqtrade","jesse","vectorbt","nautilus"];
+  const reasons=[];
+  for(const name of required){
+    const v=validators?.[name];
+    if(!v?.usable) reasons.push(name+":UNUSABLE");
+    if(v?.pass!==true) reasons.push(name+":FAIL");
+  }
+  return {ready:reasons.length===0,reasons};
+}
 
 async function getFusionValidators(env,force=false){
   const cached=await getState(env,"fusion:validators");
