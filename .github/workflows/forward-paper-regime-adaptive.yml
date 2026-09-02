@@ -1,6 +1,12 @@
 name: Forward paper regime-adaptive tracker
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/forward-paper-regime-adaptive.mjs'
+      - 'scripts/paper-regime-adaptive.mjs'
+      - 'src/strategies/regime-adaptive-momentum.mjs'
+      - '.github/workflows/forward-paper-regime-adaptive.yml'
   schedule:
     - cron: '17 */4 * * *'
 permissions:
