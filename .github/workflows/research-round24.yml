@@ -1,0 +1,25 @@
+name: Research Round24 Community Trend Breakout
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'validation/evidence-gate-round24.json'
+      - 'scripts/research-round24.mjs'
+      - '.github/workflows/research-round24.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round24.mjs
+      - run: node scripts/research-round24.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-round24
+          path: validation/round24.json
