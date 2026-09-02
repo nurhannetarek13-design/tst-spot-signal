@@ -1,0 +1,12 @@
+{
+  "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
+  "mode": "PAPER_ONLY",
+  "startingEquityUSDT": 20.12,
+  "cashUSDT": 20.12,
+  "realizedPnLUSDT": 0,
+  "openPositions": [],
+  "closedTrades": [],
+  "seenSignals": [],
+  "lastRunAt": null,
+  "liveTrading": false
+}
