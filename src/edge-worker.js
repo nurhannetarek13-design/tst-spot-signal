@@ -22,6 +22,12 @@ const CFG = {
 const EXCLUDED = new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","EUR","AEUR","TRY","BRL","GBP","AUD","USD1","RLUSD","USDE"]);
 const MAJORS = new Set(["BTC","ETH","BNB","SOL","XRP","ADA","DOGE","TRX","LTC","BCH","LINK","AVAX","DOT"]);
 const SAFE_B_SUFFIX = new Set(["BNB","ARB","KUB","WBB"]);
+const FUSION_VALIDATORS = {
+  freqtrade: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/freqtrade-latest.json",
+  jesse: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/jesse-latest.json",
+};
+const FUSION_STRATEGY_ID = "TST_ADAPTIVE_FUSION_V1";
+const VALIDATOR_CACHE_SECONDS = 30 * 60;
 
 export default {
   async fetch(request, env) {
@@ -30,9 +36,13 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      return json({ ok:true,mode:"ADAPTIVE_MULTI_STRATEGY_PAPER",liveTrading:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence) });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","FREQTRADE_VALIDATOR","JESSE_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
+    if (url.pathname === "/fusion-status") {
+      const validators = await getFusionValidators(env, url.searchParams.get("refresh") === "1");
+      return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, validators, note:"Cloudflare executes paper scanning; Freqtrade and Jesse run as scheduled GitHub Actions validators." });
+    }
     if (url.pathname === "/scan-preview") return json(await scan(env,false));
     if (url.searchParams.get("test") === "telegram") {
       await telegram(env,"🧪 TEST — Adaptive paper trader شغال. مفيش شراء حقيقي.");
@@ -61,10 +71,10 @@ export class SignalState {
 
 async function scan(env,sendAlert){
   try{
-    const daily=await getDaily(env);
-    if(Number(daily.realizedPnlUSDT||0)<=-CFG.dailyLossCap) return {ok:true,status:"DAILY_LOSS_CAP",liveTrading:false};
+    const daily=await getDaily(env); const validators=await getFusionValidators(env,false);
+    if(Number(daily.realizedPnlUSDT||0)<=-CFG.dailyLossCap) return {ok:true,status:"DAILY_LOSS_CAP",validators,liveTrading:false};
     const active=(await getState(env,"paper:active")||[]).filter(Boolean);
-    if(active.length>=CFG.maxOpenPaper) return {ok:true,status:"PAPER_POSITION_OPEN",symbol:active[0]?.symbol,liveTrading:false};
+    if(active.length>=CFG.maxOpenPaper) return {ok:true,status:"PAPER_POSITION_OPEN",symbol:active[0]?.symbol,validators,liveTrading:false};
 
     const [tickers,books,info,btc1hRaw,btc4hRaw]=await Promise.all([
       binance("/api/v3/ticker/24hr"),binance("/api/v3/ticker/bookTicker"),binance("/api/v3/exchangeInfo"),
@@ -93,9 +103,9 @@ async function scan(env,sendAlert){
 
     if(sendAlert){
       const pair=best.symbol.replace("USDT","/USDT");
-      await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,"","البوت هيتابع الصفقة ويبعث النتيجة تلقائيًا.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
+      const vline=`🧪 Freqtrade: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"}`; await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,vline,"","Cloudflare هو منفذ الـpaper scan؛ Freqtrade وJesse validators مستقلين.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
     }
-    return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,liveTrading:false};
+    return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false};
   }catch(error){ return {ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; }
 }
 
@@ -236,6 +246,25 @@ function closed(c){const now=Date.now();return c.filter(x=>x.closeTime<now);} fu
 function rsi14(values){if(values.length<15)return 50;let g=0,l=0;for(let i=values.length-14;i<values.length;i++){const d=values[i]-values[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/14)/(l/14);return 100-100/(1+rs);} function atr14(c){if(c.length<15)return 0;const tr=[];for(let i=c.length-14;i<c.length;i++){const p=c[i-1].close,x=c[i];tr.push(Math.max(x.high-x.low,Math.abs(x.high-p),Math.abs(x.low-p)));}return tr.reduce((a,b)=>a+b,0)/tr.length;}
 function median(a){if(!a.length)return 0;const x=[...a].sort((m,n)=>m-n),h=Math.floor(x.length/2);return x.length%2?x[h]:(x[h-1]+x[h])/2;} function std(a){if(!a.length)return 0;const m=a.reduce((s,x)=>s+x,0)/a.length;return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length);} function orderBookStats(depth,mid){const bids=(depth.bids||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p>=mid*0.99),asks=(depth.asks||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p<=mid*1.01);const bid=bids.reduce((s,[p,q])=>s+p*q,0),ask=asks.reduce((s,[p,q])=>s+p*q,0);return{bid,ask,bidAskRatio:ask>0?bid/ask:0};}
 function floorStep(v,step){if(!(v>0&&step>0))return 0;const d=Math.max(0,(String(step).split(".")[1]||"").length);return Number((Math.floor((v+1e-12)/step)*step).toFixed(d));} function roundPrice(v,ref){const d=ref>=1000?2:ref>=1?4:8;return Number(v.toFixed(d));} function round(v,d=2){const f=10**d;return Math.round(Number(v)*f)/f;} function fmt(v){const n=Number(v);if(!Number.isFinite(n))return"-";if(Math.abs(n)>=1000)return n.toFixed(2);if(Math.abs(n)>=1)return n.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');return n.toFixed(8).replace(/0+$/,'').replace(/\.$/,'');} function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
+
+async function getFusionValidators(env,force=false){
+  const cached=await getState(env,"fusion:validators");
+  if(!force&&cached&&Number(cached.fetchedAt||0)>Date.now()-VALIDATOR_CACHE_SECONDS*1000) return cached;
+  const entries=await Promise.all(Object.entries(FUSION_VALIDATORS).map(async([name,url])=>{
+    try{
+      const r=await fetch(url,{headers:{Accept:"application/json","User-Agent":"tst-fusion-worker/1.0"},signal:AbortSignal.timeout(8000),cf:{cacheTtl:300,cacheEverything:true}});
+      if(!r.ok) throw new Error(String(r.status));
+      const report=await r.json();
+      const same=report?.strategyId===FUSION_STRATEGY_ID;
+      return [name,{...report,strategyMatch:same,usable:Boolean(same&&report?.generatedAt)}];
+    }catch(error){
+      return [name,{engine:name.toUpperCase(),status:"UNAVAILABLE",pass:false,strategyMatch:false,usable:false,error:String(error?.message||error)}];
+    }
+  }));
+  const out=Object.fromEntries(entries); out.fetchedAt=Date.now();
+  await putState(env,"fusion:validators",out,2*3600);
+  return out;
+}
 
 async function binance(path){let last;for(const base of API_BASES){try{const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/2.0"},signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error(`${r.status}`);return await r.json();}catch(e){last=e;}}throw last||new Error("Binance unavailable");}
 function stateStub(env){const id=env.STATE_COORDINATOR.idFromName("global");return env.STATE_COORDINATOR.get(id);} async function getState(env,key){const r=await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);return r.ok?await r.json():null;} async function putState(env,key,value,ttlSeconds){const row={value,expiresAt:Date.now()+ttlSeconds*1000};await stateStub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(row)});} function dailyKey(){return `paper:daily:${new Date().toISOString().slice(0,10)}`;} async function getDaily(env){return await getState(env,dailyKey())||{realizedPnlUSDT:0,trades:0,wins:0};}
