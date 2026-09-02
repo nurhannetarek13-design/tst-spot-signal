@@ -1,0 +1,17 @@
+{
+  "round": 22,
+  "createdAt": "2026-09-02",
+  "status": "PREREGISTERED",
+  "objective": "Focused independent validation of DUAL_HORIZON_MOM before any live trading decision",
+  "strategy": "DUAL_HORIZON_MOM",
+  "market": "Binance Spot USDT long-only",
+  "interval": "4h",
+  "costs": {"baseRoundTrip": 0.0036, "stressRoundTrip": 0.0072},
+  "risk": {"accountUSDT": 20.12, "maxOrderUSDT": 7, "reserveUSDT": 2, "maxRiskPerTradeUSDT": 0.20, "maxConcurrentPositions": 2},
+  "rules": {"momentumShortBars": 180, "momentumLongBars": 540, "trendEmaBars": 200, "btcRegime": "close > EMA200 and 180-bar momentum > 0", "rebalanceBars": 42, "atrPeriod": 14, "atrTrailingStopMultiplier": 2.5, "maxHoldBars": 120},
+  "discoveryGate": {"minOosTrades": 100, "minProfitFactor": 1.15, "positiveBaseExpectancy": true, "positiveStressExpectancy": true, "minPositiveWalkForwardFolds": 4, "walkForwardFolds": 5, "maxDrawdown": 0.20},
+  "paperApprovalGate": {"minPooledOosTrades": 200, "minProfitFactor": 1.20, "positiveFinalHoldout": true, "maxTop2ProfitShare": 0.50},
+  "liveTrading": false,
+  "validatedStrategyRelease": null,
+  "notes": "No threshold tuning after seeing Round22 results. Passing discovery does not enable live trading; it permits forward paper validation only."
+}
