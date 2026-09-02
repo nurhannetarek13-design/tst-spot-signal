@@ -1,0 +1,43 @@
+name: Small-cap semi-live forward tracker
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/forward-paper-small-cap-intraday.mjs'
+      - 'src/strategies/small-cap-intraday.mjs'
+      - '.github/workflows/forward-paper-small-cap-intraday.yml'
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: small-cap-semi-live-forward
+  cancel-in-progress: false
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check src/strategies/small-cap-intraday.mjs
+      - run: node --check scripts/forward-paper-small-cap-intraday.mjs
+      - run: node scripts/forward-paper-small-cap-intraday.mjs
+      - name: Persist small-cap paper ledger
+        run: |
+          if ! git diff --quiet -- paper/small-cap-intraday-ledger.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add paper/small-cap-intraday-ledger.json
+            git commit -m "chore: update small-cap semi-live ledger [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-paper-small-cap-intraday
+          path: artifacts/forward-paper-small-cap-intraday.json
