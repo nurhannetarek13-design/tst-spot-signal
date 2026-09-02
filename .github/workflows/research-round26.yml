@@ -1,0 +1,25 @@
+name: Research Round26 Hardened Edge 15m Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'validation/evidence-gate-round26.json'
+      - 'scripts/research-round26.mjs'
+      - '.github/workflows/research-round26.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/research-round26.mjs
+      - run: node scripts/research-round26.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-round26
+          path: validation/round26.json
