@@ -1,0 +1,58 @@
+name: Fusion Stack Validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "fusion/**"
+      - "hummingbot/**"
+      - "jesse/**"
+      - "freqtrade/**"
+      - ".github/workflows/fusion-validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Validate Fusion policy JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('fusion/policy.json','utf8')); console.log('fusion policy ok')"
+
+      - name: Syntax check Fusion master
+        run: node --check fusion/server.mjs
+
+      - name: Python syntax check Hummingbot controller
+        run: python -m py_compile hummingbot/controllers/directional_trading/tst_fusion_signal.py
+
+      - name: Python syntax check Jesse validator
+        run: python -m py_compile jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py
+
+      - name: Python syntax check Freqtrade strategy
+        run: python -m py_compile freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py
+
+      - name: Fusion fail-closed assertion
+        run: |
+          node - <<'NODE'
+          const p = JSON.parse(require('fs').readFileSync('fusion/policy.json', 'utf8'));
+          if (p.mode !== 'PAPER_ONLY') throw new Error('Fusion must remain PAPER_ONLY');
+          if (p.liveTrading !== false) throw new Error('liveTrading must be false');
+          if (p.execution?.executorAllowed !== false) throw new Error('executorAllowed must be false');
+          if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
+          if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
+          if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
+          console.log('fail-closed assertions passed');
+          NODE
