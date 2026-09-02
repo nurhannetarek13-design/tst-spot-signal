@@ -55,42 +55,9 @@ jobs:
 
       - name: Assert Hummingbot template is paper-only
         run: |
-          grep -q '^allow_executor_actions: false        run: |
-          node - <<'NODE'
-          const p = JSON.parse(require('fs').readFileSync('fusion/policy.json', 'utf8'));
-          if (p.mode !== 'PAPER_ONLY') throw new Error('Fusion must remain PAPER_ONLY');
-          if (p.liveTrading !== false) throw new Error('liveTrading must be false');
-          if (p.execution?.executorAllowed !== false) throw new Error('executorAllowed must be false');
-          if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
-          if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
-          if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
-          console.log('fail-closed assertions passed');
-          NODE
- hummingbot/configs/tst_fusion_signal_btc.yml
-          grep -q '^connector_name: binance        run: |
-          node - <<'NODE'
-          const p = JSON.parse(require('fs').readFileSync('fusion/policy.json', 'utf8'));
-          if (p.mode !== 'PAPER_ONLY') throw new Error('Fusion must remain PAPER_ONLY');
-          if (p.liveTrading !== false) throw new Error('liveTrading must be false');
-          if (p.execution?.executorAllowed !== false) throw new Error('executorAllowed must be false');
-          if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
-          if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
-          if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
-          console.log('fail-closed assertions passed');
-          NODE
- hummingbot/configs/tst_fusion_signal_btc.yml
-          grep -q '^leverage: 1        run: |
-          node - <<'NODE'
-          const p = JSON.parse(require('fs').readFileSync('fusion/policy.json', 'utf8'));
-          if (p.mode !== 'PAPER_ONLY') throw new Error('Fusion must remain PAPER_ONLY');
-          if (p.liveTrading !== false) throw new Error('liveTrading must be false');
-          if (p.execution?.executorAllowed !== false) throw new Error('executorAllowed must be false');
-          if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
-          if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
-          if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
-          console.log('fail-closed assertions passed');
-          NODE
- hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^allow_executor_actions: false$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^connector_name: binance$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^leverage: 1$' hummingbot/configs/tst_fusion_signal_btc.yml
 
       - name: Fusion fail-closed assertion
         run: |
