@@ -1,0 +1,52 @@
+name: Nautilus Execution Validator
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "43 3 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "validation/fusion/vectorbt-latest.json"
+      - "research/nautilus_validator.py"
+      - ".github/workflows/nautilus-validator.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nautilus-validator
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install NautilusTrader
+        run: pip install --disable-pip-version-check nautilus_trader pandas numpy
+
+      - name: Run event-driven execution validation
+        run: python research/nautilus_validator.py
+
+      - name: Commit Nautilus snapshot
+        run: |
+          cp validation/fusion/nautilus-latest.json /tmp/nautilus-latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p validation/fusion
+          cp /tmp/nautilus-latest.json validation/fusion/nautilus-latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/nautilus-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update Nautilus execution validator snapshot"
+          git push
