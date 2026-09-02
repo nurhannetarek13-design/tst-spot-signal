@@ -49,6 +49,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp validation/fusion/freqtrade-latest.json /tmp/freqtrade-latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p validation/fusion
+          cp /tmp/freqtrade-latest.json validation/fusion/freqtrade-latest.json
           git add validation/fusion/freqtrade-latest.json
           git diff --cached --quiet && exit 0
           git commit -m "Update Freqtrade fusion validator snapshot"
