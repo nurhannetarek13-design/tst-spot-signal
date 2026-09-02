@@ -1,0 +1,124 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "bot_name": "TST Adaptive Spot",
+  "initial_state": "running",
+  "max_open_trades": 1,
+  "stake_currency": "USDT",
+  "stake_amount": 5.5,
+  "tradable_balance_ratio": 0.9,
+  "fiat_display_currency": "USD",
+  "dry_run": true,
+  "dry_run_wallet": 20.08,
+  "cancel_open_orders_on_exit": true,
+  "trading_mode": "spot",
+  "margin_mode": "",
+  "timeframe": "15m",
+  "process_only_new_candles": true,
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {
+      "enableRateLimit": true
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true
+    },
+    "pair_whitelist": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "BNB/USDT",
+      "SOL/USDT",
+      "XRP/USDT",
+      "ADA/USDT",
+      "DOGE/USDT",
+      "LINK/USDT",
+      "AVAX/USDT",
+      "DOT/USDT"
+    ],
+    "pair_blacklist": [
+      ".*(UP|DOWN|BULL|BEAR)/USDT",
+      "USDC/USDT",
+      "FDUSD/USDT",
+      "TUSD/USDT",
+      "USDP/USDT",
+      "DAI/USDT",
+      "EUR/USDT"
+    ]
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": true,
+      "bids_to_ask_delta": 1.05
+    }
+  },
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "order_types": {
+    "entry": "limit",
+    "exit": "limit",
+    "emergency_exit": "market",
+    "force_entry": "market",
+    "force_exit": "market",
+    "stoploss": "market",
+    "stoploss_on_exchange": false
+  },
+  "unfilledtimeout": {
+    "entry": 5,
+    "exit": 5,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "protections": [
+    {
+      "method": "CooldownPeriod",
+      "stop_duration_candles": 2
+    },
+    {
+      "method": "StoplossGuard",
+      "lookback_period_candles": 24,
+      "trade_limit": 2,
+      "stop_duration_candles": 12,
+      "only_per_pair": false
+    },
+    {
+      "method": "MaxDrawdown",
+      "lookback_period_candles": 96,
+      "trade_limit": 4,
+      "stop_duration_candles": 24,
+      "max_allowed_drawdown": 0.025
+    }
+  ],
+  "telegram": {
+    "enabled": false,
+    "token": "",
+    "chat_id": ""
+  },
+  "api_server": {
+    "enabled": false,
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8080,
+    "verbosity": "error",
+    "enable_openapi": false,
+    "jwt_secret_key": "CHANGE_ME_ONLY_IF_API_SERVER_IS_ENABLED",
+    "ws_token": "CHANGE_ME_ONLY_IF_API_SERVER_IS_ENABLED",
+    "CORS_origins": [],
+    "username": "",
+    "password": ""
+  },
+  "internals": {
+    "process_throttle_secs": 5
+  }
+}
