@@ -1,0 +1,33 @@
+name: Forward paper regime-adaptive tracker
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */4 * * *'
+permissions:
+  contents: write
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check src/strategies/regime-adaptive-momentum.mjs
+      - run: node --check scripts/paper-regime-adaptive.mjs
+      - run: node --check scripts/forward-paper-regime-adaptive.mjs
+      - run: node scripts/forward-paper-regime-adaptive.mjs
+      - name: Persist paper ledger
+        run: |
+          if ! git diff --quiet -- paper/regime-adaptive-ledger.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add paper/regime-adaptive-ledger.json
+            git commit -m "chore: update forward paper ledger [skip ci]"
+            git push
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-paper-regime-adaptive
+          path: artifacts/forward-paper-regime-adaptive.json
