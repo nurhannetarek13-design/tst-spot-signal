@@ -1,4 +1,5 @@
 name: Nautilus Execution Validator
+# validates the latest VectorBT-selected candidate
 
 on:
   workflow_dispatch:
