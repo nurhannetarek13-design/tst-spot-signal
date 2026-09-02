@@ -1,0 +1,33 @@
+{
+  "round": 26,
+  "strategy": "HARDENED_EDGE_WORKER_V2_15M_REPLICATION",
+  "status": "PREREGISTERED_BEFORE_RESULTS",
+  "purpose": "Replicate the production worker much more faithfully using 15m entries with aggregated 1h/4h trend filters; test cost resilience before any live approval.",
+  "market": "Binance Spot USDT long-only",
+  "history_days": 420,
+  "entry_timeframe": "15m",
+  "trend_timeframes": ["1h", "4h"],
+  "portfolio": "max 1 concurrent position, next-bar entry, 36h max hold",
+  "costs_roundtrip": 0.0036,
+  "stress_costs_roundtrip": 0.0072,
+  "discovery_gate": {
+    "min_oos_trades": 100,
+    "min_profit_factor": 1.15,
+    "positive_expectancy_base_cost": true,
+    "positive_expectancy_double_cost": true,
+    "min_positive_walk_forward_folds": "4/5",
+    "max_drawdown": 0.20
+  },
+  "paper_gate": {
+    "min_oos_trades": 200,
+    "min_profit_factor": 1.20,
+    "positive_final_holdout": true,
+    "max_top2_profit_share": 0.50
+  },
+  "robustness_gate": {
+    "min_positive_neighbor_share": 0.70
+  },
+  "authorization_if_historical_pass": "FORWARD_PAPER_ONLY",
+  "live_trading": false,
+  "validated_strategy_release": null
+}
