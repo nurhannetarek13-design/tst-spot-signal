@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install VectorBT
-        run: pip install --disable-pip-version-check vectorbt pandas numpy
+        run: pip install --disable-pip-version-check 'plotly<7' vectorbt pandas numpy
 
       - name: Run multi-family discovery
         run: python research/vectorbt_discovery.py
