@@ -8,6 +8,8 @@ const MAX_POSITIONS=2;
 const RESERVE_USDT=2;
 const DAILY_LOSS_LIMIT=0.50;
 const ROUND_TRIP_COST=0.0036;
+const TG_TOKEN=process.env.TELEGRAM_BOT_TOKEN||process.env.TELEGRAM_TOKEN||'';
+const TG_CHAT_ID=process.env.TELEGRAM_CHAT_ID||process.env.TG_CHAT_ID||'';
 
 async function get(path){let last;for(const b of BASES){try{const r=await fetch(b+path);if(r.ok)return r.json();last=new Error(`${b} ${r.status}`)}catch(e){last=e}}throw last||new Error('NO_MARKET_DATA')}
 async function candles(symbol,interval,limit){const x=await get(`/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);return x.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5],q:+k[7],tbq:+k[10],closeTime:+k[6]}));}
@@ -18,13 +20,21 @@ function utcDay(ts=Date.now()){return new Date(ts).toISOString().slice(0,10);}
 function loadLedger(){const x=JSON.parse(fs.readFileSync(LEDGER,'utf8'));if(!x.startedAt)x.startedAt=new Date().toISOString();return x;}
 function pnlForExit(p,exit){const gross=(exit-p.entry)*p.qty;const costs=(p.entry*p.qty+exit*p.qty)*(ROUND_TRIP_COST/2);return gross-costs;}
 function stats(closed){const wins=closed.filter(t=>t.pnlUSDT>0),losses=closed.filter(t=>t.pnlUSDT<0);const gp=wins.reduce((a,t)=>a+t.pnlUSDT,0),gl=Math.abs(losses.reduce((a,t)=>a+t.pnlUSDT,0));return {trades:closed.length,wins:wins.length,losses:losses.length,winRate:closed.length?wins.length/closed.length:0,profitFactor:gl?gp/gl:(gp>0?999:null),expectancyUSDT:closed.length?closed.reduce((a,t)=>a+t.pnlUSDT,0)/closed.length:0};}
+async function telegram(text){
+  if(!TG_TOKEN||!TG_CHAT_ID){console.log('TELEGRAM_NOT_CONFIGURED');return false;}
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:TG_CHAT_ID,text,disable_web_page_preview:true})});
+    if(!r.ok){console.error('TELEGRAM_SEND_FAILED',r.status,await r.text());return false;}
+    return true;
+  }catch(e){console.error('TELEGRAM_SEND_ERROR',String(e.message||e));return false;}
+}
 
 const ledger=loadLedger();
+const telegramEvents=[];
 const [tickers,books,info,btcRaw]=await Promise.all([get('/api/v3/ticker/24hr'),get('/api/v3/ticker/bookTicker'),get('/api/v3/exchangeInfo'),candles('BTCUSDT','15m',140)]);
 const tm=new Map(tickers.map(x=>[x.symbol,x])), bm=new Map(books.map(x=>[x.symbol,x]));
 const btc15=closedOnly(btcRaw);
 
-// Manage existing paper positions first using observable current book prices.
 const stillOpen=[];
 for(const p of ledger.openPositions){
   const b=bm.get(p.symbol); if(!b){stillOpen.push(p);continue;}
@@ -39,14 +49,13 @@ for(const p of ledger.openPositions){
     ledger.realizedPnLUSDT+=pnlUSDT;
     ledger.closedTrades.push({...p,closedAt:new Date().toISOString(),exit:bid,exitReason:reason,pnlUSDT,returnPct:(bid/p.entry-1)*100});
     const d=utcDay(); ledger.daily[d]=(ledger.daily[d]||0)+pnlUSDT;
+    telegramEvents.push(`🔴 PAPER CLOSE ${p.symbol}\nReason: ${reason}\nExit: ${bid}\nPnL: ${pnlUSDT>=0?'+':''}${pnlUSDT.toFixed(4)} USDT`);
   } else stillOpen.push(p);
 }
 ledger.openPositions=stillOpen;
 
 const today=utcDay(); const todayPnL=ledger.daily[today]||0;
 const dailyLossGateOpen=todayPnL>-DAILY_LOSS_LIMIT;
-
-// Scan smaller liquid coins. Signals use CLOSED 15m/1h bars only; entry uses current ask after signal formation.
 const universe=(info.symbols||[])
  .filter(s=>s.status==='TRADING'&&s.quoteAsset==='USDT'&&s.isSpotTradingAllowed&&supportedBase(s.baseAsset))
  .map(s=>({meta:s,t:tm.get(s.symbol)})).filter(x=>x.t)
@@ -77,11 +86,20 @@ if(dailyLossGateOpen){
   ledger.cashUSDT-=notional;
   ledger.openPositions.push({symbol:c.symbol,strategy:STRATEGY_ID,openedAt:new Date().toISOString(),entry:c.entry,stop:c.stop,target:c.target,qty,notional,maxHoldBars:c.maxHoldBars,score:c.score,metrics:c.metrics});
   occupied.add(c.symbol);
+  telegramEvents.push(`🟢 PAPER OPEN ${c.symbol}\nScore: ${c.score}/100\nEntry: ${c.entry}\nStop: ${c.stop}\nTarget: ${c.target}\nSize: ${notional.toFixed(2)} USDT`);
  }
 }
 
 const summary={generatedAt:new Date().toISOString(),strategy:STRATEGY_ID,mode:'FORWARD_PAPER_SEMI_LIVE',liveTrading:false,scope:'SMALLER_LIQUID_BINANCE_SPOT_USDT',universeCount:universe.length,dailyLossGateOpen,todayPnLUSDT:todayPnL,cashUSDT:ledger.cashUSDT,realizedPnLUSDT:ledger.realizedPnLUSDT,openPositions:ledger.openPositions,performance:stats(ledger.closedTrades),topCandidates:ranked.slice(0,10)};
+const heartbeatDue=!ledger.lastTelegramHeartbeatAt||(Date.now()-new Date(ledger.lastTelegramHeartbeatAt).getTime()>=4*60*60*1000);
+if(telegramEvents.length){for(const m of telegramEvents) await telegram(m);}
+else if(heartbeatDue){
+  const top=ranked[0];
+  const sent=await telegram(`🤖 Small-cap scanner ACTIVE\nMode: PAPER\nPairs scanned: ${universe.length}\nOpen positions: ${ledger.openPositions.length}\nClosed trades: ${ledger.closedTrades.length}\nTop now: ${top?.symbol||'none'} (${top?.score||0}/100)\nNo qualified BUY right now.`);
+  if(sent) ledger.lastTelegramHeartbeatAt=new Date().toISOString();
+}
+
 fs.mkdirSync('artifacts',{recursive:true});
 fs.writeFileSync(LEDGER,JSON.stringify(ledger,null,2)+'\n');
-fs.writeFileSync(ART,JSON.stringify(summary,null,2)+'\n');
-console.log(JSON.stringify(summary,null,2));
+fs.writeFileSync(ART,JSON.stringify({...summary,telegramConfigured:Boolean(TG_TOKEN&&TG_CHAT_ID),telegramEvents:telegramEvents.length},null,2)+'\n');
+console.log(JSON.stringify({...summary,telegramConfigured:Boolean(TG_TOKEN&&TG_CHAT_ID),telegramEvents:telegramEvents.length},null,2));
