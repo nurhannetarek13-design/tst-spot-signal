@@ -1,0 +1,32 @@
+name: Unified Binance Spot opportunity scanner
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/unified-opportunity-scanner.mjs'
+      - '.github/workflows/unified-opportunity-scanner.yml'
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: unified-opportunity-scanner
+  cancel-in-progress: true
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/unified-opportunity-scanner.mjs
+      - run: node scripts/unified-opportunity-scanner.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unified-opportunity-scanner
+          path: artifacts/unified-opportunity-scanner.json
