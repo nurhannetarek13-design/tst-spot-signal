@@ -1,15 +1,128 @@
 {
   "engine": "DERIVATIVES_PRESSURE",
-  "strategyId": "TST_DERIVATIVES_PRESSURE_V1",
-  "status": "RUNTIME_BLOCKED_451",
+  "strategyId": "TST_DERIVATIVES_PRESSURE_V2",
+  "status": "FORWARD_ONLY",
   "pass": false,
-  "authorization": "FORWARD_PAPER_ONLY",
+  "authorization": "FORWARD_PAPER_CONTEXT_ONLY",
   "liveTrading": false,
-  "note": "GitHub-hosted runner is blocked from Binance USD-M Futures. Active derivatives monitoring has moved to the Cloudflare Worker.",
-  "candidates": [],
-  "universeCount": 0,
+  "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
+  "candidates": [
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.7932,
+      "quoteVolume24h": 73087882.63162,
+      "score": 90,
+      "oiChange2h": 0.028248825467570127,
+      "takerBuySellRatio1h": 1.085575,
+      "fundingRate": 0.0001,
+      "basis": 6.835607127531063e-05,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.1792,
+      "quoteVolume24h": 45812808.85834,
+      "score": 90,
+      "oiChange2h": 0.06557822213114561,
+      "takerBuySellRatio1h": 1.134875,
+      "fundingRate": 5e-05,
+      "basis": 0.0003212885933618903,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "ZKPUSDT",
+      "price": 0.0462,
+      "quoteVolume24h": 22568500.286,
+      "score": 90,
+      "oiChange2h": 0.00760557983798793,
+      "takerBuySellRatio1h": 1.202025,
+      "fundingRate": 5e-05,
+      "basis": 7.554518078034533e-05,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "TRUMPUSDT",
+      "price": 2.426,
+      "quoteVolume24h": 60563199.005868,
+      "score": 70,
+      "oiChange2h": 0.028262307499256734,
+      "takerBuySellRatio1h": 0.912475,
+      "fundingRate": 2.771e-05,
+      "basis": -0.00012233045799536768,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ARBUSDT",
+      "price": 0.1327,
+      "quoteVolume24h": 42508670.9524,
+      "score": 70,
+      "oiChange2h": -0.013895145513221463,
+      "takerBuySellRatio1h": 1.232675,
+      "fundingRate": 0.0001,
+      "basis": -0.0007165938683344475,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "NEARUSDT",
+      "price": 2.002,
+      "quoteVolume24h": 32208463.7153,
+      "score": 70,
+      "oiChange2h": -0.0040792021364999265,
+      "takerBuySellRatio1h": 1.398325,
+      "fundingRate": 0.0001,
+      "basis": 1.9035373007625367e-05,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "XPLUSDT",
+      "price": 0.09732,
+      "quoteVolume24h": 21981076.940695,
+      "score": 70,
+      "oiChange2h": 0.05528904407444957,
+      "takerBuySellRatio1h": 0.95075,
+      "fundingRate": 5e-05,
+      "basis": -0.00039684081011415184,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "PUMPUSDT",
+      "price": 0.004461,
+      "quoteVolume24h": 29247196.248936,
+      "score": 60,
+      "oiChange2h": 0.0024691150081841418,
+      "takerBuySellRatio1h": 1.002675,
+      "fundingRate": 2.525e-05,
+      "basis": -0.0006591928251122869,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "BMTUSDT",
+      "price": 0.01823,
+      "quoteVolume24h": 148792892.590873,
+      "score": 55,
+      "oiChange2h": 0.04934714823696651,
+      "takerBuySellRatio1h": 0.766225,
+      "fundingRate": -0.00152549,
+      "basis": -0.004995875644790648,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "HEMIUSDT",
+      "price": 0.01563,
+      "quoteVolume24h": 43534935.280604,
+      "score": 40,
+      "oiChange2h": -0.05822232378586012,
+      "takerBuySellRatio1h": 1.0068,
+      "fundingRate": 5e-05,
+      "basis": 2.4317214219804484e-05,
+      "paperLongPressure": false
+    }
+  ],
+  "universeCount": 12,
+  "usableCount": 10,
   "failures": {
-    "runtime": "HTTP 451"
+    "PEPEUSDT": "NO_FUTURES_SERIES",
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-09-03T13:56:41.562599+00:00"
+  "generatedAt": "2026-09-03T18:03:26.533833+00:00"
 }
