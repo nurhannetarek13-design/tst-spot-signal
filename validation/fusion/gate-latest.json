@@ -1,19 +1,17 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
-  "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "symbol": null,
+  "family": null,
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_MISMATCH",
-    "vectorbt:FAIL",
+    "CANDIDATE:MISSING",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
-    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
     "nautilus:FAIL",
@@ -22,10 +20,10 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "NO_CANDIDATE",
-      "pass": false,
-      "candidateFingerprint": null,
-      "trades": 0
+      "status": "PASS",
+      "pass": true,
+      "candidateFingerprint": "db0561831b32d3a2c528",
+      "trades": 44
     },
     "freqtrade": {
       "status": "FAIL",
@@ -52,6 +50,6 @@
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T18:10:47.369458+00:00",
+  "generatedAt": "2026-09-03T18:11:12.898013+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
