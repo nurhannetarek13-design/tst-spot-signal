@@ -58,7 +58,7 @@ jobs:
       - name: Download candidate Binance Spot data
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             download-data             --exchange binance             --days 365             --timeframes "$TF"             --pairs "$PAIR"
+          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             download-data             --exchange binance             --days 365             --timeframes "$TF"             --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
 
       - name: Prepare writable result folders
         if: env.HAS_CANDIDATE == 'true'
