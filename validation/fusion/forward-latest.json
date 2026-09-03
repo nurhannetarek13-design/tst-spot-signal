@@ -1,10 +1,13 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "NO_CANDIDATE",
+  "status": "COLLECTING",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:29:40.346Z",
-  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
+  "generatedAt": "2026-09-03T18:31:27.680Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
