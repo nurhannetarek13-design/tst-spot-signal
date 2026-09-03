@@ -84,16 +84,17 @@ class UnifiedConfig(StrategyConfig, frozen=True):
     bar_type: BarType
     family: str
     params_json: str
+    leader_json: str="{}"
     trade_quote: float=TRADE_USDT
 
 class UnifiedStrategy(Strategy):
     def __init__(self,config:UnifiedConfig):
-        super().__init__(config);self.p=json.loads(config.params_json)
-        self.opens=[];self.highs=[];self.lows=[];self.closes=[];self.volumes=[]
+        super().__init__(config);self.p=json.loads(config.params_json);self.leader=json.loads(config.leader_json or "{}")
+        self.opens=[];self.highs=[];self.lows=[];self.closes=[];self.volumes=[];self.last_ts_ms=0
         self.entry_price=None;self.pending_entry=False;self.pending_exit=False;self.bars_in_position=0
     def on_start(self):self.subscribe_bars(self.config.bar_type)
     def on_bar(self,bar:Bar):
-        o=bar.open.as_double();h=bar.high.as_double();l=bar.low.as_double();c=bar.close.as_double();v=bar.volume.as_double()
+        o=bar.open.as_double();h=bar.high.as_double();l=bar.low.as_double();c=bar.close.as_double();v=bar.volume.as_double();self.last_ts_ms=int(bar.ts_event/1_000_000)
         self.opens.append(o);self.highs.append(h);self.lows.append(l);self.closes.append(c);self.volumes.append(v)
         if len(self.closes)>1000:
             self.opens=self.opens[-1000:];self.highs=self.highs[-1000:];self.lows=self.lows[-1000:];self.closes=self.closes[-1000:];self.volumes=self.volumes[-1000:]
@@ -121,6 +122,10 @@ class UnifiedStrategy(Strategy):
 
     def _entry_signal(self):
         p=self.p;fam=self.config.family;c,qv,rel,R,a=self._features();close=float(c[-1])
+        if fam=="CROSS_CRYPTO_LEAD_LAG":
+            lead=float(self.leader.get(str(self.last_ts_ms),0.0))
+            alt3=float(close/c[-4]-1);gap=lead-alt3;e24=ema(c[-100:],int(p.get("emaFast",24)))
+            return bool(e24 and lead>=float(p.get("leaderRetMin",0.012)) and gap>=float(p.get("gapMin",0.008)) and alt3>float(p.get("altRetMin",-0.02)) and close>e24 and rel>=float(p.get("relvol",0.9)) and float(p.get("rsiMin",42))<=R<=float(p.get("rsiMax",70)))
         if fam=="TS_MOMENTUM":
             ef=ema(c[-400:],int(p.get("emaFast",48)));es=ema(c[-500:],int(p.get("emaSlow",120)));lb=int(p.get("retLookback",24));ret=close/c[-lb-1]-1
             return bool(ef and es and close>ef>es and ret>float(p.get("retMin",0.02)) and float(p.get("atrMin",0.006))<=a<=float(p.get("atrMax",0.08)) and rel>=float(p.get("relvol",0.8)))
@@ -178,14 +183,24 @@ def parse_money(x):
     if x is None or (isinstance(x,float) and math.isnan(x)):return 0.0
     m=re.search(r"[-+]?\d+(?:\.\d+)?",str(x).replace(",",""));return float(m.group(0)) if m else 0.0
 
+def build_leader_map(tf):
+    if tf!="1h": return {}
+    series=[]
+    for s in ["BTCUSDT","ETHUSDT","SOLUSDT"]:
+        adf=fetch_klines(s,"1h")
+        series.append(adf["close"].pct_change(3).rename(s))
+    lead=pd.concat(series,axis=1).mean(axis=1).dropna()
+    return {str(int(ts.timestamp()*1000)):float(v) for ts,v in lead.items()}
+
 def run_once(symbol,tf,family,params,fee):
     df=fetch_klines(symbol,tf);meta=instrument_meta(symbol);ins=make_instrument(symbol,fee,meta)
+    leader=build_leader_map(tf) if family=="CROSS_CRYPTO_LEAD_LAG" else {}
     bar_spec="1-HOUR" if tf=="1h" else "15-MINUTE"
     bt=BarType.from_str(f"{symbol}.BINANCE-{bar_spec}-LAST-EXTERNAL")
     bars=BarDataWrangler(bar_type=bt,instrument=ins).process(df)
     engine=BacktestEngine(config=BacktestEngineConfig())
     engine.add_venue(venue=Venue("BINANCE"),oms_type=OmsType.NETTING,account_type=AccountType.CASH,base_currency=None,starting_balances=[Money.from_str(f"{STARTING_USDT} USDT")])
-    engine.add_instrument(ins);engine.add_data(bars);engine.add_strategy(UnifiedStrategy(UnifiedConfig(instrument_id=ins.id,bar_type=bt,family=family,params_json=json.dumps(params),trade_quote=TRADE_USDT)));engine.run()
+    engine.add_instrument(ins);engine.add_data(bars);engine.add_strategy(UnifiedStrategy(UnifiedConfig(instrument_id=ins.id,bar_type=bt,family=family,params_json=json.dumps(params),leader_json=json.dumps(leader,separators=(",",":")),trade_quote=TRADE_USDT)));engine.run()
     rep=engine.trader.generate_positions_report();out=[]
     if rep is not None and not rep.empty:
         if "ts_closed" in rep.columns:rep=rep[rep["ts_closed"].notna()]
