@@ -62,6 +62,16 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-03T18:50:24.583806+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "16a891b75d998d5f2638",
+      "symbol": "BMTUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-03T19:35:10.751311+00:00"
     }
   ],
   "ttlDays": 7,
