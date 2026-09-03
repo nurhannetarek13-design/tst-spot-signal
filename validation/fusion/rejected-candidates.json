@@ -32,6 +32,16 @@
       ],
       "rejectedAt": "2026-09-03T18:44:43.538Z",
       "reason": "Freqtrade stress2x negative with 41 trades"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:ZKPUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "b7b8fd956817ecaced07",
+      "symbol": "ZKPUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-03T18:46:10.555850+00:00"
     }
   ],
   "ttlDays": 7,
