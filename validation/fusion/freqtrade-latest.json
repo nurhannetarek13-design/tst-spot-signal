@@ -4,21 +4,21 @@
   "status": "FAIL",
   "pass": false,
   "base": {
-    "trades": 223,
-    "wins": 80,
-    "profitFactor": 0.3873040442356637,
-    "expectancyUSDT": -0.01134422717488789,
-    "netPnlUSDT": -2.52976266,
+    "trades": 224,
+    "wins": 81,
+    "profitFactor": 0.3895912372673832,
+    "expectancyUSDT": -0.011251424375,
+    "netPnlUSDT": -2.52031906,
     "maxDrawdownUSDT": 2.6360378300000002
   },
   "stress2x": {
-    "trades": 223,
+    "trades": 224,
     "wins": 48,
-    "profitFactor": 0.18207688437162917,
-    "expectancyUSDT": -0.021443259506726455,
-    "netPnlUSDT": -4.78184687,
-    "maxDrawdownUSDT": 4.802777270000002
+    "profitFactor": 0.182029782216013,
+    "expectancyUSDT": -0.02135428424107143,
+    "netPnlUSDT": -4.78335967,
+    "maxDrawdownUSDT": 4.804290070000002
   },
-  "generatedAt": "2026-09-03T07:10:56.046960+00:00",
+  "generatedAt": "2026-09-03T13:45:26.653927+00:00",
   "notes": "Binance Spot historical data; 15m; fees included by Freqtrade."
 }
