@@ -12,7 +12,6 @@
     "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
-    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_MISMATCH",
@@ -37,11 +36,11 @@
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "83e561f3d531f1bd9a71",
-      "trades": 37,
+      "candidateFingerprint": "491ef3dee6fa939725a4",
+      "trades": 46,
       "independentEnginePass": false,
-      "stressProfitFactor": 0.7332600948018183,
-      "stressExpectancyUSDT": -0.016304008108108108
+      "stressProfitFactor": 0.9896364881441613,
+      "stressExpectancyUSDT": -0.0005545382608695655
     },
     "jesse": {
       "status": "NO_CANDIDATE",
@@ -55,11 +54,11 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "4d447ed53b9d56d398d4",
-      "trades": 31,
-      "independentEnginePass": true,
-      "stressProfitFactor": 1.4236842343317635,
-      "stressExpectancyUSDT": 0.03239257258064516
+      "candidateFingerprint": "83e561f3d531f1bd9a71",
+      "trades": 33,
+      "independentEnginePass": false,
+      "stressProfitFactor": 0.6889793045135755,
+      "stressExpectancyUSDT": -0.01834520606060606
     },
     "forward": {
       "status": "RESET_FOR_NEW_CANDIDATE",
@@ -71,6 +70,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:49:24.841432+00:00",
+  "generatedAt": "2026-09-03T18:50:04.800949+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
