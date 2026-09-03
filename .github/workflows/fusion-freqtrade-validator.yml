@@ -76,14 +76,13 @@ jobs:
 
       - name: Commit snapshot
         run: |
-          cp validation/fusion/freqtrade-latest.json /tmp/freqtrade-latest.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p validation/fusion
-          cp /tmp/freqtrade-latest.json validation/fusion/freqtrade-latest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add validation/fusion/freqtrade-latest.json
           git diff --cached --quiet && exit 0
           git commit -m "Update unified Freqtrade candidate validation"
-          git push
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
