@@ -12,7 +12,7 @@
     "independentValidator": "JESSE",
     "executionValidator": "NAUTILUS_TRADER",
     "forwardValidator": "FORWARD_PAPER",
-    "derivativesContext": "CLOUDFLARE_BINANCE_USDM_READ_ONLY"
+    "derivativesContext": "GITHUB_BINANCE_PUBLIC_DERIVATIVES_SNAPSHOT"
   },
   "account": {
     "exchange": "BINANCE",
