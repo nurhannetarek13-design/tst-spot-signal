@@ -6,6 +6,8 @@ import pathlib
 MANIFEST=pathlib.Path("validation/fusion/candidate-manifest.json")
 GATE=pathlib.Path("validation/fusion/gate-latest.json")
 REJECTED=pathlib.Path("validation/fusion/rejected-candidates.json")
+FORWARD=pathlib.Path("validation/fusion/forward-latest.json")
+LEDGER=pathlib.Path("paper/public-edge-forward-ledger.json")
 
 def load(p,default):
     try:return json.loads(p.read_text())
@@ -83,4 +85,38 @@ else:
       "rotationReason":{"rejectedFingerprint":fp,"hardFailValidators":hard_fail},
     }
 MANIFEST.write_text(json.dumps(new,indent=2))
-print(json.dumps({"changed":True,"rejected":fp,"hardFail":hard_fail,"next":new.get("candidateId")},indent=2))
+
+# Candidate rotation must also reset forward state immediately. Rotation commits use
+# [skip ci], so we cannot rely on a downstream push-trigger to clear a stale paper candidate.
+forward={
+  "engine":"FORWARD_PAPER",
+  "strategyId":"TST_UNIFIED_FORWARD_V1",
+  "status":"RESET_FOR_NEW_CANDIDATE" if new.get("candidateFingerprint") else "NO_CANDIDATE",
+  "pass":False,
+  "candidateId":new.get("candidateId"),
+  "candidateFingerprint":new.get("candidateFingerprint"),
+  "metrics":{"trades":0,"wins":0,"winRate":0,"netPnlUSDT":0,"expectancyUSDT":0,"profitFactor":0,"maxDrawdownUSDT":0},
+  "open":None,
+  "authorization":"FORWARD_PAPER_ONLY",
+  "liveTrading":False,
+  "generatedAt":now,
+  "notes":"Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
+}
+FORWARD.parent.mkdir(parents=True,exist_ok=True)
+FORWARD.write_text(json.dumps(forward,indent=2))
+
+ledger=load(LEDGER,{"open":None,"closed":[],"seen":{},"cancelled":[]})
+if ledger.get("open"):
+    cancelled=list(ledger.get("cancelled") or [])
+    cancelled.append({
+      **ledger["open"],
+      "cancelledAt":now,
+      "reason":"UNIFIED_CANDIDATE_REJECTED_OR_ROTATED",
+      "countedAsTrade":False,
+    })
+    ledger["cancelled"]=cancelled[-100:]
+ledger["open"]=None
+LEDGER.parent.mkdir(parents=True,exist_ok=True)
+LEDGER.write_text(json.dumps(ledger,indent=2))
+
+print(json.dumps({"changed":True,"rejected":fp,"hardFail":hard_fail,"next":new.get("candidateId"),"forwardReset":True},indent=2))
