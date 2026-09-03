@@ -1,0 +1,54 @@
+name: Unified System Health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 */6 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "src/edge-worker.js"
+      - "fusion/policy.json"
+      - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/gate-latest.json"
+      - "validation/fusion/forward-latest.json"
+      - "validation/edges/derivatives-pressure-latest.json"
+      - "scripts/system_health.py"
+      - ".github/workflows/system-health.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unified-system-health
+  cancel-in-progress: true
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/system_health.py
+      - name: Commit health snapshot safely
+        run: |
+          cp validation/system-health-latest.json /tmp/system-health-latest.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation
+            cp /tmp/system-health-latest.json validation/system-health-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/system-health-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update unified system health [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
