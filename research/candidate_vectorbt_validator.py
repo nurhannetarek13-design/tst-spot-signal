@@ -91,6 +91,6 @@ else:
         return metrics(pf)
     base=run(BASE_FEE); stress=run(STRESS_FEE)
     independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and base["expectancyUSDT"]>0 and stress["profitFactor"]>=1.0 and stress["expectancyUSDT"]>0 and base["maxDrawdownUSDT"]<=2.0
-    passed=independent and base["trades"]>=40
+    passed=independent and base["trades"]>=100 and stress["trades"]>=100
     out={"engine":"VECTORBT_CANDIDATE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],"symbol":m["symbol"],"family":m["family"],"timeframe":m["timeframe"],"params":p,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),"notes":"Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."}
 OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
