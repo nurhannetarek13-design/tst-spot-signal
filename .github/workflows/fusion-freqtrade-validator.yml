@@ -2,8 +2,11 @@ name: Fusion Freqtrade Validator
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab"]
+    types: [completed]
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "50 2 * * *"
   push:
     branches: [main]
     paths:
