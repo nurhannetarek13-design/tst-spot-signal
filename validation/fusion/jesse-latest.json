@@ -10,23 +10,23 @@
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "base": {
-    "trades": 72,
-    "winRate": 0.375,
+    "trades": 68,
+    "winRate": 0.36764705882352944,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.005151127874726281,
-    "netPnlUSDT": -0.37088120698029226,
-    "maxDrawdown": -8.314603330772218
+    "expectancyUSDT": -0.009332697135803009,
+    "netPnlUSDT": -0.6346234052346046,
+    "maxDrawdown": -7.580221060108694
   },
   "stress2x": {
-    "trades": 72,
-    "winRate": 0.3611111111111111,
+    "trades": 68,
+    "winRate": 0.36764705882352944,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.0216630739276902,
-    "netPnlUSDT": -1.5597413227936945,
-    "maxDrawdown": -10.712435670238186
+    "expectancyUSDT": -0.025848981361927884,
+    "netPnlUSDT": -1.757730732611096,
+    "maxDrawdown": -9.392355121541806
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T13:49:50.138872+00:00",
+  "generatedAt": "2026-09-03T13:57:37.196627+00:00",
   "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
