@@ -1,21 +1,24 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "symbol": null,
-  "family": null,
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "CANDIDATE:MISSING",
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
+    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
+    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
+    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
     "forward:FAIL",
@@ -47,12 +50,12 @@
       "trades": 0
     },
     "forward": {
-      "status": "NO_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
-      "candidateFingerprint": null,
+      "candidateFingerprint": "385a252d2323f398b13a",
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T18:30:52.262143+00:00",
+  "generatedAt": "2026-09-03T18:31:39.388750+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
