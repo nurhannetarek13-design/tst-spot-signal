@@ -10,6 +10,18 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-03T18:10:58.059764+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "385a252d2323f398b13a",
+      "symbol": "PEPEUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "hardFailValidators": [
+        "vectorbt",
+        "freqtrade",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-09-03T18:36:47.620Z"
     }
   ],
   "ttlDays": 7,
