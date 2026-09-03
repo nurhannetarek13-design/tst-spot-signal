@@ -46,7 +46,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/fusion/candidate-manifest.json validation/fusion/rejected-candidates.json validation/fusion/forward-latest.json paper/public-edge-forward-ledger.json
             git diff --cached --quiet && exit 0
-            git commit -m "Rotate rejected unified candidate [skip ci]"
+            git commit -m "Rotate rejected unified candidate"
             git push origin HEAD:main && exit 0
             sleep $((i * 2))
           done
