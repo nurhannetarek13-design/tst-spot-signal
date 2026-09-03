@@ -34,19 +34,20 @@ jobs:
       - name: Run public edge lab
         run: python research/public_edge_lab.py
 
-      - name: Build unified candidate manifest
-        run: python scripts/build_candidate_manifest.py
       - name: Commit research snapshot safely
         run: |
           cp validation/edges/public-edge-lab-latest.json /tmp/public-edge-lab-latest.json
-          cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.json
           for i in 1 2 3 4 5; do
             git fetch origin main
             git reset --hard origin/main
-            mkdir -p "$(dirname validation/edges/public-edge-lab-latest.json)"
+            mkdir -p validation/edges validation/fusion
             cp /tmp/public-edge-lab-latest.json validation/edges/public-edge-lab-latest.json
-            mkdir -p "$(dirname validation/fusion/candidate-manifest.json)"
-            cp /tmp/candidate-manifest.json validation/fusion/candidate-manifest.json
+
+            # Rebuild against the latest rejected-candidates state after the reset.
+            # This prevents a long-running research job from resurrecting a candidate
+            # which was rejected while the job was still running.
+            python scripts/build_candidate_manifest.py
+
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/edges/public-edge-lab-latest.json validation/fusion/candidate-manifest.json
