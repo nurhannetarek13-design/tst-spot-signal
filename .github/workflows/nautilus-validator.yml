@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "validation/fusion/vectorbt-latest.json"
+      - "validation/fusion/candidate-manifest.json"
       - "research/nautilus_validator.py"
       - ".github/workflows/nautilus-validator.yml"
 
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
