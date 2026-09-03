@@ -2,6 +2,7 @@ name: Safety gates
 on:
   push:
   pull_request:
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -11,8 +12,61 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - run: npm ci
       - run: npm test
       - run: node --check server.mjs
       - run: node --check src/index.js
+      - run: node --check src/edge-worker.js
+      - run: node --check scripts/forward-paper-public-edges.mjs
       - run: npm run check:render
+
+      - name: Compile research and gate Python
+        run: |
+          python -m py_compile             research/public_edge_lab.py             research/derivatives_pressure.py             research/vectorbt_discovery.py             research/candidate_vectorbt_validator.py             research/nautilus_validator.py             scripts/build_candidate_manifest.py             scripts/build_fusion_gate.py             scripts/rotate_candidate.py             scripts/fusion-freqtrade-report.py             jesse/run_fusion_validator.py
+
+      - name: Assert fail-closed trading policy
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          p=json.loads(pathlib.Path("fusion/policy.json").read_text())
+          assert p["mode"]=="PAPER_ONLY"
+          assert p["liveTrading"] is False
+          assert p["execution"]["executorAllowed"] is False
+          assert p["execution"]["withdrawalsAllowed"] is False
+          assert p["execution"]["futuresAllowed"] is False
+          assert p["execution"]["leverageAllowed"] is False
+          assert p["execution"]["autoEnableLive"] is False
+
+          worker=pathlib.Path("src/edge-worker.js").read_text()
+          assert 'liveTrading:false' in worker
+          assert 'executorAllowed:false' in worker
+          assert "BINANCE" in p["account"]["exchange"]
+          print("Fail-closed policy verified.")
+          PY
+
+      - name: Assert unified candidate wiring
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path("validation/fusion")
+          m=json.loads((root/"candidate-manifest.json").read_text())
+          required=["vectorbt","freqtrade","jesse","nautilus","forward"]
+          assert m["strategyId"]=="TST_UNIFIED_CANDIDATE_V1"
+          assert m["validatorsRequired"]==required
+          if m.get("candidateFingerprint"):
+              for name,path in {
+                  "vectorbt":"vectorbt-candidate-latest.json",
+                  "freqtrade":"freqtrade-latest.json",
+                  "jesse":"jesse-latest.json",
+                  "nautilus":"nautilus-latest.json",
+                  "forward":"forward-latest.json",
+              }.items():
+                  row=json.loads((root/path).read_text())
+                  if row.get("candidateFingerprint") not in {None,m["candidateFingerprint"]}:
+                      raise AssertionError(f"{name} validates a different candidate")
+          print("Unified candidate wiring verified.")
+          PY
