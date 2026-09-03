@@ -191,7 +191,7 @@
       },
       "liquidity": {
         "quoteVolume24h": 41397146.39846336,
-        "priceUSDT": 3.82e-06
+        "priceUSDT": 0.00000382
       },
       "rankKey": [
         1,
@@ -422,11 +422,12 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:46:10.555850+00:00",
+  "generatedAt": "2026-09-03T18:47:03.600Z",
   "rotationReason": {
     "rejectedFingerprint": "b7b8fd956817ecaced07",
     "hardFailValidators": [
       "freqtrade"
     ]
-  }
+  },
+  "activationReason": "Trigger unified validators after rotation workflow fix"
 }
