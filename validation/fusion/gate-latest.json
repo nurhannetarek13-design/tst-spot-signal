@@ -9,7 +9,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
@@ -26,11 +25,11 @@
     "vectorbt": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "385a252d2323f398b13a",
-      "trades": 14,
+      "candidateFingerprint": "4d447ed53b9d56d398d4",
+      "trades": 13,
       "independentEnginePass": false,
-      "stressProfitFactor": 0.8104100130819061,
-      "stressExpectancyUSDT": -0.01657459702256826
+      "stressProfitFactor": 1.849381860945832,
+      "stressExpectancyUSDT": 0.044535087897916784
     },
     "freqtrade": {
       "status": "FAIL",
@@ -69,6 +68,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:42:02.588629+00:00",
+  "generatedAt": "2026-09-03T18:43:19.936719+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
