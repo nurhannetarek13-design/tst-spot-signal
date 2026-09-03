@@ -62,7 +62,7 @@
       "stressExpectancyUSDT": 0.012941640322580644
     },
     "forward": {
-      "status": "RESET_FOR_NEW_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
       "candidateFingerprint": "16a891b75d998d5f2638",
       "trades": 0,
@@ -71,6 +71,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:59:29.024178+00:00",
+  "generatedAt": "2026-09-03T19:34:21.960321+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
