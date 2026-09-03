@@ -3,8 +3,11 @@ name: Nautilus Execution Validator
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab"]
+    types: [completed]
   schedule:
-    - cron: "43 3 * * *"
+    - cron: "50 3 * * *"
   push:
     branches: [main]
     paths:
