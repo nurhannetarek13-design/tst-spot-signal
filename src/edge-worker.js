@@ -16,12 +16,12 @@ const CFG = {
   maxHoldHours: 36,
   scanPerRun: 8,
   focusUniverseSize: 80,
-  focusMinVolume: 5_000_000,
+  focusMinVolume: 20_000_000,
   focusMaxVolume: 150_000_000,
-  focusMaxPrice: 2.0,
+  focusMaxPrice: 3.0,
   newListingSlotsPerRun: 4,
   big: { minVolume:20_000_000,maxSpreadPct:0.10,minDepth:15_000,minRelVol:1.25,minTaker:0.54,minDepthRatio:1.10,minScore:88,maxPosition:7,maxRisk:0.20,maxStopPct:2.5 },
-  small:{ minVolume:5_000_000,maxVolume:150_000_000,maxSpreadPct:0.15,minDepth:5_000,minRelVol:1.30,minTaker:0.56,minDepthRatio:1.15,minScore:90,maxPosition:5.5,maxRisk:0.10,maxStopPct:2.2 },
+  small:{ minVolume:20_000_000,maxVolume:150_000_000,maxSpreadPct:0.15,minDepth:5_000,minRelVol:1.30,minTaker:0.56,minDepthRatio:1.15,minScore:90,maxPosition:5.5,maxRisk:0.10,maxStopPct:2.2 },
   newListing:{ maxAgeDays:30,minVolume:500_000,maxSpreadPct:0.20,minDepth:2_500,minRelVol:1.45,minTaker:0.58,minDepthRatio:1.18,minScore:95,maxPosition:5.0,maxRisk:0.08,maxStopPct:2.0 },
 };
 
@@ -50,7 +50,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LOW_PRICE_SMALL_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
