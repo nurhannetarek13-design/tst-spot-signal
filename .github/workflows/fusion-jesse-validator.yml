@@ -2,8 +2,11 @@ name: Fusion Jesse Validator
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab"]
+    types: [completed]
   schedule:
-    - cron: "47 2 * * *"
+    - cron: "20 3 * * *"
   push:
     branches: [main]
     paths:
