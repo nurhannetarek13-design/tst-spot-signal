@@ -3,10 +3,10 @@
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
   "status": "FAIL",
   "pass": false,
-  "independentEnginePass": true,
-  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "4d447ed53b9d56d398d4",
-  "symbol": "XPLUSDT",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "83e561f3d531f1bd9a71",
+  "symbol": "NEARUSDT",
   "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "params": {
@@ -22,25 +22,25 @@
     "tp": 0.05
   },
   "base": {
-    "trades": 31,
-    "wins": 16,
-    "winRate": 0.5161290322580645,
-    "netPnlUSDT": 1.5187613,
-    "expectancyUSDT": 0.0489923,
-    "profitFactor": 1.7146754056925044,
-    "maxDrawdownUSDT": 1.18885987
+    "trades": 33,
+    "wins": 15,
+    "winRate": 0.45454545454545453,
+    "netPnlUSDT": -0.06039589999999997,
+    "expectancyUSDT": -0.001830178787878787,
+    "profitFactor": 0.9628624161722774,
+    "maxDrawdownUSDT": 0.57935705
   },
   "stress2x": {
-    "trades": 31,
-    "wins": 15,
-    "winRate": 0.4838709677419355,
-    "netPnlUSDT": 1.00416975,
-    "expectancyUSDT": 0.03239257258064516,
-    "profitFactor": 1.4236842343317635,
-    "maxDrawdownUSDT": 1.5013508
+    "trades": 33,
+    "wins": 13,
+    "winRate": 0.3939393939393939,
+    "netPnlUSDT": -0.6053918,
+    "expectancyUSDT": -0.01834520606060606,
+    "profitFactor": 0.6889793045135755,
+    "maxDrawdownUSDT": 1.0527332
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:41:50.121077+00:00",
+  "generatedAt": "2026-09-03T18:49:47.756875+00:00",
   "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
