@@ -2,11 +2,11 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "candidateId": null,
   "candidateFingerprint": null,
-  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T14:29:51.149646+00:00",
+      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
       "symbol": "ENAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
@@ -24,33 +24,33 @@
       },
       "sourceMetrics": {
         "base": {
-          "trades": 38,
-          "wins": 18,
-          "winRate": 0.47368421052631576,
-          "netPnlUSDT": 1.589403239023674,
-          "expectancyUSDT": 0.04182640102693879,
-          "profitFactor": 1.474495520155278,
-          "maxDrawdownUSDT": 1.4667674999999991
+          "trades": 89,
+          "wins": 39,
+          "winRate": 0.43820224719101125,
+          "netPnlUSDT": 1.538088512780342,
+          "expectancyUSDT": 0.017281893402026315,
+          "profitFactor": 1.1722885555563183,
+          "maxDrawdownUSDT": 2.1695324336585347
         },
         "stress2x": {
-          "trades": 38,
-          "wins": 18,
-          "winRate": 0.47368421052631576,
-          "netPnlUSDT": 0.9590736397662529,
-          "expectancyUSDT": 0.02523877999384876,
-          "profitFactor": 1.260962950974643,
-          "maxDrawdownUSDT": 1.7785349999999975
+          "trades": 89,
+          "wins": 39,
+          "winRate": 0.43820224719101125,
+          "netPnlUSDT": 0.06507185502453675,
+          "expectancyUSDT": 0.000731144438477941,
+          "profitFactor": 1.0066807334658692,
+          "maxDrawdownUSDT": 2.628967287288492
         }
       },
       "liquidity": {
-        "quoteVolume24h": 24544490.835319,
-        "priceUSDT": 0.1572
+        "quoteVolume24h": 47273518.726987,
+        "priceUSDT": 0.1771
       },
       "rankKey": [
         1,
-        0.02523877999384876,
-        1.260962950974643,
-        38
+        0.000731144438477941,
+        1.0066807334658692,
+        89
       ],
       "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
       "candidateFingerprint": "db0561831b32d3a2c528"
@@ -69,5 +69,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:10:58.059764+00:00"
+  "generatedAt": "2026-09-03T18:29:28.644153+00:00"
 }
