@@ -23,10 +23,10 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "db0561831b32d3a2c528",
-      "trades": 18
+      "candidateFingerprint": null,
+      "trades": 0
     },
     "freqtrade": {
       "status": "NO_CANDIDATE",
@@ -53,6 +53,6 @@
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T14:35:47.143649+00:00",
+  "generatedAt": "2026-09-03T14:35:55.773054+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
