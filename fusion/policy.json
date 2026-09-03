@@ -1,14 +1,18 @@
 {
-  "release": "TST_FUSION_V1",
+  "release": "TST_FUSION_V2",
   "mode": "PAPER_ONLY",
   "liveTrading": false,
-  "strategyId": "TST_ADAPTIVE_FUSION_V1",
+  "strategyId": "TST_UNIFIED_CANDIDATE_V1",
+  "candidateManifest": "validation/fusion/candidate-manifest.json",
   "engines": {
-    "executionAndMarketData": "HUMMINGBOT_V2_CONDOR",
+    "scanner": "CLOUDFLARE_ORDERBOOK_MICROSTRUCTURE",
+    "edgeDiscovery": "PUBLIC_EDGE_LAB",
+    "discoveryValidator": "VECTORBT_CANDIDATE",
     "primaryValidator": "FREQTRADE",
     "independentValidator": "JESSE",
-    "discovery": "VECTORBT",
-    "executionValidator": "NAUTILUS_TRADER"
+    "executionValidator": "NAUTILUS_TRADER",
+    "forwardValidator": "FORWARD_PAPER",
+    "derivativesContext": "CLOUDFLARE_BINANCE_USDM_READ_ONLY"
   },
   "account": {
     "exchange": "BINANCE",
@@ -21,19 +25,30 @@
     "maxRiskUSDT": 0.2,
     "dailyLossCapUSDT": 0.5
   },
+  "universe": {
+    "scanner": "LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",
+    "focusMaxPriceUSDT": 3,
+    "focusMinVolume24hUSDT": 20000000,
+    "focusMaxVolume24hUSDT": 150000000,
+    "majorsAsMarketFilterOnly": true,
+    "newListingsPaperOnly": true
+  },
   "decisionGate": {
     "validatorsRequired": [
+      "vectorbt",
       "freqtrade",
       "jesse",
-      "vectorbt",
-      "nautilus"
+      "nautilus",
+      "forward"
     ],
+    "requireSameCandidateFingerprint": true,
     "validatorMaxAgeHours": 48,
-    "minTrades": 100,
+    "minHistoricalTradesPerValidator": 100,
+    "minForwardClosedTrades": 50,
     "minProfitFactor": 1.15,
     "requirePositiveExpectancy": true,
     "requireStressPass": true,
-    "minCandidateScore": 90,
+    "maxForwardDrawdownUSDT": 1,
     "requireAllPass": true
   },
   "execution": {
@@ -43,6 +58,6 @@
     "leverageAllowed": false,
     "liveReady": false,
     "autoEnableLive": false,
-    "liveEnableCondition": "ALL_REQUIRED_VALIDATORS_PASS_AND_EXPLICIT_USER_ENABLE"
+    "liveEnableCondition": "ALL_REQUIRED_VALIDATORS_SAME_CANDIDATE_PASS_AND_FORWARD_PASS_AND_EXPLICIT_USER_ENABLE"
   }
 }
