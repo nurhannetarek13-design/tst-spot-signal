@@ -1,45 +1,12 @@
 {
   "engine": "VECTORBT_CANDIDATE",
   "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
-  "symbol": "BMTUSDT",
-  "family": "VOLATILITY_BREAKOUT",
-  "timeframe": "1h",
-  "params": {
-    "lookback": 24,
-    "compressionLookback": 72,
-    "compressionPct": 0.25,
-    "relvol": 1.5,
-    "rsiMin": 55,
-    "rsiMax": 75,
-    "holdBars": 12,
-    "sl": 0.025,
-    "tp": 0.055
-  },
-  "base": {
-    "trades": 13,
-    "wins": 5,
-    "winRate": 0.38461538461538464,
-    "netPnlUSDT": 0.23905420234675348,
-    "expectancyUSDT": 0.018388784795904115,
-    "profitFactor": 1.2035819278643556,
-    "maxDrawdownUSDT": 0.8545871332240371
-  },
-  "stress2x": {
-    "trades": 13,
-    "wins": 5,
-    "winRate": 0.38461538461538464,
-    "netPnlUSDT": 0.023872849013233055,
-    "expectancyUSDT": 0.0018363730010179274,
-    "profitFactor": 1.0182979268213943,
-    "maxDrawdownUSDT": 0.9855016242607562
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T19:35:19.882523+00:00",
-  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
+  "generatedAt": "2026-09-03T19:44:06.053762+00:00",
+  "notes": "No unified candidate; heavy VectorBT validation skipped."
 }
