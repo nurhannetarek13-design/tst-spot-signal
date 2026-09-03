@@ -52,6 +52,16 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-03T18:49:14.232751+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "491ef3dee6fa939725a4",
+      "symbol": "WLDUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-03T18:50:24.583806+00:00"
     }
   ],
   "ttlDays": 7,

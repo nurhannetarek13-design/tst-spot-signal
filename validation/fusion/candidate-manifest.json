@@ -2,53 +2,52 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-03T18:40:07.071892+00:00",
-  "symbol": "WLDUSDT",
-  "family": "CROSS_CRYPTO_LEAD_LAG",
+  "symbol": "BMTUSDT",
+  "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "params": {
-    "leaderRetMin": 0.012,
-    "gapMin": 0.008,
-    "altRetMin": -0.02,
-    "relvol": 0.9,
-    "rsiMin": 42,
-    "rsiMax": 70,
-    "emaFast": 24,
-    "holdBars": 6,
+    "lookback": 24,
+    "compressionLookback": 72,
+    "compressionPct": 0.25,
+    "relvol": 1.5,
+    "rsiMin": 55,
+    "rsiMax": 75,
+    "holdBars": 12,
     "sl": 0.025,
-    "tp": 0.05
+    "tp": 0.055
   },
   "sourceMetrics": {
     "base": {
-      "trades": 20,
-      "wins": 10,
-      "winRate": 0.5,
-      "netPnlUSDT": 0.5527694233474996,
-      "expectancyUSDT": 0.02763847116737498,
-      "profitFactor": 1.5551347277191743,
-      "maxDrawdownUSDT": 0.6534375257127425
+      "trades": 13,
+      "wins": 5,
+      "winRate": 0.38461538461538464,
+      "netPnlUSDT": 0.3003024893690171,
+      "expectancyUSDT": 0.023100191489924392,
+      "profitFactor": 1.2847508850959302,
+      "maxDrawdownUSDT": 0.7470272706190546
     },
     "stress2x": {
-      "trades": 20,
-      "wins": 10,
-      "winRate": 0.5,
-      "netPnlUSDT": 0.2214432799974532,
-      "expectancyUSDT": 0.01107216399987266,
-      "profitFactor": 1.1909831412494662,
-      "maxDrawdownUSDT": 0.7846541944272452
+      "trades": 13,
+      "wins": 5,
+      "winRate": 0.38461538461538464,
+      "netPnlUSDT": 0.08502912558929404,
+      "expectancyUSDT": 0.006540701968407234,
+      "profitFactor": 1.071740686507242,
+      "maxDrawdownUSDT": 0.8450537694613895
     }
   },
   "liquidity": {
-    "quoteVolume24h": 20349652.85431,
-    "priceUSDT": 0.405
+    "quoteVolume24h": 148463268.401171,
+    "priceUSDT": 0.01845
   },
   "rankKey": [
     1,
-    0.01107216399987266,
-    1.1909831412494662,
-    20
+    0.006540701968407234,
+    1.071740686507242,
+    13
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "491ef3dee6fa939725a4",
+  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "16a891b75d998d5f2638",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -409,6 +408,7 @@
   "poolSize": 7,
   "recentRejectedFingerprints": [
     "385a252d2323f398b13a",
+    "491ef3dee6fa939725a4",
     "4d447ed53b9d56d398d4",
     "83e561f3d531f1bd9a71",
     "b7b8fd956817ecaced07",
@@ -423,9 +423,9 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:49:14.232751+00:00",
+  "generatedAt": "2026-09-03T18:50:24.583806+00:00",
   "rotationReason": {
-    "rejectedFingerprint": "83e561f3d531f1bd9a71",
+    "rejectedFingerprint": "491ef3dee6fa939725a4",
     "hardFailValidators": [
       "freqtrade"
     ]
