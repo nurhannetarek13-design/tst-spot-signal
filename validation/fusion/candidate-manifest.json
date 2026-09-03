@@ -3,7 +3,7 @@
   "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
   "candidateFingerprint": "db0561831b32d3a2c528",
   "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-03T13:24:41.078180+00:00",
+  "sourceGeneratedAt": "2026-09-03T13:50:23.848030+00:00",
   "symbol": "ENAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
@@ -40,9 +40,15 @@
     }
   },
   "liquidity": {
-    "quoteVolume24h": 24624255.742081,
-    "priceUSDT": 0.1553
+    "quoteVolume24h": 24166598.07591,
+    "priceUSDT": 0.1557
   },
+  "rankKey": [
+    1,
+    0.023737931237698618,
+    1.236441251448753,
+    38
+  ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
@@ -52,5 +58,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T13:41:56.745Z"
+  "generatedAt": "2026-09-03T13:50:23.943739+00:00"
 }
