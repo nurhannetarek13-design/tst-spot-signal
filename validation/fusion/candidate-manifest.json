@@ -1,9 +1,154 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "source": "PUBLIC_EDGE_LAB",
+  "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
+  "params": {
+    "lookback": 24,
+    "compressionLookback": 72,
+    "compressionPct": 0.25,
+    "relvol": 1.5,
+    "rsiMin": 55,
+    "rsiMax": 75,
+    "holdBars": 12,
+    "sl": 0.025,
+    "tp": 0.055
+  },
+  "sourceMetrics": {
+    "base": {
+      "trades": 14,
+      "wins": 8,
+      "winRate": 0.5714285714285714,
+      "netPnlUSDT": 0.6064385709770812,
+      "expectancyUSDT": 0.04331704078407723,
+      "profitFactor": 1.861331955886097,
+      "maxDrawdownUSDT": 0.3075875000000003
+    },
+    "stress2x": {
+      "trades": 14,
+      "wins": 8,
+      "winRate": 0.5714285714285714,
+      "netPnlUSDT": 0.3741805260532299,
+      "expectancyUSDT": 0.026727180432373564,
+      "profitFactor": 1.4664652074488902,
+      "maxDrawdownUSDT": 0.3440619736518094
+    }
+  },
+  "liquidity": {
+    "quoteVolume24h": 41268052.13046993,
+    "priceUSDT": 0.00000384
+  },
+  "rankKey": [
+    1,
+    0.026727180432373564,
+    1.4664652074488902,
+    14
+  ],
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
   "candidatePool": [
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+      "symbol": "PEPEUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "timeframe": "1h",
+      "params": {
+        "lookback": 24,
+        "compressionLookback": 72,
+        "compressionPct": 0.25,
+        "relvol": 1.5,
+        "rsiMin": 55,
+        "rsiMax": 75,
+        "holdBars": 12,
+        "sl": 0.025,
+        "tp": 0.055
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 14,
+          "wins": 8,
+          "winRate": 0.5714285714285714,
+          "netPnlUSDT": 0.6064385709770812,
+          "expectancyUSDT": 0.04331704078407723,
+          "profitFactor": 1.861331955886097,
+          "maxDrawdownUSDT": 0.3075875000000003
+        },
+        "stress2x": {
+          "trades": 14,
+          "wins": 8,
+          "winRate": 0.5714285714285714,
+          "netPnlUSDT": 0.3741805260532299,
+          "expectancyUSDT": 0.026727180432373564,
+          "profitFactor": 1.4664652074488902,
+          "maxDrawdownUSDT": 0.3440619736518094
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 41268052.13046993,
+        "priceUSDT": 0.00000384
+      },
+      "rankKey": [
+        1,
+        0.026727180432373564,
+        1.4664652074488902,
+        14
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "385a252d2323f398b13a"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+      "symbol": "BMTUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "timeframe": "1h",
+      "params": {
+        "lookback": 24,
+        "compressionLookback": 72,
+        "compressionPct": 0.25,
+        "relvol": 1.5,
+        "rsiMin": 55,
+        "rsiMax": 75,
+        "holdBars": 12,
+        "sl": 0.025,
+        "tp": 0.055
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 13,
+          "wins": 5,
+          "winRate": 0.38461538461538464,
+          "netPnlUSDT": 0.3003024893690171,
+          "expectancyUSDT": 0.023100191489924392,
+          "profitFactor": 1.2847508850959302,
+          "maxDrawdownUSDT": 0.7470272706190546
+        },
+        "stress2x": {
+          "trades": 13,
+          "wins": 5,
+          "winRate": 0.38461538461538464,
+          "netPnlUSDT": 0.08502912558929404,
+          "expectancyUSDT": 0.006540701968407234,
+          "profitFactor": 1.071740686507242,
+          "maxDrawdownUSDT": 0.8450537694613895
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 148553795.419701,
+        "priceUSDT": 0.01836
+      },
+      "rankKey": [
+        1,
+        0.006540701968407234,
+        1.071740686507242,
+        13
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "16a891b75d998d5f2638"
+    },
     {
       "source": "PUBLIC_EDGE_LAB",
       "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
@@ -56,11 +201,11 @@
       "candidateFingerprint": "db0561831b32d3a2c528"
     }
   ],
-  "poolSize": 1,
+  "poolSize": 3,
   "recentRejectedFingerprints": [
     "db0561831b32d3a2c528"
   ],
-  "authorization": "RESEARCH_ONLY",
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -69,5 +214,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:29:28.644153+00:00"
+  "generatedAt": "2026-09-03T18:31:12.030Z"
 }
