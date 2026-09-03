@@ -50,7 +50,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","DERIVATIVES_PRESSURE_FORWARD","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -177,6 +177,12 @@ async function analyze(summary,symbolInfo,marketRegime){
     const relBase=median(c15.slice(-25,-1).map(x=>x.quoteVolume)),relVol=relBase>0?last.quoteVolume/relBase:0;
     const flow=c15.slice(-8),totalQ=flow.reduce((s,x)=>s+x.quoteVolume,0),taker=totalQ>0?flow.reduce((s,x)=>s+x.takerBuyQuote,0)/totalQ:0;
     const rsi=rsi14(closes15),depthStats=orderBookStats(depth,summary.ask);
+    const tradeFlowImbalance=Math.max(-1,Math.min(1,(taker-0.5)*2));
+    const microComposite=
+      0.30*depthStats.l1Imbalance+
+      0.20*depthStats.l5Imbalance+
+      0.20*Math.max(-1,Math.min(1,depthStats.micropriceOffsetBps/2))+
+      0.30*tradeFlowImbalance;
     const trendStrength=Math.abs(e20_1-e50_1)/e50_1*100;
     const symbolRegime = lane==="NEW_LISTING"?"NEW_LISTING":classifySymbolRegime({trendStrength,atrPct,relVol,rsi,e20_1,e50_1,e20_4,e50_4,lastClose:closes15.at(-1),e20_15,e50_15});
     const candidate = chooseStrategy(symbolRegime,c15,{e20_15,e50_15,e20_1,e50_1,e20_4,e50_4,atr,relVol,taker,rsi,summary,cfg,marketRegime});
@@ -191,9 +197,11 @@ async function analyze(summary,symbolInfo,marketRegime){
     const baseScore=candidate.score;
     const liquidityScore=(summary.spreadPct<=cfg.maxSpreadPct?4:0)+(depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth?4:0)+(depthStats.bidAskRatio>=cfg.minDepthRatio?4:0);
     const flowScore=(relVol>=candidate.minRelVol?5:0)+(taker>=candidate.minTaker?5:0);
-    const score=Math.min(100,baseScore+liquidityScore+flowScore);
-    const hard=marketRegime.state!=="RISK_OFF"&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=1.6&&score>=cfg.minScore;
-    return {symbol:summary.symbol,lane,valid:hard,status:hard?"READY":"WAIT",strategy:candidate.strategy,regime:symbolRegime,setup:candidate.setup,signalBar:candidate.signalBar,score,entry,stop,target,quantity:qty,notional:round(notional,4),riskUSDT:round(feeRisk,4),netRR:round(rr,2),edge:round(relVol*taker*depthStats.bidAskRatio,3),metrics:{relVol:round(relVol,2),taker:round(taker,3),rsi:round(rsi,1),atrPct:round(atrPct,2),spreadPct:round(summary.spreadPct,4),depthRatio:round(depthStats.bidAskRatio,2)}};
+    const microScore=microComposite>=0.25?6:microComposite>=0.10?3:0;
+    const score=Math.min(100,baseScore+liquidityScore+flowScore+microScore);
+    const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:microComposite>=0.08;
+    const hard=marketRegime.state!=="RISK_OFF"&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=1.6&&score>=cfg.minScore;
+    return {symbol:summary.symbol,lane,valid:hard,status:hard?"READY":"WAIT",strategy:candidate.strategy,regime:symbolRegime,setup:candidate.setup,signalBar:candidate.signalBar,score,entry,stop,target,quantity:qty,notional:round(notional,4),riskUSDT:round(feeRisk,4),netRR:round(rr,2),edge:round(relVol*taker*depthStats.bidAskRatio*Math.max(0.1,1+microComposite),3),metrics:{relVol:round(relVol,2),taker:round(taker,3),rsi:round(rsi,1),atrPct:round(atrPct,2),spreadPct:round(summary.spreadPct,4),depthRatio:round(depthStats.bidAskRatio,2),l1Imbalance:round(depthStats.l1Imbalance,3),l5Imbalance:round(depthStats.l5Imbalance,3),micropriceOffsetBps:round(depthStats.micropriceOffsetBps,3),microComposite:round(microComposite,3)}};
   }catch(error){ return {symbol:summary.symbol,lane,valid:false,status:"DATA_ERROR",error:String(error?.message||error)}; }
 }
 
@@ -289,7 +297,19 @@ async function paperStatus(env){ const active=await getState(env,"paper:active")
 function candle(k){ return {openTime:Number(k[0]),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4]),volume:Number(k[5]),closeTime:Number(k[6]),quoteVolume:Number(k[7]),takerBuyQuote:Number(k[10]||0)}; }
 function closed(c){const now=Date.now();return c.filter(x=>x.closeTime<now);} function ema(values,p){if(!values.length)return 0;const a=2/(p+1);let e=values[0];for(let i=1;i<values.length;i++)e=values[i]*a+e*(1-a);return e;}
 function rsi14(values){if(values.length<15)return 50;let g=0,l=0;for(let i=values.length-14;i<values.length;i++){const d=values[i]-values[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/14)/(l/14);return 100-100/(1+rs);} function atr14(c){if(c.length<15)return 0;const tr=[];for(let i=c.length-14;i<c.length;i++){const p=c[i-1].close,x=c[i];tr.push(Math.max(x.high-x.low,Math.abs(x.high-p),Math.abs(x.low-p)));}return tr.reduce((a,b)=>a+b,0)/tr.length;}
-function median(a){if(!a.length)return 0;const x=[...a].sort((m,n)=>m-n),h=Math.floor(x.length/2);return x.length%2?x[h]:(x[h-1]+x[h])/2;} function std(a){if(!a.length)return 0;const m=a.reduce((s,x)=>s+x,0)/a.length;return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length);} function orderBookStats(depth,mid){const bids=(depth.bids||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p>=mid*0.99),asks=(depth.asks||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p])=>p<=mid*1.01);const bid=bids.reduce((s,[p,q])=>s+p*q,0),ask=asks.reduce((s,[p,q])=>s+p*q,0);return{bid,ask,bidAskRatio:ask>0?bid/ask:0};}
+function median(a){if(!a.length)return 0;const x=[...a].sort((m,n)=>m-n),h=Math.floor(x.length/2);return x.length%2?x[h]:(x[h-1]+x[h])/2;} function std(a){if(!a.length)return 0;const m=a.reduce((s,x)=>s+x,0)/a.length;return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length);} function orderBookStats(depth,mid){
+  const rawBids=(depth.bids||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p,q])=>p>0&&q>0);
+  const rawAsks=(depth.asks||[]).map(([p,q])=>[Number(p),Number(q)]).filter(([p,q])=>p>0&&q>0);
+  const bids=rawBids.filter(([p])=>p>=mid*0.99),asks=rawAsks.filter(([p])=>p<=mid*1.01);
+  const bid=bids.reduce((s,[p,q])=>s+p*q,0),ask=asks.reduce((s,[p,q])=>s+p*q,0);
+  const b1=rawBids[0]||[mid,0],a1=rawAsks[0]||[mid,0];
+  const l1Den=b1[1]+a1[1],l1Imbalance=l1Den>0?(b1[1]-a1[1])/l1Den:0;
+  const b5=rawBids.slice(0,5).reduce((s,[p,q])=>s+p*q,0),a5=rawAsks.slice(0,5).reduce((s,[p,q])=>s+p*q,0);
+  const l5Den=b5+a5,l5Imbalance=l5Den>0?(b5-a5)/l5Den:0;
+  const microDen=b1[1]+a1[1],microprice=microDen>0?(a1[0]*b1[1]+b1[0]*a1[1])/microDen:mid;
+  const micropriceOffsetBps=mid>0?(microprice-mid)/mid*10000:0;
+  return{bid,ask,bidAskRatio:ask>0?bid/ask:0,l1Imbalance,l5Imbalance,micropriceOffsetBps};
+}
 function floorStep(v,step){if(!(v>0&&step>0))return 0;const d=Math.max(0,(String(step).split(".")[1]||"").length);return Number((Math.floor((v+1e-12)/step)*step).toFixed(d));} function roundPrice(v,ref){const d=ref>=1000?2:ref>=1?4:8;return Number(v.toFixed(d));} function round(v,d=2){const f=10**d;return Math.round(Number(v)*f)/f;} function fmt(v){const n=Number(v);if(!Number.isFinite(n))return"-";if(Math.abs(n)>=1000)return n.toFixed(2);if(Math.abs(n)>=1)return n.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');return n.toFixed(8).replace(/0+$/,'').replace(/\.$/,'');} function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
 
 function fusionLiveReady(validators){
