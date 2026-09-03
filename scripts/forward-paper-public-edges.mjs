@@ -37,11 +37,15 @@ if(!fingerprint||!symbol){
   process.exit(0);
 }
 
-function signal(c,spreadPct){
+function signal(c,spreadPct,leader3=0){
   if(c.length<160)return null;
   const closes=c.map(x=>x.c),qv=c.map(x=>x.qv),last=c.at(-1),R=rsi(closes),rv=last.qv/Math.max(1,median(qv.slice(-25,-1))),atrs=atrPctSeries(c),a=atrs.at(-1)||0;
   let ok=false,why="",score=80;
-  if(family==="TS_MOMENTUM"){
+  if(family==="CROSS_CRYPTO_LEAD_LAG"){
+    const alt3=last.c/closes.at(-4)-1,gap=leader3-alt3,e24=ema(closes,Number(p.emaFast||24));
+    ok=leader3>=Number(p.leaderRetMin||0.012)&&gap>=Number(p.gapMin||0.008)&&alt3>Number(p.altRetMin||-0.02)&&last.c>e24&&rv>=Number(p.relvol||0.9)&&R>=Number(p.rsiMin||42)&&R<=Number(p.rsiMax||70);
+    score=Math.min(100,82+Math.min(8,gap*500)+Math.min(6,leader3*250)+(spreadPct<=0.10?4:0));why=`leaders3h ${(leader3*100).toFixed(2)}% | gap ${(gap*100).toFixed(2)}%`;
+  } else if(family==="TS_MOMENTUM"){
     const ef=ema(closes,Number(p.emaFast||48)),es=ema(closes,Number(p.emaSlow||120)),lb=Number(p.retLookback||24),ret=last.c/closes.at(-lb-1)-1;
     ok=last.c>ef&&ef>es&&ret>Number(p.retMin||0.02)&&a>=Number(p.atrMin||0.006)&&a<=Number(p.atrMax||0.08)&&rv>=Number(p.relvol||0.8);
     score=Math.min(100,80+Math.min(8,ret*100)+Math.min(6,rv*2)+(spreadPct<=0.10?4:0));why=`ret${lb} ${(ret*100).toFixed(2)}% | RV ${rv.toFixed(2)}x`;
@@ -77,6 +81,12 @@ if(!Array.isArray(ledger.closed))ledger.closed=[];
 if(!ledger.seen)ledger.seen={};
 const [book,raw]=await Promise.all([get(`/api/v3/ticker/bookTicker?symbol=${symbol}`),get(`/api/v3/klines?symbol=${symbol}&interval=${tf}&limit=1000`)]);
 const bid=n(book.bidPrice),ask=n(book.askPrice),spread=((ask-bid)/((ask+bid)/2))*100,c=raw.map(candle);
+let leader3=0;
+if(family==="CROSS_CRYPTO_LEAD_LAG"){
+  const anchors=await Promise.all(["BTCUSDT","ETHUSDT","SOLUSDT"].map(s=>get(`/api/v3/klines?symbol=${s}&interval=1h&limit=8`)));
+  const vals=anchors.map(rows=>{const x=rows.map(candle);return x.at(-1).c/x.at(-4).c-1;});
+  leader3=vals.reduce((a,b)=>a+b,0)/vals.length;
+}
 
 if(ledger.open&&ledger.open.candidateFingerprint!==fingerprint){
   const gross=STAKE*(bid/ledger.open.entry-1),pnl=gross-STAKE*COST_PER_SIDE-(STAKE*(bid/ledger.open.entry))*COST_PER_SIDE;
@@ -94,7 +104,7 @@ if(ledger.open){
 }
 
 if(!ledger.open&&fingerprint){
-  const sig=signal(c,spread),seenKey=fingerprint;
+  const sig=signal(c,spread,leader3),seenKey=fingerprint;
   if(sig&&(!ledger.seen[seenKey]||Date.now()-ledger.seen[seenKey]>6*3600000)){
     const sl=Number(p.sl||0.03),tp=Number(p.tp||0.06),holdBars=Number(p.holdBars||24),mins=tf==="1h"?60:15;
     ledger.open={candidateId:manifest.candidateId,candidateFingerprint:fingerprint,symbol,family,timeframe:tf,score:Math.round(sig.score),entry:ask,stop:ask*(1-sl),target:ask*(1+tp),holdHours:holdBars*mins/60,openedAt:Date.now(),why:sig.why};
