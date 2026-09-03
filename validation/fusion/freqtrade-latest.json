@@ -10,25 +10,25 @@
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "base": {
-    "trades": 224,
-    "wins": 81,
-    "winRate": 0.36160714285714285,
-    "profitFactor": 0.3895912372673832,
-    "expectancyUSDT": -0.011251424375,
-    "netPnlUSDT": -2.52031906,
-    "maxDrawdownUSDT": 2.6360378300000002
+    "trades": 70,
+    "wins": 27,
+    "winRate": 0.38571428571428573,
+    "profitFactor": 1.0206670335385166,
+    "expectancyUSDT": 0.0022364514285714296,
+    "netPnlUSDT": 0.15655160000000007,
+    "maxDrawdownUSDT": 1.4650598699999997
   },
   "stress2x": {
-    "trades": 224,
-    "wins": 48,
-    "winRate": 0.21428571428571427,
-    "profitFactor": 0.182029782216013,
-    "expectancyUSDT": -0.02135428424107143,
-    "netPnlUSDT": -4.78335967,
-    "maxDrawdownUSDT": 4.804290070000002
+    "trades": 65,
+    "wins": 24,
+    "winRate": 0.36923076923076925,
+    "profitFactor": 0.842338272593891,
+    "expectancyUSDT": -0.01912439215384615,
+    "netPnlUSDT": -1.24308549,
+    "maxDrawdownUSDT": 1.94060312
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T13:45:33.672729+00:00",
+  "generatedAt": "2026-09-03T13:45:53.820180+00:00",
   "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
 }
