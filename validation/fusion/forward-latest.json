@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
-  "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
+  "candidateId": null,
+  "candidateFingerprint": null,
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,22 +14,9 @@
     "profitFactor": 0,
     "maxDrawdownUSDT": 0
   },
-  "open": {
-    "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-    "candidateFingerprint": "db0561831b32d3a2c528",
-    "symbol": "ENAUSDT",
-    "family": "TS_MOMENTUM",
-    "timeframe": "1h",
-    "score": 94,
-    "entry": 0.1797,
-    "stop": 0.174309,
-    "target": 0.190482,
-    "holdHours": 24,
-    "openedAt": 1788458981796,
-    "why": "ret24 19.88% | RV 1.13x"
-  },
+  "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:09:41.796Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-03T18:17:16.993Z",
+  "notes": "No unified candidate is eligible; stale ENA paper position was cancelled without counting it as a trade."
 }
