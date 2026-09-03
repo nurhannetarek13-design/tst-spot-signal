@@ -1,20 +1,19 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
-  "symbol": "BMTUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "symbol": null,
+  "family": null,
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_MISMATCH",
+    "CANDIDATE:MISSING",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
-    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
     "nautilus:FAIL",
@@ -26,11 +25,11 @@
     "vectorbt": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "491ef3dee6fa939725a4",
-      "trades": 20,
+      "candidateFingerprint": "16a891b75d998d5f2638",
+      "trades": 13,
       "independentEnginePass": false,
-      "stressProfitFactor": 1.4863375262269254,
-      "stressExpectancyUSDT": 0.027172425694425833
+      "stressProfitFactor": 1.0182979268213943,
+      "stressExpectancyUSDT": 0.0018363730010179274
     },
     "freqtrade": {
       "status": "FAIL",
@@ -60,15 +59,15 @@
       "stressExpectancyUSDT": -0.048685048421052625
     },
     "forward": {
-      "status": "COLLECTING",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "16a891b75d998d5f2638",
+      "candidateFingerprint": null,
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T19:35:15.266143+00:00",
+  "generatedAt": "2026-09-03T19:35:35.241324+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
