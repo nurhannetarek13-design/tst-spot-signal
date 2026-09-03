@@ -8,6 +8,6 @@
   "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T19:44:01.491080+00:00",
-  "notes": "No unified candidate is active; Jesse exits without downloading market data."
+  "generatedAt": "2026-09-03T19:44:12.431055+00:00",
+  "notes": "No unified candidate; Jesse install and market download skipped."
 }
