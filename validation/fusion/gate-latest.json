@@ -12,7 +12,6 @@
     "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
-    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_MISMATCH",
@@ -37,11 +36,11 @@
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "491ef3dee6fa939725a4",
-      "trades": 46,
+      "candidateFingerprint": "16a891b75d998d5f2638",
+      "trades": 34,
       "independentEnginePass": false,
-      "stressProfitFactor": 0.9896364881441613,
-      "stressExpectancyUSDT": -0.0005545382608695655
+      "stressProfitFactor": 0.4498827164059801,
+      "stressExpectancyUSDT": -0.05382031411764706
     },
     "jesse": {
       "status": "FAIL",
@@ -71,6 +70,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T19:34:21.960321+00:00",
+  "generatedAt": "2026-09-03T19:34:58.263900+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
