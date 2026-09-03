@@ -76,6 +76,46 @@
       }
     },
     {
+      "name": "no_candidate_snapshot:vectorbt",
+      "ok": true,
+      "detail": {
+        "status": "NO_CANDIDATE",
+        "fingerprint": null
+      }
+    },
+    {
+      "name": "no_candidate_snapshot:freqtrade",
+      "ok": true,
+      "detail": {
+        "status": "NO_CANDIDATE",
+        "fingerprint": null
+      }
+    },
+    {
+      "name": "no_candidate_snapshot:jesse",
+      "ok": true,
+      "detail": {
+        "status": "NO_CANDIDATE",
+        "fingerprint": null
+      }
+    },
+    {
+      "name": "no_candidate_snapshot:nautilus",
+      "ok": true,
+      "detail": {
+        "status": "NO_CANDIDATE",
+        "fingerprint": null
+      }
+    },
+    {
+      "name": "no_candidate_snapshot:forward",
+      "ok": true,
+      "detail": {
+        "status": "NO_CANDIDATE",
+        "fingerprint": null
+      }
+    },
+    {
       "name": "forward_live_off",
       "ok": true,
       "detail": null
@@ -171,8 +211,43 @@
       "name": "workflow:deploy-cloudflare.yml",
       "ok": true,
       "detail": null
+    },
+    {
+      "name": "rotation_dispatch:candidate-vectorbt-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "rotation_dispatch:fusion-freqtrade-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "rotation_dispatch:fusion-jesse-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "rotation_dispatch:nautilus-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "rotation_dispatch:forward-paper-public-edges.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "safety_blocks_worker_order_endpoint",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "safety_compiles_unified_strategies",
+      "ok": true,
+      "detail": null
     }
   ],
-  "generatedAt": "2026-09-03T19:39:16.624984+00:00",
+  "generatedAt": "2026-09-03T19:46:13.982452+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
