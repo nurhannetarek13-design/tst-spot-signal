@@ -1,0 +1,178 @@
+{
+  "engine": "SYSTEM_HEALTH",
+  "status": "PASS",
+  "pass": true,
+  "liveTrading": false,
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "gateLiveReady": false,
+  "checks": [
+    {
+      "name": "policy_exists",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "policy_paper_only",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "policy_live_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "executor_auto_enable_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "withdrawals_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "futures_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "leverage_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "manifest_exists",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "manifest_live_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "gate_exists",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "gate_live_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "gate_auto_enable_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "no_candidate_is_fail_closed",
+      "ok": true,
+      "detail": {
+        "manifestStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS"
+      }
+    },
+    {
+      "name": "forward_live_off",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "derivatives_context_read_only",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "derivatives_has_data",
+      "ok": true,
+      "detail": {
+        "usableCount": 10
+      }
+    },
+    {
+      "name": "worker_live_off_literal",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "worker_unified_gate",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "worker_small_mid_universe",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "worker_microstructure",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "worker_derivatives_context",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "worker_forward_validator",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:public-edge-lab.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:candidate-vectorbt-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:fusion-freqtrade-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:fusion-jesse-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:nautilus-validator.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:forward-paper-public-edges.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:fusion-gate.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:candidate-rotation.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:derivatives-pressure.yml",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "workflow:deploy-cloudflare.yml",
+      "ok": true,
+      "detail": null
+    }
+  ],
+  "generatedAt": "2026-09-03T19:39:16.624984+00:00",
+  "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
+}
