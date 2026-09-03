@@ -39,6 +39,16 @@ if fp:
     check("gate_candidate_matches",gate and gate.get("candidateFingerprint")==fp,{"manifest":fp,"gate":(gate or {}).get("candidateFingerprint")})
 else:
     check("no_candidate_is_fail_closed",gate and gate.get("liveReady") is False and "CANDIDATE:MISSING" in (gate.get("reasons") or []),{"manifestStatus":(manifest or {}).get("status")})
+    no_candidate_files={
+      "vectorbt":"validation/fusion/vectorbt-candidate-latest.json",
+      "freqtrade":"validation/fusion/freqtrade-latest.json",
+      "jesse":"validation/fusion/jesse-latest.json",
+      "nautilus":"validation/fusion/nautilus-latest.json",
+      "forward":"validation/fusion/forward-latest.json",
+    }
+    for name,pth in no_candidate_files.items():
+        row=load(pth)
+        check("no_candidate_snapshot:"+name, row is not None and row.get("candidateFingerprint") is None and row.get("status")=="NO_CANDIDATE", {"status":(row or {}).get("status"),"fingerprint":(row or {}).get("candidateFingerprint")})
 
 check("forward_live_off",forward and forward.get("liveTrading") is False)
 check("derivatives_context_read_only",deriv and deriv.get("liveTrading") is False)
@@ -65,6 +75,14 @@ required=[
 ]
 for p in required:
     check("workflow:"+pathlib.Path(p).name,pathlib.Path(p).exists())
+
+rotation_text=pathlib.Path(".github/workflows/candidate-rotation.yml").read_text()
+for wf in ["candidate-vectorbt-validator.yml","fusion-freqtrade-validator.yml","fusion-jesse-validator.yml","nautilus-validator.yml","forward-paper-public-edges.yml"]:
+    check("rotation_dispatch:"+wf, "gh workflow run" in rotation_text and wf in rotation_text)
+
+safety_text=pathlib.Path(".github/workflows/safety.yml").read_text()
+check("safety_blocks_worker_order_endpoint", "'/api/v3/order' not in worker" in safety_text)
+check("safety_compiles_unified_strategies","UnifiedCandidateValidator" in safety_text and "UnifiedCandidateStrategy.py" in safety_text)
 
 ok=all(x["ok"] for x in checks)
 report={
