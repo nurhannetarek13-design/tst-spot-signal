@@ -1,34 +1,13 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
-  "symbol": "BMTUSDT",
-  "family": "VOLATILITY_BREAKOUT",
-  "timeframe": "1h",
-  "base": {
-    "trades": 34,
-    "wins": 10,
-    "winRate": 0.29411764705882354,
-    "profitFactor": 0.5493723220328297,
-    "expectancyUSDT": -0.03879994088235294,
-    "netPnlUSDT": -1.31919799,
-    "maxDrawdownUSDT": 1.9275560600000006
-  },
-  "stress2x": {
-    "trades": 34,
-    "wins": 9,
-    "winRate": 0.2647058823529412,
-    "profitFactor": 0.4498827164059801,
-    "expectancyUSDT": -0.05382031411764706,
-    "netPnlUSDT": -1.82989068,
-    "maxDrawdownUSDT": 2.4389630099999997
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T19:34:40.498567+00:00",
-  "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
+  "generatedAt": "2026-09-03T19:45:20.361198+00:00",
+  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
 }
