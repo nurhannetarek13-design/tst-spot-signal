@@ -2,6 +2,11 @@ name: Unified Candidate VectorBT Validator
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab"]
+    types: [completed]
+  schedule:
+    - cron: "35 2 * * *"
   push:
     branches: [main]
     paths:
