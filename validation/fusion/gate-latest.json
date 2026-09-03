@@ -41,11 +41,11 @@
       "stressExpectancyUSDT": -0.05382031411764706
     },
     "jesse": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "491ef3dee6fa939725a4",
+      "candidateFingerprint": null,
       "trades": 0,
-      "independentEnginePass": false,
+      "independentEnginePass": null,
       "stressProfitFactor": 0.0,
       "stressExpectancyUSDT": 0.0
     },
@@ -68,6 +68,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T19:43:15.022673+00:00",
+  "generatedAt": "2026-09-03T19:44:14.020246+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
