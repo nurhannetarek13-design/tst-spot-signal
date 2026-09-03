@@ -30,8 +30,21 @@ jobs:
         with: {fetch-depth: 0}
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: pip install --disable-pip-version-check 'plotly<7' vectorbt pandas numpy
-      - run: python research/candidate_vectorbt_validator.py
+      - name: Read candidate presence
+        run: |
+          python - <<'PY'
+          import json, pathlib, os, datetime
+          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          has=bool(m.get("candidateFingerprint"))
+          with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+          if not has:
+              out={"engine":"VECTORBT_CANDIDATE","strategyId":"TST_CANDIDATE_VECTORBT_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; heavy VectorBT validation skipped."}
+              pathlib.Path("validation/fusion/vectorbt-candidate-latest.json").write_text(json.dumps(out,indent=2))
+          PY
+      - if: env.HAS_CANDIDATE == 'true'
+        run: pip install --disable-pip-version-check 'plotly<7' vectorbt pandas numpy
+      - if: env.HAS_CANDIDATE == 'true'
+        run: python research/candidate_vectorbt_validator.py
       - name: Commit VectorBT snapshot safely
         run: |
           cp validation/fusion/vectorbt-candidate-latest.json /tmp/vectorbt-candidate-latest.json
