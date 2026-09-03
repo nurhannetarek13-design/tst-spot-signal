@@ -1,11 +1,18 @@
 {
   "engine": "FREQTRADE",
-  "strategyId": "TST_ADAPTIVE_FUSION_V1",
+  "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
   "status": "FAIL",
   "pass": false,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
+  "symbol": "ENAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
   "base": {
     "trades": 224,
     "wins": 81,
+    "winRate": 0.36160714285714285,
     "profitFactor": 0.3895912372673832,
     "expectancyUSDT": -0.011251424375,
     "netPnlUSDT": -2.52031906,
@@ -14,11 +21,14 @@
   "stress2x": {
     "trades": 224,
     "wins": 48,
+    "winRate": 0.21428571428571427,
     "profitFactor": 0.182029782216013,
     "expectancyUSDT": -0.02135428424107143,
     "netPnlUSDT": -4.78335967,
     "maxDrawdownUSDT": 4.804290070000002
   },
-  "generatedAt": "2026-09-03T13:45:26.653927+00:00",
-  "notes": "Binance Spot historical data; 15m; fees included by Freqtrade."
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "generatedAt": "2026-09-03T13:45:33.672729+00:00",
+  "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
 }
