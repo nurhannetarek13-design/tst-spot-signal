@@ -27,10 +27,19 @@ for name in ["vectorbt","freqtrade","jesse","nautilus"]:
     v=summary.get(name) or {}
     if v.get("candidateFingerprint")!=fp: continue
     trades=int(v.get("trades") or 0)
-    # Reject only on a real economic failure, not merely because sample size is below 100.
-    # "independentEnginePass" isolates stressed economics from the final sample-size gate.
+    # Reject on actual stressed economic failure, not merely on insufficient sample size.
     indep=v.get("independentEnginePass")
-    if trades>=30 and indep is False:
+    stress_exp=v.get("stressExpectancyUSDT")
+    stress_pf=v.get("stressProfitFactor")
+    economic_fail=(
+        trades>=10
+        and stress_exp is not None
+        and stress_pf is not None
+        and (float(stress_exp)<0 or float(stress_pf)<0.95)
+    )
+    if economic_fail:
+        hard_fail.append(name)
+    elif trades>=30 and indep is False and stress_exp is not None and float(stress_exp)<=0:
         hard_fail.append(name)
     elif trades>=100 and indep is None and v.get("pass") is False:
         hard_fail.append(name)
