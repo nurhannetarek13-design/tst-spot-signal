@@ -15,7 +15,7 @@ SYMBOL=SYMBOL_API[:-4]+"-USDT"
 TF=MANIFEST["timeframe"]
 EXCHANGE="Binance Spot Synthetic Feed"
 STRATEGY_ID="TST_CANDIDATE_JESSE_VALIDATOR_V1"
-DAYS=90
+DAYS=365
 
 def fetch_1m(days=DAYS):
     end=int(time.time()*1000);start=end-days*86400000;out=[];cursor=start
