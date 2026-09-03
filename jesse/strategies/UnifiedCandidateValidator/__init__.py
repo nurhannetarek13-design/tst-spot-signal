@@ -9,6 +9,23 @@ MANIFEST=json.loads(MANIFEST_PATH.read_text()) if MANIFEST_PATH.exists() else {}
 FAMILY=MANIFEST.get("family","TS_MOMENTUM")
 PARAMS=MANIFEST.get("params") or {}
 TF=MANIFEST.get("timeframe","1h")
+LEADER_PATH=pathlib.Path("validation/fusion/jesse-leader.json")
+_LEADER_CACHE=None
+
+def leader_value(ts):
+    global _LEADER_CACHE
+    if FAMILY!="CROSS_CRYPTO_LEAD_LAG":
+        return 0.0
+    if _LEADER_CACHE is None:
+        try:
+            _LEADER_CACHE=json.loads(LEADER_PATH.read_text())
+        except Exception:
+            _LEADER_CACHE={}
+    try:
+        key=str(int(float(ts)))
+        return float(_LEADER_CACHE.get(key,0.0))
+    except Exception:
+        return 0.0
 
 def ema(values,n):
     x=np.asarray(values,dtype=float)
@@ -44,6 +61,21 @@ class UnifiedCandidateValidator(Strategy):
         qv=volumes*closes
         med=float(np.median(qv[-25:-1])) if len(qv)>=25 else 0.0
         rel=float(qv[-1]/med) if med>0 else 0.0
+
+        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+            lead=leader_value(self.current_candle[0])
+            alt3=float(close/closes[-4]-1)
+            gap=lead-alt3
+            e24=ema(closes[-100:],int(p.get("emaFast",24)))
+            return bool(
+                e24
+                and lead>=float(p.get("leaderRetMin",0.012))
+                and gap>=float(p.get("gapMin",0.008))
+                and alt3>float(p.get("altRetMin",-0.02))
+                and close>e24
+                and rel>=float(p.get("relvol",0.9))
+                and float(p.get("rsiMin",42))<=R<=float(p.get("rsiMax",70))
+            )
 
         if FAMILY=="TS_MOMENTUM":
             ef=ema(closes[-400:],int(p.get("emaFast",48)));es=ema(closes[-500:],int(p.get("emaSlow",120)))
