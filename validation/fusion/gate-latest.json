@@ -23,13 +23,13 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "16a891b75d998d5f2638",
-      "trades": 13,
-      "independentEnginePass": false,
-      "stressProfitFactor": 1.0182979268213943,
-      "stressExpectancyUSDT": 0.0018363730010179274
+      "candidateFingerprint": null,
+      "trades": 0,
+      "independentEnginePass": null,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "freqtrade": {
       "status": "FAIL",
@@ -50,13 +50,13 @@
       "stressExpectancyUSDT": 0.0
     },
     "nautilus": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "16a891b75d998d5f2638",
-      "trades": 19,
-      "independentEnginePass": false,
-      "stressProfitFactor": 0.42664080598807774,
-      "stressExpectancyUSDT": -0.048685048421052625
+      "candidateFingerprint": null,
+      "trades": 0,
+      "independentEnginePass": null,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "forward": {
       "status": "NO_CANDIDATE",
@@ -68,6 +68,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T19:44:14.020246+00:00",
+  "generatedAt": "2026-09-03T19:44:30.849400+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
