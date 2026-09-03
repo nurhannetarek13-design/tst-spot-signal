@@ -1,0 +1,15 @@
+{
+  "engine": "DERIVATIVES_PRESSURE",
+  "strategyId": "TST_DERIVATIVES_PRESSURE_V1",
+  "status": "RUNTIME_BLOCKED_451",
+  "pass": false,
+  "authorization": "FORWARD_PAPER_ONLY",
+  "liveTrading": false,
+  "note": "GitHub-hosted runner is blocked from Binance USD-M Futures. Active derivatives monitoring has moved to the Cloudflare Worker.",
+  "candidates": [],
+  "universeCount": 0,
+  "failures": {
+    "runtime": "HTTP 451"
+  },
+  "generatedAt": "2026-09-03T13:56:41.562599+00:00"
+}
