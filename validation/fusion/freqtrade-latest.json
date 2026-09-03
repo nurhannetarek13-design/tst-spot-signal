@@ -1,34 +1,11 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
-  "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "base": {
-    "trades": 70,
-    "wins": 27,
-    "winRate": 0.38571428571428573,
-    "profitFactor": 1.0206670335385166,
-    "expectancyUSDT": 0.0022364514285714296,
-    "netPnlUSDT": 0.15655160000000007,
-    "maxDrawdownUSDT": 1.4650598699999997
-  },
-  "stress2x": {
-    "trades": 65,
-    "wins": 24,
-    "winRate": 0.36923076923076925,
-    "profitFactor": 0.842338272593891,
-    "expectancyUSDT": -0.01912439215384615,
-    "netPnlUSDT": -1.24308549,
-    "maxDrawdownUSDT": 1.94060312
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T14:31:11.240000+00:00",
-  "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
+  "generatedAt": "2026-09-03T14:34:37.009603+00:00"
 }
