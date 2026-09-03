@@ -1,23 +1,26 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "f16d9a96bb813112f524",
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
   "symbol": "ENAUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "family": "TS_MOMENTUM",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
+    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
-    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
+    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
+    "forward:CANDIDATE_MISMATCH",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -53,6 +56,6 @@
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T14:30:03.977479+00:00",
+  "generatedAt": "2026-09-03T14:30:18.126644+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
