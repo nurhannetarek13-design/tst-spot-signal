@@ -15,6 +15,7 @@ COMPATIBLE_EDGE={
   "TS_MOMENTUM":{"timeframe":"1h","params":{"emaFast":48,"emaSlow":120,"retLookback":24,"retMin":0.02,"atrMin":0.006,"atrMax":0.08,"relvol":0.8,"holdBars":24,"sl":0.03,"tp":0.06}},
   "LIQUIDITY_REVERSAL":{"timeframe":"1h","params":{"retLookback":6,"zLookback":720,"zMax":-2.0,"rsiMax":35,"volumeRatioMax":1.10,"holdBars":12,"sl":0.03,"tp":0.05}},
   "VOLATILITY_BREAKOUT":{"timeframe":"1h","params":{"lookback":24,"compressionLookback":72,"compressionPct":0.25,"relvol":1.5,"rsiMin":55,"rsiMax":75,"holdBars":12,"sl":0.025,"tp":0.055}},
+  "CROSS_CRYPTO_LEAD_LAG":{"timeframe":"1h","params":{"leaderRetMin":0.012,"gapMin":0.008,"altRetMin":-0.02,"relvol":0.9,"rsiMin":42,"rsiMax":70,"emaFast":24,"holdBars":6,"sl":0.025,"tp":0.05}},
 }
 COMPATIBLE_VBT={"TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM"}
 
