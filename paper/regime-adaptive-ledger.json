@@ -8,7 +8,7 @@
     {
       "symbol": "ETHUSDT",
       "entry": 2509.4,
-      "stop": 2407.61643953,
+      "stop": 2409.0174081718214,
       "qty": 0.00196495386,
       "notionalUSDT": 4.93085522,
       "riskUSDT": 0.2,
@@ -16,14 +16,14 @@
       "openedAt": "2026-09-03T19:18:35.560Z",
       "signalBarTime": "2026-09-03T16:00:00.000Z",
       "highestClose": 2509.97,
-      "barsHeld": 0,
+      "barsHeld": 1,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     },
     {
       "symbol": "AVAXUSDT",
       "entry": 7.525,
-      "stop": 7.2244879,
+      "stop": 7.231381617870407,
       "qty": 0.665530597156,
       "notionalUSDT": 5.00811774,
       "riskUSDT": 0.2,
@@ -31,7 +31,7 @@
       "openedAt": "2026-09-03T19:18:35.560Z",
       "signalBarTime": "2026-09-03T16:00:00.000Z",
       "highestClose": 7.529,
-      "barsHeld": 0,
+      "barsHeld": 1,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -41,7 +41,7 @@
     "ETHUSDT:1788451200000",
     "AVAXUSDT:1788451200000"
   ],
-  "lastRunAt": "2026-09-03T19:18:35.560Z",
+  "lastRunAt": "2026-09-03T22:36:54.778Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
