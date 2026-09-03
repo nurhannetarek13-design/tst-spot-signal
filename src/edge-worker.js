@@ -17,6 +17,8 @@ const CFG = {
   scanPerRun: 8,
   focusUniverseSize: 80,
   focusMinVolume: 5_000_000,
+  focusMaxVolume: 150_000_000,
+  focusMaxPrice: 2.0,
   newListingSlotsPerRun: 4,
   big: { minVolume:20_000_000,maxSpreadPct:0.10,minDepth:15_000,minRelVol:1.25,minTaker:0.54,minDepthRatio:1.10,minScore:88,maxPosition:7,maxRisk:0.20,maxStopPct:2.5 },
   small:{ minVolume:5_000_000,maxVolume:150_000_000,maxSpreadPct:0.15,minDepth:5_000,minRelVol:1.30,minTaker:0.56,minDepthRatio:1.15,minScore:90,maxPosition:5.5,maxRisk:0.10,maxStopPct:2.2 },
@@ -48,7 +50,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"TOP_80_LIQUID_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LOW_PRICE_SMALL_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -100,9 +102,9 @@ async function scan(env,sendAlert){
     const summaries=tickers.map(t=>summarize(t,tradable.get(t.symbol),bookMap.get(t.symbol))).filter(Boolean);
     const bigPool=summaries.filter(x=>x.volume>=CFG.big.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const smallPool=summaries.filter(x=>!MAJORS.has(x.base)&&x.volume>=CFG.small.minVolume&&x.volume<=CFG.small.maxVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
-    const newPool=summaries.filter(x=>x.isNewListing&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
+    const newPool=summaries.filter(x=>x.isNewListing&&!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const allPool=summaries.slice().sort((a,b)=>opportunityRank(b)-opportunityRank(a));
-    const focusPool=allPool.filter(x=>x.volume>=CFG.focusMinVolume).slice(0,CFG.focusUniverseSize);
+    const focusPool=allPool.filter(x=>!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.focusMinVolume&&x.volume<=CFG.focusMaxVolume).slice(0,CFG.focusUniverseSize);
     const selected=await rotateSelection(env,focusPool,newPool);
     const analyses=[];
     for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime))));
