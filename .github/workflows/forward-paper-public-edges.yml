@@ -37,15 +37,23 @@ jobs:
           node-version: "22"
       - run: node --check scripts/forward-paper-public-edges.mjs
       - run: node scripts/forward-paper-public-edges.mjs
-      - name: Persist edge paper ledger
+      - name: Persist edge paper ledger safely
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add paper/public-edge-forward-ledger.json validation/fusion/forward-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "chore: update unified forward evidence [skip ci]"
+          cp paper/public-edge-forward-ledger.json /tmp/public-edge-forward-ledger.json
+          cp validation/fusion/forward-latest.json /tmp/forward-latest.json
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p "$(dirname paper/public-edge-forward-ledger.json)"
+            cp /tmp/public-edge-forward-ledger.json paper/public-edge-forward-ledger.json
+            mkdir -p "$(dirname validation/fusion/forward-latest.json)"
+            cp /tmp/forward-latest.json validation/fusion/forward-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add paper/public-edge-forward-ledger.json validation/fusion/forward-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "chore: update unified forward evidence [skip ci]"
+            git push origin HEAD:main && exit 0
             sleep $((i * 2))
           done
           exit 1
