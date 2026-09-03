@@ -5,6 +5,7 @@ Uses public Binance USD-M data as a predictive filter for Spot candidates.
 Research/paper only; it never trades futures.
 """
 import datetime as dt, json, pathlib, time, urllib.parse, urllib.request
+from urllib.error import HTTPError
 
 SPOT="https://data-api.binance.vision"
 FAPI="https://fapi.binance.com"
@@ -22,7 +23,22 @@ def get(base,path):
 
 spot_info=get(SPOT,"/api/v3/exchangeInfo")
 spot_tickers={x["symbol"]:x for x in get(SPOT,"/api/v3/ticker/24hr")}
-fut_info=get(FAPI,"/fapi/v1/exchangeInfo")
+try:
+    fut_info=get(FAPI,"/fapi/v1/exchangeInfo")
+except HTTPError as e:
+    if e.code == 451:
+        report={
+            "engine":"DERIVATIVES_PRESSURE","strategyId":STRATEGY_ID,"status":"RUNTIME_BLOCKED_451",
+            "pass":False,"authorization":"FORWARD_PAPER_ONLY","liveTrading":False,
+            "note":"GitHub-hosted runner is blocked from Binance USD-M Futures. Active derivatives monitoring has moved to the Cloudflare Worker.",
+            "candidates":[],"universeCount":0,"failures":{"runtime":"HTTP 451"},
+            "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat()
+        }
+        OUT.parent.mkdir(parents=True,exist_ok=True)
+        OUT.write_text(json.dumps(report,indent=2))
+        print(json.dumps(report,indent=2))
+        raise SystemExit(0)
+    raise
 fut_symbols={x["symbol"] for x in fut_info.get("symbols",[]) if x.get("status")=="TRADING" and x.get("contractType")=="PERPETUAL"}
 
 universe=[]
