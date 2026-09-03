@@ -1,32 +1,11 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
-  "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "base": {
-    "trades": 68,
-    "winRate": 0.4411764705882353,
-    "profitFactor": 0.0,
-    "expectancyUSDT": 0.02502973276950031,
-    "netPnlUSDT": 1.7020218283260211,
-    "maxDrawdown": -7.232084273213612
-  },
-  "stress2x": {
-    "trades": 68,
-    "winRate": 0.4264705882352941,
-    "profitFactor": 0.0,
-    "expectancyUSDT": 0.008473917064930121,
-    "netPnlUSDT": 0.5762263604152482,
-    "maxDrawdown": -9.651805654778478
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T14:34:44.558816+00:00",
-  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
+  "generatedAt": "2026-09-03T14:35:59.933836+00:00"
 }
