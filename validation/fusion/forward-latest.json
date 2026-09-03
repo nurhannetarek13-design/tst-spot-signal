@@ -3,10 +3,10 @@
   "strategyId": "TST_UNIFIED_FORWARD_V1",
   "status": "COLLECTING",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "4d447ed53b9d56d398d4",
-  "symbol": "XPLUSDT",
-  "family": "CROSS_CRYPTO_LEAD_LAG",
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "metrics": {
     "trades": 0,
@@ -20,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:37:13.023Z",
+  "generatedAt": "2026-09-03T18:36:27.842Z",
   "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
