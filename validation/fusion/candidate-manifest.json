@@ -3,7 +3,7 @@
   "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
   "candidateFingerprint": "db0561831b32d3a2c528",
   "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-03T13:50:23.848030+00:00",
+  "sourceGeneratedAt": "2026-09-03T14:01:06.257893+00:00",
   "symbol": "ENAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
@@ -24,29 +24,29 @@
       "trades": 38,
       "wins": 18,
       "winRate": 0.47368421052631576,
-      "netPnlUSDT": 1.5322851804934792,
-      "expectancyUSDT": 0.04032329422351261,
-      "profitFactor": 1.439072458393806,
+      "netPnlUSDT": 1.589403239023674,
+      "expectancyUSDT": 0.04182640102693879,
+      "profitFactor": 1.474495520155278,
       "maxDrawdownUSDT": 1.4667674999999991
     },
     "stress2x": {
       "trades": 38,
       "wins": 18,
       "winRate": 0.47368421052631576,
-      "netPnlUSDT": 0.9020413870325474,
-      "expectancyUSDT": 0.023737931237698618,
-      "profitFactor": 1.236441251448753,
+      "netPnlUSDT": 0.9590736397662529,
+      "expectancyUSDT": 0.02523877999384876,
+      "profitFactor": 1.260962950974643,
       "maxDrawdownUSDT": 1.7785349999999975
     }
   },
   "liquidity": {
-    "quoteVolume24h": 24166598.07591,
-    "priceUSDT": 0.1557
+    "quoteVolume24h": 24144113.529208,
+    "priceUSDT": 0.1555
   },
   "rankKey": [
     1,
-    0.023737931237698618,
-    1.236441251448753,
+    0.02523877999384876,
+    1.260962950974643,
     38
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
@@ -58,5 +58,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T13:50:23.943739+00:00"
+  "generatedAt": "2026-09-03T14:01:06.355667+00:00"
 }
