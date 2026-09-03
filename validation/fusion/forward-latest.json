@@ -17,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:17:16.993Z",
-  "notes": "No unified candidate is eligible; stale ENA paper position was cancelled without counting it as a trade."
+  "generatedAt": "2026-09-03T18:29:40.346Z",
+  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
 }
