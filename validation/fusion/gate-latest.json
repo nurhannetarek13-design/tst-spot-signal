@@ -28,33 +28,48 @@
       "status": "FAIL",
       "pass": false,
       "candidateFingerprint": "385a252d2323f398b13a",
-      "trades": 14
+      "trades": 14,
+      "independentEnginePass": false,
+      "stressProfitFactor": 0.8104100130819061,
+      "stressExpectancyUSDT": -0.01657459702256826
     },
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
       "candidateFingerprint": "4d447ed53b9d56d398d4",
-      "trades": 41
+      "trades": 41,
+      "independentEnginePass": false,
+      "stressProfitFactor": 0.8879973938152669,
+      "stressExpectancyUSDT": -0.008478161707317074
     },
     "jesse": {
       "status": "NO_CANDIDATE",
       "pass": false,
       "candidateFingerprint": null,
-      "trades": 0
+      "trades": 0,
+      "independentEnginePass": null,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "nautilus": {
       "status": "FAIL",
       "pass": false,
       "candidateFingerprint": "385a252d2323f398b13a",
-      "trades": 11
+      "trades": 11,
+      "independentEnginePass": false,
+      "stressProfitFactor": 0.8705476462105917,
+      "stressExpectancyUSDT": -0.009141191818181819
     },
     "forward": {
       "status": "COLLECTING",
       "pass": false,
       "candidateFingerprint": "4d447ed53b9d56d398d4",
-      "trades": 0
+      "trades": 0,
+      "independentEnginePass": null,
+      "stressProfitFactor": null,
+      "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:38:08.339543+00:00",
+  "generatedAt": "2026-09-03T18:38:21.205203+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
