@@ -1,0 +1,45 @@
+name: Derivatives Pressure Forward Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "research/derivatives_pressure.py"
+      - ".github/workflows/derivatives-pressure.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: derivatives-pressure
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run derivatives pressure monitor
+        run: python research/derivatives_pressure.py
+      - name: Commit forward snapshot
+        run: |
+          cp validation/edges/derivatives-pressure-latest.json /tmp/derivatives-pressure-latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p validation/edges
+          cp /tmp/derivatives-pressure-latest.json validation/edges/derivatives-pressure-latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/edges/derivatives-pressure-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update derivatives pressure snapshot"
+          git push
