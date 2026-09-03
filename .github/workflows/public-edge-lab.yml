@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - "research/public_edge_lab.py"
+      - "scripts/build_candidate_manifest.py"
       - ".github/workflows/public-edge-lab.yml"
 
 permissions:
@@ -37,16 +38,13 @@ jobs:
         run: python scripts/build_candidate_manifest.py
       - name: Commit research snapshot
         run: |
-          cp validation/edges/public-edge-lab-latest.json /tmp/public-edge-lab-latest.json
-          cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p validation/edges
-          cp /tmp/public-edge-lab-latest.json validation/edges/public-edge-lab-latest.json
-          cp /tmp/candidate-manifest.json validation/fusion/candidate-manifest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add validation/edges/public-edge-lab-latest.json validation/fusion/candidate-manifest.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update public edge lab snapshot"
-          git push
+          git commit -m "Update public edge lab and unified candidate"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
