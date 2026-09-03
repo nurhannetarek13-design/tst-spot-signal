@@ -44,7 +44,11 @@ for name in ["vectorbt","freqtrade","jesse","nautilus"]:
     elif trades>=100 and indep is None and v.get("pass") is False:
         hard_fail.append(name)
 
-if len(hard_fail)<2:
+strong_fail=[
+    name for name in hard_fail
+    if int((summary.get(name) or {}).get("trades") or 0)>=30
+]
+if not strong_fail and len(hard_fail)<2:
     print(json.dumps({"changed":False,"reason":"INSUFFICIENT_HARD_FAILURES","hardFail":hard_fail}))
     raise SystemExit(0)
 
