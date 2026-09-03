@@ -1,10 +1,10 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
-  "symbol": "BMTUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "4d447ed53b9d56d398d4",
+  "symbol": "XPLUSDT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
@@ -62,15 +62,15 @@
       "stressExpectancyUSDT": -0.009141191818181819
     },
     "forward": {
-      "status": "RESET_FOR_NEW_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
-      "candidateFingerprint": "16a891b75d998d5f2638",
+      "candidateFingerprint": "4d447ed53b9d56d398d4",
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:39:45.719272+00:00",
+  "generatedAt": "2026-09-03T18:40:34.860871+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
