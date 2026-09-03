@@ -1,7 +1,7 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+  "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
   "symbol": "PEPEUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
@@ -37,8 +37,8 @@
     }
   },
   "liquidity": {
-    "quoteVolume24h": 41268052.13046993,
-    "priceUSDT": 0.00000384
+    "quoteVolume24h": 41318620.87862496,
+    "priceUSDT": 3.83e-06
   },
   "rankKey": [
     1,
@@ -51,7 +51,7 @@
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
       "symbol": "PEPEUSDT",
       "family": "VOLATILITY_BREAKOUT",
       "timeframe": "1h",
@@ -87,8 +87,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 41268052.13046993,
-        "priceUSDT": 0.00000384
+        "quoteVolume24h": 41318620.87862496,
+        "priceUSDT": 3.83e-06
       },
       "rankKey": [
         1,
@@ -101,7 +101,7 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
       "symbol": "BMTUSDT",
       "family": "VOLATILITY_BREAKOUT",
       "timeframe": "1h",
@@ -137,8 +137,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 148553795.419701,
-        "priceUSDT": 0.01836
+        "quoteVolume24h": 148512171.573979,
+        "priceUSDT": 0.01846
       },
       "rankKey": [
         1,
@@ -151,7 +151,7 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T18:29:28.550557+00:00",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
       "symbol": "ENAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
@@ -172,29 +172,29 @@
           "trades": 89,
           "wins": 39,
           "winRate": 0.43820224719101125,
-          "netPnlUSDT": 1.538088512780342,
-          "expectancyUSDT": 0.017281893402026315,
-          "profitFactor": 1.1722885555563183,
+          "netPnlUSDT": 1.5412702914593694,
+          "expectancyUSDT": 0.017317643724262578,
+          "profitFactor": 1.172644961607176,
           "maxDrawdownUSDT": 2.1695324336585347
         },
         "stress2x": {
           "trades": 89,
           "wins": 39,
           "winRate": 0.43820224719101125,
-          "netPnlUSDT": 0.06507185502453675,
-          "expectancyUSDT": 0.000731144438477941,
-          "profitFactor": 1.0066807334658692,
+          "netPnlUSDT": 0.06824885386578873,
+          "expectancyUSDT": 0.0007668410546717835,
+          "profitFactor": 1.0070069064706464,
           "maxDrawdownUSDT": 2.628967287288492
         }
       },
       "liquidity": {
-        "quoteVolume24h": 47273518.726987,
-        "priceUSDT": 0.1771
+        "quoteVolume24h": 47514498.930427,
+        "priceUSDT": 0.1764
       },
       "rankKey": [
         1,
-        0.000731144438477941,
-        1.0066807334658692,
+        0.0007668410546717835,
+        1.0070069064706464,
         89
       ],
       "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
@@ -214,5 +214,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:31:12.030Z"
+  "generatedAt": "2026-09-03T18:34:12.279626+00:00"
 }
