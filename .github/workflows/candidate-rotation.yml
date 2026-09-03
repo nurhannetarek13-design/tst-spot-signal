@@ -26,7 +26,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python scripts/rotate_candidate.py
+      - name: Evaluate candidate rotation
+        id: rotate
+        run: |
+          python scripts/rotate_candidate.py | tee /tmp/rotation-result.json
+          python - <<'PY'
+          import json, os
+          row=json.load(open("/tmp/rotation-result.json"))
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write("changed="+str(bool(row.get("changed"))).lower()+"\n")
+              f.write("next_candidate="+str(row.get("next") or "")+"\n")
+          print(row)
+          PY
       - name: Persist rotation safely
         run: |
           cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.json
@@ -51,3 +62,14 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Dispatch validators for rotated candidate
+        if: steps.rotate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for wf in             candidate-vectorbt-validator.yml             fusion-freqtrade-validator.yml             fusion-jesse-validator.yml             nautilus-validator.yml             forward-paper-public-edges.yml; do
+            gh workflow run "$wf" --ref main
+          done
+          echo "Dispatched all unified validators for: ${{ steps.rotate.outputs.next_candidate }}"
