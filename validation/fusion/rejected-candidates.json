@@ -1,18 +1,5 @@
 {
-  "rejected": [
-    {
-      "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "db0561831b32d3a2c528",
-      "symbol": "ENAUSDT",
-      "family": "TS_MOMENTUM",
-      "hardFailValidators": [
-        "freqtrade",
-        "nautilus"
-      ],
-      "rejectedAt": "2026-09-03T14:34:18.936Z",
-      "reason": "Independent validators failed doubled-friction stress on the exact unified candidate"
-    }
-  ],
+  "rejected": [],
   "ttlDays": 7,
-  "note": "Candidates rejected by the unified gate are cooled down, not permanently blacklisted."
+  "note": "Prior ENA rejection cleared only because the independent validation horizon changed materially to 365 days. Future failures will be cooled down normally."
 }
