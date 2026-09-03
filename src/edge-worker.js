@@ -31,15 +31,18 @@ const SAFE_B_SUFFIX = new Set(["BNB","ARB","KUB","WBB"]);
 const FUSION_VALIDATORS = {
   freqtrade: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/freqtrade-latest.json",
   jesse: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/jesse-latest.json",
-  vectorbt: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/vectorbt-latest.json",
+  vectorbt: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/vectorbt-candidate-latest.json",
   nautilus: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/nautilus-latest.json",
+  forward: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/forward-latest.json",
 };
-const FUSION_STRATEGY_ID = "TST_ADAPTIVE_FUSION_V1";
+const CANDIDATE_MANIFEST_URL = "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/candidate-manifest.json";
+const FUSION_STRATEGY_ID = "TST_UNIFIED_CANDIDATE_V1";
 const EXPECTED_VALIDATOR_IDS = {
-  freqtrade: "TST_ADAPTIVE_FUSION_V1",
-  jesse: "TST_ADAPTIVE_FUSION_V1",
-  vectorbt: "TST_DISCOVERY_VECTORBT_V1",
-  nautilus: "TST_NAUTILUS_EXECUTION_VALIDATOR_V1",
+  freqtrade: "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
+  jesse: "TST_CANDIDATE_JESSE_VALIDATOR_V1",
+  vectorbt: "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
+  nautilus: "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
+  forward: "TST_UNIFIED_FORWARD_V1",
 };
 const VALIDATOR_CACHE_SECONDS = 30 * 60;
 
@@ -50,12 +53,19 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","DERIVATIVES_PRESSURE_FORWARD","VECTORBT_DISCOVERY","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
       const validators = await getFusionValidators(env, url.searchParams.get("refresh") === "1");
-      const liveGate=fusionLiveReady(validators); return json({ ok:true, mode:"FREE_FUSION_SHADOW", strategyId:FUSION_STRATEGY_ID, liveTrading:false, executorAllowed:false, liveReady:liveGate.ready, liveBlockReasons:liveGate.reasons, validators, note:"Cloudflare runs the paper/order-book scanner. VectorBT discovers candidates; Freqtrade and Jesse validate; NautilusTrader stress-tests event-driven execution. No engine can authorize live trading." });
+      const candidate = await getCandidateManifest();
+      const liveGate=fusionLiveReady(validators,candidate);
+      return json({ ok:true, mode:"UNIFIED_CANDIDATE_SHADOW", strategyId:FUSION_STRATEGY_ID, candidate, liveTrading:false, executorAllowed:false, liveReady:liveGate.ready, liveBlockReasons:liveGate.reasons, validators, note:"All validators are required to validate the same candidate fingerprint. Forward paper evidence is mandatory. No engine can auto-enable live trading." });
+    }
+    if (url.pathname === "/derivatives-status") {
+      const symbol=(url.searchParams.get("symbol")||"").toUpperCase();
+      if(symbol) return json(await derivativesPressure(symbol));
+      return json(await getState(env,"fusion:derivatives")||{status:"PENDING"});
     }
     if (url.pathname === "/scan-preview") return json(await scan(env,false));
     if (url.searchParams.get("test") === "telegram") {
@@ -64,7 +74,7 @@ export default {
     }
     return json(await scan(env,true));
   },
-  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorPaper(env); await scan(env,true); })()); },
+  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true); })()); },
 };
 
 export class SignalState {
@@ -100,6 +110,7 @@ async function scan(env,sendAlert){
     const tradable=new Map(info.symbols.filter(s=>s.status==="TRADING"&&s.quoteAsset==="USDT"&&s.isSpotTradingAllowed).map(s=>[s.symbol,s]));
     const bookMap=new Map(books.map(x=>[x.symbol,x]));
     const summaries=tickers.map(t=>summarize(t,tradable.get(t.symbol),bookMap.get(t.symbol))).filter(Boolean);
+    await tagNewListings(env,summaries);
     const bigPool=summaries.filter(x=>x.volume>=CFG.big.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const smallPool=summaries.filter(x=>!MAJORS.has(x.base)&&x.volume>=CFG.small.minVolume&&x.volume<=CFG.small.maxVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const newPool=summaries.filter(x=>x.isNewListing&&!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
@@ -111,16 +122,19 @@ async function scan(env,sendAlert){
     const valid=analyses.filter(x=>x.valid).sort((a,b)=>b.score-a.score||b.edge-a.edge);
     const best=valid[0]||null;
     if(!best) return {ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,score:x.score||0,status:x.status})),liveTrading:false};
+    const derivatives=await derivativesPressure(best.symbol).catch(error=>({status:"UNAVAILABLE",error:String(error?.message||error)}));
 
     const dedupeKey=`signal:${best.symbol}:${best.strategy}:${best.signalBar}`;
     if(await getState(env,dedupeKey)) return {ok:true,status:"DUPLICATE_SUPPRESSED",symbol:best.symbol,liveTrading:false};
-    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,quantity:best.quantity,notional:best.notional,score:best.score,openedAt:Date.now(),signalBar:best.signalBar};
+    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,quantity:best.quantity,notional:best.notional,score:best.score,derivatives,openedAt:Date.now(),signalBar:best.signalBar};
     await putState(env,dedupeKey,{createdAt:Date.now()},CFG.duplicateHours*3600);
     await putState(env,"paper:active",[position],CFG.maxHoldHours*3600+7200);
 
     if(sendAlert){
       const pair=best.symbol.replace("USDT","/USDT");
-      const vline=`🧪 VBT: ${validators.vectorbt?.status||"PENDING"} | FT: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"} | Nautilus: ${validators.nautilus?.status||"PENDING"}`; await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,vline,"","Cloudflare للـpaper scan؛ VectorBT discovery؛ Freqtrade + Jesse validation؛ Nautilus execution stress.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
+      const vline=`🧪 VBT: ${validators.vectorbt?.status||"PENDING"} | FT: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"} | Nautilus: ${validators.nautilus?.status||"PENDING"} | Forward: ${validators.forward?.status||"PENDING"}`;
+      const dline=derivatives?.status==="OK"?`📡 Futures pressure: ${derivatives.score}/100 | OI ${round((derivatives.oiChange2h||0)*100,2)}% | Taker ${round(derivatives.takerBuySellRatio1h||0,2)}x`:`📡 Futures pressure: ${derivatives?.status||"UNAVAILABLE"}`;
+      await telegram(env,[`🟢 PAPER BUY — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,dline,vline,"","Cloudflare minute scanner + microstructure + derivatives context. Unified validators must agree on the same candidate fingerprint.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
     }
     return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false};
   }catch(error){ return {ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; }
@@ -312,15 +326,93 @@ function median(a){if(!a.length)return 0;const x=[...a].sort((m,n)=>m-n),h=Math.
 }
 function floorStep(v,step){if(!(v>0&&step>0))return 0;const d=Math.max(0,(String(step).split(".")[1]||"").length);return Number((Math.floor((v+1e-12)/step)*step).toFixed(d));} function roundPrice(v,ref){const d=ref>=1000?2:ref>=1?4:8;return Number(v.toFixed(d));} function round(v,d=2){const f=10**d;return Math.round(Number(v)*f)/f;} function fmt(v){const n=Number(v);if(!Number.isFinite(n))return"-";if(Math.abs(n)>=1000)return n.toFixed(2);if(Math.abs(n)>=1)return n.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');return n.toFixed(8).replace(/0+$/,'').replace(/\.$/,'');} function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
 
-function fusionLiveReady(validators){
-  const required=["freqtrade","jesse","vectorbt","nautilus"];
+function fusionLiveReady(validators,candidate){
+  const required=["vectorbt","freqtrade","jesse","nautilus","forward"];
   const reasons=[];
+  const fp=candidate?.candidateFingerprint||null;
+  if(!fp) reasons.push("CANDIDATE:MISSING");
   for(const name of required){
     const v=validators?.[name];
     if(!v?.usable) reasons.push(name+":UNUSABLE");
     if(v?.pass!==true) reasons.push(name+":FAIL");
+    if(fp&&v?.candidateFingerprint!==fp) reasons.push(name+":CANDIDATE_MISMATCH");
+    if(name!=="forward"&&Number(v?.base?.trades||0)<100) reasons.push(name+":LT_100_TRADES");
+    if(name==="forward"&&Number(v?.metrics?.trades||0)<50) reasons.push(name+":LT_50_FORWARD_TRADES");
   }
-  return {ready:reasons.length===0,reasons};
+  return {ready:reasons.length===0,reasons:[...new Set(reasons)],candidateFingerprint:fp};
+}
+
+async function getCandidateManifest(){
+  try{
+    const r=await fetch(CANDIDATE_MANIFEST_URL,{headers:{Accept:"application/json","User-Agent":"tst-unified-candidate/1.0"},signal:AbortSignal.timeout(8000),cf:{cacheTtl:300,cacheEverything:true}});
+    if(!r.ok) throw new Error(String(r.status));
+    return await r.json();
+  }catch(error){ return {strategyId:FUSION_STRATEGY_ID,candidateId:null,candidateFingerprint:null,status:"UNAVAILABLE",error:String(error?.message||error)}; }
+}
+
+async function tagNewListings(env,summaries){
+  const key="universe:known-usdt";
+  const prev=await getState(env,key);
+  const now=Date.now();
+  if(!prev||!prev.symbols){
+    const symbols=Object.fromEntries(summaries.map(x=>[x.symbol,{firstSeen:0}]));
+    await putState(env,key,{symbols,updatedAt:now},365*24*3600);
+    for(const x of summaries){ if(x.isNewListing!==true){x.isNewListing=false;x.listingAgeDays=null;} }
+    return;
+  }
+  const symbols=prev.symbols||{};
+  for(const x of summaries){
+    if(!symbols[x.symbol]) symbols[x.symbol]={firstSeen:now};
+    const first=Number(symbols[x.symbol].firstSeen||0);
+    if(first>0){
+      const age=(now-first)/86400000;
+      x.listingAgeDays=age;
+      x.isNewListing=age<=CFG.newListing.maxAgeDays;
+    }
+  }
+  await putState(env,key,{symbols,updatedAt:now},365*24*3600);
+}
+
+const FUTURES_BASES=["https://fapi.binance.com","https://fapi1.binance.com"];
+async function futuresJson(path){
+  let last;
+  for(const base of FUTURES_BASES){
+    try{
+      const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-derivatives-cloudflare/1.0"},signal:AbortSignal.timeout(8000)});
+      if(!r.ok) throw new Error(String(r.status));
+      return await r.json();
+    }catch(e){last=e;}
+  }
+  throw last||new Error("Futures API unavailable");
+}
+async function derivativesPressure(symbol){
+  if(!symbol||!symbol.endsWith("USDT")) return {status:"BAD_SYMBOL",symbol};
+  try{
+    const [prem,oi,taker]=await Promise.all([
+      futuresJson("/fapi/v1/premiumIndex?symbol="+encodeURIComponent(symbol)),
+      futuresJson("/futures/data/openInterestHist?symbol="+encodeURIComponent(symbol)+"&period=15m&limit=8"),
+      futuresJson("/futures/data/takerlongshortRatio?symbol="+encodeURIComponent(symbol)+"&period=15m&limit=8"),
+    ]);
+    if(!Array.isArray(oi)||oi.length<2||!Array.isArray(taker)||taker.length<2) return {status:"NO_FUTURES_DATA",symbol};
+    const oi0=Number(oi[0].sumOpenInterestValue||oi[0].sumOpenInterest||0),oi1=Number(oi.at(-1).sumOpenInterestValue||oi.at(-1).sumOpenInterest||0);
+    const oiChange2h=oi0>0?oi1/oi0-1:0;
+    const ratios=taker.slice(-4).map(x=>Number(x.buySellRatio||1)).filter(Number.isFinite);
+    const takerBuySellRatio1h=ratios.length?ratios.reduce((a,b)=>a+b,0)/ratios.length:1;
+    const fundingRate=Number(prem.lastFundingRate||0),mark=Number(prem.markPrice||0),index=Number(prem.indexPrice||0),basis=index>0?mark/index-1:0;
+    let score=50;
+    score+=oiChange2h>=0.02?18:oiChange2h>0?8:-8;
+    score+=takerBuySellRatio1h>=1.15?18:takerBuySellRatio1h>=1.05?8:-8;
+    score+=fundingRate>=-0.0005&&fundingRate<=0.0008?8:fundingRate>0.0015?-8:0;
+    score+=Math.abs(basis)<=0.003?6:-6;
+    score=Math.max(0,Math.min(100,score));
+    return {status:"OK",symbol,score,oiChange2h,takerBuySellRatio1h,fundingRate,basis,paperLongPressure:score>=78&&oiChange2h>0&&takerBuySellRatio1h>=1.05,liveTrading:false};
+  }catch(error){ return {status:"UNAVAILABLE",symbol,error:String(error?.message||error),liveTrading:false}; }
+}
+async function monitorUnifiedDerivative(env){
+  const candidate=await getCandidateManifest();
+  if(!candidate?.symbol) return;
+  const row=await derivativesPressure(candidate.symbol);
+  await putState(env,"fusion:derivatives",{...row,candidateId:candidate.candidateId,candidateFingerprint:candidate.candidateFingerprint,updatedAt:Date.now()},2*3600);
 }
 
 async function getFusionValidators(env,force=false){
