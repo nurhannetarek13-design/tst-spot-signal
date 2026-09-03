@@ -1,24 +1,32 @@
 {
   "engine": "JESSE",
-  "strategyId": "TST_ADAPTIVE_FUSION_V1",
+  "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
   "status": "FAIL",
   "pass": false,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
+  "symbol": "ENAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
   "base": {
-    "trades": 85,
-    "winRate": 0.2823529411764706,
+    "trades": 72,
+    "winRate": 0.375,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.0074038786847417494,
-    "netPnlUSDT": -0.6293296882030487,
-    "maxDrawdown": -3.1341119930437644
+    "expectancyUSDT": -0.005151127874726281,
+    "netPnlUSDT": -0.37088120698029226,
+    "maxDrawdown": -8.314603330772218
   },
   "stress2x": {
-    "trades": 85,
-    "winRate": 0.23529411764705882,
+    "trades": 72,
+    "winRate": 0.3611111111111111,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.018407478405778045,
-    "netPnlUSDT": -1.5646356644911337,
-    "maxDrawdown": -7.792010281330075
+    "expectancyUSDT": -0.0216630739276902,
+    "netPnlUSDT": -1.5597413227936945,
+    "maxDrawdown": -10.712435670238186
   },
-  "generatedAt": "2026-09-03T13:47:46.285009+00:00",
-  "notes": "Independent Jesse research backtest on Binance Spot 1m candles aggregated by Jesse to 15m. Long-only strategy; 1x futures simulator is used only because Jesse permits bracket exits pre-entry in that mode."
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "generatedAt": "2026-09-03T13:49:40.639015+00:00",
+  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
