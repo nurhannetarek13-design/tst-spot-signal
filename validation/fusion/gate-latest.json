@@ -1,14 +1,15 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "385a252d2323f398b13a",
-  "symbol": "PEPEUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "16a891b75d998d5f2638",
+  "symbol": "BMTUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:CANDIDATE_MISMATCH",
@@ -17,9 +18,9 @@
     "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
+    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
-    "forward:CANDIDATE_MISMATCH",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -36,11 +37,11 @@
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "4d447ed53b9d56d398d4",
-      "trades": 41,
+      "candidateFingerprint": "385a252d2323f398b13a",
+      "trades": 32,
       "independentEnginePass": false,
-      "stressProfitFactor": 0.8879973938152669,
-      "stressExpectancyUSDT": -0.008478161707317074
+      "stressProfitFactor": 0.7942947736316458,
+      "stressExpectancyUSDT": -0.015386958437500002
     },
     "jesse": {
       "status": "NO_CANDIDATE",
@@ -61,15 +62,15 @@
       "stressExpectancyUSDT": -0.009141191818181819
     },
     "forward": {
-      "status": "COLLECTING",
+      "status": "RESET_FOR_NEW_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "4d447ed53b9d56d398d4",
+      "candidateFingerprint": "16a891b75d998d5f2638",
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:38:36.041075+00:00",
+  "generatedAt": "2026-09-03T18:38:53.865128+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
