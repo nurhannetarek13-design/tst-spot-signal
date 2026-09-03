@@ -1,4 +1,5 @@
 import express from "express";
+import { coinruleBridgeStatus, verifyCoinruleBridgeKey, sendCoinruleSignal } from "./src/coinrule-bridge.mjs";
 
 const app = express();
 app.use(express.text({ type: "application/json", limit: "16kb" }));
@@ -105,6 +106,49 @@ app.get("/telegram/test", async (_req, res) => {
     return res.status(500).json({ ok: false, telegram: "failed", error: String(error?.message || error), liveTrading: false });
   }
 });
+
+app.get("/coinrule/status", (_req, res) => {
+  const status = coinruleBridgeStatus();
+  return res.json({
+    ok: true,
+    bridge: "COINRULE_CUSTOM_SIGNAL",
+    enabled: status.enabled,
+    configured: status.configured,
+    mode: status.mode,
+    liveTrading: false,
+  });
+});
+
+app.post("/coinrule/signal", async (req, res) => {
+  try {
+    const status = coinruleBridgeStatus();
+    if (!status.enabled) {
+      return res.status(409).json({ ok: false, status: "COINRULE_BRIDGE_DISABLED", mode: status.mode });
+    }
+
+    const key = String(req.get("x-coinrule-bridge-key") || "");
+    if (!verifyCoinruleBridgeKey(key)) {
+      return res.status(401).json({ ok: false, status: "UNAUTHORIZED" });
+    }
+
+    const raw = typeof req.body === "string" ? req.body : "";
+    if (!raw) return res.status(400).json({ ok: false, status: "EMPTY_BODY" });
+
+    const body = JSON.parse(raw);
+    const action = String(body.action || "").toLowerCase();
+    const symbol = String(body.symbol || "").toUpperCase();
+
+    const result = await sendCoinruleSignal({ action, symbol });
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      status: "COINRULE_BRIDGE_ERROR",
+      error: String(error?.message || error),
+    });
+  }
+});
+
 
 app.get("/health", async (_req, res) => {
   try {
