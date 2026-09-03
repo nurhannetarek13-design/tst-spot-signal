@@ -44,17 +44,23 @@ def fetch_klines(symbol,tf):
     df["timestamp"]=pd.to_datetime(df["open_time"],unit="ms",utc=True)
     return df.set_index("timestamp")[["open","high","low","close","volume"]].dropna()
 
-def precision_from_increment(x):
+def normalize_increment(x):
     s=str(x)
+    if "." in s:
+        s=s.rstrip("0").rstrip(".")
+    return s or "0"
+
+def precision_from_increment(x):
+    s=normalize_increment(x)
     if "." not in s:return 0
-    return len(s.rstrip("0").split(".")[1])
+    return len(s.split(".")[1])
 
 def instrument_meta(symbol):
     info=api_json("/api/v3/exchangeInfo?symbol="+symbol)
     s=info["symbols"][0]
     fs={x["filterType"]:x for x in s.get("filters",[])}
-    tick=fs.get("PRICE_FILTER",{}).get("tickSize","0.00000001")
-    step=fs.get("LOT_SIZE",{}).get("stepSize","0.00000001")
+    tick=normalize_increment(fs.get("PRICE_FILTER",{}).get("tickSize","0.00000001"))
+    step=normalize_increment(fs.get("LOT_SIZE",{}).get("stepSize","0.00000001"))
     return {"price_precision":precision_from_increment(tick),"size_precision":precision_from_increment(step),"tick":tick,"step":step}
 
 def ema(values,n):
