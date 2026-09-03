@@ -17,7 +17,7 @@ import pandas as pd
 
 BASE_URL = "https://data-api.binance.vision"
 INTERVAL = "1h"
-DAYS = 120
+DAYS = 365
 MAX_SYMBOLS = 60
 MIN_QV = 20_000_000
 MAX_QV = 150_000_000
@@ -78,7 +78,7 @@ def klines(symbol):
             break
         cur=nxt
         time.sleep(0.01)
-    if len(rows)<1200:
+    if len(rows)<4000:
         raise RuntimeError(f"{symbol}: insufficient bars {len(rows)}")
     df=pd.DataFrame(rows,columns=["open_time","open","high","low","close","volume","close_time","quote_volume","trades","taker_base","taker_quote","ignore"])
     for c in ["open","high","low","close","volume","quote_volume","taker_quote"]:
