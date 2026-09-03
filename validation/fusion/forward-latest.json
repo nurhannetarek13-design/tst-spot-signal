@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "RESET_FOR_NEW_CANDIDATE",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "83e561f3d531f1bd9a71",
-  "symbol": "NEARUSDT",
-  "family": "CROSS_CRYPTO_LEAD_LAG",
-  "timeframe": "1h",
+  "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "491ef3dee6fa939725a4",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:47:22.325Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-03T18:48:27.254628+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }

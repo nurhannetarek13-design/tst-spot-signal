@@ -2,7 +2,7 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-03T18:40:07.071892+00:00",
-  "symbol": "NEARUSDT",
+  "symbol": "WLDUSDT",
   "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "params": {
@@ -19,36 +19,36 @@
   },
   "sourceMetrics": {
     "base": {
-      "trades": 13,
-      "wins": 5,
-      "winRate": 0.38461538461538464,
-      "netPnlUSDT": 0.38586637448240446,
-      "expectancyUSDT": 0.029682028806338804,
-      "profitFactor": 1.8936313282275503,
-      "maxDrawdownUSDT": 0.22298362829443522
+      "trades": 20,
+      "wins": 10,
+      "winRate": 0.5,
+      "netPnlUSDT": 0.5527694233474996,
+      "expectancyUSDT": 0.02763847116737498,
+      "profitFactor": 1.5551347277191743,
+      "maxDrawdownUSDT": 0.6534375257127425
     },
     "stress2x": {
-      "trades": 13,
-      "wins": 5,
-      "winRate": 0.38461538461538464,
-      "netPnlUSDT": 0.17046447206705778,
-      "expectancyUSDT": 0.013112651697465984,
-      "profitFactor": 1.3025930843170763,
-      "maxDrawdownUSDT": 0.2722230119274431
+      "trades": 20,
+      "wins": 10,
+      "winRate": 0.5,
+      "netPnlUSDT": 0.2214432799974532,
+      "expectancyUSDT": 0.01107216399987266,
+      "profitFactor": 1.1909831412494662,
+      "maxDrawdownUSDT": 0.7846541944272452
     }
   },
   "liquidity": {
-    "quoteVolume24h": 32808726.8314,
-    "priceUSDT": 2.002
+    "quoteVolume24h": 20349652.85431,
+    "priceUSDT": 0.405
   },
   "rankKey": [
     1,
-    0.013112651697465984,
-    1.3025930843170763,
-    13
+    0.01107216399987266,
+    1.1909831412494662,
+    20
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "83e561f3d531f1bd9a71",
+  "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "491ef3dee6fa939725a4",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -191,7 +191,7 @@
       },
       "liquidity": {
         "quoteVolume24h": 41397146.39846336,
-        "priceUSDT": 0.00000382
+        "priceUSDT": 3.82e-06
       },
       "rankKey": [
         1,
@@ -410,6 +410,7 @@
   "recentRejectedFingerprints": [
     "385a252d2323f398b13a",
     "4d447ed53b9d56d398d4",
+    "83e561f3d531f1bd9a71",
     "b7b8fd956817ecaced07",
     "db0561831b32d3a2c528"
   ],
@@ -422,12 +423,11 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:47:03.600Z",
+  "generatedAt": "2026-09-03T18:48:27.254628+00:00",
   "rotationReason": {
-    "rejectedFingerprint": "b7b8fd956817ecaced07",
+    "rejectedFingerprint": "83e561f3d531f1bd9a71",
     "hardFailValidators": [
       "freqtrade"
     ]
-  },
-  "activationReason": "Trigger unified validators after rotation workflow fix"
+  }
 }

@@ -42,6 +42,16 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-03T18:46:10.555850+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "83e561f3d531f1bd9a71",
+      "symbol": "NEARUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-03T18:48:27.254628+00:00"
     }
   ],
   "ttlDays": 7,
