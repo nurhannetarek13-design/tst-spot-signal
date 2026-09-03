@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - "jesse/**"
+      - "validation/fusion/candidate-manifest.json"
       - ".github/workflows/fusion-jesse-validator.yml"
 
 permissions:
@@ -16,7 +17,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
