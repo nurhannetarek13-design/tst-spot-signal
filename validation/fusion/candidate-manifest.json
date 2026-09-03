@@ -190,7 +190,7 @@
       },
       "liquidity": {
         "quoteVolume24h": 41397146.39846336,
-        "priceUSDT": 3.82e-06
+        "priceUSDT": 0.00000382
       },
       "rankKey": [
         1,
@@ -429,5 +429,6 @@
     "hardFailValidators": [
       "freqtrade"
     ]
-  }
+  },
+  "validationRequestAt": "2026-09-03T19:33:52.296Z"
 }
