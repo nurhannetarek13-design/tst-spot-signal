@@ -7,6 +7,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "validation/fusion/candidate-manifest.json"
       - "freqtrade/**"
       - "scripts/fusion-freqtrade-report.py"
       - ".github/workflows/fusion-freqtrade-validator.yml"
@@ -14,51 +15,72 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: unified-candidate-freqtrade
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read unified candidate
+        run: |
+          python - <<'PY'
+          import json, pathlib, os
+          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          if not m.get("candidateFingerprint"):
+              raise SystemExit("No unified candidate")
+          pair=m["symbol"][:-4]+"/USDT"
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write(f"PAIR={pair}\n")
+              f.write(f"TF={m['timeframe']}\n")
+          pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
+          print(m["candidateId"], pair, m["timeframe"])
+          PY
 
       - name: Pull official Freqtrade image
         run: docker pull freqtradeorg/freqtrade:stable
 
-      - name: Download 120 days of Binance Spot 15m data
+      - name: Download candidate Binance Spot data
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             download-data             --exchange binance             --days 120             --timeframes 15m             --pairs BTC/USDT ETH/USDT BNB/USDT SOL/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT DOT/USDT
+          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             download-data             --exchange binance             --days 120             --timeframes "$TF"             --pairs "$PAIR"
 
       - name: Prepare writable result folders
         run: |
           mkdir -p "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID"
           chmod 777 "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID"
 
-      - name: Base-cost backtest
+      - name: Base-cost unified backtest
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-base-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy AdaptiveRegimeStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe 15m             --fee 0.001             --cache none             --export trades             --backtest-directory /results
+          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-base-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy UnifiedCandidateStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe "$TF"             --pairs "$PAIR"             --fee 0.0015             --cache none             --export trades             --backtest-directory /results
           cp "$(ls -1t /tmp/ft-base-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-base.zip
 
-      - name: Double-cost stress backtest
+      - name: Double-friction unified backtest
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy AdaptiveRegimeStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe 15m             --fee 0.002             --cache none             --export trades             --backtest-directory /results
+          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy UnifiedCandidateStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe "$TF"             --pairs "$PAIR"             --fee 0.003             --cache none             --export trades             --backtest-directory /results
           cp "$(ls -1t /tmp/ft-stress-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-stress.zip
 
-      - name: Build validator report
+      - name: Build unified validator report
         run: python scripts/fusion-freqtrade-report.py /tmp/freqtrade-base.zip /tmp/freqtrade-stress.zip validation/fusion/freqtrade-latest.json
 
       - name: Restore repository file ownership
         run: sudo chown -R "$(id -u):$(id -g)" freqtrade/user_data
 
-      - name: Commit latest public validator snapshot
+      - name: Commit snapshot
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp validation/fusion/freqtrade-latest.json /tmp/freqtrade-latest.json
           git fetch origin main
           git reset --hard origin/main
           mkdir -p validation/fusion
           cp /tmp/freqtrade-latest.json validation/fusion/freqtrade-latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add validation/fusion/freqtrade-latest.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update Freqtrade fusion validator snapshot"
+          git commit -m "Update unified Freqtrade candidate validation"
           git push
