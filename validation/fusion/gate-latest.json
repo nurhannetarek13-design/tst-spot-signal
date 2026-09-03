@@ -16,9 +16,7 @@
     "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
-    "nautilus:LT_100_TRADES",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -42,10 +40,10 @@
       "trades": 0
     },
     "nautilus": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": null,
-      "trades": 0
+      "candidateFingerprint": "db0561831b32d3a2c528",
+      "trades": 151
     },
     "forward": {
       "status": "COLLECTING",
@@ -54,6 +52,6 @@
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T18:10:30.304374+00:00",
+  "generatedAt": "2026-09-03T18:10:47.369458+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
