@@ -10,6 +10,7 @@
   "executorAutoEnable": false,
   "reasons": [
     "CANDIDATE:MISSING",
+    "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
@@ -22,10 +23,10 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "PASS",
-      "pass": true,
-      "candidateFingerprint": "db0561831b32d3a2c528",
-      "trades": 44
+      "status": "NO_CANDIDATE",
+      "pass": false,
+      "candidateFingerprint": null,
+      "trades": 0
     },
     "freqtrade": {
       "status": "NO_CANDIDATE",
@@ -52,6 +53,6 @@
       "trades": 0
     }
   },
-  "generatedAt": "2026-09-03T18:13:39.146455+00:00",
+  "generatedAt": "2026-09-03T18:13:51.977819+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
