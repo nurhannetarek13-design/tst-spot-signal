@@ -1,0 +1,51 @@
+name: Unified Fusion Gate
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Unified Candidate VectorBT Validator"
+      - "Fusion Freqtrade Validator"
+      - "Fusion Jesse Validator"
+      - "Nautilus Execution Validator"
+      - "Public Edge Forward Paper"
+    types: [completed]
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_fusion_gate.py"
+      - ".github/workflows/fusion-gate.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unified-fusion-gate
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/build_fusion_gate.py
+      - name: Commit gate snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/gate-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update unified fusion gate snapshot [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
