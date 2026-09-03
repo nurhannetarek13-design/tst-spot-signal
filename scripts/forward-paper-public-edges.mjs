@@ -29,6 +29,14 @@ function loadLedger(){try{return JSON.parse(fs.readFileSync(LEDGER_PATH,"utf8"))
 function saveJson(pth,obj){fs.mkdirSync(path.dirname(pth),{recursive:true});fs.writeFileSync(pth,JSON.stringify(obj,null,2))}
 async function telegram(text){const token=process.env.TELEGRAM_BOT_TOKEN,chat=process.env.TELEGRAM_CHAT_ID;if(!token||!chat)return false;const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:String(chat),text,disable_web_page_preview:true})});return r.ok}
 
+if(!fingerprint||!symbol){
+  const ledger=loadLedger();
+  const report={engine:"FORWARD_PAPER",strategyId:"TST_UNIFIED_FORWARD_V1",status:"NO_CANDIDATE",pass:false,candidateId:null,candidateFingerprint:null,metrics:{trades:0,wins:0,winRate:0,netPnlUSDT:0,expectancyUSDT:0,profitFactor:0,maxDrawdownUSDT:0},open:null,authorization:"FORWARD_PAPER_ONLY",liveTrading:false,generatedAt:new Date().toISOString(),notes:"No unified candidate is currently eligible; forward tracker is fail-closed."};
+  saveJson(LEDGER_PATH,ledger);saveJson(REPORT_PATH,report);saveJson(ARTIFACT_PATH,report);
+  console.log(JSON.stringify(report,null,2));
+  process.exit(0);
+}
+
 function signal(c,spreadPct){
   if(c.length<160)return null;
   const closes=c.map(x=>x.c),qv=c.map(x=>x.qv),last=c.at(-1),R=rsi(closes),rv=last.qv/Math.max(1,median(qv.slice(-25,-1))),atrs=atrPctSeries(c),a=atrs.at(-1)||0;
