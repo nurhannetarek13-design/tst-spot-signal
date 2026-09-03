@@ -1,11 +1,32 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "491ef3dee6fa939725a4",
+  "symbol": "WLDUSDT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
+  "timeframe": "1h",
+  "base": {
+    "trades": 0,
+    "winRate": 0.0,
+    "profitFactor": 0.0,
+    "expectancyUSDT": 0,
+    "netPnlUSDT": 0.0,
+    "maxDrawdown": 0.0
+  },
+  "stress2x": {
+    "trades": 0,
+    "winRate": 0.0,
+    "profitFactor": 0.0,
+    "expectancyUSDT": 0,
+    "netPnlUSDT": 0.0,
+    "maxDrawdown": 0.0
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:30:40.288757+00:00"
+  "generatedAt": "2026-09-03T18:59:15.729159+00:00",
+  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
