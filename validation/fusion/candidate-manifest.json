@@ -2,53 +2,156 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
-  "symbol": "PEPEUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "symbol": "XPLUSDT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "params": {
-    "lookback": 24,
-    "compressionLookback": 72,
-    "compressionPct": 0.25,
-    "relvol": 1.5,
-    "rsiMin": 55,
-    "rsiMax": 75,
-    "holdBars": 12,
+    "leaderRetMin": 0.012,
+    "gapMin": 0.008,
+    "altRetMin": -0.02,
+    "relvol": 0.9,
+    "rsiMin": 42,
+    "rsiMax": 70,
+    "emaFast": 24,
+    "holdBars": 6,
     "sl": 0.025,
-    "tp": 0.055
+    "tp": 0.05
   },
   "sourceMetrics": {
     "base": {
-      "trades": 14,
+      "trades": 13,
       "wins": 8,
-      "winRate": 0.5714285714285714,
-      "netPnlUSDT": 0.6064385709770812,
-      "expectancyUSDT": 0.04331704078407723,
-      "profitFactor": 1.861331955886097,
-      "maxDrawdownUSDT": 0.3075875000000003
+      "winRate": 0.6153846153846154,
+      "netPnlUSDT": 1.0864389847558444,
+      "expectancyUSDT": 0.08357222959660342,
+      "profitFactor": 2.660869102786536,
+      "maxDrawdownUSDT": 0.21334259592326027
     },
     "stress2x": {
-      "trades": 14,
+      "trades": 13,
       "wins": 8,
-      "winRate": 0.5714285714285714,
-      "netPnlUSDT": 0.3741805260532299,
-      "expectancyUSDT": 0.026727180432373564,
-      "profitFactor": 1.4664652074488902,
-      "maxDrawdownUSDT": 0.3440619736518094
+      "winRate": 0.6153846153846154,
+      "netPnlUSDT": 0.8699846447687299,
+      "expectancyUSDT": 0.06692189575144077,
+      "profitFactor": 2.1823976413920128,
+      "maxDrawdownUSDT": 0.2625964628297351
     }
   },
   "liquidity": {
-    "quoteVolume24h": 41318620.87862496,
-    "priceUSDT": 3.83e-06
+    "quoteVolume24h": 22378392.314276,
+    "priceUSDT": 0.09576
   },
   "rankKey": [
     1,
-    0.026727180432373564,
-    1.4664652074488902,
-    14
+    0.06692189575144077,
+    2.1823976413920128,
+    13
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "385a252d2323f398b13a",
+  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "4d447ed53b9d56d398d4",
   "candidatePool": [
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
+      "symbol": "XPLUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "timeframe": "1h",
+      "params": {
+        "leaderRetMin": 0.012,
+        "gapMin": 0.008,
+        "altRetMin": -0.02,
+        "relvol": 0.9,
+        "rsiMin": 42,
+        "rsiMax": 70,
+        "emaFast": 24,
+        "holdBars": 6,
+        "sl": 0.025,
+        "tp": 0.05
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 13,
+          "wins": 8,
+          "winRate": 0.6153846153846154,
+          "netPnlUSDT": 1.0864389847558444,
+          "expectancyUSDT": 0.08357222959660342,
+          "profitFactor": 2.660869102786536,
+          "maxDrawdownUSDT": 0.21334259592326027
+        },
+        "stress2x": {
+          "trades": 13,
+          "wins": 8,
+          "winRate": 0.6153846153846154,
+          "netPnlUSDT": 0.8699846447687299,
+          "expectancyUSDT": 0.06692189575144077,
+          "profitFactor": 2.1823976413920128,
+          "maxDrawdownUSDT": 0.2625964628297351
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 22378392.314276,
+        "priceUSDT": 0.09576
+      },
+      "rankKey": [
+        1,
+        0.06692189575144077,
+        2.1823976413920128,
+        13
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "4d447ed53b9d56d398d4"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
+      "symbol": "ZKPUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "timeframe": "1h",
+      "params": {
+        "leaderRetMin": 0.012,
+        "gapMin": 0.008,
+        "altRetMin": -0.02,
+        "relvol": 0.9,
+        "rsiMin": 42,
+        "rsiMax": 70,
+        "emaFast": 24,
+        "holdBars": 6,
+        "sl": 0.025,
+        "tp": 0.05
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 11,
+          "wins": 7,
+          "winRate": 0.6363636363636364,
+          "netPnlUSDT": 0.7790297485469204,
+          "expectancyUSDT": 0.07082088623153822,
+          "profitFactor": 7.132635174688133,
+          "maxDrawdownUSDT": 0.053858843537415005
+        },
+        "stress2x": {
+          "trades": 11,
+          "wins": 6,
+          "winRate": 0.5454545454545454,
+          "netPnlUSDT": 0.596086789485508,
+          "expectancyUSDT": 0.05418970813504618,
+          "profitFactor": 3.9925580500393565,
+          "maxDrawdownUSDT": 0.07030272108843541
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 22505596.70783,
+        "priceUSDT": 0.0462
+      },
+      "rankKey": [
+        1,
+        0.05418970813504618,
+        3.9925580500393565,
+        11
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:ZKPUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "b7b8fd956817ecaced07"
+    },
     {
       "source": "PUBLIC_EDGE_LAB",
       "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
@@ -88,7 +191,7 @@
       },
       "liquidity": {
         "quoteVolume24h": 41318620.87862496,
-        "priceUSDT": 3.83e-06
+        "priceUSDT": 0.00000383
       },
       "rankKey": [
         1,
@@ -98,6 +201,108 @@
       ],
       "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
       "candidateFingerprint": "385a252d2323f398b13a"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
+      "symbol": "NEARUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "timeframe": "1h",
+      "params": {
+        "leaderRetMin": 0.012,
+        "gapMin": 0.008,
+        "altRetMin": -0.02,
+        "relvol": 0.9,
+        "rsiMin": 42,
+        "rsiMax": 70,
+        "emaFast": 24,
+        "holdBars": 6,
+        "sl": 0.025,
+        "tp": 0.05
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 13,
+          "wins": 5,
+          "winRate": 0.38461538461538464,
+          "netPnlUSDT": 0.3886884453971002,
+          "expectancyUSDT": 0.02989911118439232,
+          "profitFactor": 1.9001669870634228,
+          "maxDrawdownUSDT": 0.22298362829443522
+        },
+        "stress2x": {
+          "trades": 13,
+          "wins": 5,
+          "winRate": 0.38461538461538464,
+          "netPnlUSDT": 0.17328230351618312,
+          "expectancyUSDT": 0.013329407962783316,
+          "profitFactor": 1.3075950433701105,
+          "maxDrawdownUSDT": 0.2722230119274431
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 32758133.9003,
+        "priceUSDT": 2.005
+      },
+      "rankKey": [
+        1,
+        0.013329407962783316,
+        1.3075950433701105,
+        13
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "83e561f3d531f1bd9a71"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
+      "symbol": "WLDUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "timeframe": "1h",
+      "params": {
+        "leaderRetMin": 0.012,
+        "gapMin": 0.008,
+        "altRetMin": -0.02,
+        "relvol": 0.9,
+        "rsiMin": 42,
+        "rsiMax": 70,
+        "emaFast": 24,
+        "holdBars": 6,
+        "sl": 0.025,
+        "tp": 0.05
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 20,
+          "wins": 10,
+          "winRate": 0.5,
+          "netPnlUSDT": 0.5527694233474996,
+          "expectancyUSDT": 0.02763847116737498,
+          "profitFactor": 1.5551347277191743,
+          "maxDrawdownUSDT": 0.6534375257127425
+        },
+        "stress2x": {
+          "trades": 20,
+          "wins": 10,
+          "winRate": 0.5,
+          "netPnlUSDT": 0.2214432799974532,
+          "expectancyUSDT": 0.01107216399987266,
+          "profitFactor": 1.1909831412494662,
+          "maxDrawdownUSDT": 0.7846541944272452
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 20214839.57672,
+        "priceUSDT": 0.4032
+      },
+      "rankKey": [
+        1,
+        0.01107216399987266,
+        1.1909831412494662,
+        20
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "491ef3dee6fa939725a4"
     },
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -201,9 +406,10 @@
       "candidateFingerprint": "db0561831b32d3a2c528"
     }
   ],
-  "poolSize": 3,
+  "poolSize": 7,
   "recentRejectedFingerprints": [
-    "db0561831b32d3a2c528"
+    "db0561831b32d3a2c528",
+    "385a252d2323f398b13a"
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
@@ -214,5 +420,13 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:34:12.279626+00:00"
+  "generatedAt": "2026-09-03T18:36:47.620Z",
+  "rotationReason": {
+    "rejectedFingerprint": "385a252d2323f398b13a",
+    "hardFailValidators": [
+      "vectorbt",
+      "freqtrade",
+      "nautilus"
+    ]
+  }
 }
