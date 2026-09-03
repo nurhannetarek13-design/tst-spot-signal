@@ -57,7 +57,7 @@ if EDGE.exists():
         # Candidate pool is exploratory but still requires positive stressed economics
         # and enough observations to avoid promoting one-off noise.
         if not (20_000_000<=qv<=150_000_000 and 0<price<=3
-                and int(stress.get("trades",0))>=20
+                and int(stress.get("trades",0))>=10
                 and float(stress.get("expectancyUSDT",0))>0
                 and float(stress.get("profitFactor",0))>=1.0):
             continue
