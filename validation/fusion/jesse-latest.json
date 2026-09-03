@@ -4,21 +4,21 @@
   "status": "FAIL",
   "pass": false,
   "base": {
-    "trades": 113,
-    "winRate": 0.20353982300884957,
+    "trades": 85,
+    "winRate": 0.2823529411764706,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.013546466434915144,
-    "netPnlUSDT": -1.5307507071454112,
-    "maxDrawdown": -7.623260493752748
+    "expectancyUSDT": -0.0074038786847417494,
+    "netPnlUSDT": -0.6293296882030487,
+    "maxDrawdown": -3.1341119930437644
   },
   "stress2x": {
-    "trades": 113,
-    "winRate": 0.168141592920354,
+    "trades": 85,
+    "winRate": 0.23529411764705882,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.02454414586045875,
-    "netPnlUSDT": -2.773488482231839,
-    "maxDrawdown": -13.812193636612413
+    "expectancyUSDT": -0.018407478405778045,
+    "netPnlUSDT": -1.5646356644911337,
+    "maxDrawdown": -7.792010281330075
   },
-  "generatedAt": "2026-09-03T07:41:43.344692+00:00",
+  "generatedAt": "2026-09-03T13:47:46.285009+00:00",
   "notes": "Independent Jesse research backtest on Binance Spot 1m candles aggregated by Jesse to 15m. Long-only strategy; 1x futures simulator is used only because Jesse permits bracket exits pre-entry in that mode."
 }
