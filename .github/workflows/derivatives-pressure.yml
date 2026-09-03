@@ -32,14 +32,13 @@ jobs:
         run: python research/derivatives_pressure.py
       - name: Commit forward snapshot
         run: |
-          cp validation/edges/derivatives-pressure-latest.json /tmp/derivatives-pressure-latest.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p validation/edges
-          cp /tmp/derivatives-pressure-latest.json validation/edges/derivatives-pressure-latest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add validation/edges/derivatives-pressure-latest.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update derivatives pressure snapshot"
-          git push
+          git commit -m "Update derivatives runtime diagnostic"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
