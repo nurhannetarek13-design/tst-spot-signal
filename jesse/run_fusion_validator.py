@@ -6,7 +6,7 @@ from strategies.UnifiedCandidateValidator import UnifiedCandidateValidator
 
 MANIFEST=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
 if not MANIFEST.get("candidateFingerprint"):
-    report={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    report={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":MANIFEST.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate is active; Jesse exits without downloading market data."}
     pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
     raise SystemExit(0)
