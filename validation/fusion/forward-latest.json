@@ -1,10 +1,13 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "RESET_FOR_NEW_CANDIDATE",
+  "status": "COLLECTING",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
+  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "4d447ed53b9d56d398d4",
+  "symbol": "XPLUSDT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:38:35.153098+00:00",
-  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
+  "generatedAt": "2026-09-03T18:40:22.861Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
