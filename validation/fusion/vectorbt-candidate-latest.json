@@ -1,9 +1,45 @@
 {
   "engine": "VECTORBT_CANDIDATE",
   "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
+  "params": {
+    "lookback": 24,
+    "compressionLookback": 72,
+    "compressionPct": 0.25,
+    "relvol": 1.5,
+    "rsiMin": 55,
+    "rsiMax": 75,
+    "holdBars": 12,
+    "sl": 0.025,
+    "tp": 0.055
+  },
+  "base": {
+    "trades": 14,
+    "wins": 7,
+    "winRate": 0.5,
+    "netPnlUSDT": -0.0006983869392995223,
+    "expectancyUSDT": -4.988478137853731e-05,
+    "profitFactor": 0.9993707778851302,
+    "maxDrawdownUSDT": 0.5820556601374043
+  },
+  "stress2x": {
+    "trades": 14,
+    "wins": 7,
+    "winRate": 0.5,
+    "netPnlUSDT": -0.23204435831595566,
+    "expectancyUSDT": -0.01657459702256826,
+    "profitFactor": 0.8104100130819061,
+    "maxDrawdownUSDT": 0.6472804137776584
+  },
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:30:19.697955+00:00"
+  "generatedAt": "2026-09-03T18:32:29.091362+00:00",
+  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
 }
