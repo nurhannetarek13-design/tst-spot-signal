@@ -1,45 +1,12 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "16a891b75d998d5f2638",
-  "symbol": "BMTUSDT",
-  "family": "VOLATILITY_BREAKOUT",
-  "timeframe": "1h",
-  "params": {
-    "lookback": 24,
-    "compressionLookback": 72,
-    "compressionPct": 0.25,
-    "relvol": 1.5,
-    "rsiMin": 55,
-    "rsiMax": 75,
-    "holdBars": 12,
-    "sl": 0.025,
-    "tp": 0.055
-  },
-  "base": {
-    "trades": 19,
-    "wins": 7,
-    "winRate": 0.3684210526315789,
-    "netPnlUSDT": -0.61197402,
-    "expectancyUSDT": -0.03220915894736842,
-    "profitFactor": 0.5666741446873153,
-    "maxDrawdownUSDT": 1.00364413
-  },
-  "stress2x": {
-    "trades": 19,
-    "wins": 6,
-    "winRate": 0.3157894736842105,
-    "netPnlUSDT": -0.9250159199999999,
-    "expectancyUSDT": -0.048685048421052625,
-    "profitFactor": 0.42664080598807774,
-    "maxDrawdownUSDT": 1.26653614
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T19:35:04.043841+00:00",
-  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
+  "generatedAt": "2026-09-03T19:44:11.596869+00:00",
+  "notes": "No unified candidate; Nautilus install and execution validation skipped."
 }
