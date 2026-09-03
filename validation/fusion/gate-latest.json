@@ -17,7 +17,6 @@
     "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
     "forward:FAIL",
@@ -54,11 +53,11 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "491ef3dee6fa939725a4",
-      "trades": 31,
-      "independentEnginePass": true,
-      "stressProfitFactor": 1.3060338668523372,
-      "stressExpectancyUSDT": 0.012941640322580644
+      "candidateFingerprint": "16a891b75d998d5f2638",
+      "trades": 19,
+      "independentEnginePass": false,
+      "stressProfitFactor": 0.42664080598807774,
+      "stressExpectancyUSDT": -0.048685048421052625
     },
     "forward": {
       "status": "COLLECTING",
@@ -70,6 +69,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T19:34:58.263900+00:00",
+  "generatedAt": "2026-09-03T19:35:15.266143+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
