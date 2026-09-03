@@ -4,28 +4,28 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 14.78804323845025,
-  "realizedPnLUSDT": 0.009340760621037711,
+  "cashUSDT": 14.725434973169378,
+  "realizedPnLUSDT": -0.0729548097823277,
   "openPositions": [
     {
-      "symbol": "WLDUSDT",
+      "symbol": "ARUSDT",
       "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
-      "openedAt": "2026-09-03T18:35:48.805Z",
-      "entry": 0.4041,
-      "stop": 0.4006758403136869,
-      "target": 0.40942647062315374,
-      "qty": 13.610492452363276,
+      "openedAt": "2026-09-03T21:19:35.809Z",
+      "entry": 2.701,
+      "stop": 2.673145916178209,
+      "target": 2.744328574833897,
+      "qty": 2.0362828582006665,
       "notional": 5.5,
       "maxHoldBars": 8,
-      "score": 91,
+      "score": 90,
       "metrics": {
-        "spreadPct": 0.02474634991338505,
-        "mom1h": 0.019415027735753876,
-        "mom4h": 0.06171218487394947,
-        "btc1h": -0.0006077985629878713,
-        "atrPct": 0.009410392959884294,
-        "takerBuyRatio": 0.5967795127157363,
-        "relativeVolume": 1.3371144179465846,
+        "spreadPct": 0.03702332469455349,
+        "mom1h": 0.02351156617368222,
+        "mom4h": 0.044504643962848256,
+        "btc1h": 0.002281104943601786,
+        "atrPct": 0.011466832910045237,
+        "takerBuyRatio": 0.6316952057153886,
+        "relativeVolume": 4.434358984184903,
         "breakout": false,
         "trend15": true,
         "trend1h": true
@@ -264,10 +264,39 @@
       "exitReason": "TARGET",
       "pnlUSDT": 0.07544026477973025,
       "returnPct": 1.7347637525678916
+    },
+    {
+      "symbol": "WLDUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-03T18:35:48.805Z",
+      "entry": 0.4041,
+      "stop": 0.4006758403136869,
+      "target": 0.40942647062315374,
+      "qty": 13.610492452363276,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 91,
+      "metrics": {
+        "spreadPct": 0.02474634991338505,
+        "mom1h": 0.019415027735753876,
+        "mom4h": 0.06171218487394947,
+        "btc1h": -0.0006077985629878713,
+        "atrPct": 0.009410392959884294,
+        "takerBuyRatio": 0.5967795127157363,
+        "relativeVolume": 1.3371144179465846,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      },
+      "closedAt": "2026-09-03T21:19:19.611Z",
+      "exit": 0.3995,
+      "exitReason": "STOP",
+      "pnlUSDT": -0.08229557040336541,
+      "returnPct": -1.1383320960158372
     }
   ],
   "daily": {
     "2026-09-02": -0.05182854893971692,
-    "2026-09-03": 0.06116930956075464
+    "2026-09-03": -0.021126260842610767
   }
 }
