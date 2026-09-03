@@ -39,6 +39,11 @@ class UnifiedCandidateStrategy(IStrategy):
     exit_profit_only=False
     ignore_roi_if_entry_signal=False
 
+    def informative_pairs(self):
+        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+            return [("BTC/USDT","1h"),("ETH/USDT","1h"),("SOL/USDT","1h")]
+        return []
+
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         p=PARAMS
         dataframe["rsi"]=ta.RSI(dataframe,timeperiod=14)
@@ -48,7 +53,24 @@ class UnifiedCandidateStrategy(IStrategy):
         dataframe["qv_med24"]=dataframe["qv"].rolling(24).median()
         dataframe["relvol"]=dataframe["qv"]/dataframe["qv_med24"]
 
-        if FAMILY=="TS_MOMENTUM":
+        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+            leaders=[]
+            if self.dp:
+                for pair in ["BTC/USDT","ETH/USDT","SOL/USDT"]:
+                    inf=self.dp.get_pair_dataframe(pair=pair,timeframe="1h").copy()
+                    inf["leader_ret3"]=inf["close"].pct_change(3)
+                    leaders.append(inf[["date","leader_ret3"]].rename(columns={"leader_ret3":f"lead_{pair.split('/')[0]}"}))
+                for z in leaders:
+                    dataframe=dataframe.merge(z,on="date",how="left")
+                cols=[x for x in ["lead_BTC","lead_ETH","lead_SOL"] if x in dataframe.columns]
+                dataframe["leader3"]=dataframe[cols].mean(axis=1) if cols else 0.0
+            else:
+                dataframe["leader3"]=0.0
+            dataframe["ret3"]=dataframe["close"].pct_change(3)
+            dataframe["gap"]=dataframe["leader3"]-dataframe["ret3"]
+            dataframe["ema_fast"]=ta.EMA(dataframe,timeperiod=int(p.get("emaFast",24)))
+
+        elif FAMILY=="TS_MOMENTUM":
             f=int(p.get("emaFast",48)); s=int(p.get("emaSlow",120)); lb=int(p.get("retLookback",24))
             dataframe["ema_fast"]=ta.EMA(dataframe,timeperiod=f)
             dataframe["ema_slow"]=ta.EMA(dataframe,timeperiod=s)
@@ -89,7 +111,17 @@ class UnifiedCandidateStrategy(IStrategy):
         dataframe["enter_long"]=0
         dataframe["enter_tag"]=None
 
-        if FAMILY=="TS_MOMENTUM":
+        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+            cond=(
+                (dataframe["leader3"]>=float(p.get("leaderRetMin",0.012)))
+                &(dataframe["gap"]>=float(p.get("gapMin",0.008)))
+                &(dataframe["ret3"]>float(p.get("altRetMin",-0.02)))
+                &(dataframe["close"]>dataframe["ema_fast"])
+                &(dataframe["relvol"]>=float(p.get("relvol",0.9)))
+                &dataframe["rsi"].between(float(p.get("rsiMin",42)),float(p.get("rsiMax",70)))
+                &(dataframe["volume"]>0)
+            )
+        elif FAMILY=="TS_MOMENTUM":
             cond=(
                 (dataframe["close"]>dataframe["ema_fast"])
                 &(dataframe["ema_fast"]>dataframe["ema_slow"])
