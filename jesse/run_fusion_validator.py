@@ -54,6 +54,6 @@ candles=fetch_1m()
 if len(candles)<50000:raise RuntimeError(f"insufficient candles {len(candles)}")
 base=run(candles,0.0015);stress=run(candles,0.003)
 independent=base["trades"]>=30 and stress["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
-passed=independent and base["trades"]>=40
+passed=independent and base["trades"]>=100 and stress["trades"]>=100
 report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."}
 pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
