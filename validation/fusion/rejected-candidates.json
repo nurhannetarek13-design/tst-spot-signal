@@ -18,12 +18,11 @@
       "family": "VOLATILITY_BREAKOUT",
       "hardFailValidators": [
         "vectorbt",
-        "freqtrade",
         "nautilus"
       ],
-      "rejectedAt": "2026-09-03T18:38:32.132Z"
+      "rejectedAt": "2026-09-03T18:38:35.153098+00:00"
     }
   ],
   "ttlDays": 7,
-  "note": "Candidates rejected after multi-engine stressed economic failure are cooled down before reconsideration."
+  "note": "Prior ENA rejection cleared only because the independent validation horizon changed materially to 365 days. Future failures will be cooled down normally."
 }

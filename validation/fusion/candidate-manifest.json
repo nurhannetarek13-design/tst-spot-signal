@@ -2,7 +2,7 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-03T18:34:12.170694+00:00",
-  "symbol": "PEPEUSDT",
+  "symbol": "BMTUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "params": {
@@ -18,36 +18,36 @@
   },
   "sourceMetrics": {
     "base": {
-      "trades": 14,
-      "wins": 8,
-      "winRate": 0.5714285714285714,
-      "netPnlUSDT": 0.6064385709770812,
-      "expectancyUSDT": 0.04331704078407723,
-      "profitFactor": 1.861331955886097,
-      "maxDrawdownUSDT": 0.3075875000000003
+      "trades": 13,
+      "wins": 5,
+      "winRate": 0.38461538461538464,
+      "netPnlUSDT": 0.3003024893690171,
+      "expectancyUSDT": 0.023100191489924392,
+      "profitFactor": 1.2847508850959302,
+      "maxDrawdownUSDT": 0.7470272706190546
     },
     "stress2x": {
-      "trades": 14,
-      "wins": 8,
-      "winRate": 0.5714285714285714,
-      "netPnlUSDT": 0.3741805260532299,
-      "expectancyUSDT": 0.026727180432373564,
-      "profitFactor": 1.4664652074488902,
-      "maxDrawdownUSDT": 0.3440619736518094
+      "trades": 13,
+      "wins": 5,
+      "winRate": 0.38461538461538464,
+      "netPnlUSDT": 0.08502912558929404,
+      "expectancyUSDT": 0.006540701968407234,
+      "profitFactor": 1.071740686507242,
+      "maxDrawdownUSDT": 0.8450537694613895
     }
   },
   "liquidity": {
-    "quoteVolume24h": 41318620.87862496,
-    "priceUSDT": 3.83e-06
+    "quoteVolume24h": 148512171.573979,
+    "priceUSDT": 0.01846
   },
   "rankKey": [
     1,
-    0.026727180432373564,
-    1.4664652074488902,
-    14
+    0.006540701968407234,
+    1.071740686507242,
+    13
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "385a252d2323f398b13a",
+  "candidateId": "PUBLIC_EDGE_LAB:BMTUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "16a891b75d998d5f2638",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -203,6 +203,7 @@
   ],
   "poolSize": 3,
   "recentRejectedFingerprints": [
+    "385a252d2323f398b13a",
     "db0561831b32d3a2c528"
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
@@ -214,5 +215,12 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T18:34:12.279626+00:00"
+  "generatedAt": "2026-09-03T18:38:35.153098+00:00",
+  "rotationReason": {
+    "rejectedFingerprint": "385a252d2323f398b13a",
+    "hardFailValidators": [
+      "vectorbt",
+      "nautilus"
+    ]
+  }
 }
