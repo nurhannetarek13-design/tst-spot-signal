@@ -4,29 +4,53 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 14.660180225564872,
-  "realizedPnLUSDT": -0.058892098841146004,
+  "cashUSDT": 9.17387110585453,
+  "realizedPnLUSDT": -0.06502586213600944,
   "openPositions": [
     {
-      "symbol": "PUMPUSDT",
+      "symbol": "LINKUSDT",
       "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
-      "openedAt": "2026-09-03T11:31:01.604Z",
-      "entry": 0.004419,
-      "stop": 0.004380502979360652,
-      "target": 0.0044788842543278745,
-      "qty": 1244.6254808780266,
+      "openedAt": "2026-09-03T15:10:21.525Z",
+      "entry": 11.727,
+      "stop": 11.660566998779784,
+      "target": 11.84427,
+      "qty": 0.46900315511213436,
       "notional": 5.5,
       "maxHoldBars": 8,
-      "score": 77,
+      "score": 100,
       "metrics": {
-        "spreadPct": 0.022629554197785305,
-        "mom1h": 0.012606005042402169,
-        "mom4h": 0.028637951105937143,
-        "btc1h": 0.0038161321204839282,
-        "atrPct": 0.009681862240165895,
-        "takerBuyRatio": 0.6222224649708571,
-        "relativeVolume": 1.7468401576775379,
-        "breakout": false,
+        "spreadPct": 0.008527330092943172,
+        "mom1h": 0.030952172772580333,
+        "mom4h": 0.05295588497946069,
+        "btc1h": 0.02168237855356603,
+        "atrPct": 0.00626023626496828,
+        "takerBuyRatio": 0.5919209704613696,
+        "relativeVolume": 2.656428185042721,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    },
+    {
+      "symbol": "PENGUUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-03T15:10:21.526Z",
+      "entry": 0.008762,
+      "stop": 0.008698639134885021,
+      "target": 0.008860561345734414,
+      "qty": 627.7105683633873,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 100,
+      "metrics": {
+        "spreadPct": 0.011412919424800274,
+        "mom1h": 0.04582593250444056,
+        "mom4h": 0.06204906204906191,
+        "btc1h": 0.02168237855356603,
+        "atrPct": 0.007971123328676038,
+        "takerBuyRatio": 0.5859962746745082,
+        "relativeVolume": 4.0118833116950725,
+        "breakout": true,
         "trend15": true,
         "trend1h": true
       }
@@ -177,10 +201,39 @@
       "exitReason": "TARGET",
       "pnlUSDT": 0.11516071428571455,
       "returnPct": 2.4582560296846134
+    },
+    {
+      "symbol": "PUMPUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-03T11:31:01.604Z",
+      "entry": 0.004419,
+      "stop": 0.004380502979360652,
+      "target": 0.0044788842543278745,
+      "qty": 1244.6254808780266,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 77,
+      "metrics": {
+        "spreadPct": 0.022629554197785305,
+        "mom1h": 0.012606005042402169,
+        "mom4h": 0.028637951105937143,
+        "btc1h": 0.0038161321204839282,
+        "atrPct": 0.009681862240165895,
+        "takerBuyRatio": 0.6222224649708571,
+        "relativeVolume": 1.7468401576775379,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      },
+      "closedAt": "2026-09-03T15:10:10.798Z",
+      "exit": 0.00443,
+      "exitReason": "TIME",
+      "pnlUSDT": -0.006133763294863436,
+      "returnPct": 0.24892509617560066
     }
   ],
   "daily": {
     "2026-09-02": -0.05182854893971692,
-    "2026-09-03": -0.007063549901429073
+    "2026-09-03": -0.013197313196292509
   }
 }
