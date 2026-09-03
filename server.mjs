@@ -19,7 +19,7 @@ const CFG = {
   maxPositionUSDT: 7,
   minQuoteVolume24h: 20_000_000,
   maxSpreadPct: 0.10,
-  scanAllSpotUSDT: false,
+  scanAllSpotUSDT: true,
   feeRate: 0.001,
 };
 // No strategy release is promoted until it passes the documented evidence
@@ -1557,7 +1557,7 @@ async function analyze(symbol, ticker, book, rawKlines) {
 }
 
 function isAllowed(symbol) {
-  if (!ALLOWED_SPOT_SYMBOLS.has(symbol)) return false;
+  if (!CFG.scanAllSpotUSDT && !ALLOWED_SPOT_SYMBOLS.has(symbol)) return false;
   const base = symbol.slice(0, -4);
   if (STABLES.has(base)) return false;
   if (/UP$|DOWN$|BULL$|BEAR$/.test(base)) return false;
