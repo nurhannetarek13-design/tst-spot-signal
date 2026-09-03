@@ -2,8 +2,8 @@ name: Derivatives Pressure Forward Monitor
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/30 * * * *"
+  # GitHub-hosted runners currently receive Binance Futures HTTP 451.
+  # Keep manual-only until this monitor is moved to a non-blocked runtime.
   push:
     branches: [main]
     paths:
