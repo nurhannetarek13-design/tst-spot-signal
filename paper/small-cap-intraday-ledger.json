@@ -4,9 +4,58 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 20.087913695712565,
+  "cashUSDT": 9.087913695712565,
   "realizedPnLUSDT": -0.05182854893971692,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "FILUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-03T01:42:27.796Z",
+      "entry": 0.8296,
+      "stop": 0.8219552421969902,
+      "target": 0.8414918454713486,
+      "qty": 6.629701060752169,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 96,
+      "metrics": {
+        "spreadPct": 0.012054001928638982,
+        "mom1h": 0.03503704633931948,
+        "mom4h": 0.025634644101543147,
+        "btc1h": 0.005220035809292645,
+        "atrPct": 0.010305963766898307,
+        "takerBuyRatio": 0.6075999965233791,
+        "relativeVolume": 2.117311258922458,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    },
+    {
+      "symbol": "XLMUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-03T01:42:27.796Z",
+      "entry": 0.1782,
+      "stop": 0.1773981,
+      "target": 0.179982,
+      "qty": 30.8641975308642,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 90,
+      "metrics": {
+        "spreadPct": 0.056116722783383276,
+        "mom1h": 0.01768397033656588,
+        "mom4h": 0.02352266207687892,
+        "btc1h": 0.005220035809292645,
+        "atrPct": 0.004873852822032078,
+        "takerBuyRatio": 0.6413981783520674,
+        "relativeVolume": 2.105639548189937,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
