@@ -32,15 +32,20 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install --disable-pip-version-check 'plotly<7' vectorbt pandas numpy
       - run: python research/candidate_vectorbt_validator.py
-      - name: Commit snapshot
+      - name: Commit VectorBT snapshot safely
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add validation/fusion/vectorbt-candidate-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "Update unified VectorBT candidate validation"
+          cp validation/fusion/vectorbt-candidate-latest.json /tmp/vectorbt-candidate-latest.json
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p "$(dirname validation/fusion/vectorbt-candidate-latest.json)"
+            cp /tmp/vectorbt-candidate-latest.json validation/fusion/vectorbt-candidate-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/fusion/vectorbt-candidate-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update unified VectorBT candidate validation [skip ci]"
+            git push origin HEAD:main && exit 0
             sleep $((i * 2))
           done
           exit 1
