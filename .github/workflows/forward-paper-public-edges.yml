@@ -2,6 +2,9 @@ name: Public Edge Forward Paper
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab"]
+    types: [completed]
   schedule:
     - cron: "*/15 * * * *"
   push:
