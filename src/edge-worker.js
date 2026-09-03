@@ -1,4 +1,5 @@
 const API_BASES = [
+  "https://www.binance.com",
   "https://api-gcp.binance.com",
   "https://api1.binance.com",
   "https://api2.binance.com",
