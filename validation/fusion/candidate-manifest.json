@@ -1,8 +1,54 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "source": "PUBLIC_EDGE_LAB",
+  "sourceGeneratedAt": "2026-09-03T14:29:51.149646+00:00",
+  "symbol": "ENAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "sourceMetrics": {
+    "base": {
+      "trades": 38,
+      "wins": 18,
+      "winRate": 0.47368421052631576,
+      "netPnlUSDT": 1.589403239023674,
+      "expectancyUSDT": 0.04182640102693879,
+      "profitFactor": 1.474495520155278,
+      "maxDrawdownUSDT": 1.4667674999999991
+    },
+    "stress2x": {
+      "trades": 38,
+      "wins": 18,
+      "winRate": 0.47368421052631576,
+      "netPnlUSDT": 0.9590736397662529,
+      "expectancyUSDT": 0.02523877999384876,
+      "profitFactor": 1.260962950974643,
+      "maxDrawdownUSDT": 1.7785349999999975
+    }
+  },
+  "liquidity": {
+    "quoteVolume24h": 24544490.835319,
+    "priceUSDT": 0.1572
+  },
+  "rankKey": [
+    1,
+    0.02523877999384876,
+    1.260962950974643,
+    38
+  ],
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -57,10 +103,8 @@
     }
   ],
   "poolSize": 1,
-  "recentRejectedFingerprints": [
-    "db0561831b32d3a2c528"
-  ],
-  "authorization": "RESEARCH_ONLY",
+  "recentRejectedFingerprints": [],
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -69,6 +113,6 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T14:34:18.936Z",
-  "note": "No current candidate survives independent validation; discovery continues automatically."
+  "generatedAt": "2026-09-03T18:09:20.907Z",
+  "revalidationReason": "Historical validator horizon upgraded from 90-120d to 365d; prior rejection reset for a clean methodology-consistent retest."
 }
