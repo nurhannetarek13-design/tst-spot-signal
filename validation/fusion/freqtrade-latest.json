@@ -4,31 +4,31 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ZKPUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "b7b8fd956817ecaced07",
-  "symbol": "ZKPUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:NEARUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "83e561f3d531f1bd9a71",
+  "symbol": "NEARUSDT",
   "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "base": {
-    "trades": 42,
+    "trades": 37,
     "wins": 17,
-    "winRate": 0.40476190476190477,
-    "profitFactor": 0.9528167566909724,
-    "expectancyUSDT": -0.0020693833333333338,
-    "netPnlUSDT": -0.08691410000000002,
-    "maxDrawdownUSDT": 1.25834876
+    "winRate": 0.4594594594594595,
+    "profitFactor": 0.9996538167860165,
+    "expectancyUSDT": -1.8135135135134238e-05,
+    "netPnlUSDT": -0.0006709999999999668,
+    "maxDrawdownUSDT": 0.5854280500000001
   },
   "stress2x": {
-    "trades": 42,
-    "wins": 12,
-    "winRate": 0.2857142857142857,
-    "profitFactor": 0.5482091279274054,
-    "expectancyUSDT": -0.024670914999999998,
-    "netPnlUSDT": -1.0361784299999999,
-    "maxDrawdownUSDT": 1.6876181700000004
+    "trades": 37,
+    "wins": 17,
+    "winRate": 0.4594594594594595,
+    "profitFactor": 0.7332600948018183,
+    "expectancyUSDT": -0.016304008108108108,
+    "netPnlUSDT": -0.6032483,
+    "maxDrawdownUSDT": 1.0043532000000002
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:45:44.452159+00:00",
+  "generatedAt": "2026-09-03T18:47:49.061500+00:00",
   "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
 }
