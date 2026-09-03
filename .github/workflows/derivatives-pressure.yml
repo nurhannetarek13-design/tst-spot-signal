@@ -2,12 +2,12 @@ name: Derivatives Pressure Forward Monitor
 
 on:
   workflow_dispatch:
-  # GitHub-hosted runners currently receive Binance Futures HTTP 451.
-  # Keep manual-only until this monitor is moved to a non-blocked runtime.
+  schedule:
+    - cron: "*/30 * * * *"
   push:
     branches: [main]
     paths:
-      - "research/derivatives_pressure.py"
+      - "src/edge-worker.js"
       - ".github/workflows/derivatives-pressure.yml"
 
 permissions:
@@ -20,25 +20,52 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Run derivatives pressure monitor
-        run: python research/derivatives_pressure.py
-      - name: Commit forward snapshot
+
+      - name: Query Cloudflare derivatives runtime
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add validation/edges/derivatives-pressure-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "Update derivatives runtime diagnostic"
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/derivatives-status?symbol=BTCUSDT"             -o /tmp/derivatives.json
+          python - <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path("/tmp/derivatives.json")
+          row=json.loads(p.read_text())
+          print(json.dumps(row,indent=2))
+          if row.get("status") != "OK":
+              raise SystemExit(f"Cloudflare derivatives runtime unhealthy: {row}")
+          if row.get("liveTrading") is not False:
+              raise SystemExit("Derivatives monitor must remain read-only / liveTrading=false")
+          out=pathlib.Path("validation/edges/derivatives-pressure-latest.json")
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text(json.dumps({
+            "engine":"DERIVATIVES_PRESSURE_CLOUDFLARE",
+            "status":"OK",
+            "pass":False,
+            "authorization":"FORWARD_PAPER_CONTEXT_ONLY",
+            "liveTrading":False,
+            "healthSymbol":"BTCUSDT",
+            "runtime":row,
+          },indent=2))
+          PY
+
+      - name: Commit derivatives health snapshot
+        run: |
+          cp validation/edges/derivatives-pressure-latest.json /tmp/derivatives-pressure-latest.json
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/edges
+            cp /tmp/derivatives-pressure-latest.json validation/edges/derivatives-pressure-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/edges/derivatives-pressure-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update Cloudflare derivatives pressure health [skip ci]"
+            git push origin HEAD:main && exit 0
             sleep $((i * 2))
           done
           exit 1
