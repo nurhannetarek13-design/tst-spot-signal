@@ -30,6 +30,33 @@ def fetch_1m(days=DAYS):
         cursor=nxt;time.sleep(0.01)
     return np.asarray(out,dtype=float)
 
+def build_leader_map():
+    if MANIFEST.get("family")!="CROSS_CRYPTO_LEAD_LAG":
+        pathlib.Path("validation/fusion/jesse-leader.json").write_text("{}")
+        return
+    end=int(time.time()*1000);start=end-DAYS*86400000
+    series={}
+    for symbol in ["BTCUSDT","ETHUSDT","SOLUSDT"]:
+        rows=[];cursor=start
+        while cursor<end:
+            qs=urllib.parse.urlencode({"symbol":symbol,"interval":"1h","limit":1000,"startTime":cursor,"endTime":end})
+            req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse-leader/1.0"})
+            with urllib.request.urlopen(req,timeout=20) as r:batch=json.load(r)
+            if not batch:break
+            rows.extend(batch);nxt=int(batch[-1][0])+3600000
+            if nxt<=cursor:break
+            cursor=nxt;time.sleep(0.01)
+        vals={}
+        for i,row in enumerate(rows):
+            if i<3:continue
+            ts=int(row[0]);close=float(row[4]);prev=float(rows[i-3][4])
+            vals[ts]=close/prev-1
+        series[symbol]=vals
+    keys=set.intersection(*(set(v.keys()) for v in series.values())) if series else set()
+    out={str(ts):sum(series[s][ts] for s in series)/len(series) for ts in keys}
+    pathlib.Path("validation/fusion/jesse-leader.json").write_text(json.dumps(out))
+    print(f"leader points: {len(out)}")
+
 def metric(metrics,*names):
     if not isinstance(metrics,dict):return 0.0
     low={str(k).lower().replace(" ","_"):v for k,v in metrics.items()}
@@ -50,6 +77,7 @@ def run(candles,fee):
     netusdt=(netpct/100*20.08) if abs(netpct)>1 else (netpct*20.08);ex=netusdt/n if n else 0
     return {"trades":n,"winRate":win,"profitFactor":pf,"expectancyUSDT":ex,"netPnlUSDT":netusdt,"maxDrawdown":maxdd}
 
+build_leader_map()
 candles=fetch_1m()
 if len(candles)<50000:raise RuntimeError(f"insufficient candles {len(candles)}")
 base=run(candles,0.0015);stress=run(candles,0.003)
