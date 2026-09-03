@@ -1,46 +1,9 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
-  "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "params": {
-    "emaFast": 48,
-    "emaSlow": 120,
-    "retLookback": 24,
-    "retMin": 0.02,
-    "atrMin": 0.006,
-    "atrMax": 0.08,
-    "relvol": 0.8,
-    "holdBars": 24,
-    "sl": 0.03,
-    "tp": 0.06
-  },
-  "base": {
-    "trades": 65,
-    "wins": 28,
-    "winRate": 0.4307692307692308,
-    "netPnlUSDT": 0.9845356299999998,
-    "expectancyUSDT": 0.015146701999999996,
-    "profitFactor": 1.1601771941108558,
-    "maxDrawdownUSDT": 1.7811486300000001
-  },
-  "stress2x": {
-    "trades": 65,
-    "wins": 28,
-    "winRate": 0.4307692307692308,
-    "netPnlUSDT": -0.09105173000000022,
-    "expectancyUSDT": -0.0014007958461538495,
-    "profitFactor": 0.9865082987870354,
-    "maxDrawdownUSDT": 2.09244528
-  },
-  "authorization": "RESEARCH_ONLY",
+  "candidateFingerprint": null,
   "liveTrading": false,
-  "generatedAt": "2026-09-03T14:30:29.033783+00:00",
-  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
+  "generatedAt": "2026-09-03T14:34:57.523264+00:00"
 }
