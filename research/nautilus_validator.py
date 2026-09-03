@@ -219,6 +219,6 @@ else:
     base=metrics(run_child(m["symbol"],m["timeframe"],BASE_FEE,m["family"],m["params"]))
     stress=metrics(run_child(m["symbol"],m["timeframe"],STRESS_FEE,m["family"],m["params"]))
     independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and base["expectancyUSDT"]>0 and stress["profitFactor"]>=1.0 and stress["expectancyUSDT"]>0
-    passed=independent and base["trades"]>=40
+    passed=independent and base["trades"]>=100 and stress["trades"]>=100
     report={"engine":"NAUTILUS_TRADER","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],"symbol":m["symbol"],"family":m["family"],"timeframe":m["timeframe"],"params":m["params"],"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),"notes":"NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."}
 OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
