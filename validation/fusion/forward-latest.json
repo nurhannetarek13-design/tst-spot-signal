@@ -1,0 +1,25 @@
+{
+  "engine": "FORWARD_PAPER",
+  "strategyId": "TST_UNIFIED_FORWARD_V1",
+  "status": "COLLECTING",
+  "pass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
+  "symbol": "ENAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "metrics": {
+    "trades": 0,
+    "wins": 0,
+    "winRate": 0,
+    "netPnlUSDT": 0,
+    "expectancyUSDT": 0,
+    "profitFactor": 0,
+    "maxDrawdownUSDT": 0
+  },
+  "open": null,
+  "authorization": "FORWARD_PAPER_ONLY",
+  "liveTrading": false,
+  "generatedAt": "2026-09-03T13:56:34.484Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+}
