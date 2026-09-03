@@ -25,9 +25,12 @@ for name in ["vectorbt","freqtrade","jesse","nautilus"]:
     v=summary.get(name) or {}
     if v.get("candidateFingerprint")!=fp: continue
     trades=int(v.get("trades") or 0)
-    # Gate summary is enough to know pass/fail and sample size. Require 30+ trades
-    # before treating a historical validator failure as a hard rejection.
-    if trades>=30 and v.get("pass") is False:
+    # Reject only on a real economic failure, not merely because sample size is below 100.
+    # "independentEnginePass" isolates stressed economics from the final sample-size gate.
+    indep=v.get("independentEnginePass")
+    if trades>=30 and indep is False:
+        hard_fail.append(name)
+    elif trades>=100 and indep is None and v.get("pass") is False:
         hard_fail.append(name)
 
 if len(hard_fail)<2:
