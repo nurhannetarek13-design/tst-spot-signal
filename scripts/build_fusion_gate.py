@@ -71,6 +71,9 @@ report={
           "pass":bool(v.get("pass")),
           "candidateFingerprint":v.get("candidateFingerprint"),
           "trades":int(((v.get("metrics") if k=="forward" else v.get("base")) or {}).get("trades") or 0),
+          "independentEnginePass":v.get("independentEnginePass"),
+          "stressProfitFactor":float(((v.get("stress2x") or {}).get("profitFactor") or 0)) if k!="forward" else None,
+          "stressExpectancyUSDT":float(((v.get("stress2x") or {}).get("expectancyUSDT") or 0)) if k!="forward" else None,
       } for k,v in validators.items()
   },
   "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
