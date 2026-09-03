@@ -16,7 +16,7 @@ from nautilus_trader.trading.strategy import Strategy
 
 MANIFEST_PATH=pathlib.Path("validation/fusion/candidate-manifest.json")
 OUT=pathlib.Path("validation/fusion/nautilus-latest.json")
-DAYS=120
+DAYS=365
 BASE_FEE=0.0015
 STRESS_FEE=0.003
 STARTING_USDT=20.08
