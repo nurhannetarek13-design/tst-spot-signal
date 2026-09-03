@@ -1,0 +1,47 @@
+name: Public Edge Lab
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 2 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "research/public_edge_lab.py"
+      - ".github/workflows/public-edge-lab.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: public-edge-lab
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check pandas numpy
+      - name: Run public edge lab
+        run: python research/public_edge_lab.py
+      - name: Commit research snapshot
+        run: |
+          cp validation/edges/public-edge-lab-latest.json /tmp/public-edge-lab-latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p validation/edges
+          cp /tmp/public-edge-lab-latest.json validation/edges/public-edge-lab-latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/edges/public-edge-lab-latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update public edge lab snapshot"
+          git push
