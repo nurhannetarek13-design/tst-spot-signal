@@ -4,29 +4,29 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "db0561831b32d3a2c528",
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "f16d9a96bb813112f524",
   "symbol": "ENAUSDT",
-  "family": "TS_MOMENTUM",
+  "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "base": {
-    "trades": 65,
-    "winRate": 0.36923076923076925,
+    "trades": 3,
+    "winRate": 0.6666666666666666,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.00948317266305456,
-    "netPnlUSDT": -0.6164062230985464,
-    "maxDrawdown": -9.521997100370783
+    "expectancyUSDT": 4.0170296673092345,
+    "netPnlUSDT": 12.051089001927703,
+    "maxDrawdown": -0.1476632380982057
   },
   "stress2x": {
-    "trades": 65,
-    "winRate": 0.35384615384615387,
+    "trades": 3,
+    "winRate": 0.6666666666666666,
     "profitFactor": 0.0,
-    "expectancyUSDT": -0.02599371371563887,
-    "netPnlUSDT": -1.6895913915165266,
-    "maxDrawdown": -11.897167611108673
+    "expectancyUSDT": 2.3585163528365616,
+    "netPnlUSDT": 7.075549058509685,
+    "maxDrawdown": -0.18874889546870444
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T14:02:30.344083+00:00",
+  "generatedAt": "2026-09-03T14:30:04.534489+00:00",
   "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
