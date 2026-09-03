@@ -4,7 +4,7 @@ import numpy as np, pandas as pd, vectorbt as vbt
 
 MANIFEST=pathlib.Path("validation/fusion/candidate-manifest.json")
 OUT=pathlib.Path("validation/fusion/vectorbt-candidate-latest.json")
-DAYS=120
+DAYS=365
 INIT=20.08
 STAKE=5.5
 BASE_FEE=0.0015
