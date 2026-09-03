@@ -37,8 +37,16 @@ def atrp(df,n=14):
     tr=pd.concat([(df.high-df.low).abs(),(df.high-pc).abs(),(df.low-pc).abs()],axis=1).max(axis=1)
     return tr.rolling(n).mean()/df.close
 
-def raw_signal(df,fam,p):
+def raw_signal(df,fam,p,leader=None):
     c=df.close; rv=df.quote_volume/df.quote_volume.rolling(24).median().replace(0,np.nan); R=rsi(c)
+    if fam=="CROSS_CRYPTO_LEAD_LAG":
+        if leader is None:
+            return pd.Series(False,index=df.index)
+        lead=leader.reindex(df.index).ffill()
+        alt3=c.pct_change(3)
+        gap=lead-alt3
+        return (lead>=float(p.get("leaderRetMin",0.012)))&(gap>=float(p.get("gapMin",0.008)))&(alt3>float(p.get("altRetMin",-0.02)))&(c>ema(c,int(p.get("emaFast",24))))&(rv>=float(p.get("relvol",0.9)))&R.between(float(p.get("rsiMin",42)),float(p.get("rsiMax",70)))
+
     if fam=="TS_MOMENTUM":
         return (c>ema(c,p["emaFast"]))&(ema(c,p["emaFast"])>ema(c,p["emaSlow"]))&(c.pct_change(p["retLookback"])>p["retMin"])&atrp(df).between(p["atrMin"],p["atrMax"])&(rv>=p["relvol"])
     if fam=="LIQUIDITY_REVERSAL":
@@ -83,7 +91,14 @@ if not m.get("candidateFingerprint"):
     out={"engine":"VECTORBT_CANDIDATE","strategyId":STRATEGY_ID,"status":"NO_CANDIDATE","pass":False,"candidateFingerprint":None,"liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat()}
 else:
     df=fetch(m["symbol"],m["timeframe"]); p=m["params"]; hold=int(p.get("holdBars",24 if m["timeframe"]=="1h" else 96))
-    raw=raw_signal(df,m["family"],p); entries,exits=build_signals(df,raw,hold)
+    leader=None
+    if m["family"]=="CROSS_CRYPTO_LEAD_LAG":
+        anchors=[]
+        for s in ["BTCUSDT","ETHUSDT","SOLUSDT"]:
+            adf=fetch(s,m["timeframe"])
+            anchors.append(adf["close"].pct_change(3).rename(s))
+        leader=pd.concat(anchors,axis=1).mean(axis=1)
+    raw=raw_signal(df,m["family"],p,leader); entries,exits=build_signals(df,raw,hold)
     start=int(len(df)*0.60)
     def run(fee):
         sub=df.iloc[start:]; e=entries.iloc[start:]; x=exits.iloc[start:]
