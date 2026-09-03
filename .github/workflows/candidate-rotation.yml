@@ -31,15 +31,20 @@ jobs:
         run: |
           cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.json
           cp validation/fusion/rejected-candidates.json /tmp/rejected-candidates.json
+          cp validation/fusion/forward-latest.json /tmp/forward-latest.json
+          cp paper/public-edge-forward-ledger.json /tmp/public-edge-forward-ledger.json
           for i in 1 2 3 4 5; do
             git fetch origin main
             git reset --hard origin/main
             mkdir -p validation/fusion
             cp /tmp/candidate-manifest.json validation/fusion/candidate-manifest.json
             cp /tmp/rejected-candidates.json validation/fusion/rejected-candidates.json
+            cp /tmp/forward-latest.json validation/fusion/forward-latest.json
+            mkdir -p paper
+            cp /tmp/public-edge-forward-ledger.json paper/public-edge-forward-ledger.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add validation/fusion/candidate-manifest.json validation/fusion/rejected-candidates.json
+            git add validation/fusion/candidate-manifest.json validation/fusion/rejected-candidates.json validation/fusion/forward-latest.json paper/public-edge-forward-ledger.json
             git diff --cached --quiet && exit 0
             git commit -m "Rotate rejected unified candidate [skip ci]"
             git push origin HEAD:main && exit 0
