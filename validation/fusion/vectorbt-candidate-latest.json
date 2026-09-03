@@ -1,0 +1,46 @@
+{
+  "engine": "VECTORBT_CANDIDATE",
+  "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
+  "status": "FAIL",
+  "pass": false,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "db0561831b32d3a2c528",
+  "symbol": "ENAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "base": {
+    "trades": 18,
+    "wins": 8,
+    "winRate": 0.4444444444444444,
+    "netPnlUSDT": 0.7664632826285618,
+    "expectancyUSDT": 0.04258129347936454,
+    "profitFactor": 1.4147589516749939,
+    "maxDrawdownUSDT": 0.7939544221591952
+  },
+  "stress2x": {
+    "trades": 18,
+    "wins": 8,
+    "winRate": 0.4444444444444444,
+    "netPnlUSDT": 0.4678656913176521,
+    "expectancyUSDT": 0.025992538406536227,
+    "profitFactor": 1.232717524941685,
+    "maxDrawdownUSDT": 0.8423360629871984
+  },
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "generatedAt": "2026-09-03T13:44:48.751008+00:00",
+  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
+}
