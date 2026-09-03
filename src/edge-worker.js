@@ -36,6 +36,7 @@ const FUSION_VALIDATORS = {
   forward: "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/forward-latest.json",
 };
 const CANDIDATE_MANIFEST_URL = "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/fusion/candidate-manifest.json";
+const DERIVATIVES_SNAPSHOT_URL = "https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/validation/edges/derivatives-pressure-latest.json";
 const FUSION_STRATEGY_ID = "TST_UNIFIED_CANDIDATE_V1";
 const EXPECTED_VALIDATOR_IDS = {
   freqtrade: "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
@@ -373,40 +374,38 @@ async function tagNewListings(env,summaries){
   await putState(env,key,{symbols,updatedAt:now},365*24*3600);
 }
 
-const FUTURES_BASES=["https://fapi.binance.com","https://fapi1.binance.com"];
-async function futuresJson(path){
-  let last;
-  for(const base of FUTURES_BASES){
-    try{
-      const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-derivatives-cloudflare/1.0"},signal:AbortSignal.timeout(8000)});
-      if(!r.ok) throw new Error(String(r.status));
-      return await r.json();
-    }catch(e){last=e;}
+async function getDerivativesSnapshot(){
+  try{
+    const r=await fetch(DERIVATIVES_SNAPSHOT_URL,{
+      headers:{Accept:"application/json","User-Agent":"tst-derivatives-snapshot/1.0"},
+      signal:AbortSignal.timeout(8000),
+      cf:{cacheTtl:300,cacheEverything:true}
+    });
+    if(!r.ok) throw new Error(String(r.status));
+    return await r.json();
+  }catch(error){
+    return {status:"UNAVAILABLE",candidates:[],error:String(error?.message||error),liveTrading:false};
   }
-  throw last||new Error("Futures API unavailable");
 }
 async function derivativesPressure(symbol){
-  if(!symbol||!symbol.endsWith("USDT")) return {status:"BAD_SYMBOL",symbol};
-  try{
-    const [prem,oi,taker]=await Promise.all([
-      futuresJson("/fapi/v1/premiumIndex?symbol="+encodeURIComponent(symbol)),
-      futuresJson("/futures/data/openInterestHist?symbol="+encodeURIComponent(symbol)+"&period=15m&limit=8"),
-      futuresJson("/futures/data/takerlongshortRatio?symbol="+encodeURIComponent(symbol)+"&period=15m&limit=8"),
-    ]);
-    if(!Array.isArray(oi)||oi.length<2||!Array.isArray(taker)||taker.length<2) return {status:"NO_FUTURES_DATA",symbol};
-    const oi0=Number(oi[0].sumOpenInterestValue||oi[0].sumOpenInterest||0),oi1=Number(oi.at(-1).sumOpenInterestValue||oi.at(-1).sumOpenInterest||0);
-    const oiChange2h=oi0>0?oi1/oi0-1:0;
-    const ratios=taker.slice(-4).map(x=>Number(x.buySellRatio||1)).filter(Number.isFinite);
-    const takerBuySellRatio1h=ratios.length?ratios.reduce((a,b)=>a+b,0)/ratios.length:1;
-    const fundingRate=Number(prem.lastFundingRate||0),mark=Number(prem.markPrice||0),index=Number(prem.indexPrice||0),basis=index>0?mark/index-1:0;
-    let score=50;
-    score+=oiChange2h>=0.02?18:oiChange2h>0?8:-8;
-    score+=takerBuySellRatio1h>=1.15?18:takerBuySellRatio1h>=1.05?8:-8;
-    score+=fundingRate>=-0.0005&&fundingRate<=0.0008?8:fundingRate>0.0015?-8:0;
-    score+=Math.abs(basis)<=0.003?6:-6;
-    score=Math.max(0,Math.min(100,score));
-    return {status:"OK",symbol,score,oiChange2h,takerBuySellRatio1h,fundingRate,basis,paperLongPressure:score>=78&&oiChange2h>0&&takerBuySellRatio1h>=1.05,liveTrading:false};
-  }catch(error){ return {status:"UNAVAILABLE",symbol,error:String(error?.message||error),liveTrading:false}; }
+  if(!symbol||!symbol.endsWith("USDT")) return {status:"BAD_SYMBOL",symbol,liveTrading:false};
+  const snapshot=await getDerivativesSnapshot();
+  if(snapshot?.status==="UNAVAILABLE") return {status:"UNAVAILABLE",symbol,error:snapshot.error,liveTrading:false};
+  const row=(snapshot?.candidates||[]).find(x=>x.symbol===symbol);
+  if(!row) return {status:"NO_FUTURES_DATA",symbol,snapshotGeneratedAt:snapshot?.generatedAt||null,liveTrading:false};
+  return {
+    status:"OK",
+    symbol,
+    score:Number(row.score||0),
+    oiChange2h:Number(row.oiChange2h||0),
+    takerBuySellRatio1h:Number(row.takerBuySellRatio1h||0),
+    fundingRate:row.fundingRate==null?null:Number(row.fundingRate),
+    basis:row.basis==null?null:Number(row.basis),
+    paperLongPressure:Boolean(row.paperLongPressure),
+    snapshotGeneratedAt:snapshot?.generatedAt||null,
+    source:"GITHUB_DERIVATIVES_SNAPSHOT",
+    liveTrading:false,
+  };
 }
 async function monitorUnifiedDerivative(env){
   const candidate=await getCandidateManifest();
