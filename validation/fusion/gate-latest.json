@@ -1,21 +1,24 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "4d447ed53b9d56d398d4",
-  "symbol": "XPLUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:ZKPUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "b7b8fd956817ecaced07",
+  "symbol": "ZKPUSDT",
   "family": "CROSS_CRYPTO_LEAD_LAG",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
+    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
+    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
     "forward:FAIL",
@@ -61,13 +64,13 @@
     "forward": {
       "status": "COLLECTING",
       "pass": false,
-      "candidateFingerprint": "4d447ed53b9d56d398d4",
+      "candidateFingerprint": "b7b8fd956817ecaced07",
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-03T18:43:19.936719+00:00",
+  "generatedAt": "2026-09-03T18:45:22.765319+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
