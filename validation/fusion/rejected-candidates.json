@@ -21,8 +21,19 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-03T18:38:35.153098+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:XPLUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "4d447ed53b9d56d398d4",
+      "symbol": "XPLUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-03T18:44:43.538Z",
+      "reason": "Freqtrade stress2x negative with 41 trades"
     }
   ],
   "ttlDays": 7,
-  "note": "Prior ENA rejection cleared only because the independent validation horizon changed materially to 365 days. Future failures will be cooled down normally."
+  "note": "Candidates with a strong stressed validator failure, or multi-engine stressed failure, are cooled down before reconsideration."
 }
