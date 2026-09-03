@@ -1,7 +1,7 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-03T14:26:53.333635+00:00",
+  "sourceGeneratedAt": "2026-09-03T14:28:05.416030+00:00",
   "symbol": "ENAUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
@@ -21,29 +21,29 @@
       "trades": 5,
       "wins": 3,
       "winRate": 0.6,
-      "netPnlUSDT": 0.36097127756160696,
-      "expectancyUSDT": 0.07219425551232139,
-      "profitFactor": 2.173556394722169,
+      "netPnlUSDT": 0.350286939040205,
+      "expectancyUSDT": 0.07005738780804101,
+      "profitFactor": 2.138820462600734,
       "maxDrawdownUSDT": 0.15379375000000073
     },
     "stress2x": {
       "trades": 5,
       "wins": 3,
       "winRate": 0.6,
-      "netPnlUSDT": 0.2778050713359261,
-      "expectancyUSDT": 0.05556101426718522,
-      "profitFactor": 1.8166534029129857,
+      "netPnlUSDT": 0.2671367833981817,
+      "expectancyUSDT": 0.05342735667963634,
+      "profitFactor": 1.7852922272306329,
       "maxDrawdownUSDT": 0.17008750000000072
     }
   },
   "liquidity": {
-    "quoteVolume24h": 24525202.907296,
-    "priceUSDT": 0.1572
+    "quoteVolume24h": 24548011.464015,
+    "priceUSDT": 0.1573
   },
   "rankKey": [
     1,
-    0.05556101426718522,
-    1.8166534029129857,
+    0.05342735667963634,
+    1.7852922272306329,
     5
   ],
   "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:VOLATILITY_BREAKOUT",
@@ -51,7 +51,7 @@
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T14:26:53.333635+00:00",
+      "sourceGeneratedAt": "2026-09-03T14:28:05.416030+00:00",
       "symbol": "ENAUSDT",
       "family": "VOLATILITY_BREAKOUT",
       "timeframe": "1h",
@@ -71,29 +71,29 @@
           "trades": 5,
           "wins": 3,
           "winRate": 0.6,
-          "netPnlUSDT": 0.36097127756160696,
-          "expectancyUSDT": 0.07219425551232139,
-          "profitFactor": 2.173556394722169,
+          "netPnlUSDT": 0.350286939040205,
+          "expectancyUSDT": 0.07005738780804101,
+          "profitFactor": 2.138820462600734,
           "maxDrawdownUSDT": 0.15379375000000073
         },
         "stress2x": {
           "trades": 5,
           "wins": 3,
           "winRate": 0.6,
-          "netPnlUSDT": 0.2778050713359261,
-          "expectancyUSDT": 0.05556101426718522,
-          "profitFactor": 1.8166534029129857,
+          "netPnlUSDT": 0.2671367833981817,
+          "expectancyUSDT": 0.05342735667963634,
+          "profitFactor": 1.7852922272306329,
           "maxDrawdownUSDT": 0.17008750000000072
         }
       },
       "liquidity": {
-        "quoteVolume24h": 24525202.907296,
-        "priceUSDT": 0.1572
+        "quoteVolume24h": 24548011.464015,
+        "priceUSDT": 0.1573
       },
       "rankKey": [
         1,
-        0.05556101426718522,
-        1.8166534029129857,
+        0.05342735667963634,
+        1.7852922272306329,
         5
       ],
       "candidateId": "PUBLIC_EDGE_LAB:ENAUSDT:VOLATILITY_BREAKOUT",
@@ -101,7 +101,7 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T14:26:53.333635+00:00",
+      "sourceGeneratedAt": "2026-09-03T14:28:05.416030+00:00",
       "symbol": "ENAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
@@ -138,8 +138,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 24525202.907296,
-        "priceUSDT": 0.1572
+        "quoteVolume24h": 24548011.464015,
+        "priceUSDT": 0.1573
       },
       "rankKey": [
         1,
@@ -152,7 +152,7 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-03T14:26:53.333635+00:00",
+      "sourceGeneratedAt": "2026-09-03T14:28:05.416030+00:00",
       "symbol": "HEMIUSDT",
       "family": "VOLATILITY_BREAKOUT",
       "timeframe": "1h",
@@ -188,8 +188,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 40843277.342755,
-        "priceUSDT": 0.01586
+        "quoteVolume24h": 40850034.56817,
+        "priceUSDT": 0.01591
       },
       "rankKey": [
         1,
@@ -212,5 +212,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-03T14:26:53.427586+00:00"
+  "generatedAt": "2026-09-03T14:28:05.499321+00:00"
 }
