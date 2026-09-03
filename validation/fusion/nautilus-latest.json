@@ -1,9 +1,45 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "385a252d2323f398b13a",
+  "symbol": "PEPEUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
+  "params": {
+    "lookback": 24,
+    "compressionLookback": 72,
+    "compressionPct": 0.25,
+    "relvol": 1.5,
+    "rsiMin": 55,
+    "rsiMax": 75,
+    "holdBars": 12,
+    "sl": 0.025,
+    "tp": 0.055
+  },
+  "base": {
+    "trades": 11,
+    "wins": 4,
+    "winRate": 0.36363636363636365,
+    "netPnlUSDT": 0.08134176000000007,
+    "expectancyUSDT": 0.007394705454545461,
+    "profitFactor": 1.1228581306118608,
+    "maxDrawdownUSDT": 0.32489146
+  },
+  "stress2x": {
+    "trades": 11,
+    "wins": 4,
+    "winRate": 0.36363636363636365,
+    "netPnlUSDT": -0.10055311,
+    "expectancyUSDT": -0.009141191818181819,
+    "profitFactor": 0.8705476462105917,
+    "maxDrawdownUSDT": 0.39050256000000005
+  },
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-03T18:30:07.087704+00:00"
+  "generatedAt": "2026-09-03T18:32:45.770946+00:00",
+  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
