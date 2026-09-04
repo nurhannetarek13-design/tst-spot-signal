@@ -5,7 +5,7 @@
   "liveTrading": false,
   "candidateId": null,
   "candidateFingerprint": null,
-  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "gateLiveReady": false,
   "checks": [
     {
@@ -72,7 +72,7 @@
       "name": "no_candidate_is_fail_closed",
       "ok": true,
       "detail": {
-        "manifestStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS"
+        "manifestStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE"
       }
     },
     {
@@ -129,7 +129,7 @@
       "name": "derivatives_has_data",
       "ok": true,
       "detail": {
-        "usableCount": 12
+        "usableCount": 13
       }
     },
     {
@@ -248,6 +248,6 @@
       "detail": null
     }
   ],
-  "generatedAt": "2026-09-04T04:21:06.526314+00:00",
+  "generatedAt": "2026-09-04T11:09:11.162713+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
