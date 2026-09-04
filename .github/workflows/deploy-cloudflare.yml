@@ -1,5 +1,6 @@
 name: Deploy Cloudflare Minute Scheduler
 # Deploy production paper scanner, verify Telegram + health endpoints, then force a scan.
+# Manual Telegram test trigger: 2026-09-04
 
 on:
   workflow_dispatch:
