@@ -1,0 +1,52 @@
+name: Prepare OPOCO executor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/patch-vercel-opoco.py
+      - test/opoco-safety.test.mjs
+      - .github/workflows/prepare-opoco-executor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply OPOCO safety patch
+        run: python scripts/patch-vercel-opoco.py
+
+      - name: Syntax check executor
+        run: node --check server.mjs
+
+      - name: Run execution safety tests
+        run: npm test
+
+      - name: Commit prepared executor
+        shell: bash
+        run: |
+          if git diff --quiet -- server.mjs; then
+            echo "OPOCO executor already prepared"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.mjs
+          git commit -m "Add OPOCO-first Spot execution safety"
+          git push origin HEAD:main
