@@ -67,4 +67,19 @@ digest = r'''async function sendPeriodicScanDigest(env){
 if marker not in s:
     raise SystemExit("scan function marker missing; refusing unsafe patch")
 s = s.replace(marker, digest + marker, 1)
+
+signal_start = '      await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`'
+if signal_start not in s:
+    raise SystemExit("strong signal Telegram call changed; refusing unsafe patch")
+button_prefix = '''      const baseAsset=best.symbol.endsWith("USDT")?best.symbol.slice(0,-4):best.symbol;
+      const tradeUrl=`https://www.binance.com/en/trade/${encodeURIComponent(baseAsset)}_USDT?type=spot`;
+      const tradeButtons={inline_keyboard:[[{text:"🟢 افتح الزوج على Binance Spot",url:tradeUrl}]]};
+      await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`'''
+s = s.replace(signal_start, button_prefix, 1)
+
+signal_tail = '"Paper only — مفيش شراء حقيقي من Binance."].join("\\n"));'
+if signal_tail not in s:
+    raise SystemExit("strong signal Telegram tail changed; refusing unsafe patch")
+s = s.replace(signal_tail, '"🔗 Binance Spot: ${tradeUrl}","Paper only — مفيش شراء حقيقي من Binance."].join("\\n"),tradeButtons);', 1)
+
 p.write_text(s)
