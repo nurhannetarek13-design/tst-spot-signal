@@ -4,9 +4,34 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 20.054387213080524,
+  "cashUSDT": 14.554387213080524,
   "realizedPnLUSDT": -0.2634946839030239,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "HEMIUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-04T05:50:54.142Z",
+      "entry": 0.01673,
+      "stop": 0.016430855090161876,
+      "target": 0.017195336526414858,
+      "qty": 328.75074716078905,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 89,
+      "metrics": {
+        "spreadPct": 0.05977286312014102,
+        "mom1h": 0.044072004965859835,
+        "mom4h": 0.036352433764633485,
+        "btc1h": -0.000657705663511976,
+        "atrPct": 0.01976119103171649,
+        "takerBuyRatio": 0.556859132778959,
+        "relativeVolume": 1.5793733328258848,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
