@@ -1,0 +1,51 @@
+name: Prepare OTOCO executor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/patch-vercel-otoco.py
+      - .github/workflows/prepare-otoco-executor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply OTOCO safety patch
+        run: python scripts/patch-vercel-otoco.py
+
+      - name: Syntax check executor
+        run: node --check server.mjs
+
+      - name: Run execution safety tests
+        run: npm test
+
+      - name: Commit prepared executor
+        shell: bash
+        run: |
+          if git diff --quiet -- server.mjs test/otoco-safety.test.mjs; then
+            echo "OTOCO executor already prepared"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.mjs test/otoco-safety.test.mjs
+          git commit -m "Add OTOCO-first Spot execution safety"
+          git push origin HEAD:main
