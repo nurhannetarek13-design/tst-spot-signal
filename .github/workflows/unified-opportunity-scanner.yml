@@ -6,7 +6,7 @@ on:
       - 'scripts/paper-unified-opportunity-scanner.mjs'
       - '.github/workflows/unified-opportunity-scanner.yml'
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
 permissions:
   contents: read
 concurrency:
