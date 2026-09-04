@@ -4,9 +4,34 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 19.774949077993853,
+  "cashUSDT": 14.493643147752305,
   "realizedPnLUSDT": -0.5622298303465385,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "DASHUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-04T17:40:48.971Z",
+      "entry": 56.08,
+      "stop": 55.01814142295985,
+      "target": 57.731780008729125,
+      "qty": 0.09417449946935712,
+      "notional": 5.281305930241547,
+      "maxHoldBars": 8,
+      "score": 94,
+      "metrics": {
+        "spreadPct": 0.05349500713266965,
+        "mom1h": 0.023183072677092964,
+        "mom4h": 0.10998003992015959,
+        "btc1h": -0.00047454824892323444,
+        "atrPct": 0.021216379488903894,
+        "takerBuyRatio": 0.5755377720043445,
+        "relativeVolume": 1.3012229604129613,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
