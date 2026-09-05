@@ -25,22 +25,27 @@
     "trades": 150,
     "wins": 53,
     "winRate": 0.35333333333333333,
-    "netPnlUSDT": -1.5732981400000003,
-    "expectancyUSDT": -0.01048865426666667,
-    "profitFactor": 0.9038085156012285,
+    "netPnlUSDT": -1.5673970100000003,
+    "expectancyUSDT": -0.010449313400000002,
+    "profitFactor": 0.9041347230908793,
     "maxDrawdownUSDT": 2.93513603
   },
   "stress2x": {
     "trades": 150,
     "wins": 48,
     "winRate": 0.32,
-    "netPnlUSDT": -4.048585730000001,
-    "expectancyUSDT": -0.02699057153333334,
-    "profitFactor": 0.7746601518890662,
-    "maxDrawdownUSDT": 4.340551900000002
+    "netPnlUSDT": -4.036801190000001,
+    "expectancyUSDT": -0.02691200793333334,
+    "profitFactor": 0.775168596281936,
+    "maxDrawdownUSDT": 4.328767360000001
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:22:24.003129+00:00",
-  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
+  "generatedAt": "2026-09-05T15:45:49.256618+00:00",
+  "notes": "NautilusTrader parity validation on frozen candidate and exact canonical dataset window; research only.",
+  "dataset": {
+    "firstTs": "2025-09-05T16:00:00+00:00",
+    "lastTs": "2026-09-05T15:00:00+00:00",
+    "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
+  }
 }
