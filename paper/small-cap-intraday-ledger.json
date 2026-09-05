@@ -4,34 +4,9 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 14.341546381941509,
-  "realizedPnLUSDT": -0.6731651028948547,
-  "openPositions": [
-    {
-      "symbol": "UNIUSDT",
-      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
-      "openedAt": "2026-09-05T17:36:14.103Z",
-      "entry": 6.787,
-      "stop": 6.718195922134307,
-      "target": 6.894028565568855,
-      "qty": 0.8103727714748784,
-      "notional": 5.5,
-      "maxHoldBars": 8,
-      "score": 84,
-      "metrics": {
-        "spreadPct": 0.014734050390457257,
-        "mom1h": 0.011615628299894487,
-        "mom4h": 0.07588641103802352,
-        "btc1h": 0.0017185702847055673,
-        "atrPct": 0.011400085804701051,
-        "takerBuyRatio": 0.609195441003604,
-        "relativeVolume": 2.843447804889981,
-        "breakout": false,
-        "trend15": true,
-        "trend1h": true
-      }
-    }
-  ],
+  "cashUSDT": 20.188385928132757,
+  "realizedPnLUSDT": -0.346749867886751,
+  "openPositions": [],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
@@ -612,12 +587,41 @@
       "exitReason": "TARGET",
       "pnlUSDT": 0.3420172043010756,
       "returnPct": 6.590357266736047
+    },
+    {
+      "symbol": "UNIUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-05T17:36:14.103Z",
+      "entry": 6.787,
+      "stop": 6.718195922134307,
+      "target": 6.894028565568855,
+      "qty": 0.8103727714748784,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 84,
+      "metrics": {
+        "spreadPct": 0.014734050390457257,
+        "mom1h": 0.011615628299894487,
+        "mom4h": 0.07588641103802352,
+        "btc1h": 0.0017185702847055673,
+        "atrPct": 0.011400085804701051,
+        "takerBuyRatio": 0.609195441003604,
+        "relativeVolume": 2.843447804889981,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      },
+      "closedAt": "2026-09-05T19:27:33.396Z",
+      "exit": 7.215,
+      "exitReason": "TARGET",
+      "pnlUSDT": 0.32641523500810365,
+      "returnPct": 6.306173567113604
     }
   ],
   "daily": {
     "2026-09-02": -0.05182854893971692,
     "2026-09-03": -0.21166613496330697,
     "2026-09-04": -0.6129923070208968,
-    "2026-09-05": 0.20332188802906598
+    "2026-09-05": 0.5297371230371697
   }
 }
