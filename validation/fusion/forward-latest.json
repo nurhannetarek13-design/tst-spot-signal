@@ -1,10 +1,13 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "NO_CANDIDATE",
+  "status": "COLLECTING",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "355f478a8b669d789baf",
+  "symbol": "SAHARAUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T05:53:29.596Z",
-  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
+  "generatedAt": "2026-09-05T07:01:54.000Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
