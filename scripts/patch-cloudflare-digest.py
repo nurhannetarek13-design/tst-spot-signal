@@ -3,29 +3,37 @@ from pathlib import Path
 p = Path("src/edge-worker.js")
 s = p.read_text()
 
+
+def replace_once(old, new, label):
+    global s
+    if new in s:
+        return
+    if old not in s:
+        raise SystemExit(f"{label} changed; refusing unsafe patch")
+    s = s.replace(old, new, 1)
+
+
 # 1) Keep the 5-minute Telegram digest on the Cloudflare scheduled worker.
-old = '  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true); })()); },'
-new = '  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true); })()); },'
-if old not in s:
-    raise SystemExit("scheduled handler signature changed; refusing unsafe patch")
-s = s.replace(old, new, 1)
+replace_once(
+    '  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true); })()); },',
+    '  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true); })()); },',
+    "scheduled handler signature",
+)
 
 # 2) Surface the two reversal strategies in scanner status.
-old_strategies = 'strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"]'
-new_strategies = 'strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM","LIQUIDITY_CRASH_EXHAUSTION","STOP_HUNT_REVERSAL"]'
-if old_strategies not in s:
-    raise SystemExit("strategy status list changed; refusing unsafe patch")
-s = s.replace(old_strategies, new_strategies, 1)
+replace_once(
+    'strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"]',
+    'strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM","LIQUIDITY_CRASH_EXHAUSTION","STOP_HUNT_REVERSAL"]',
+    "strategy status list",
+)
 
 # 3) Do not abort the whole scan in BTC RISK_OFF. Normal strategies remain blocked
-#    later by the hard gate; only strict reversal setups may pass during RISK_OFF.
+# later by the hard gate; only strict reversal setups may pass during RISK_OFF.
 risk_off_abort = '    if(regime.state==="RISK_OFF") return {ok:true,status:"MARKET_RISK_OFF",marketRegime:regime,liveTrading:false};\n'
-if risk_off_abort not in s:
-    raise SystemExit("RISK_OFF early-return changed; refusing unsafe patch")
-s = s.replace(risk_off_abort, '', 1)
+if risk_off_abort in s:
+    s = s.replace(risk_off_abort, '', 1)
 
-# 4) Reserve scan slots for liquid coins already in a sharp 24h selloff, so the
-#    reversal engine is not starved by the momentum ranking.
+# 4) Reserve scan slots for liquid coins already in a sharp 24h selloff.
 old_selection = '    const selected=await rotateSelection(env,focusPool,newPool);\n'
 new_selection = '''    const crashPool=summaries
       .filter(x=>x.volume>=CFG.big.minVolume&&x.change<=-4&&x.spreadPct<=CFG.small.maxSpreadPct)
@@ -36,9 +44,7 @@ new_selection = '''    const crashPool=summaries
       .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
       .slice(0,Math.max(CFG.scanPerRun,10));
 '''
-if old_selection not in s:
-    raise SystemExit("scan selection changed; refusing unsafe patch")
-s = s.replace(old_selection, new_selection, 1)
+replace_once(old_selection, new_selection, "scan selection")
 
 # 5) Add the two reversal detectors ahead of the existing regime strategies.
 choose_marker = 'function chooseStrategy(regime,c,ctx){\n  const last=c.at(-1),prev=c.at(-2);'
@@ -104,12 +110,12 @@ function chooseStrategy(regime,c,ctx){
   if(stopHunt) return stopHunt;
   const crashExhaustion=detectLiquidityCrashExhaustion(c,ctx);
   if(crashExhaustion) return crashExhaustion;'''
-if choose_marker not in s:
-    raise SystemExit("chooseStrategy signature changed; refusing unsafe patch")
-s = s.replace(choose_marker, reversal_code, 1)
+if 'function detectStopHuntReversal(c,ctx){' not in s:
+    if choose_marker not in s:
+        raise SystemExit("chooseStrategy signature changed; refusing unsafe patch")
+    s = s.replace(choose_marker, reversal_code, 1)
 
-# 6) Tighten the hard gate for reversal trades. They may pass in BTC RISK_OFF,
-#    but only with stronger score, microstructure confirmation, and >=1.8 net R:R.
+# 6) Tighten the hard gate for reversal trades.
 old_gate = '    const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:microComposite>=0.08;\n    const hard=marketRegime.state!=="RISK_OFF"&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=1.6&&score>=cfg.minScore;'
 new_gate = '''    const reversalStrategy=candidate.strategy==="STOP_HUNT_REVERSAL"||candidate.strategy==="LIQUIDITY_CRASH_EXHAUSTION";
     const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:(reversalStrategy?microComposite>=0.12:microComposite>=0.08);
@@ -117,12 +123,12 @@ new_gate = '''    const reversalStrategy=candidate.strategy==="STOP_HUNT_REVERSA
     const rrFloor=reversalStrategy?1.8:1.6;
     const scoreFloor=reversalStrategy?Math.max(cfg.minScore,93):cfg.minScore;
     const hard=regimeOk&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=rrFloor&&score>=scoreFloor;'''
-if old_gate not in s:
-    raise SystemExit("hard gate changed; refusing unsafe patch")
-s = s.replace(old_gate, new_gate, 1)
+if 'const reversalStrategy=candidate.strategy==="STOP_HUNT_REVERSAL"' not in s:
+    if old_gate not in s:
+        raise SystemExit("hard gate changed; refusing unsafe patch")
+    s = s.replace(old_gate, new_gate, 1)
 
-# 7) Add the read-only Telegram scan digest. Include crash candidates first so
-#    the new reversal strategies are visible in the periodic shortlist.
+# 7) Add the read-only Telegram scan digest.
 marker = 'async function scan(env,sendAlert){'
 digest = r'''async function sendPeriodicScanDigest(env){
   try{
@@ -185,23 +191,27 @@ digest = r'''async function sendPeriodicScanDigest(env){
 }
 
 '''
-if marker not in s:
-    raise SystemExit("scan function marker missing; refusing unsafe patch")
-s = s.replace(marker, digest + marker, 1)
+if 'async function sendPeriodicScanDigest(env){' not in s:
+    if marker not in s:
+        raise SystemExit("scan function marker missing; refusing unsafe patch")
+    s = s.replace(marker, digest + marker, 1)
 
 # 8) Add a direct Binance Spot button to a strong alert.
 signal_start = '      await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`'
-if signal_start not in s:
-    raise SystemExit("strong signal Telegram call changed; refusing unsafe patch")
-button_prefix = '''      const baseAsset=best.symbol.endsWith("USDT")?best.symbol.slice(0,-4):best.symbol;
+if 'const tradeButtons={inline_keyboard:' not in s:
+    if signal_start not in s:
+        raise SystemExit("strong signal Telegram call changed; refusing unsafe patch")
+    button_prefix = '''      const baseAsset=best.symbol.endsWith("USDT")?best.symbol.slice(0,-4):best.symbol;
       const tradeUrl=`https://www.binance.com/en/trade/${encodeURIComponent(baseAsset)}_USDT?type=spot`;
       const tradeButtons={inline_keyboard:[[{text:"🟢 افتح الزوج على Binance Spot",url:tradeUrl}]]};
       await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`'''
-s = s.replace(signal_start, button_prefix, 1)
+    s = s.replace(signal_start, button_prefix, 1)
 
 signal_tail = '"Paper only — مفيش شراء حقيقي من Binance."].join("\\n"));'
-if signal_tail not in s:
-    raise SystemExit("strong signal Telegram tail changed; refusing unsafe patch")
-s = s.replace(signal_tail, '"📐 Net R:R: ${best.netRR||\"-\"}","🔗 Binance Spot: ${tradeUrl}","Paper only — مفيش شراء حقيقي من Binance."].join("\\n"),tradeButtons);', 1)
+patched_tail = '"📐 Net R:R: ${best.netRR||\\"-\\"}","🔗 Binance Spot: ${tradeUrl}","Paper only — مفيش شراء حقيقي من Binance."].join("\\n"),tradeButtons);'
+if 'Net R:R: ${best.netRR' not in s:
+    if signal_tail not in s:
+        raise SystemExit("strong signal Telegram tail changed; refusing unsafe patch")
+    s = s.replace(signal_tail, patched_tail, 1)
 
 p.write_text(s)
