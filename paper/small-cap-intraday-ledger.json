@@ -4,9 +4,58 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 19.49900792468939,
+  "cashUSDT": 8.49900792468939,
   "realizedPnLUSDT": -0.8764869909239206,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "MUBARAKUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-05T05:45:15.872Z",
+      "entry": 0.03109,
+      "stop": 0.030655092745157604,
+      "target": 0.031766522396421505,
+      "qty": 176.90575747828885,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 99,
+      "metrics": {
+        "spreadPct": 0.032164683177869385,
+        "mom1h": 0.03432189270243269,
+        "mom4h": 0.03535690460306884,
+        "btc1h": 0.0003489265982119516,
+        "atrPct": 0.015567985926488974,
+        "takerBuyRatio": 0.5801443024750209,
+        "relativeVolume": 1.627560963353267,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    },
+    {
+      "symbol": "CHIPUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-05T05:45:15.872Z",
+      "entry": 0.05864,
+      "stop": 0.05778927486780276,
+      "target": 0.059963350205640135,
+      "qty": 93.79263301500683,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 91,
+      "metrics": {
+        "spreadPct": 0.03410641200545564,
+        "mom1h": 0.03022315937445086,
+        "mom4h": 0.04565721419654012,
+        "btc1h": 0.0003489265982119516,
+        "atrPct": 0.016122294847105815,
+        "takerBuyRatio": 0.5837560011626884,
+        "relativeVolume": 1.9310616414836645,
+        "breakout": false,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
