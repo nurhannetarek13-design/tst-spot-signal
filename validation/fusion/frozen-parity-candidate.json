@@ -1,0 +1,25 @@
+{
+  "strategyId": "TST_UNIFIED_CANDIDATE_V1",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "source": "PUBLIC_EDGE_LAB",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "freezeReason": "Execution parity reconciliation across VectorBT, Freqtrade, Jesse, and Nautilus. Candidate rotation must not alter this artifact until parity is resolved.",
+  "authorization": "VALIDATION_ONLY",
+  "liveTrading": false,
+  "frozenAt": "2026-09-05T15:29:00Z"
+}
