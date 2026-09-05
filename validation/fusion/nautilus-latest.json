@@ -4,9 +4,9 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "355f478a8b669d789baf",
-  "symbol": "SAHARAUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "1b7dc1733caf8b96d86e",
+  "symbol": "ZKCUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "params": {
@@ -21,25 +21,25 @@
     "tp": 0.055
   },
   "base": {
-    "trades": 25,
-    "wins": 12,
-    "winRate": 0.48,
-    "netPnlUSDT": 0.8961109199999998,
-    "expectancyUSDT": 0.03584443679999999,
-    "profitFactor": 1.6606794643853318,
-    "maxDrawdownUSDT": 0.8431911
+    "trades": 22,
+    "wins": 5,
+    "winRate": 0.22727272727272727,
+    "netPnlUSDT": -1.8885296999999996,
+    "expectancyUSDT": -0.08584225909090908,
+    "profitFactor": 0.24106726102295195,
+    "maxDrawdownUSDT": 2.02248198
   },
   "stress2x": {
-    "trades": 25,
-    "wins": 11,
-    "winRate": 0.44,
-    "netPnlUSDT": 0.4817018999999999,
-    "expectancyUSDT": 0.019268075999999995,
-    "profitFactor": 1.3042608759980312,
-    "maxDrawdownUSDT": 0.94108222
+    "trades": 22,
+    "wins": 5,
+    "winRate": 0.22727272727272727,
+    "netPnlUSDT": -2.24930931,
+    "expectancyUSDT": -0.10224133227272728,
+    "profitFactor": 0.18670476679753326,
+    "maxDrawdownUSDT": 2.24930931
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T07:02:21.747266+00:00",
+  "generatedAt": "2026-09-05T07:53:22.672326+00:00",
   "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
