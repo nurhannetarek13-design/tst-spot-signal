@@ -1,0 +1,65 @@
+name: External Freqtrade strategy pack
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'freqtrade/user_data/config-external-pack.json'
+      - '.github/workflows/external-freqtrade-pack.yml'
+
+jobs:
+  official-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare external GPL strategy workspace
+        run: |
+          mkdir -p external/freqtrade-official user_data/data/binance user_data/backtest_results
+          git clone --depth 1 https://github.com/freqtrade/freqtrade-strategies.git external/freqtrade-official
+          cp freqtrade/user_data/config-external-pack.json user_data/config.json
+          mkdir -p user_data/strategies
+          cp external/freqtrade-official/user_data/strategies/berlinguyinca/ADXMomentum.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/berlinguyinca/BbandRsi.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/berlinguyinca/AwesomeMacd.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/berlinguyinca/CMCWinner.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/Heracles.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/MultiMa.py user_data/strategies/ || true
+          cp external/freqtrade-official/user_data/strategies/hlhb.py user_data/strategies/ || true
+      - name: Download Binance Spot data
+        run: |
+          docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable \
+            download-data --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 5m 15m 1h 4h 1d \
+            --timerange 20250101-20260905
+      - name: Backtest official strategies independently
+        shell: bash
+        run: |
+          set +e
+          mkdir -p validation/external-freqtrade
+          : > validation/external-freqtrade/summary.txt
+          for STRAT in ADXMomentum BbandRsi AwesomeMacd CMCWinner Heracles MultiMa hlhb; do
+            echo "===== $STRAT =====" | tee -a validation/external-freqtrade/summary.txt
+            docker run --rm \
+              -v "$PWD/user_data:/freqtrade/user_data" \
+              freqtradeorg/freqtrade:stable \
+              backtesting --config /freqtrade/user_data/config.json \
+              --strategy "$STRAT" \
+              --strategy-path /freqtrade/user_data/strategies \
+              --timerange 20250101-20260905 \
+              --fee 0.001 \
+              --export trades \
+              --export-filename "/freqtrade/user_data/backtest_results/${STRAT}.json" \
+              > "validation/external-freqtrade/${STRAT}.log" 2>&1
+            CODE=$?
+            echo "exit_code=$CODE" | tee -a validation/external-freqtrade/summary.txt
+            grep -E "TOTAL|Tot Profit|Profit factor|Max % of account underwater|Win%|Absolute profit|Total profit" "validation/external-freqtrade/${STRAT}.log" | tail -n 30 | tee -a validation/external-freqtrade/summary.txt || true
+          done
+          cat validation/external-freqtrade/summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-freqtrade-pack
+          path: |
+            validation/external-freqtrade/**
+            user_data/backtest_results/**
+          if-no-files-found: warn
