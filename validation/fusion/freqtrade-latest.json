@@ -4,31 +4,31 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "355f478a8b669d789baf",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "82bc01511e155b64e664",
   "symbol": "SAHARAUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "base": {
-    "trades": 49,
-    "wins": 22,
-    "winRate": 0.4489795918367347,
-    "profitFactor": 1.1888689824792955,
-    "expectancyUSDT": 0.010993403469387758,
-    "netPnlUSDT": 0.5386767700000001,
-    "maxDrawdownUSDT": 1.60407104
+    "trades": 63,
+    "wins": 26,
+    "winRate": 0.4126984126984127,
+    "profitFactor": 1.1017066843677121,
+    "expectancyUSDT": 0.00444599746031746,
+    "netPnlUSDT": 0.28009783999999993,
+    "maxDrawdownUSDT": 1.47157628
   },
   "stress2x": {
-    "trades": 49,
+    "trades": 63,
     "wins": 20,
-    "winRate": 0.40816326530612246,
-    "profitFactor": 0.8147287835279147,
-    "expectancyUSDT": -0.013148971224489794,
-    "netPnlUSDT": -0.6442995899999999,
-    "maxDrawdownUSDT": 2.08103318
+    "winRate": 0.31746031746031744,
+    "profitFactor": 0.811414083885345,
+    "expectancyUSDT": -0.010221753492063492,
+    "netPnlUSDT": -0.6439704700000001,
+    "maxDrawdownUSDT": 2.1955155700000004
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T07:01:53.503928+00:00",
+  "generatedAt": "2026-09-05T07:07:32.740685+00:00",
   "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
 }
