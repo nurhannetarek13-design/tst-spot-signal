@@ -2,23 +2,19 @@ name: Fusion Jesse Validator
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Public Edge Lab"]
-    types: [completed]
-  schedule:
-    - cron: "20 3 * * *"
   push:
-    branches: [main]
+    branches: [fix/unified-execution-parity]
     paths:
       - "jesse/**"
-      - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/frozen-parity-candidate.json"
+      - "validation/fusion/execution-parity-fixture.json"
       - ".github/workflows/fusion-jesse-validator.yml"
 
 permissions:
   contents: write
 
 concurrency:
-  group: unified-candidate-jesse
+  group: unified-candidate-jesse-parity
   cancel-in-progress: true
 
 jobs:
@@ -27,20 +23,24 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/unified-execution-parity
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Read candidate presence
+      - name: Read frozen parity candidate
         run: |
           python - <<'PY'
           import json, pathlib, os, datetime
-          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
           has=bool(m.get("candidateFingerprint"))
-          with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
           if not has:
-              out={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":m.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; Jesse install and market download skipped."}
+              out={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat()}
               pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(out,indent=2))
           PY
 
@@ -54,20 +54,20 @@ jobs:
           PYTHONPATH: jesse
         run: python jesse/run_fusion_validator.py
 
-      - name: Commit Jesse snapshot safely
+      - name: Commit Jesse parity snapshot safely
         run: |
           cp validation/fusion/jesse-latest.json /tmp/jesse-latest.json
           for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p "$(dirname validation/fusion/jesse-latest.json)"
+            git fetch origin fix/unified-execution-parity
+            git reset --hard origin/fix/unified-execution-parity
+            mkdir -p validation/fusion
             cp /tmp/jesse-latest.json validation/fusion/jesse-latest.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/fusion/jesse-latest.json
             git diff --cached --quiet && exit 0
-            git commit -m "Update unified Jesse candidate validation"
-            git push origin HEAD:main && exit 0
+            git commit -m "Update parity Jesse validation"
+            git push origin HEAD:fix/unified-execution-parity && exit 0
             sleep $((i * 2))
           done
           exit 1
