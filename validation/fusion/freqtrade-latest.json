@@ -14,24 +14,24 @@
   "dataset": {
     "firstTs": "2025-09-05T17:00:00+00:00",
     "lastTs": "2026-09-05T16:00:00+00:00",
-    "sha256": "6b7e4ea0c8675f1963e896437602897b6f5ae754556b843e4f0b834ecc29cf9c"
+    "sha256": "7cf2fb11185dbf7568b346f1ad31580ac8e46978a79783adc7db1107414dee41"
   },
   "base": {
     "trades": 131,
     "wins": 44,
     "winRate": 0.33587786259541985,
-    "profitFactor": 0.7769704844676029,
-    "expectancyUSDT": -0.024812038778625953,
-    "netPnlUSDT": -3.25037708,
+    "profitFactor": 0.7798171317024004,
+    "expectancyUSDT": -0.02440593129770992,
+    "netPnlUSDT": -3.197177,
     "maxDrawdownUSDT": 4.21284728
   },
   "stress2x": {
     "trades": 131,
     "wins": 40,
     "winRate": 0.3053435114503817,
-    "profitFactor": 0.6621548834097558,
-    "expectancyUSDT": -0.04132331465648855,
-    "netPnlUSDT": -5.41335422,
+    "profitFactor": 0.6643573652101867,
+    "expectancyUSDT": -0.04091781725190839,
+    "netPnlUSDT": -5.36023406,
     "maxDrawdownUSDT": 6.274904610000001
   },
   "parityDiagnostics": {
@@ -1103,11 +1103,11 @@
       },
       {
         "entryTs": "2026-09-04T17:00:00+00:00",
-        "exitTs": "2026-09-05T15:00:00+00:00",
+        "exitTs": "2026-09-05T17:00:00+00:00",
         "entryPrice": 0.00932,
-        "exitPrice": 0.00916,
-        "reason": "force_exit",
-        "pnlUSDT": -0.11113024
+        "exitPrice": 0.00925,
+        "reason": "time_exit",
+        "pnlUSDT": -0.05793016
       }
     ],
     "freqtradeFirst50": [
@@ -1516,6 +1516,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T16:38:53.875706+00:00",
+  "generatedAt": "2026-09-05T19:27:53.581374+00:00",
   "notes": "Independent native Freqtrade Spot backtest of the frozen candidate. Canonical execution parity is validated separately by the canonical adapter and strict parity CI."
 }
