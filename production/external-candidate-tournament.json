@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "liveTradingAllowed": false,
+  "account": {
+    "capitalUSDT": 50,
+    "market": "binance_spot",
+    "leverage": false,
+    "maxOpenPositions": 1,
+    "defaultStakeUSDT": 10
+  },
+  "pipeline": [
+    "SOURCE_LICENSE_CHECK",
+    "SPOT_COMPATIBILITY_CHECK",
+    "BASE_BACKTEST",
+    "COST_STRESS",
+    "ECONOMIC_VIABILITY",
+    "CROSS_SYMBOL_CHECK",
+    "FROZEN_WALK_FORWARD",
+    "SIGNAL_ONLY_FORWARD",
+    "MANUAL_SMALL_LIVE_REVIEW"
+  ],
+  "hardGates": {
+    "minProfitFactor": 1.25,
+    "maxDrawdown": 0.15,
+    "positiveExpectancy": true,
+    "maxObservedLossPerTradeUSDT": 0.5,
+    "minExpectedProfitPerTradeUSDT": 0.03,
+    "minProjectedAnnualProfitUSDT": 8,
+    "requireSpotOnly": true,
+    "requireNoLeverage": true,
+    "requireClearLicenseForVendoring": true,
+    "requireStressPass": true,
+    "requireWalkForwardPass": true
+  },
+  "sources": [
+    {
+      "repo": "jptsantossilva/BEC",
+      "license": "MIT",
+      "mode": "ADAPT_ALLOWED_WITH_ATTRIBUTION",
+      "status": "TESTED",
+      "result": "NO_PRODUCTION_WINNER"
+    },
+    {
+      "repo": "freqtrade/freqtrade-strategies",
+      "license": "GPL-3.0",
+      "mode": "UPSTREAM_RUNTIME_TEST_ONLY",
+      "status": "ACTIVE",
+      "notes": "Do not vendor code into this project unless GPL obligations are intentionally accepted."
+    },
+    {
+      "repo": "CryptoMarius/CryptoScanBot",
+      "license": null,
+      "mode": "IDEAS_ONLY",
+      "status": "NOT_ELIGIBLE_FOR_CODE_REUSE",
+      "reason": "NO_DECLARED_LICENSE"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "freqtrade_upstream_adx_momentum",
+      "source": "freqtrade/freqtrade-strategies",
+      "status": "REJECT_FOR_PRODUCTION",
+      "reason": ["STRESS_PF_FAIL","BTC_NEGATIVE","DOLLAR_EDGE_TOO_SMALL","WORST_TRADE_EXCEEDS_RISK_BUDGET"]
+    },
+    {
+      "id": "bec_ema_cross_with_market_phases",
+      "source": "jptsantossilva/BEC",
+      "status": "REJECT_FOR_PRODUCTION",
+      "reason": ["FAILED_FROZEN_WALK_FORWARD"]
+    }
+  ]
+}
