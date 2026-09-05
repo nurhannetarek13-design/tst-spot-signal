@@ -1,13 +1,73 @@
 {
+  "generatedAt": "2026-09-05T16:53:19.040Z",
   "status": "RESEARCH_ONLY",
   "protocol": "validation/evidence-gate-round3.json",
   "category": "LIQUIDITY_CRASH_EXHAUSTION",
+  "discoverySymbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "TRXUSDT",
+    "LINKUSDT",
+    "AVAXUSDT",
+    "DOTUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "NEARUSDT",
+    "UNIUSDT",
+    "AAVEUSDT",
+    "ETCUSDT",
+    "FILUSDT",
+    "ATOMUSDT",
+    "APTUSDT",
+    "ARBUSDT",
+    "OPUSDT",
+    "INJUSDT",
+    "SUIUSDT"
+  ],
   "days": 1825,
+  "thresholds": {
+    "marketZ": -2.5,
+    "breadth": 0.6,
+    "assetRet": -0.03,
+    "volumeZ": 2.5
+  },
   "eventCount": 60,
   "horizons": {
-    "24": {"n":60,"meanGross":-0.008533494665400055,"medianGross":0.0007961783439490722,"hitRate":0.5,"medianMFE":0.030759558805221965,"medianMAE":0.08569646877457177,"medianMfeMaeRatio":0.3589361294003409,"pass":false},
-    "48": {"n":60,"meanGross":-0.010130846489647386,"medianGross":-0.021731089609773713,"hitRate":0.3,"medianMFE":0.03345535072970818,"medianMAE":0.09037625289071799,"medianMfeMaeRatio":0.37017855531321964,"pass":false},
-    "72": {"n":60,"meanGross":-0.019531144481689126,"medianGross":-0.021913914701275905,"hitRate":0.38333333333333336,"medianMFE":0.03345535072970818,"medianMAE":0.09826600543000674,"medianMfeMaeRatio":0.3404570134229978,"pass":false}
+    "24": {
+      "n": 60,
+      "meanGross": -0.008533494665400055,
+      "medianGross": 0.0007961783439490722,
+      "hitRate": 0.5,
+      "medianMFE": 0.030759558805221965,
+      "medianMAE": 0.08569646877457177,
+      "medianMfeMaeRatio": 0.3589361294003409,
+      "pass": false
+    },
+    "48": {
+      "n": 60,
+      "meanGross": -0.010130846489647386,
+      "medianGross": -0.021731089609773713,
+      "hitRate": 0.3,
+      "medianMFE": 0.03345535072970818,
+      "medianMAE": 0.09037625289071799,
+      "medianMfeMaeRatio": 0.37017855531321964,
+      "pass": false
+    },
+    "72": {
+      "n": 60,
+      "meanGross": -0.019531144481689126,
+      "medianGross": -0.021913914701275905,
+      "hitRate": 0.38333333333333336,
+      "medianMFE": 0.03345535072970818,
+      "medianMAE": 0.09826600543000674,
+      "medianMfeMaeRatio": 0.3404570134229978,
+      "pass": false
+    }
   },
   "rawGatePassed": false,
   "verdict": "REJECT_BEFORE_STRATEGY_CONSTRUCTION"
