@@ -1,0 +1,42 @@
+name: Canonical Adapter CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - "scripts/canonical-execution-adapter.py"
+      - "scripts/canonical-parity-gate.py"
+      - "test/test_canonical_execution_adapter.py"
+      - "validation/fusion/PARITY_POLICY.md"
+      - ".github/workflows/canonical-adapter-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-adapter-ci
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/unified-execution-parity
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deterministic test dependencies
+        run: pip install --disable-pip-version-check pandas
+      - name: Compile canonical tools
+        run: python -m py_compile scripts/canonical-execution-adapter.py scripts/canonical-parity-gate.py
+      - name: Run canonical execution contract regression tests
+        run: python -m unittest test/test_canonical_execution_adapter.py -v
+      - name: Assert research-only policy markers
+        run: |
+          grep -q 'RESEARCH_ONLY' scripts/canonical-execution-adapter.py
+          grep -q 'RESEARCH_ONLY' scripts/canonical-parity-gate.py
+          grep -q 'SAHARAUSDT / TS_MOMENTUM is a parity fixture only' validation/fusion/PARITY_POLICY.md
