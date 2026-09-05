@@ -4,29 +4,29 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "355f478a8b669d789baf",
-  "symbol": "SAHARAUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "1b7dc1733caf8b96d86e",
+  "symbol": "ZKCUSDT",
   "family": "VOLATILITY_BREAKOUT",
   "timeframe": "1h",
   "base": {
-    "trades": 25,
-    "winRate": 0.44,
+    "trades": 22,
+    "winRate": 0.22727272727272727,
     "profitFactor": 0.0,
-    "expectancyUSDT": 0.017281540519756416,
-    "netPnlUSDT": 0.4320385129939104,
-    "maxDrawdown": -3.214009737402468
+    "expectancyUSDT": -0.04799607113598705,
+    "netPnlUSDT": -1.055913564991715,
+    "maxDrawdown": -6.874869344938983
   },
   "stress2x": {
-    "trades": 25,
-    "winRate": 0.44,
+    "trades": 22,
+    "winRate": 0.22727272727272727,
     "profitFactor": 0.0,
-    "expectancyUSDT": 0.07307920863266387,
-    "netPnlUSDT": 1.8269802158165969,
-    "maxDrawdown": -4.245132226112103
+    "expectancyUSDT": -0.06444875605666406,
+    "netPnlUSDT": -1.4178726332466094,
+    "maxDrawdown": -8.093366253106549
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T07:12:14.572539+00:00",
+  "generatedAt": "2026-09-05T07:49:26.045717+00:00",
   "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
