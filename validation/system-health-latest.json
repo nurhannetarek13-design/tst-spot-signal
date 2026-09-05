@@ -3,9 +3,9 @@
   "status": "PASS",
   "pass": true,
   "liveTrading": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "candidateStatus": "ACTIVE",
   "gateLiveReady": false,
   "checks": [
     {
@@ -69,50 +69,11 @@
       "detail": null
     },
     {
-      "name": "no_candidate_is_fail_closed",
+      "name": "gate_candidate_matches",
       "ok": true,
       "detail": {
-        "manifestStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE"
-      }
-    },
-    {
-      "name": "no_candidate_snapshot:vectorbt",
-      "ok": true,
-      "detail": {
-        "status": "NO_CANDIDATE",
-        "fingerprint": null
-      }
-    },
-    {
-      "name": "no_candidate_snapshot:freqtrade",
-      "ok": true,
-      "detail": {
-        "status": "NO_CANDIDATE",
-        "fingerprint": null
-      }
-    },
-    {
-      "name": "no_candidate_snapshot:jesse",
-      "ok": true,
-      "detail": {
-        "status": "NO_CANDIDATE",
-        "fingerprint": null
-      }
-    },
-    {
-      "name": "no_candidate_snapshot:nautilus",
-      "ok": true,
-      "detail": {
-        "status": "NO_CANDIDATE",
-        "fingerprint": null
-      }
-    },
-    {
-      "name": "no_candidate_snapshot:forward",
-      "ok": true,
-      "detail": {
-        "status": "NO_CANDIDATE",
-        "fingerprint": null
+        "manifest": "5a8be2536ed727aaa38e",
+        "gate": "5a8be2536ed727aaa38e"
       }
     },
     {
@@ -248,6 +209,6 @@
       "detail": null
     }
   ],
-  "generatedAt": "2026-09-05T04:16:42.974179+00:00",
+  "generatedAt": "2026-09-05T10:28:46.341848+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
