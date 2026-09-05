@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "23 2 * * *"
   push:
-    branches: [main]
+    branches: [main, fix/unified-execution-parity]
     paths:
       - "research/public_edge_lab.py"
       - "scripts/build_candidate_manifest.py"
@@ -15,8 +15,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: public-edge-lab
+  group: public-edge-lab-${{ github.ref_name }}
   cancel-in-progress: true
+
+env:
+  TARGET_REF: ${{ github.ref_name }}
 
 jobs:
   research:
@@ -25,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -38,14 +42,12 @@ jobs:
         run: |
           cp validation/edges/public-edge-lab-latest.json /tmp/public-edge-lab-latest.json
           for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin "$TARGET_REF"
+            git reset --hard "origin/$TARGET_REF"
             mkdir -p validation/edges validation/fusion
             cp /tmp/public-edge-lab-latest.json validation/edges/public-edge-lab-latest.json
 
-            # Rebuild against the latest rejected-candidates state after the reset.
-            # This prevents a long-running research job from resurrecting a candidate
-            # which was rejected while the job was still running.
+            # Rebuild against the latest rejected/golden-fixture state after reset.
             python scripts/build_candidate_manifest.py
 
             git config user.name "github-actions[bot]"
@@ -53,7 +55,7 @@ jobs:
             git add validation/edges/public-edge-lab-latest.json validation/fusion/candidate-manifest.json
             git diff --cached --quiet && exit 0
             git commit -m "Update public edge lab and unified candidate"
-            git push origin HEAD:main && exit 0
+            git push origin "HEAD:$TARGET_REF" && exit 0
             sleep $((i * 2))
           done
           exit 1
