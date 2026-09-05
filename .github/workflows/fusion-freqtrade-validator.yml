@@ -27,106 +27,50 @@ jobs:
         with:
           ref: fix/unified-execution-parity
           fetch-depth: 0
-
       - name: Read frozen parity candidate and fixture window
         run: |
           python - <<'PY'
           import json, pathlib, os, datetime
-          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
-          fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
+          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text()); fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
           if not m.get("candidateFingerprint"):
-              out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False}
-              pathlib.Path("validation/fusion/freqtrade-latest.json").write_text(json.dumps(out,indent=2))
-              with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE=false\n")
+              pathlib.Path("validation/fusion/freqtrade-latest.json").write_text(json.dumps({"engine":"FREQTRADE","status":"NO_CANDIDATE","pass":False,"authorization":"RESEARCH_ONLY","liveTrading":False},indent=2))
+              open(os.environ["GITHUB_ENV"],"a").write("HAS_CANDIDATE=false\n")
           else:
-              pair=m["symbol"][:-4]+"/USDT"
-              start=datetime.datetime.fromisoformat(fx["dataset"]["firstTs"].replace("Z","+00:00"))
-              last=datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00"))
-              bar=datetime.timedelta(hours=1) if m["timeframe"]=="1h" else datetime.timedelta(minutes=15)
-              end=last+bar
-              timerange=f"{int(start.timestamp())}-{int(end.timestamp())}"
-              download_timerange=timerange
-              with open(os.environ["GITHUB_ENV"],"a") as f:
-                  f.write("HAS_CANDIDATE=true\n")
-                  f.write(f"PAIR={pair}\n")
-                  f.write(f"TF={m['timeframe']}\n")
-                  f.write(f"TIMERANGE={timerange}\n")
-                  f.write(f"DOWNLOAD_TIMERANGE={download_timerange}\n")
+              pair=m["symbol"][:-4]+"/USDT"; start=datetime.datetime.fromisoformat(fx["dataset"]["firstTs"].replace("Z","+00:00")); last=datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00")); bar=datetime.timedelta(hours=1) if m["timeframe"]=="1h" else datetime.timedelta(minutes=15); timerange=f"{int(start.timestamp())}-{int((last+bar).timestamp())}"
+              with open(os.environ["GITHUB_ENV"],"a") as f: f.write(f"HAS_CANDIDATE=true\nPAIR={pair}\nTF={m['timeframe']}\nTIMERANGE={timerange}\nDOWNLOAD_TIMERANGE={timerange}\n")
               pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
-              print(m["candidateId"], pair, m["timeframe"], "test", timerange, "download", download_timerange)
           PY
-
       - name: Pull official Freqtrade image
         if: env.HAS_CANDIDATE == 'true'
         run: docker pull freqtradeorg/freqtrade:stable
-
       - name: Download frozen Binance Spot fixture window
         if: env.HAS_CANDIDATE == 'true'
-        run: |
-          docker run --rm \
-            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
-            freqtradeorg/freqtrade:stable download-data \
-            --exchange binance --timerange "$DOWNLOAD_TIMERANGE" --timeframes "$TF" \
-            --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
-
+        run: docker run --rm -v "$PWD/freqtrade/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable download-data --exchange binance --timerange "$DOWNLOAD_TIMERANGE" --timeframes "$TF" --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
       - name: Prepare writable result folders
         if: env.HAS_CANDIDATE == 'true'
-        run: |
-          mkdir -p "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID"
-          chmod 777 "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID"
-
+        run: mkdir -p "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID" && chmod 777 "/tmp/ft-base-$GITHUB_RUN_ID" "/tmp/ft-stress-$GITHUB_RUN_ID"
       - name: Base-cost unified backtest
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm \
-            -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" \
-            -v "/tmp/ft-base-$GITHUB_RUN_ID:/results" \
-            freqtradeorg/freqtrade:stable backtesting \
-            --config /freqtrade/user_data/config-unified-validation.json \
-            --strategy UnifiedCandidateStrategy \
-            --strategy-path /freqtrade/user_data/strategies \
-            --timeframe "$TF" --pairs "$PAIR" --fee 0.0015 \
-            --timerange "$TIMERANGE" \
-            --cache none --export trades --backtest-directory /results
+          docker run --rm -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" -v "/tmp/ft-base-$GITHUB_RUN_ID:/results" freqtradeorg/freqtrade:stable backtesting --config /freqtrade/user_data/config-unified-validation.json --strategy UnifiedCandidateStrategy --strategy-path /freqtrade/user_data/strategies --timeframe "$TF" --pairs "$PAIR" --fee 0.0015 --timerange "$TIMERANGE" --enable-protections --cache none --export trades --backtest-directory /results
           cp "$(ls -1t /tmp/ft-base-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-base.zip
-
       - name: Double-friction unified backtest
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm \
-            -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" \
-            -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results" \
-            freqtradeorg/freqtrade:stable backtesting \
-            --config /freqtrade/user_data/config-unified-validation.json \
-            --strategy UnifiedCandidateStrategy \
-            --strategy-path /freqtrade/user_data/strategies \
-            --timeframe "$TF" --pairs "$PAIR" --fee 0.003 \
-            --timerange "$TIMERANGE" \
-            --cache none --export trades --backtest-directory /results
+          docker run --rm -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results" freqtradeorg/freqtrade:stable backtesting --config /freqtrade/user_data/config-unified-validation.json --strategy UnifiedCandidateStrategy --strategy-path /freqtrade/user_data/strategies --timeframe "$TF" --pairs "$PAIR" --fee 0.003 --timerange "$TIMERANGE" --enable-protections --cache none --export trades --backtest-directory /results
           cp "$(ls -1t /tmp/ft-stress-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-stress.zip
-
       - name: Build unified validator report
         if: env.HAS_CANDIDATE == 'true'
         run: python scripts/fusion-freqtrade-report.py /tmp/freqtrade-base.zip /tmp/freqtrade-stress.zip validation/fusion/freqtrade-latest.json
-
       - name: Restore repository file ownership
         if: env.HAS_CANDIDATE == 'true'
         run: sudo chown -R "$(id -u):$(id -g)" freqtrade/user_data
-
       - name: Commit branch snapshot safely
         run: |
           cp validation/fusion/freqtrade-latest.json /tmp/freqtrade-latest.json
           for i in 1 2 3 4 5; do
-            git fetch origin fix/unified-execution-parity
-            git reset --hard origin/fix/unified-execution-parity
-            mkdir -p validation/fusion
-            cp /tmp/freqtrade-latest.json validation/fusion/freqtrade-latest.json
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add validation/fusion/freqtrade-latest.json
-            git diff --cached --quiet && exit 0
-            git commit -m "Update parity Freqtrade validation"
-            git push origin HEAD:fix/unified-execution-parity && exit 0
-            sleep $((i * 2))
+            git fetch origin fix/unified-execution-parity; git reset --hard origin/fix/unified-execution-parity; mkdir -p validation/fusion; cp /tmp/freqtrade-latest.json validation/fusion/freqtrade-latest.json
+            git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git add validation/fusion/freqtrade-latest.json
+            git diff --cached --quiet && exit 0; git commit -m "Update parity Freqtrade validation"; git push origin HEAD:fix/unified-execution-parity && exit 0; sleep $((i * 2))
           done
           exit 1
