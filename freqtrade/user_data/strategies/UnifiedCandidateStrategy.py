@@ -1,15 +1,15 @@
 import json
 from datetime import datetime
 from pathlib import Path
+import numpy as np
 import pandas as pd
-import talib.abstract as ta
 from pandas import DataFrame
 from freqtrade.strategy import IStrategy
 
 CANDIDATE_PATHS=[
     Path("/freqtrade/user_data/candidate-manifest.json"),
     Path("freqtrade/user_data/candidate-manifest.json"),
-    Path("validation/fusion/candidate-manifest.json"),
+    Path("validation/fusion/frozen-parity-candidate.json"),
 ]
 _manifest={}
 for _p in CANDIDATE_PATHS:
@@ -23,6 +23,30 @@ for _p in CANDIDATE_PATHS:
 FAMILY=_manifest.get("family","TS_MOMENTUM")
 PARAMS=_manifest.get("params") or {}
 TIMEFRAME=_manifest.get("timeframe","1h")
+
+
+def ema(series: pd.Series, n: int) -> pd.Series:
+    return series.ewm(span=int(n), adjust=False).mean()
+
+
+def rsi_wilder(series: pd.Series, n: int = 14) -> pd.Series:
+    d=series.diff()
+    gain=d.clip(lower=0)
+    loss=-d.clip(upper=0)
+    avg_gain=gain.ewm(alpha=1/n,adjust=False).mean()
+    avg_loss=loss.ewm(alpha=1/n,adjust=False).mean()
+    rs=avg_gain/avg_loss.replace(0,np.nan)
+    return (100-100/(1+rs)).fillna(50.0)
+
+
+def atr_pct_sma(dataframe: DataFrame, n: int = 14) -> pd.Series:
+    pc=dataframe["close"].shift(1)
+    tr=pd.concat([
+        (dataframe["high"]-dataframe["low"]).abs(),
+        (dataframe["high"]-pc).abs(),
+        (dataframe["low"]-pc).abs(),
+    ],axis=1).max(axis=1)
+    return tr.rolling(n).mean()/dataframe["close"]
 
 
 class UnifiedCandidateStrategy(IStrategy):
@@ -46,12 +70,11 @@ class UnifiedCandidateStrategy(IStrategy):
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         p=PARAMS
-        dataframe["rsi"]=ta.RSI(dataframe,timeperiod=14)
-        dataframe["atr"]=ta.ATR(dataframe,timeperiod=14)
-        dataframe["atr_pct"]=dataframe["atr"]/dataframe["close"]
+        dataframe["rsi"]=rsi_wilder(dataframe["close"],14)
+        dataframe["atr_pct"]=atr_pct_sma(dataframe,14)
         dataframe["qv"]=dataframe["volume"]*dataframe["close"]
         dataframe["qv_med24"]=dataframe["qv"].rolling(24).median()
-        dataframe["relvol"]=dataframe["qv"]/dataframe["qv_med24"]
+        dataframe["relvol"]=dataframe["qv"]/dataframe["qv_med24"].replace(0,np.nan)
 
         if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
             leaders=[]
@@ -68,12 +91,12 @@ class UnifiedCandidateStrategy(IStrategy):
                 dataframe["leader3"]=0.0
             dataframe["ret3"]=dataframe["close"].pct_change(3)
             dataframe["gap"]=dataframe["leader3"]-dataframe["ret3"]
-            dataframe["ema_fast"]=ta.EMA(dataframe,timeperiod=int(p.get("emaFast",24)))
+            dataframe["ema_fast"]=ema(dataframe["close"],int(p.get("emaFast",24)))
 
         elif FAMILY=="TS_MOMENTUM":
             f=int(p.get("emaFast",48)); s=int(p.get("emaSlow",120)); lb=int(p.get("retLookback",24))
-            dataframe["ema_fast"]=ta.EMA(dataframe,timeperiod=f)
-            dataframe["ema_slow"]=ta.EMA(dataframe,timeperiod=s)
+            dataframe["ema_fast"]=ema(dataframe["close"],f)
+            dataframe["ema_slow"]=ema(dataframe["close"],s)
             dataframe["ret_lb"]=dataframe["close"].pct_change(lb)
 
         elif FAMILY=="LIQUIDITY_REVERSAL":
@@ -81,10 +104,10 @@ class UnifiedCandidateStrategy(IStrategy):
             dataframe["ret_lb"]=dataframe["close"].pct_change(lb)
             dataframe["ret_mu"]=dataframe["ret_lb"].rolling(zlb).mean()
             dataframe["ret_sd"]=dataframe["ret_lb"].rolling(zlb).std(ddof=0)
-            dataframe["z"]=(dataframe["ret_lb"]-dataframe["ret_mu"])/dataframe["ret_sd"].replace(0,pd.NA)
+            dataframe["z"]=(dataframe["ret_lb"]-dataframe["ret_mu"])/dataframe["ret_sd"].replace(0,np.nan)
             dataframe["qv_week_med"]=dataframe["qv"].rolling(7*24).median()
-            dataframe["volume_ratio"]=dataframe["qv"]/dataframe["qv_week_med"]
-            dataframe["ema24"]=ta.EMA(dataframe,timeperiod=24)
+            dataframe["volume_ratio"]=dataframe["qv"]/dataframe["qv_week_med"].replace(0,np.nan)
+            dataframe["ema24"]=ema(dataframe["close"],24)
 
         elif FAMILY=="VOLATILITY_BREAKOUT":
             lb=int(p.get("lookback",24)); clb=int(p.get("compressionLookback",72))
@@ -92,8 +115,8 @@ class UnifiedCandidateStrategy(IStrategy):
             dataframe["atr_rank"]=dataframe["atr_pct"].rolling(clb).rank(pct=True)
 
         elif FAMILY=="TREND_BREAKOUT":
-            dataframe["ema_fast"]=ta.EMA(dataframe,timeperiod=int(p.get("fast",20)))
-            dataframe["ema_slow"]=ta.EMA(dataframe,timeperiod=int(p.get("slow",60)))
+            dataframe["ema_fast"]=ema(dataframe["close"],int(p.get("fast",20)))
+            dataframe["ema_slow"]=ema(dataframe["close"],int(p.get("slow",60)))
             dataframe["hh"]=dataframe["high"].rolling(int(p.get("lookback",20))).max().shift(1)
 
         elif FAMILY=="MEAN_REVERSION":
@@ -103,7 +126,7 @@ class UnifiedCandidateStrategy(IStrategy):
 
         elif FAMILY=="VOLATILITY_MOMENTUM":
             dataframe["hh"]=dataframe["high"].rolling(int(p.get("lookback",20))).max().shift(1)
-            dataframe["ema20"]=ta.EMA(dataframe,timeperiod=20)
+            dataframe["ema20"]=ema(dataframe["close"],20)
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -175,10 +198,8 @@ class UnifiedCandidateStrategy(IStrategy):
 
     def custom_exit(self,pair,trade,current_time:datetime,current_rate,current_profit,**kwargs):
         hold=int(PARAMS.get("holdBars",0))
-        if hold<=0:
-            return None
+        if hold<=0:return None
         minutes=60 if TIMEFRAME=="1h" else 15
         age=(current_time-trade.open_date_utc).total_seconds()/60
-        if age>=hold*minutes:
-            return "time_exit"
+        if age>=hold*minutes:return "time_exit"
         return None
