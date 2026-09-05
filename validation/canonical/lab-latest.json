@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "authority": "CANONICAL_LABORATORY",
+  "status": "NOT_READY",
+  "pass": false,
+  "liveReady": false,
+  "smallLiveReviewReady": false,
+  "reason": "Canonical/engine normalized trade ledgers are not all materialized yet.",
+  "missing": [
+    "validation/canonical/canonical-trades-latest.json",
+    "validation/canonical/vectorbt-adapter-latest.json",
+    "validation/canonical/freqtrade-adapter-latest.json",
+    "validation/canonical/jesse-adapter-latest.json",
+    "validation/canonical/nautilus-adapter-latest.json"
+  ],
+  "generatedAt": "2026-09-05T16:27:47.453334+00:00"
+}
