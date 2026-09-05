@@ -22,23 +22,23 @@
     "tp": 0.06
   },
   "paritySpecVersion": "TST_EXECUTION_PARITY_V1",
-  "parityFixtureMatch": true,
+  "parityFixtureMatch": false,
   "base": {
     "trades": 148,
     "wins": 55,
     "winRate": 0.3716216216216216,
-    "netPnlUSDT": -1.8394444779031391,
-    "expectancyUSDT": -0.01242867890475094,
-    "profitFactor": 0.8856160950267848,
+    "netPnlUSDT": -1.821767171036186,
+    "expectancyUSDT": -0.012309237642136392,
+    "profitFactor": 0.8865906750288483,
     "maxDrawdownUSDT": 3.807664572156172
   },
   "stress2x": {
     "trades": 148,
     "wins": 54,
     "winRate": 0.36486486486486486,
-    "netPnlUSDT": -4.28234966897289,
-    "expectancyUSDT": -0.028934795060627638,
-    "profitFactor": 0.7566845225874783,
+    "netPnlUSDT": -4.264698917899929,
+    "expectancyUSDT": -0.028815533229053572,
+    "profitFactor": 0.7574441513773396,
     "maxDrawdownUSDT": 5.140452256824943
   },
   "tradeLogFirst50": [
@@ -495,6 +495,6 @@
   ],
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:33:34.675479+00:00",
+  "generatedAt": "2026-09-05T16:38:34.252541+00:00",
   "notes": "Frozen candidate; 365d; 800-bar warmup; next-bar-open; actual-exit re-entry; canonical indicator and execution semantics for parity reconciliation."
 }
