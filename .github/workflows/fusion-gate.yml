@@ -16,6 +16,11 @@ on:
     branches: [main]
     paths:
       - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/vectorbt-candidate-latest.json"
+      - "validation/fusion/freqtrade-latest.json"
+      - "validation/fusion/jesse-latest.json"
+      - "validation/fusion/nautilus-latest.json"
+      - "validation/fusion/forward-latest.json"
       - "scripts/build_fusion_gate.py"
       - ".github/workflows/fusion-gate.yml"
 
