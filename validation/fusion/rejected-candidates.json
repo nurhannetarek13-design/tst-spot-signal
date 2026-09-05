@@ -72,6 +72,16 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-03T19:35:10.751311+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "355f478a8b669d789baf",
+      "symbol": "SAHARAUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-05T07:02:14.362134+00:00"
     }
   ],
   "ttlDays": 7,

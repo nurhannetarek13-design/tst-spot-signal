@@ -3,37 +3,38 @@
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-05T07:01:05.632587+00:00",
   "symbol": "SAHARAUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "family": "CROSS_CRYPTO_LEAD_LAG",
   "timeframe": "1h",
   "params": {
-    "lookback": 24,
-    "compressionLookback": 72,
-    "compressionPct": 0.25,
-    "relvol": 1.5,
-    "rsiMin": 55,
-    "rsiMax": 75,
-    "holdBars": 12,
+    "leaderRetMin": 0.012,
+    "gapMin": 0.008,
+    "altRetMin": -0.02,
+    "relvol": 0.9,
+    "rsiMin": 42,
+    "rsiMax": 70,
+    "emaFast": 24,
+    "holdBars": 6,
     "sl": 0.025,
-    "tp": 0.055
+    "tp": 0.05
   },
   "sourceMetrics": {
     "base": {
-      "trades": 12,
-      "wins": 6,
-      "winRate": 0.5,
-      "netPnlUSDT": 1.1847667067314789,
-      "expectancyUSDT": 0.0987305588942899,
-      "profitFactor": 3.2417076847275235,
-      "maxDrawdownUSDT": 0.21407911744434327
+      "trades": 20,
+      "wins": 11,
+      "winRate": 0.55,
+      "netPnlUSDT": 1.1063359868033127,
+      "expectancyUSDT": 0.05531679934016563,
+      "profitFactor": 2.504186760261068,
+      "maxDrawdownUSDT": 0.4196559937966312
     },
     "stress2x": {
-      "trades": 12,
-      "wins": 6,
+      "trades": 20,
+      "wins": 10,
       "winRate": 0.5,
-      "netPnlUSDT": 0.9846894407724434,
-      "expectancyUSDT": 0.08205745339770361,
-      "profitFactor": 2.5708143895890707,
-      "maxDrawdownUSDT": 0.2633318779088736
+      "netPnlUSDT": 0.7741782462122211,
+      "expectancyUSDT": 0.038708912310611056,
+      "profitFactor": 1.8712657416153917,
+      "maxDrawdownUSDT": 0.490569436502659
     }
   },
   "liquidity": {
@@ -42,12 +43,12 @@
   },
   "rankKey": [
     1,
-    0.08205745339770361,
-    2.5708143895890707,
-    12
+    0.038708912310611056,
+    1.8712657416153917,
+    20
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "355f478a8b669d789baf",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "82bc01511e155b64e664",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -402,6 +403,7 @@
   "poolSize": 7,
   "recentRejectedFingerprints": [
     "16a891b75d998d5f2638",
+    "355f478a8b669d789baf",
     "385a252d2323f398b13a",
     "491ef3dee6fa939725a4",
     "4d447ed53b9d56d398d4",
@@ -418,5 +420,11 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-05T07:01:06.143400+00:00"
+  "generatedAt": "2026-09-05T07:02:14.362134+00:00",
+  "rotationReason": {
+    "rejectedFingerprint": "355f478a8b669d789baf",
+    "hardFailValidators": [
+      "freqtrade"
+    ]
+  }
 }

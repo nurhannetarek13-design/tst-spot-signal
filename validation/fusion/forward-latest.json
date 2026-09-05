@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "RESET_FOR_NEW_CANDIDATE",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "355f478a8b669d789baf",
-  "symbol": "SAHARAUSDT",
-  "family": "VOLATILITY_BREAKOUT",
-  "timeframe": "1h",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
+  "candidateFingerprint": "82bc01511e155b64e664",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T07:01:54.000Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-05T07:02:14.362134+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }
