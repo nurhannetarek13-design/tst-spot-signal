@@ -106,6 +106,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T15:39:53.924573+00:00",
+  "generatedAt": "2026-09-05T15:44:57.807649+00:00",
   "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
