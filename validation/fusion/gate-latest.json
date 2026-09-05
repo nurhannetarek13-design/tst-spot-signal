@@ -6,6 +6,34 @@
   "symbol": "SAHARAUSDT",
   "family": "TS_MOMENTUM",
   "liveReady": false,
+  "smallLiveReviewReady": false,
+  "smallLiveReviewReasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
+    "freqtrade:CANDIDATE_MISMATCH",
+    "jesse:CANDIDATE_MISMATCH",
+    "nautilus:CANDIDATE_MISMATCH",
+    "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
+  ],
+  "smallLiveReviewPolicy": {
+    "purpose": "Manual review for a tiny capped live trial only; never auto-enables execution.",
+    "historicalValidatorsRequired": [
+      "vectorbt",
+      "freqtrade",
+      "jesse",
+      "nautilus"
+    ],
+    "sameCandidateRequired": true,
+    "minTradesPerEngine": 30,
+    "minIndependentEnginePasses": 3,
+    "baseProfitFactorMin": 1.15,
+    "baseExpectancyPositive": true,
+    "stressProfitFactorMin": 1.0,
+    "stressExpectancyPositive": true,
+    "forwardTradesRequired": 0,
+    "suggestedMaxPositionUSDT": 7,
+    "suggestedMaxConcurrentPositions": 1,
+    "suggestedDailyLossCapUSDT": 0.5
+  },
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
@@ -31,6 +59,8 @@
       "candidateFingerprint": "82bc01511e155b64e664",
       "trades": 21,
       "independentEnginePass": false,
+      "baseProfitFactor": 1.6412253317414647,
+      "baseExpectancyUSDT": 0.025402867534957907,
       "stressProfitFactor": 1.1865669237042964,
       "stressExpectancyUSDT": 0.008839918810568878
     },
@@ -40,6 +70,8 @@
       "candidateFingerprint": "82bc01511e155b64e664",
       "trades": 63,
       "independentEnginePass": false,
+      "baseProfitFactor": 1.1017066843677121,
+      "baseExpectancyUSDT": 0.00444599746031746,
       "stressProfitFactor": 0.811414083885345,
       "stressExpectancyUSDT": -0.010221753492063492
     },
@@ -49,6 +81,8 @@
       "candidateFingerprint": "1b7dc1733caf8b96d86e",
       "trades": 22,
       "independentEnginePass": false,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": -0.04799607113598705,
       "stressProfitFactor": 0.0,
       "stressExpectancyUSDT": -0.06444875605666406
     },
@@ -58,6 +92,8 @@
       "candidateFingerprint": "1b7dc1733caf8b96d86e",
       "trades": 22,
       "independentEnginePass": false,
+      "baseProfitFactor": 0.24106726102295195,
+      "baseExpectancyUSDT": -0.08584225909090908,
       "stressProfitFactor": 0.18670476679753326,
       "stressExpectancyUSDT": -0.10224133227272728
     },
@@ -67,10 +103,12 @@
       "candidateFingerprint": "5a8be2536ed727aaa38e",
       "trades": 0,
       "independentEnginePass": null,
+      "baseProfitFactor": null,
+      "baseExpectancyUSDT": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T13:01:29.694782+00:00",
-  "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
+  "generatedAt": "2026-09-05T15:02:53.093106+00:00",
+  "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
