@@ -1,0 +1,40 @@
+name: Execution Parity Fixture
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - "validation/fusion/candidate-manifest.json"
+      - "scripts/build_execution_parity_fixture.py"
+      - ".github/workflows/execution-parity-fixture.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: execution-parity-fixture
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/unified-execution-parity
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --disable-pip-version-check pandas numpy
+      - run: python scripts/build_execution_parity_fixture.py
+      - name: Commit fixture
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/execution-parity-fixture.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update execution parity fixture"
+          git push origin HEAD:fix/unified-execution-parity
