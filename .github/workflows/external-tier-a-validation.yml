@@ -1,0 +1,91 @@
+name: External Tier A validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/external-tier-a-validation.yml'
+      - 'freqtrade/user_data/config-external-pack.json'
+
+jobs:
+  tier-a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare pinned external strategy sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external/ceyhan external/zev user_data/strategies user_data/data/binance user_data/backtest_results validation/external-tier-a
+
+          git clone https://github.com/ceyhanmolla/freqtrade-strategies.git external/ceyhan
+          git -C external/ceyhan checkout 937fefc25ef209120fa2a59d2f520f52d991f26b
+
+          git clone https://github.com/zevrichards/freqtrade-strategies.git external/zev
+          git -C external/zev checkout 9dc9ef238325c4d29fa0b8e64346db96fe96343c
+
+          cp freqtrade/user_data/config-external-pack.json user_data/config.json
+          cp external/ceyhan/GeneticEngineV1.py user_data/strategies/
+          cp external/ceyhan/AdaptiveMomentum.py user_data/strategies/
+          cp external/ceyhan/TrendFollowingStrategyV2.py user_data/strategies/
+          cp external/zev/BinHV45_Regime_5m.py user_data/strategies/
+          cp external/zev/BinHV45_Regime_5m_v4.py user_data/strategies/
+
+          cat > validation/external-tier-a/sources.txt <<'EOF'
+          ceyhanmolla/freqtrade-strategies@937fefc25ef209120fa2a59d2f520f52d991f26b
+          zevrichards/freqtrade-strategies@9dc9ef238325c4d29fa0b8e64346db96fe96343c
+          EOF
+
+      - name: Download Binance Spot data
+        run: |
+          docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable \
+            download-data --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 5m 15m 30m 1h 4h 1d \
+            --timerange 20250101-20260905
+
+      - name: Baseline backtests
+        shell: bash
+        run: |
+          set +e
+          : > validation/external-tier-a/summary.txt
+          for STRAT in GeneticEngineV1 AdaptiveMomentum TrendFollowingStrategyV2 BinHV45_Regime_5m BinHV45_Regime_5m_v4; do
+            echo "===== $STRAT =====" | tee -a validation/external-tier-a/summary.txt
+            docker run --rm \
+              -v "$PWD/user_data:/freqtrade/user_data" \
+              freqtradeorg/freqtrade:stable bash -lc \
+              "pip install -q pandas-ta >/dev/null 2>&1 || true; freqtrade backtesting --config /freqtrade/user_data/config.json --strategy '$STRAT' --strategy-path /freqtrade/user_data/strategies --timerange 20250101-20260905 --fee 0.001 --export trades --export-filename '/freqtrade/user_data/backtest_results/${STRAT}.json'" \
+              > "validation/external-tier-a/${STRAT}.log" 2>&1
+            CODE=$?
+            echo "exit_code=$CODE" | tee -a validation/external-tier-a/summary.txt
+            grep -E "TOTAL|Tot Profit|Profit factor|Max % of account underwater|Win%|Absolute profit|Total profit|Total/Daily Avg Trades|Avg. Duration" "validation/external-tier-a/${STRAT}.log" | tail -n 40 | tee -a validation/external-tier-a/summary.txt || true
+          done
+          cat validation/external-tier-a/summary.txt
+
+      - name: Lookahead-bias checks
+        shell: bash
+        run: |
+          set +e
+          : > validation/external-tier-a/lookahead-summary.txt
+          for STRAT in GeneticEngineV1 AdaptiveMomentum TrendFollowingStrategyV2 BinHV45_Regime_5m BinHV45_Regime_5m_v4; do
+            echo "===== $STRAT =====" | tee -a validation/external-tier-a/lookahead-summary.txt
+            docker run --rm \
+              -v "$PWD/user_data:/freqtrade/user_data" \
+              freqtradeorg/freqtrade:stable bash -lc \
+              "pip install -q pandas-ta >/dev/null 2>&1 || true; freqtrade lookahead-analysis --config /freqtrade/user_data/config.json --strategy '$STRAT' --strategy-path /freqtrade/user_data/strategies --timerange 20250101-20260905 --fee 0.001 --minimum-trade-amount 20 --targeted-trade-amount 100" \
+              > "validation/external-tier-a/${STRAT}.lookahead.log" 2>&1
+            CODE=$?
+            echo "exit_code=$CODE" | tee -a validation/external-tier-a/lookahead-summary.txt
+            grep -Ei "bias|lookahead|strategy|total signals|false|true" "validation/external-tier-a/${STRAT}.lookahead.log" | tail -n 60 | tee -a validation/external-tier-a/lookahead-summary.txt || true
+          done
+          cat validation/external-tier-a/lookahead-summary.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-tier-a-validation
+          path: |
+            validation/external-tier-a/**
+            user_data/backtest_results/**
+          if-no-files-found: warn
