@@ -44,27 +44,31 @@ jobs:
               last=datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00"))
               bar=datetime.timedelta(hours=1) if m["timeframe"]=="1h" else datetime.timedelta(minutes=15)
               end=last+bar
+              warmup=int(fx.get("executionAssumptions",{}).get("warmupBars",800))
+              download_start=start-(bar*warmup)
               timerange=start.strftime("%Y%m%d-%H%M%S")+"-"+end.strftime("%Y%m%d-%H%M%S")
+              download_timerange=download_start.strftime("%Y%m%d-%H%M%S")+"-"+end.strftime("%Y%m%d-%H%M%S")
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
                   f.write(f"PAIR={pair}\n")
                   f.write(f"TF={m['timeframe']}\n")
                   f.write(f"TIMERANGE={timerange}\n")
+                  f.write(f"DOWNLOAD_TIMERANGE={download_timerange}\n")
               pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
-              print(m["candidateId"], pair, m["timeframe"], timerange)
+              print(m["candidateId"], pair, m["timeframe"], "test", timerange, "download", download_timerange)
           PY
 
       - name: Pull official Freqtrade image
         if: env.HAS_CANDIDATE == 'true'
         run: docker pull freqtradeorg/freqtrade:stable
 
-      - name: Download exact frozen Binance Spot window
+      - name: Download frozen Binance Spot window plus warmup
         if: env.HAS_CANDIDATE == 'true'
         run: |
           docker run --rm \
             -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
             freqtradeorg/freqtrade:stable download-data \
-            --exchange binance --timerange "$TIMERANGE" --timeframes "$TF" \
+            --exchange binance --timerange "$DOWNLOAD_TIMERANGE" --timeframes "$TF" \
             --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
 
       - name: Prepare writable result folders
