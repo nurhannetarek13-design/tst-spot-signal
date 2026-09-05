@@ -58,19 +58,24 @@ jobs:
         if: env.HAS_CANDIDATE == 'true'
         run: pip install --disable-pip-version-check nautilus_trader pandas numpy
 
-      - name: Patch validator runtime to frozen manifest and exact window
+      - name: Patch validator runtime to canonical parity semantics
         if: env.HAS_CANDIDATE == 'true'
         run: |
           python - <<'PY'
           import pathlib
           p=pathlib.Path("research/nautilus_validator.py")
           s=p.read_text()
-          s=s.replace('validation/fusion/candidate-manifest.json','validation/fusion/frozen-parity-candidate.json')
-          old='end=int(time.time()*1000);start=end-DAYS*86400000'
-          new='start=int(__import__("os").environ["PARITY_START_MS"]);end=int(__import__("os").environ["PARITY_END_MS"])'
-          if old not in s:
-              raise SystemExit("expected rolling-window expression not found")
-          s=s.replace(old,new)
+          replacements={
+            'validation/fusion/candidate-manifest.json':'validation/fusion/frozen-parity-candidate.json',
+            'end=int(time.time()*1000);start=end-DAYS*86400000':'start=int(__import__("os").environ["PARITY_START_MS"]);end=int(__import__("os").environ["PARITY_END_MS"])',
+            'if len(self.closes)>1000:':'if False and len(self.closes)>1000:',
+            'if len(self.closes)<160:return':'if len(self.closes)<800:return',
+            'ef=ema(c[-400:],int(p.get("emaFast",48)));es=ema(c[-500:],int(p.get("emaSlow",120)))':'ef=ema(c,int(p.get("emaFast",48)));es=ema(c,int(p.get("emaSlow",120)))',
+          }
+          for old,new in replacements.items():
+              if old not in s:
+                  raise SystemExit("expected Nautilus parity expression not found: "+old)
+              s=s.replace(old,new)
           p.write_text(s)
           PY
 
@@ -87,7 +92,7 @@ jobs:
           fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
           r=json.loads(rp.read_text())
           r["dataset"]={"firstTs":fx["dataset"]["firstTs"],"lastTs":fx["dataset"]["lastTs"],"sha256":fx["dataset"]["sha256"]}
-          r["notes"]="NautilusTrader parity validation on frozen candidate and exact canonical dataset window; research only."
+          r["notes"]="NautilusTrader parity validation on frozen candidate and exact canonical dataset window; 800-bar warmup and full-history pandas-compatible EMA seed; research only."
           rp.write_text(json.dumps(r,indent=2))
           PY
 
