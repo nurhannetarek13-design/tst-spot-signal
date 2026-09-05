@@ -25,22 +25,22 @@
     "trades": 150,
     "wins": 53,
     "winRate": 0.35333333333333333,
-    "netPnlUSDT": -1.5791992800000003,
-    "expectancyUSDT": -0.010527995200000003,
-    "profitFactor": 0.9034825428626998,
+    "netPnlUSDT": -1.5732981400000003,
+    "expectancyUSDT": -0.01048865426666667,
+    "profitFactor": 0.9038085156012285,
     "maxDrawdownUSDT": 2.93513603
   },
   "stress2x": {
     "trades": 150,
     "wins": 48,
     "winRate": 0.32,
-    "netPnlUSDT": -4.054478000000001,
-    "expectancyUSDT": -0.027029853333333343,
-    "profitFactor": 0.7744061797327009,
-    "maxDrawdownUSDT": 4.346444170000002
+    "netPnlUSDT": -4.048585730000001,
+    "expectancyUSDT": -0.02699057153333334,
+    "profitFactor": 0.7746601518890662,
+    "maxDrawdownUSDT": 4.340551900000002
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:03:54.228099+00:00",
+  "generatedAt": "2026-09-05T15:22:24.003129+00:00",
   "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
