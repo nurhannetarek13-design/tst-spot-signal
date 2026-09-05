@@ -8,10 +8,17 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_MISMATCH",
-    "freqtrade:CANDIDATE_MISMATCH",
-    "jesse:CANDIDATE_MISMATCH",
-    "nautilus:CANDIDATE_MISMATCH",
+    "freqtrade:BASE_PF_LT_1_15",
+    "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
+    "freqtrade:STRESS_PF_LT_1_0",
+    "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
+    "jesse:BASE_PF_LT_1_15",
+    "jesse:STRESS_PF_LT_1_0",
+    "jesse:STRESS_EXPECTANCY_NONPOSITIVE",
+    "nautilus:BASE_PF_LT_1_15",
+    "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
+    "nautilus:STRESS_PF_LT_1_0",
+    "nautilus:STRESS_EXPECTANCY_NONPOSITIVE",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -37,18 +44,11 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
-    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
-    "freqtrade:LT_100_TRADES",
-    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
-    "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
-    "nautilus:LT_100_TRADES",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -56,46 +56,46 @@
     "vectorbt": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "82bc01511e155b64e664",
-      "trades": 21,
-      "independentEnginePass": false,
-      "baseProfitFactor": 1.6412253317414647,
-      "baseExpectancyUSDT": 0.025402867534957907,
-      "stressProfitFactor": 1.1865669237042964,
-      "stressExpectancyUSDT": 0.008839918810568878
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "trades": 32,
+      "independentEnginePass": true,
+      "baseProfitFactor": 1.2757947101157885,
+      "baseExpectancyUSDT": 0.02932927181682374,
+      "stressProfitFactor": 1.1100070623595828,
+      "stressExpectancyUSDT": 0.01276042463833074
     },
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "82bc01511e155b64e664",
-      "trades": 63,
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "trades": 188,
       "independentEnginePass": false,
-      "baseProfitFactor": 1.1017066843677121,
-      "baseExpectancyUSDT": 0.00444599746031746,
-      "stressProfitFactor": 0.811414083885345,
-      "stressExpectancyUSDT": -0.010221753492063492
+      "baseProfitFactor": 0.849463420822645,
+      "baseExpectancyUSDT": -0.016878192021276595,
+      "stressProfitFactor": 0.7622416119003502,
+      "stressExpectancyUSDT": -0.02955079617801047
     },
     "jesse": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "1b7dc1733caf8b96d86e",
-      "trades": 22,
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "trades": 174,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": -0.04799607113598705,
+      "baseExpectancyUSDT": 0.005565147734348607,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": -0.06444875605666406
+      "stressExpectancyUSDT": -0.010967999708417076
     },
     "nautilus": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "1b7dc1733caf8b96d86e",
-      "trades": 22,
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "trades": 150,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.24106726102295195,
-      "baseExpectancyUSDT": -0.08584225909090908,
-      "stressProfitFactor": 0.18670476679753326,
-      "stressExpectancyUSDT": -0.10224133227272728
+      "baseProfitFactor": 0.9034825428626998,
+      "baseExpectancyUSDT": -0.010527995200000003,
+      "stressProfitFactor": 0.7744061797327009,
+      "stressExpectancyUSDT": -0.027029853333333343
     },
     "forward": {
       "status": "COLLECTING",
@@ -109,6 +109,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T15:02:53.093106+00:00",
+  "generatedAt": "2026-09-05T15:21:53.704886+00:00",
   "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
