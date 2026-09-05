@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "mode": "INTEGRATION_NOT_COPY_BLINDLY",
+  "liveTrading": false,
+  "components": [
+    {
+      "source": "freqtrade/freqtrade",
+      "role": ["pairlists", "protections", "strategy_validation", "dry_run_patterns"],
+      "license": "GPL-3.0",
+      "integration": "reference_or_subprocess_only",
+      "notes": "Do not paste GPL code into the Node executor. Use concepts/configuration or run Freqtrade as a separate validator/runtime component."
+    },
+    {
+      "source": "jptsantossilva/BEC",
+      "role": ["market_discovery", "market_phase_ranking", "strategy_quality_scoring", "order_intent_reconciliation_patterns"],
+      "license": "MIT",
+      "integration": "adapt_with_attribution",
+      "notes": "Primary source for autonomous selection patterns."
+    },
+    {
+      "source": "potekhinskill/Ladder-Dragon",
+      "role": ["fail_closed_execution", "exchange_side_protection", "restart_recovery", "intent_journal_patterns"],
+      "license": "VERIFY_BEFORE_CODE_COPY",
+      "integration": "concepts_only_until_license_verified",
+      "notes": "No code copied until repository license is explicitly verified."
+    },
+    {
+      "source": "binance/binance-spot-api-docs",
+      "role": ["market_data", "exchange_filters", "spot_execution", "order_lists", "account_reconciliation"],
+      "license": "official_documentation",
+      "integration": "native_api",
+      "notes": "Binance remains source of truth for balances, fills and exchange filters."
+    }
+  ],
+  "productionRules": {
+    "spotOnly": true,
+    "leverage": false,
+    "futuresExecution": false,
+    "externalDependencyFailure": "NO_TRADE",
+    "unreconciledAccountState": "NO_TRADE",
+    "unprotectedPosition": "HALT_AND_REPAIR",
+    "strategyMustBeValidatedBeforeLive": true
+  }
+}
