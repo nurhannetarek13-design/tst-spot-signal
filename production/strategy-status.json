@@ -1,25 +1,20 @@
 {
-  "generatedFrom": "external-strategy-validation run 33986809774",
+  "generatedFrom": "external validation + frozen walk-forward through run 33986941605",
   "liveTradingAllowed": false,
   "statuses": {
     "bec_ema_cross_with_market_phases": {
-      "status": "RESEARCH_ONLY",
+      "status": "REJECT_FOR_PRODUCTION",
       "validated": false,
-      "reason": "POSITIVE_EDGE_LOW_WIN_RATE_REQUIRES_WALK_FORWARD",
-      "pooled": {"trades":108,"profitFactor":1.504909,"expectancy":0.00388524,"winRate":0.342593,"maxDrawdown":0.098282,"totalReturn":0.41783}
+      "reason": "RECENT_EDGE_FAILED_LONGER_WALK_FORWARD_ROBUSTNESS",
+      "recentPooled": {"trades":108,"profitFactor":1.504909,"expectancy":0.00388524,"winRate":0.342593,"maxDrawdown":0.098282,"totalReturn":0.41783},
+      "walkForward": {
+        "BTCUSDT": {"fullPF":0.757695,"fullExpectancy":-0.00210087,"fullDD":0.355983,"windowPassRate":0.25},
+        "ETHUSDT": {"fullPF":1.31305,"fullExpectancy":0.00350077,"fullDD":0.384902,"windowPassRate":0.5},
+        "SOLUSDT": {"fullPF":0.703539,"fullExpectancy":-0.00441764,"fullDD":0.484138,"windowPassRate":0.25}
+      }
     },
-    "bec_bullmarketsupportband": {
-      "status": "RESEARCH_ONLY",
-      "validated": false,
-      "reason": "HIGH_DRAWDOWN_AND_LOW_SAMPLE",
-      "pooled": {"trades":22,"profitFactor":4.766982,"expectancy":0.337846,"winRate":0.681818,"maxDrawdown":0.671433,"totalReturn":12.7731}
-    },
-    "bec_wema20": {
-      "status": "RESEARCH_ONLY",
-      "validated": false,
-      "reason": "HIGH_DRAWDOWN",
-      "pooled": {"trades":49,"profitFactor":3.035429,"expectancy":0.164455,"winRate":0.387755,"maxDrawdown":0.605565,"totalReturn":4.71236}
-    },
+    "bec_bullmarketsupportband": {"status":"RESEARCH_ONLY","validated":false,"reason":"HIGH_DRAWDOWN_AND_LOW_SAMPLE"},
+    "bec_wema20": {"status":"RESEARCH_ONLY","validated":false,"reason":"HIGH_DRAWDOWN"},
     "bec_ema_cross": {"status":"REJECT","validated":false,"reason":"NEGATIVE_EXPECTANCY_HIGH_DRAWDOWN"},
     "bec_market_phases": {"status":"REJECT","validated":false,"reason":"NEGATIVE_EXPECTANCY_HIGH_DRAWDOWN"},
     "bec_hma_rsi_linreg": {"status":"REJECT","validated":false,"reason":"NEGATIVE_EXPECTANCY_HIGH_DRAWDOWN"},
