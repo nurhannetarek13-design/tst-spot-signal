@@ -44,10 +44,8 @@ jobs:
               last=datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00"))
               bar=datetime.timedelta(hours=1) if m["timeframe"]=="1h" else datetime.timedelta(minutes=15)
               end=last+bar
-              warmup=int(fx.get("executionAssumptions",{}).get("warmupBars",800))
-              download_start=start-(bar*warmup)
               timerange=f"{int(start.timestamp())}-{int(end.timestamp())}"
-              download_timerange=f"{int(download_start.timestamp())}-{int(end.timestamp())}"
+              download_timerange=timerange
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
                   f.write(f"PAIR={pair}\n")
@@ -62,7 +60,7 @@ jobs:
         if: env.HAS_CANDIDATE == 'true'
         run: docker pull freqtradeorg/freqtrade:stable
 
-      - name: Download frozen Binance Spot window plus warmup
+      - name: Download frozen Binance Spot fixture window
         if: env.HAS_CANDIDATE == 'true'
         run: |
           docker run --rm \
