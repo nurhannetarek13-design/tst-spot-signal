@@ -46,8 +46,8 @@ jobs:
               end=last+bar
               warmup=int(fx.get("executionAssumptions",{}).get("warmupBars",800))
               download_start=start-(bar*warmup)
-              timerange=start.strftime("%Y%m%d-%H%M%S")+"-"+end.strftime("%Y%m%d-%H%M%S")
-              download_timerange=download_start.strftime("%Y%m%d-%H%M%S")+"-"+end.strftime("%Y%m%d-%H%M%S")
+              timerange=f"{int(start.timestamp())}-{int(end.timestamp())}"
+              download_timerange=f"{int(download_start.timestamp())}-{int(end.timestamp())}"
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
                   f.write(f"PAIR={pair}\n")
