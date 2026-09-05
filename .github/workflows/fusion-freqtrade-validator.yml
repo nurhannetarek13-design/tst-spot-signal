@@ -5,7 +5,7 @@ on:
   push:
     branches: [fix/unified-execution-parity]
     paths:
-      - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/frozen-parity-candidate.json"
       - "validation/fusion/execution-parity-fixture.json"
       - "freqtrade/**"
       - "scripts/fusion-freqtrade-report.py"
@@ -28,13 +28,13 @@ jobs:
           ref: fix/unified-execution-parity
           fetch-depth: 0
 
-      - name: Read unified candidate
+      - name: Read frozen parity candidate
         run: |
           python - <<'PY'
           import json, pathlib, os
-          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
           if not m.get("candidateFingerprint"):
-              out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":m.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),"notes":"No unified candidate; Freqtrade image pull and backtest skipped."}
+              out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False}
               pathlib.Path("validation/fusion/freqtrade-latest.json").write_text(json.dumps(out,indent=2))
               with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE=false\n")
           else:
