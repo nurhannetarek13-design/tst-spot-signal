@@ -10,7 +10,7 @@ import urllib.request
 import numpy as np
 import pandas as pd
 
-MANIFEST = pathlib.Path("validation/fusion/candidate-manifest.json")
+MANIFEST = pathlib.Path("validation/fusion/frozen-parity-candidate.json")
 OUT = pathlib.Path("validation/fusion/execution-parity-fixture.json")
 DAYS = 365
 WARMUP_BARS = 800
