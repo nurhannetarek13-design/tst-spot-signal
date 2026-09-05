@@ -1,0 +1,51 @@
+name: Materialize Cloudflare Runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/materialize-cloudflare-runtime.yml"
+      - "scripts/patch-cloudflare-digest.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-cloudflare-runtime
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Apply runtime patch to canonical source
+        run: |
+          python scripts/patch-cloudflare-digest.py
+          node --check src/edge-worker.js
+          grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
+          grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
+          grep -q 'const reversalStrategy=' src/edge-worker.js
+      - name: Persist canonical runtime safely
+        run: |
+          cp src/edge-worker.js /tmp/edge-worker.js
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/edge-worker.js src/edge-worker.js
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/edge-worker.js
+            git diff --cached --quiet && exit 0
+            git commit -m "Materialize Cloudflare reversal runtime"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
