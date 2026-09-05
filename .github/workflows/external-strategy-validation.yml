@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/validate-external-strategies.mjs'
       - 'scripts/validate-bec-builtins.mjs'
+      - 'scripts/walkforward-bec-ema-phase.mjs'
       - 'production/strategies/**'
       - '.github/workflows/external-strategy-validation.yml'
 
@@ -24,6 +25,8 @@ jobs:
         run: node scripts/validate-external-strategies.mjs
       - name: Validate all BEC builtins
         run: node scripts/validate-bec-builtins.mjs
+      - name: Frozen walk-forward for strongest BEC candidate
+        run: node scripts/walkforward-bec-ema-phase.mjs
       - name: Upload validation reports
         uses: actions/upload-artifact@v4
         with:
