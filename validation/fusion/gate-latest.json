@@ -20,7 +20,6 @@
     "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
-    "forward:CANDIDATE_MISMATCH",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -62,15 +61,15 @@
       "stressExpectancyUSDT": 0.0
     },
     "forward": {
-      "status": "NO_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
-      "candidateFingerprint": null,
+      "candidateFingerprint": "355f478a8b669d789baf",
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T07:02:02.626913+00:00",
+  "generatedAt": "2026-09-05T07:02:13.552832+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
