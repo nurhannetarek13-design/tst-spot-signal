@@ -17,7 +17,6 @@
     "freqtrade:LT_100_TRADES",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "nautilus:LT_100_TRADES",
     "forward:FAIL",
@@ -54,11 +53,11 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "355f478a8b669d789baf",
-      "trades": 25,
+      "candidateFingerprint": "1b7dc1733caf8b96d86e",
+      "trades": 22,
       "independentEnginePass": false,
-      "stressProfitFactor": 1.3042608759980312,
-      "stressExpectancyUSDT": 0.019268075999999995
+      "stressProfitFactor": 0.18670476679753326,
+      "stressExpectancyUSDT": -0.10224133227272728
     },
     "forward": {
       "status": "RESET_FOR_NEW_CANDIDATE",
@@ -70,6 +69,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T07:49:37.901811+00:00",
+  "generatedAt": "2026-09-05T07:53:36.038979+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
