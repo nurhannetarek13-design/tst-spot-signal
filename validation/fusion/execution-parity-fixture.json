@@ -22,7 +22,7 @@
     "bars": 8760,
     "firstTs": "2025-09-05T17:00:00+00:00",
     "lastTs": "2026-09-05T16:00:00+00:00",
-    "sha256": "6b7e4ea0c8675f1963e896437602897b6f5ae754556b843e4f0b834ecc29cf9c"
+    "sha256": "7cf2fb11185dbf7568b346f1ad31580ac8e46978a79783adc7db1107414dee41"
   },
   "executionAssumptions": {
     "warmupBars": 800,
@@ -2840,17 +2840,17 @@
     "trades": 148,
     "wins": 55,
     "winRate": 0.3716216216216216,
-    "profitFactor": 0.8869160118625411,
-    "expectancyUSDT": -0.012269423887931544,
-    "netPnlUSDT": -1.8158747354138685
+    "profitFactor": 0.8865906750288483,
+    "expectancyUSDT": -0.01230923764213639,
+    "netPnlUSDT": -1.8217671710361858
   },
   "stress2x": {
     "trades": 148,
     "wins": 54,
     "winRate": 0.36486486486486486,
-    "profitFactor": 0.7576977000138632,
-    "expectancyUSDT": -0.028775779285195556,
-    "netPnlUSDT": -4.2588153342089425
+    "profitFactor": 0.7574441513773396,
+    "expectancyUSDT": -0.02881553322905358,
+    "netPnlUSDT": -4.2646989178999295
   },
   "baseTradesFirst50": [
     {
@@ -3756,7 +3756,7 @@
       "pnlUSDT": -0.19750500000000015
     }
   ],
-  "generatedAt": "2026-09-05T16:34:33.112261+00:00",
+  "generatedAt": "2026-09-05T16:38:35.097605+00:00",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "baseTrades": [
@@ -5088,9 +5088,9 @@
       "entryTs": "2026-09-04T17:00:00+00:00",
       "exitTs": "2026-09-05T16:00:00+00:00",
       "entryPrice": 0.00932,
-      "exitPrice": 0.00921,
+      "exitPrice": 0.0092,
       "reason": "TIME",
-      "pnlUSDT": -0.08131679184549398
+      "pnlUSDT": -0.08720922746781135
     }
   ],
   "stressTrades": [
@@ -6422,9 +6422,9 @@
       "entryTs": "2026-09-04T17:00:00+00:00",
       "exitTs": "2026-09-05T16:00:00+00:00",
       "entryPrice": 0.00932,
-      "exitPrice": 0.00921,
+      "exitPrice": 0.0092,
       "reason": "TIME",
-      "pnlUSDT": -0.0977194206008588
+      "pnlUSDT": -0.10360300429184567
     }
   ],
   "auditTrail": {
