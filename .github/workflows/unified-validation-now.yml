@@ -1,0 +1,37 @@
+name: Unified Validation Now
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/rotate_candidate.py'
+      - 'scripts/build_fusion_gate.py'
+      - '.github/workflows/unified-validation-now.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: unified-validation-now
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch all validators for the current frozen candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for wf in \
+            candidate-vectorbt-validator.yml \
+            fusion-freqtrade-validator.yml \
+            fusion-jesse-validator.yml \
+            nautilus-validator.yml \
+            forward-paper-public-edges.yml; do
+            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref main
+          done
+          echo 'All historical validators and forward paper were dispatched for the current candidate.'
