@@ -1,7 +1,18 @@
 {
-  "generatedFrom": "external validation + frozen walk-forward through run 33986941605",
+  "generatedFrom": "external validation through Freqtrade upstream run 33987156547",
   "liveTradingAllowed": false,
   "statuses": {
+    "freqtrade_upstream_adx_momentum": {
+      "status": "REJECT_FOR_PRODUCTION",
+      "validated": false,
+      "source": "freqtrade/freqtrade-strategies:user_data/strategies/berlinguyinca/ADXMomentum.py",
+      "license": "GPL-3.0",
+      "vendored": false,
+      "reason": "STRESS_PF_FAIL_BTC_NEGATIVE_DOLLAR_EDGE_TOO_SMALL_WORST_TRADE_EXCEEDS_RISK_BUDGET",
+      "base": {"trades":373,"profitUSDT":5.764,"returnPct":11.53,"profitFactor":1.24,"winRate":0.826,"drawdownPct":7.74,"sharpe":1.13,"avgProfitPct":0.15,"worstTradePct":-8.87},
+      "stress": {"trades":354,"profitUSDT":3.483,"returnPct":6.97,"profitFactor":1.14,"winRate":0.819,"drawdownPct":9.49,"sharpe":0.66,"avgProfitPct":0.10,"worstTradePct":-8.96},
+      "pairStress": {"BTCUSDT":{"returnPct":-1.71},"ETHUSDT":{"returnPct":5.43},"SOLUSDT":{"returnPct":3.24}}
+    },
     "bec_ema_cross_with_market_phases": {
       "status": "REJECT_FOR_PRODUCTION",
       "validated": false,
