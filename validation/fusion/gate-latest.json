@@ -1,16 +1,18 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
-  "candidateFingerprint": "82bc01511e155b64e664",
-  "symbol": "SAHARAUSDT",
-  "family": "CROSS_CRYPTO_LEAD_LAG",
+  "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "1b7dc1733caf8b96d86e",
+  "symbol": "ZKCUSDT",
+  "family": "VOLATILITY_BREAKOUT",
   "liveReady": false,
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
+    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_MISMATCH",
@@ -42,13 +44,13 @@
       "stressExpectancyUSDT": -0.010221753492063492
     },
     "jesse": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": null,
-      "trades": 0,
-      "independentEnginePass": null,
+      "candidateFingerprint": "355f478a8b669d789baf",
+      "trades": 25,
+      "independentEnginePass": false,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "stressExpectancyUSDT": 0.07307920863266387
     },
     "nautilus": {
       "status": "FAIL",
@@ -62,13 +64,13 @@
     "forward": {
       "status": "RESET_FOR_NEW_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "82bc01511e155b64e664",
+      "candidateFingerprint": "1b7dc1733caf8b96d86e",
       "trades": 0,
       "independentEnginePass": null,
       "stressProfitFactor": null,
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T07:07:43.864425+00:00",
+  "generatedAt": "2026-09-05T07:12:28.230191+00:00",
   "note": "Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
 }
