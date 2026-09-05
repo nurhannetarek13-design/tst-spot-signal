@@ -28,36 +28,43 @@ jobs:
           ref: fix/unified-execution-parity
           fetch-depth: 0
 
-      - name: Read frozen parity candidate
+      - name: Read frozen parity candidate and fixture window
         run: |
           python - <<'PY'
-          import json, pathlib, os
+          import json, pathlib, os, datetime
           m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
+          fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
           if not m.get("candidateFingerprint"):
               out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False}
               pathlib.Path("validation/fusion/freqtrade-latest.json").write_text(json.dumps(out,indent=2))
               with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE=false\n")
           else:
               pair=m["symbol"][:-4]+"/USDT"
+              start=datetime.datetime.fromisoformat(fx["dataset"]["firstTs"].replace("Z","+00:00"))
+              last=datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00"))
+              bar=datetime.timedelta(hours=1) if m["timeframe"]=="1h" else datetime.timedelta(minutes=15)
+              end=last+bar
+              timerange=start.strftime("%Y%m%d-%H%M%S")+"-"+end.strftime("%Y%m%d-%H%M%S")
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
                   f.write(f"PAIR={pair}\n")
                   f.write(f"TF={m['timeframe']}\n")
+                  f.write(f"TIMERANGE={timerange}\n")
               pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
-              print(m["candidateId"], pair, m["timeframe"])
+              print(m["candidateId"], pair, m["timeframe"], timerange)
           PY
 
       - name: Pull official Freqtrade image
         if: env.HAS_CANDIDATE == 'true'
         run: docker pull freqtradeorg/freqtrade:stable
 
-      - name: Download candidate Binance Spot data
+      - name: Download exact frozen Binance Spot window
         if: env.HAS_CANDIDATE == 'true'
         run: |
           docker run --rm \
             -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
             freqtradeorg/freqtrade:stable download-data \
-            --exchange binance --days 365 --timeframes "$TF" \
+            --exchange binance --timerange "$TIMERANGE" --timeframes "$TF" \
             --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
 
       - name: Prepare writable result folders
@@ -77,6 +84,7 @@ jobs:
             --strategy UnifiedCandidateStrategy \
             --strategy-path /freqtrade/user_data/strategies \
             --timeframe "$TF" --pairs "$PAIR" --fee 0.0015 \
+            --timerange "$TIMERANGE" \
             --cache none --export trades --backtest-directory /results
           cp "$(ls -1t /tmp/ft-base-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-base.zip
 
@@ -91,6 +99,7 @@ jobs:
             --strategy UnifiedCandidateStrategy \
             --strategy-path /freqtrade/user_data/strategies \
             --timeframe "$TF" --pairs "$PAIR" --fee 0.003 \
+            --timerange "$TIMERANGE" \
             --cache none --export trades --backtest-directory /results
           cp "$(ls -1t /tmp/ft-stress-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-stress.zip
 
