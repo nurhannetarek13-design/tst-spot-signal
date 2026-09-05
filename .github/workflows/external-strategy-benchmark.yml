@@ -1,0 +1,30 @@
+name: External strategy benchmark
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'production/strategies/**'
+      - 'scripts/external-strategy-benchmark.mjs'
+      - '.github/workflows/external-strategy-benchmark.yml'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Binance benchmark
+        run: node scripts/external-strategy-benchmark.mjs
+      - name: Show compact result
+        run: |
+          node -e "const r=require('./validation/external/benchmark-latest.json'); console.log(JSON.stringify(r.results.map(x=>({id:x.id,validated:x.validated,all:x.all,oos:x.oos,stress:x.stress,promotion:x.promotion})),null,2))"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-strategy-benchmark
+          path: validation/external/benchmark-latest.json
+          if-no-files-found: error
