@@ -22,27 +22,27 @@
     "tp": 0.06
   },
   "base": {
-    "trades": 150,
-    "wins": 53,
-    "winRate": 0.35333333333333333,
-    "netPnlUSDT": -1.5673970100000003,
-    "expectancyUSDT": -0.010449313400000002,
-    "profitFactor": 0.9041347230908793,
+    "trades": 146,
+    "wins": 52,
+    "winRate": 0.3561643835616438,
+    "netPnlUSDT": -1.50729779,
+    "expectancyUSDT": -0.010323957465753424,
+    "profitFactor": 0.9063127307400071,
     "maxDrawdownUSDT": 2.93513603
   },
   "stress2x": {
-    "trades": 150,
-    "wins": 48,
-    "winRate": 0.32,
-    "netPnlUSDT": -4.036801190000001,
-    "expectancyUSDT": -0.02691200793333334,
-    "profitFactor": 0.775168596281936,
-    "maxDrawdownUSDT": 4.328767360000001
+    "trades": 146,
+    "wins": 47,
+    "winRate": 0.3219178082191781,
+    "netPnlUSDT": -3.91684503,
+    "expectancyUSDT": -0.026827705684931508,
+    "profitFactor": 0.7780861708856995,
+    "maxDrawdownUSDT": 4.334659630000001
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:45:49.256618+00:00",
-  "notes": "NautilusTrader parity validation on frozen candidate and exact canonical dataset window; research only.",
+  "generatedAt": "2026-09-05T15:48:19.700754+00:00",
+  "notes": "NautilusTrader parity validation on frozen candidate and exact canonical dataset window; 800-bar warmup and full-history pandas-compatible EMA seed; research only.",
   "dataset": {
     "firstTs": "2025-09-05T16:00:00+00:00",
     "lastTs": "2026-09-05T15:00:00+00:00",
