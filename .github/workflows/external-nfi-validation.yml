@@ -1,0 +1,74 @@
+name: External NFI validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/external-nfi-validation.yml'
+      - 'freqtrade/user_data/config-external-pack.json'
+
+jobs:
+  nfi-spot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone NFI at current upstream revision
+        run: |
+          git clone --depth 1 https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
+          cp freqtrade/user_data/config-external-pack.json external/NostalgiaForInfinity/user_data/tst-config.json
+          mkdir -p validation/external-nfi
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi/upstream-sha.txt
+      - name: Build NFI official custom image
+        working-directory: external/NostalgiaForInfinity
+        env:
+          FREQTRADE__TRADING_MODE: spot
+          FREQTRADE__STRATEGY: NostalgiaForInfinityX7
+        run: docker compose build freqtrade
+      - name: Smoke strategy loading in Spot mode
+        working-directory: external/NostalgiaForInfinity
+        env:
+          FREQTRADE__TRADING_MODE: spot
+          FREQTRADE__STRATEGY: NostalgiaForInfinityX7
+        run: |
+          docker compose run --rm freqtrade list-strategies \
+            --config /freqtrade/user_data/tst-config.json \
+            --strategy-path /freqtrade | tee ../../validation/external-nfi/list-strategies.log
+          grep -q 'NostalgiaForInfinityX7' ../../validation/external-nfi/list-strategies.log
+      - name: Download restricted Binance Spot data
+        working-directory: external/NostalgiaForInfinity
+        env:
+          FREQTRADE__TRADING_MODE: spot
+          FREQTRADE__STRATEGY: NostalgiaForInfinityX7
+        run: |
+          docker compose run --rm freqtrade download-data \
+            --config /freqtrade/user_data/tst-config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 1m 5m 15m 1h 4h 1d \
+            --timerange 20250101-20260905
+      - name: Backtest NFI X7 on restricted Spot universe
+        working-directory: external/NostalgiaForInfinity
+        env:
+          FREQTRADE__TRADING_MODE: spot
+          FREQTRADE__STRATEGY: NostalgiaForInfinityX7
+        run: |
+          set +e
+          docker compose run --rm freqtrade backtesting \
+            --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 \
+            --strategy-path /freqtrade \
+            --timerange 20250101-20260905 \
+            --fee 0.001 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/tst-nfi-x7.json \
+            > ../../validation/external-nfi/backtest.log 2>&1
+          CODE=$?
+          echo "$CODE" > ../../validation/external-nfi/exit-code.txt
+          cat ../../validation/external-nfi/backtest.log
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-nfi-validation
+          path: |
+            validation/external-nfi/**
+            external/NostalgiaForInfinity/user_data/backtest_results/**
+          if-no-files-found: warn
