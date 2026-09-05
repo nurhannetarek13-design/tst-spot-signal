@@ -15,46 +15,46 @@
     "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
   },
   "base": {
-    "trades": 178,
-    "wins": 60,
-    "winRate": 0.33707865168539325,
-    "profitFactor": 0.8521520339468777,
-    "expectancyUSDT": -0.016484196685393256,
-    "netPnlUSDT": -2.9341870099999996,
-    "maxDrawdownUSDT": 4.271675680000002
+    "trades": 145,
+    "wins": 51,
+    "winRate": 0.35172413793103446,
+    "profitFactor": 0.8652839821263058,
+    "expectancyUSDT": -0.014719950758620688,
+    "netPnlUSDT": -2.1343928599999997,
+    "maxDrawdownUSDT": 3.63343444
   },
   "stress2x": {
-    "trades": 181,
-    "wins": 56,
-    "winRate": 0.30939226519337015,
-    "profitFactor": 0.7636723088827561,
-    "expectancyUSDT": -0.02923740044198895,
-    "netPnlUSDT": -5.29196948,
-    "maxDrawdownUSDT": 5.965375720000001
+    "trades": 142,
+    "wins": 44,
+    "winRate": 0.30985915492957744,
+    "profitFactor": 0.738221668278098,
+    "expectancyUSDT": -0.032093092957746476,
+    "netPnlUSDT": -4.5572192,
+    "maxDrawdownUSDT": 5.233374850000001
   },
   "parityDiagnostics": {
     "canonicalTotal": 148,
-    "freqtradeTotal": 178,
-    "deltaTrades": 30,
+    "freqtradeTotal": 145,
+    "deltaTrades": -3,
     "firstDivergence": {
-      "index": 1,
-      "type": "ENTRY_TIMESTAMP",
+      "index": 3,
+      "type": "EXIT_TIMESTAMP",
       "canonical": {
-        "signalTs": "2025-10-14T00:00:00+00:00",
-        "entryTs": "2025-10-14T01:00:00+00:00",
-        "exitTs": "2025-10-14T04:00:00+00:00",
-        "entryPrice": 0.0846,
-        "exitPrice": 0.082062,
-        "reason": "SL",
-        "pnlUSDT": -0.18125249999999993
+        "signalTs": "2025-10-14T07:00:00+00:00",
+        "entryTs": "2025-10-14T08:00:00+00:00",
+        "exitTs": "2025-10-14T09:00:00+00:00",
+        "entryPrice": 0.08054,
+        "exitPrice": 0.0853724,
+        "reason": "TP",
+        "pnlUSDT": 0.3130050000000001
       },
       "freqtrade": {
-        "entryTs": "2025-10-14T00:00:00+00:00",
-        "exitTs": "2025-10-14T04:00:00+00:00",
-        "entryPrice": 0.08509,
-        "exitPrice": 0.08254,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.17929248
+        "entryTs": "2025-10-14T08:00:00+00:00",
+        "exitTs": "2025-10-15T08:00:00+00:00",
+        "entryPrice": 0.08054,
+        "exitPrice": 0.08184,
+        "reason": "time_exit",
+        "pnlUSDT": 0.07183724
       }
     },
     "freqtradeFirst50": [
@@ -67,28 +67,28 @@
         "pnlUSDT": 0.33086585
       },
       {
-        "entryTs": "2025-10-14T00:00:00+00:00",
+        "entryTs": "2025-10-14T01:00:00+00:00",
         "exitTs": "2025-10-14T04:00:00+00:00",
-        "entryPrice": 0.08509,
-        "exitPrice": 0.08254,
+        "entryPrice": 0.0846,
+        "exitPrice": 0.08207,
         "reason": "stop_loss",
-        "pnlUSDT": -0.17929248
+        "pnlUSDT": -0.18070033
       },
       {
-        "entryTs": "2025-10-14T05:00:00+00:00",
+        "entryTs": "2025-10-14T06:00:00+00:00",
         "exitTs": "2025-10-14T06:00:00+00:00",
-        "entryPrice": 0.08261,
-        "exitPrice": 0.08014,
+        "entryPrice": 0.08323,
+        "exitPrice": 0.08074,
         "reason": "stop_loss",
-        "pnlUSDT": -0.17913225
+        "pnlUSDT": -0.18057303
       },
       {
-        "entryTs": "2025-10-14T07:00:00+00:00",
-        "exitTs": "2025-10-15T07:00:00+00:00",
-        "entryPrice": 0.08136,
-        "exitPrice": 0.08131,
+        "entryTs": "2025-10-14T08:00:00+00:00",
+        "exitTs": "2025-10-15T08:00:00+00:00",
+        "entryPrice": 0.08054,
+        "exitPrice": 0.08184,
         "reason": "time_exit",
-        "pnlUSDT": -0.01969833
+        "pnlUSDT": 0.07183724
       },
       {
         "entryTs": "2025-10-21T02:00:00+00:00",
@@ -227,14 +227,6 @@
         "pnlUSDT": -0.18052174
       },
       {
-        "entryTs": "2026-01-11T14:00:00+00:00",
-        "exitTs": "2026-01-12T00:00:00+00:00",
-        "entryPrice": 0.02802,
-        "exitPrice": 0.02718,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.1817916
-      },
-      {
         "entryTs": "2026-01-14T13:00:00+00:00",
         "exitTs": "2026-01-15T03:00:00+00:00",
         "entryPrice": 0.0282,
@@ -259,14 +251,6 @@
         "pnlUSDT": 0.33159532
       },
       {
-        "entryTs": "2026-01-29T02:00:00+00:00",
-        "exitTs": "2026-01-29T02:00:00+00:00",
-        "entryPrice": 0.02833,
-        "exitPrice": 0.02749,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.18012735
-      },
-      {
         "entryTs": "2026-01-29T03:00:00+00:00",
         "exitTs": "2026-01-29T03:00:00+00:00",
         "entryPrice": 0.02646,
@@ -275,20 +259,12 @@
         "pnlUSDT": -0.18058456
       },
       {
-        "entryTs": "2026-01-29T04:00:00+00:00",
+        "entryTs": "2026-01-29T05:00:00+00:00",
         "exitTs": "2026-01-29T05:00:00+00:00",
-        "entryPrice": 0.02611,
-        "exitPrice": 0.02776,
-        "reason": "roi",
-        "pnlUSDT": 0.33110015
-      },
-      {
-        "entryTs": "2026-01-29T06:00:00+00:00",
-        "exitTs": "2026-01-29T06:00:00+00:00",
-        "entryPrice": 0.02583,
-        "exitPrice": 0.02506,
+        "entryPrice": 0.02692,
+        "exitPrice": 0.02612,
         "reason": "stop_loss",
-        "pnlUSDT": -0.18026936
+        "pnlUSDT": -0.1803098
       },
       {
         "entryTs": "2026-01-29T08:00:00+00:00",
@@ -307,12 +283,12 @@
         "pnlUSDT": 0.03728905
       },
       {
-        "entryTs": "2026-02-14T14:00:00+00:00",
+        "entryTs": "2026-02-14T15:00:00+00:00",
         "exitTs": "2026-02-15T12:00:00+00:00",
-        "entryPrice": 0.01648,
-        "exitPrice": 0.01599,
+        "entryPrice": 0.01665,
+        "exitPrice": 0.01616,
         "reason": "stop_loss",
-        "pnlUSDT": -0.18046618
+        "pnlUSDT": -0.17848016
       },
       {
         "entryTs": "2026-02-25T20:00:00+00:00",
@@ -331,14 +307,6 @@
         "pnlUSDT": 0.33140976
       },
       {
-        "entryTs": "2026-02-27T08:00:00+00:00",
-        "exitTs": "2026-02-27T08:00:00+00:00",
-        "entryPrice": 0.02013,
-        "exitPrice": 0.01953,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.18070026
-      },
-      {
         "entryTs": "2026-02-27T09:00:00+00:00",
         "exitTs": "2026-02-27T09:00:00+00:00",
         "entryPrice": 0.01945,
@@ -347,28 +315,12 @@
         "pnlUSDT": 0.33222462
       },
       {
-        "entryTs": "2026-02-27T10:00:00+00:00",
-        "exitTs": "2026-02-27T10:00:00+00:00",
-        "entryPrice": 0.02169,
-        "exitPrice": 0.02104,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.18138013
-      },
-      {
         "entryTs": "2026-02-27T11:00:00+00:00",
         "exitTs": "2026-02-27T11:00:00+00:00",
         "entryPrice": 0.02429,
         "exitPrice": 0.02582,
         "reason": "roi",
         "pnlUSDT": 0.33024754
-      },
-      {
-        "entryTs": "2026-02-27T12:00:00+00:00",
-        "exitTs": "2026-02-27T12:00:00+00:00",
-        "entryPrice": 0.02636,
-        "exitPrice": 0.02557,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.18139005
       },
       {
         "entryTs": "2026-03-01T02:00:00+00:00",
@@ -387,14 +339,6 @@
         "pnlUSDT": -0.18110397
       },
       {
-        "entryTs": "2026-03-01T09:00:00+00:00",
-        "exitTs": "2026-03-01T09:00:00+00:00",
-        "entryPrice": 0.02298,
-        "exitPrice": 0.0223,
-        "reason": "stop_loss",
-        "pnlUSDT": -0.1795008
-      },
-      {
         "entryTs": "2026-03-01T10:00:00+00:00",
         "exitTs": "2026-03-01T10:00:00+00:00",
         "entryPrice": 0.02376,
@@ -403,12 +347,12 @@
         "pnlUSDT": 0.33094104
       },
       {
-        "entryTs": "2026-03-01T11:00:00+00:00",
+        "entryTs": "2026-03-01T12:00:00+00:00",
         "exitTs": "2026-03-01T12:00:00+00:00",
-        "entryPrice": 0.0249,
-        "exitPrice": 0.02416,
+        "entryPrice": 0.02515,
+        "exitPrice": 0.0244,
         "reason": "stop_loss",
-        "pnlUSDT": -0.17980339
+        "pnlUSDT": -0.18052717
       },
       {
         "entryTs": "2026-03-01T15:00:00+00:00",
@@ -419,20 +363,12 @@
         "pnlUSDT": -0.18128929
       },
       {
-        "entryTs": "2026-03-01T18:00:00+00:00",
+        "entryTs": "2026-03-01T20:00:00+00:00",
         "exitTs": "2026-03-01T20:00:00+00:00",
-        "entryPrice": 0.02367,
-        "exitPrice": 0.02296,
+        "entryPrice": 0.02329,
+        "exitPrice": 0.0226,
         "reason": "stop_loss",
-        "pnlUSDT": -0.18172718
-      },
-      {
-        "entryTs": "2026-03-01T21:00:00+00:00",
-        "exitTs": "2026-03-02T00:00:00+00:00",
-        "entryPrice": 0.02244,
-        "exitPrice": 0.02386,
-        "reason": "roi",
-        "pnlUSDT": 0.3322353
+        "pnlUSDT": -0.1798439
       },
       {
         "entryTs": "2026-03-02T01:00:00+00:00",
@@ -443,12 +379,12 @@
         "pnlUSDT": -0.18129008
       },
       {
-        "entryTs": "2026-03-02T02:00:00+00:00",
-        "exitTs": "2026-03-02T04:00:00+00:00",
-        "entryPrice": 0.02474,
-        "exitPrice": 0.024,
+        "entryTs": "2026-03-02T03:00:00+00:00",
+        "exitTs": "2026-03-02T03:00:00+00:00",
+        "entryPrice": 0.02485,
+        "exitPrice": 0.02411,
         "reason": "stop_loss",
-        "pnlUSDT": -0.18132353
+        "pnlUSDT": -0.18058368
       },
       {
         "entryTs": "2026-03-02T05:00:00+00:00",
@@ -457,11 +393,75 @@
         "exitPrice": 0.02364,
         "reason": "stop_loss",
         "pnlUSDT": -0.18125539
+      },
+      {
+        "entryTs": "2026-03-02T10:00:00+00:00",
+        "exitTs": "2026-03-02T10:00:00+00:00",
+        "entryPrice": 0.02564,
+        "exitPrice": 0.02726,
+        "reason": "roi",
+        "pnlUSDT": 0.33123975
+      },
+      {
+        "entryTs": "2026-03-02T12:00:00+00:00",
+        "exitTs": "2026-03-02T12:00:00+00:00",
+        "entryPrice": 0.02621,
+        "exitPrice": 0.02543,
+        "reason": "stop_loss",
+        "pnlUSDT": -0.1800666
+      },
+      {
+        "entryTs": "2026-03-02T14:00:00+00:00",
+        "exitTs": "2026-03-02T21:00:00+00:00",
+        "entryPrice": 0.02505,
+        "exitPrice": 0.02663,
+        "reason": "roi",
+        "pnlUSDT": 0.3305456
+      },
+      {
+        "entryTs": "2026-03-02T23:00:00+00:00",
+        "exitTs": "2026-03-03T00:00:00+00:00",
+        "entryPrice": 0.02599,
+        "exitPrice": 0.02763,
+        "reason": "roi",
+        "pnlUSDT": 0.33062884
+      },
+      {
+        "entryTs": "2026-03-03T02:00:00+00:00",
+        "exitTs": "2026-03-03T04:00:00+00:00",
+        "entryPrice": 0.02786,
+        "exitPrice": 0.02962,
+        "reason": "roi",
+        "pnlUSDT": 0.33140844
+      },
+      {
+        "entryTs": "2026-03-03T06:00:00+00:00",
+        "exitTs": "2026-03-03T06:00:00+00:00",
+        "entryPrice": 0.02905,
+        "exitPrice": 0.02818,
+        "reason": "stop_loss",
+        "pnlUSDT": -0.18161055
+      },
+      {
+        "entryTs": "2026-03-03T08:00:00+00:00",
+        "exitTs": "2026-03-03T13:00:00+00:00",
+        "entryPrice": 0.02908,
+        "exitPrice": 0.03092,
+        "reason": "roi",
+        "pnlUSDT": 0.3325
+      },
+      {
+        "entryTs": "2026-03-03T16:00:00+00:00",
+        "exitTs": "2026-03-03T16:00:00+00:00",
+        "entryPrice": 0.02956,
+        "exitPrice": 0.03143,
+        "reason": "roi",
+        "pnlUSDT": 0.33080379
       }
     ]
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T16:07:22.043647+00:00",
+  "generatedAt": "2026-09-05T16:12:01.231378+00:00",
   "notes": "Freqtrade Spot backtest of the frozen parity candidate on the canonical fixture window; research only. parityDiagnostics compares Freqtrade trade timestamps against the canonical first-50 trades."
 }
