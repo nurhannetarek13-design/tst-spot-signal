@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import json, sys, pathlib, datetime, zipfile, tempfile
 
-MANIFEST=pathlib.Path("validation/fusion/candidate-manifest.json")
+MANIFEST=pathlib.Path("validation/fusion/frozen-parity-candidate.json")
+FIXTURE=pathlib.Path("validation/fusion/execution-parity-fixture.json")
 
 def find_report_json(p):
     p=pathlib.Path(p)
@@ -32,8 +33,9 @@ def metrics(trades):
 
 if len(sys.argv)!=4:raise SystemExit("usage: parser BASE_ZIP STRESS_ZIP OUT_JSON")
 m=json.loads(MANIFEST.read_text())
+fx=json.loads(FIXTURE.read_text())
 base=metrics(trades_for(find_report_json(sys.argv[1])));stress=metrics(trades_for(find_report_json(sys.argv[2])))
 independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
 passed=independent and base["trades"]>=100 and stress["trades"]>=100
-out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m.get("candidateId"),"candidateFingerprint":m.get("candidateFingerprint"),"symbol":m.get("symbol"),"family":m.get("family"),"timeframe":m.get("timeframe"),"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."}
+out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m.get("candidateId"),"candidateFingerprint":m.get("candidateFingerprint"),"symbol":m.get("symbol"),"family":m.get("family"),"timeframe":m.get("timeframe"),"dataset":{"firstTs":fx["dataset"]["firstTs"],"lastTs":fx["dataset"]["lastTs"],"sha256":fx["dataset"]["sha256"]},"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Freqtrade Spot backtest of the frozen parity candidate on the canonical fixture window; research only."}
 pathlib.Path(sys.argv[3]).write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2))
