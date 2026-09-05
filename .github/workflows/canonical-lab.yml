@@ -1,0 +1,110 @@
+name: Canonical Laboratory Integrity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/canonical_execution_adapter.py"
+      - "scripts/canonical_compare.py"
+      - "validation/canonical/**"
+      - ".github/workflows/canonical-lab.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: canonical-laboratory-integrity
+  cancel-in-progress: true
+
+jobs:
+  canonical-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile scripts/canonical_execution_adapter.py
+          python -m py_compile scripts/canonical_compare.py
+
+      - name: Canonical comparator preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation/canonical
+          CANONICAL="validation/canonical/canonical-trades-latest.json"
+          ENGINES=(
+            "validation/canonical/vectorbt-adapter-latest.json"
+            "validation/canonical/freqtrade-adapter-latest.json"
+            "validation/canonical/jesse-adapter-latest.json"
+            "validation/canonical/nautilus-adapter-latest.json"
+          )
+          missing=()
+          [[ -f "$CANONICAL" ]] || missing+=("$CANONICAL")
+          for f in "${ENGINES[@]}"; do
+            [[ -f "$f" ]] || missing+=("$f")
+          done
+          if (( ${#missing[@]} > 0 )); then
+            python - "${missing[@]}" <<'PY'
+          import json, pathlib, sys
+          from datetime import datetime, timezone
+          missing=sys.argv[1:]
+          out={
+            "schemaVersion":1,
+            "authority":"CANONICAL_LABORATORY",
+            "status":"NOT_READY",
+            "pass":False,
+            "liveReady":False,
+            "smallLiveReviewReady":False,
+            "reason":"Canonical/engine normalized trade ledgers are not all materialized yet.",
+            "missing":missing,
+            "generatedAt":datetime.now(timezone.utc).isoformat()
+          }
+          pathlib.Path("validation/canonical/lab-latest.json").write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compare engines directly to canonical
+        if: steps.preflight.outputs.ready == 'true'
+        run: |
+          set +e
+          python scripts/canonical_compare.py \
+            validation/canonical/canonical-trades-latest.json \
+            validation/canonical/lab-latest.json \
+            validation/canonical/vectorbt-adapter-latest.json \
+            validation/canonical/freqtrade-adapter-latest.json \
+            validation/canonical/jesse-adapter-latest.json \
+            validation/canonical/nautilus-adapter-latest.json
+          code=$?
+          echo "Comparator exit code: $code"
+          exit 0
+
+      - name: Commit laboratory snapshot safely
+        run: |
+          cp validation/canonical/lab-latest.json /tmp/canonical-lab-latest.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/canonical
+            cp /tmp/canonical-lab-latest.json validation/canonical/lab-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/canonical/lab-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update canonical laboratory snapshot [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
