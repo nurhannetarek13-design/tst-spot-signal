@@ -8,6 +8,7 @@ GATE=pathlib.Path("validation/fusion/gate-latest.json")
 REJECTED=pathlib.Path("validation/fusion/rejected-candidates.json")
 FORWARD=pathlib.Path("validation/fusion/forward-latest.json")
 LEDGER=pathlib.Path("paper/public-edge-forward-ledger.json")
+FROZEN_FIXTURE=pathlib.Path("validation/fusion/frozen-parity-candidate.json")
 
 HISTORICAL_VALIDATORS=("vectorbt","freqtrade","jesse","nautilus")
 
@@ -19,6 +20,7 @@ def load(p,default):
 m=load(MANIFEST,{})
 g=load(GATE,{})
 r=load(REJECTED,{"rejected":[],"ttlDays":7})
+frozen=load(FROZEN_FIXTURE,{})
 fp=m.get("candidateFingerprint")
 if not fp or g.get("candidateFingerprint")!=fp or g.get("liveReady") is True:
     print(json.dumps({"changed":False,"reason":"NO_ROTATION_NEEDED"}))
@@ -97,14 +99,28 @@ for x in r["rejected"]:
         if ts>=cut: active.add(x.get("candidateFingerprint"))
     except: pass
 
+# Golden canonical parity fixtures are permanently ineligible for promotion,
+# independent of the rejected-candidate cooldown TTL.
+fixture_fp=frozen.get("candidateFingerprint") if frozen.get("fixtureRole")=="GOLDEN_CANONICAL_REGRESSION_ONLY" else None
+permanent_exclusions={x for x in [fixture_fp] if x}
+
 pool=m.get("candidatePool") or []
-next_c=next((x for x in pool if x.get("candidateFingerprint") not in active),None)
+def eligible(x):
+    xfp=x.get("candidateFingerprint")
+    return (
+        xfp not in active
+        and xfp not in permanent_exclusions
+        and x.get("eligibleForPromotion") is not False
+    )
+
+next_c=next((x for x in pool if eligible(x)),None)
 if not next_c:
     new={
       "strategyId":"TST_UNIFIED_CANDIDATE_V1","candidateId":None,"candidateFingerprint":None,
       "status":"POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
       "candidatePool":pool,"poolSize":len(pool),
-      "recentRejectedFingerprints":sorted(active),
+      "recentRejectedFingerprints":sorted(x for x in active if x),
+      "permanentExcludedFingerprints":sorted(permanent_exclusions),
       "authorization":"RESEARCH_ONLY","liveTrading":False,
       "validatorsRequired":["vectorbt","freqtrade","jesse","nautilus","forward"],
       "generatedAt":now,
@@ -113,7 +129,8 @@ else:
     new={
       "strategyId":"TST_UNIFIED_CANDIDATE_V1",**next_c,
       "candidatePool":pool,"poolSize":len(pool),
-      "recentRejectedFingerprints":sorted(active),
+      "recentRejectedFingerprints":sorted(x for x in active if x),
+      "permanentExcludedFingerprints":sorted(permanent_exclusions),
       "authorization":"VALIDATION_AND_FORWARD_PAPER_ONLY","liveTrading":False,
       "validatorsRequired":["vectorbt","freqtrade","jesse","nautilus","forward"],
       "generatedAt":now,
@@ -121,8 +138,7 @@ else:
     }
 MANIFEST.write_text(json.dumps(new,indent=2))
 
-# Candidate rotation must also reset forward state immediately. Rotation commits use
-# [skip ci], so we cannot rely on a downstream push-trigger to clear a stale paper candidate.
+# Candidate rotation must also reset forward state immediately.
 forward={
   "engine":"FORWARD_PAPER",
   "strategyId":"TST_UNIFIED_FORWARD_V1",
@@ -154,4 +170,11 @@ ledger["open"]=None
 LEDGER.parent.mkdir(parents=True,exist_ok=True)
 LEDGER.write_text(json.dumps(ledger,indent=2))
 
-print(json.dumps({"changed":True,"rejected":fp,"hardFail":hard_fail,"next":new.get("candidateId"),"forwardReset":True},indent=2))
+print(json.dumps({
+  "changed":True,
+  "rejected":fp,
+  "hardFail":hard_fail,
+  "next":new.get("candidateId"),
+  "forwardReset":True,
+  "permanentExcludedFingerprints":sorted(permanent_exclusions),
+},indent=2))
