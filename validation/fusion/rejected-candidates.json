@@ -103,6 +103,18 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-05T07:53:47.660157+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "symbol": "SAHARAUSDT",
+      "family": "TS_MOMENTUM",
+      "hardFailValidators": [
+        "freqtrade",
+        "jesse",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-09-05T15:22:04.258516+00:00"
     }
   ],
   "ttlDays": 7,
