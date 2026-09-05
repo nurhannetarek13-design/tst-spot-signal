@@ -25,27 +25,27 @@
     "trades": 146,
     "wins": 52,
     "winRate": 0.3561643835616438,
-    "netPnlUSDT": -1.50729779,
-    "expectancyUSDT": -0.010323957465753424,
-    "profitFactor": 0.9063127307400071,
+    "netPnlUSDT": -1.48959438,
+    "expectancyUSDT": -0.010202701232876712,
+    "profitFactor": 0.907311107983886,
     "maxDrawdownUSDT": 2.93513603
   },
   "stress2x": {
     "trades": 146,
     "wins": 47,
     "winRate": 0.3219178082191781,
-    "netPnlUSDT": -3.91684503,
-    "expectancyUSDT": -0.026827705684931508,
-    "profitFactor": 0.7780861708856995,
-    "maxDrawdownUSDT": 4.334659630000001
+    "netPnlUSDT": -3.89916822,
+    "expectancyUSDT": -0.026706631643835615,
+    "profitFactor": 0.7788662070417308,
+    "maxDrawdownUSDT": 4.3169828200000016
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:48:19.700754+00:00",
+  "generatedAt": "2026-09-05T16:39:15.546036+00:00",
   "notes": "NautilusTrader parity validation on frozen candidate and exact canonical dataset window; 800-bar warmup and full-history pandas-compatible EMA seed; research only.",
   "dataset": {
-    "firstTs": "2025-09-05T16:00:00+00:00",
-    "lastTs": "2026-09-05T15:00:00+00:00",
-    "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
+    "firstTs": "2025-09-05T17:00:00+00:00",
+    "lastTs": "2026-09-05T16:00:00+00:00",
+    "sha256": "6b7e4ea0c8675f1963e896437602897b6f5ae754556b843e4f0b834ecc29cf9c"
   }
 }
