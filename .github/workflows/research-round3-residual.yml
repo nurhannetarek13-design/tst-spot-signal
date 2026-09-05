@@ -1,25 +1,64 @@
 name: Round 3 residual dispersion
+
 on:
+  workflow_dispatch:
   push:
+    branches: [fix/unified-execution-parity]
     paths:
       - 'scripts/research-round3-residual.mjs'
       - '.github/workflows/research-round3-residual.yml'
-  workflow_dispatch:
+
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: round3-residual-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  TARGET_REF: ${{ github.ref_name }}
+
 jobs:
   discovery:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_REF }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --check scripts/research-round3-residual.mjs
-      - run: node scripts/research-round3-residual.mjs
+      - name: Syntax check
+        run: node --check scripts/research-round3-residual.mjs
+      - name: Run raw residual-dislocation discovery
+        run: node scripts/research-round3-residual.mjs
+      - name: Assert research-only output
+        run: |
+          node - <<'NODE'
+          const x=require('./validation/round3-residual-discovery.json');
+          if(x.status!=='RESEARCH_ONLY') process.exit(1);
+          if(!['FREEZE_EVENT_AND_PROCEED_OOS','REJECT_BEFORE_STRATEGY_CONSTRUCTION'].includes(x.verdict)) process.exit(1);
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: round3-residual-discovery
           path: validation/round3-residual-discovery.json
           if-no-files-found: error
+      - name: Persist research snapshot
+        run: |
+          cp validation/round3-residual-discovery.json /tmp/result.json
+          for i in 1 2 3 4 5; do
+            git fetch origin "$TARGET_REF"
+            git reset --hard "origin/$TARGET_REF"
+            cp /tmp/result.json validation/round3-residual-discovery.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/round3-residual-discovery.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update Round 3 residual discovery"
+            git push origin "HEAD:$TARGET_REF" && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
