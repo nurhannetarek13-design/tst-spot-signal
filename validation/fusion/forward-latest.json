@@ -20,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T13:01:15.599Z",
+  "generatedAt": "2026-09-05T15:03:15.442Z",
   "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
