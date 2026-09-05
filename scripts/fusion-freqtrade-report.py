@@ -45,7 +45,7 @@ def ft_trade(t):
     return {"entryTs":norm_ts(t.get("open_date") or t.get("open_date_utc")),"exitTs":norm_ts(t.get("close_date") or t.get("close_date_utc")),"entryPrice":t.get("open_rate"),"exitPrice":t.get("close_rate"),"reason":t.get("exit_reason"),"pnlUSDT":t.get("profit_abs")}
 
 def parity_diag(ft, fx):
-    canon=fx.get("baseTradesFirst50") or []
+    canon=fx.get("baseTrades") or fx.get("baseTradesFirst50") or []
     f=[ft_trade(t) for t in ft]
     first=None
     for i,(a,b) in enumerate(zip(canon,f)):
@@ -55,7 +55,16 @@ def parity_diag(ft, fx):
             first={"index":i,"type":"EXIT_TIMESTAMP","canonical":a,"freqtrade":b};break
     if first is None and len(f)!=fx.get("base",{}).get("trades"):
         first={"index":min(len(canon),len(f)),"type":"TRADE_COUNT","canonicalTotal":fx.get("base",{}).get("trades"),"freqtradeTotal":len(f)}
-    return {"canonicalTotal":fx.get("base",{}).get("trades"),"freqtradeTotal":len(f),"deltaTrades":len(f)-int(fx.get("base",{}).get("trades",0)),"firstDivergence":first,"freqtradeFirst50":f[:50]}
+    return {
+        "mode":"DIAGNOSTIC_ONLY",
+        "canonicalTotal":fx.get("base",{}).get("trades"),
+        "freqtradeTotal":len(f),
+        "deltaTrades":len(f)-int(fx.get("base",{}).get("trades",0)),
+        "firstDivergence":first,
+        "normalizedTrades":f,
+        "freqtradeFirst50":f[:50],
+        "note":"Native Freqtrade execution is an independent validator. These diagnostics expose differences but are not a canonical PARITY_PASS claim."
+    }
 
 if len(sys.argv)!=4:raise SystemExit("usage: parser BASE_ZIP STRESS_ZIP OUT_JSON")
 m=json.loads(MANIFEST.read_text())
@@ -64,5 +73,26 @@ base_trades=trades_for(find_report_json(sys.argv[1])); stress_trades=trades_for(
 base=metrics(base_trades);stress=metrics(stress_trades)
 independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
 passed=independent and base["trades"]>=100 and stress["trades"]>=100
-out={"engine":"FREQTRADE","strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1","status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m.get("candidateId"),"candidateFingerprint":m.get("candidateFingerprint"),"symbol":m.get("symbol"),"family":m.get("family"),"timeframe":m.get("timeframe"),"dataset":{"firstTs":fx["dataset"]["firstTs"],"lastTs":fx["dataset"]["lastTs"],"sha256":fx["dataset"]["sha256"]},"base":base,"stress2x":stress,"parityDiagnostics":parity_diag(base_trades,fx),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Freqtrade Spot backtest of the frozen parity candidate on the canonical fixture window; research only. parityDiagnostics compares Freqtrade trade timestamps against the canonical first-50 trades."}
+out={
+    "engine":"FREQTRADE",
+    "validationMode":"NATIVE_INDEPENDENT",
+    "canonicalParityStatus":"NOT_APPLICABLE_TO_NATIVE_EXECUTION",
+    "strategyId":"TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
+    "status":"PASS" if passed else "FAIL",
+    "pass":passed,
+    "independentEnginePass":independent,
+    "candidateId":m.get("candidateId"),
+    "candidateFingerprint":m.get("candidateFingerprint"),
+    "symbol":m.get("symbol"),
+    "family":m.get("family"),
+    "timeframe":m.get("timeframe"),
+    "dataset":{"firstTs":fx["dataset"]["firstTs"],"lastTs":fx["dataset"]["lastTs"],"sha256":fx["dataset"]["sha256"]},
+    "base":base,
+    "stress2x":stress,
+    "parityDiagnostics":parity_diag(base_trades,fx),
+    "authorization":"RESEARCH_ONLY",
+    "liveTrading":False,
+    "generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "notes":"Independent native Freqtrade Spot backtest of the frozen candidate. Canonical execution parity is validated separately by the canonical adapter and strict parity CI."
+}
 pathlib.Path(sys.argv[3]).write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2))
