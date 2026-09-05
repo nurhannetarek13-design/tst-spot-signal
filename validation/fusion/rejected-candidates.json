@@ -92,6 +92,17 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-05T07:07:59.883053+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "1b7dc1733caf8b96d86e",
+      "symbol": "ZKCUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "hardFailValidators": [
+        "jesse",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-09-05T07:53:47.660157+00:00"
     }
   ],
   "ttlDays": 7,

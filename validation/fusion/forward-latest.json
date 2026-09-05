@@ -3,8 +3,8 @@
   "strategyId": "TST_UNIFIED_FORWARD_V1",
   "status": "RESET_FOR_NEW_CANDIDATE",
   "pass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "1b7dc1733caf8b96d86e",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T07:07:59.883053+00:00",
+  "generatedAt": "2026-09-05T07:53:47.660157+00:00",
   "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }
