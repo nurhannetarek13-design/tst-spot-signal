@@ -18,8 +18,18 @@
     "sl": 0.03,
     "tp": 0.06
   },
-  "freezeReason": "Execution parity reconciliation across VectorBT, Freqtrade, Jesse, and Nautilus. Candidate rotation must not alter this artifact until parity is resolved.",
-  "authorization": "VALIDATION_ONLY",
+  "freezeReason": "Golden execution-parity regression fixture. Keep immutable for canonical adapter CI; do not use for candidate promotion or trading.",
+  "candidateStatus": "REJECTED_FOR_TRADING",
+  "fixtureRole": "GOLDEN_CANONICAL_REGRESSION_ONLY",
+  "rejectionBasis": [
+    "FREQTRADE_NATIVE_STRESSED_FAILURE",
+    "JESSE_NEGATIVE_EXPECTANCY",
+    "NAUTILUS_NEGATIVE_EXPECTANCY",
+    "CANONICAL_BASE_PF_BELOW_RESEARCH_ACCEPTANCE"
+  ],
+  "authorization": "RESEARCH_ONLY",
+  "eligibleForPromotion": false,
   "liveTrading": false,
-  "frozenAt": "2026-09-05T15:29:00Z"
+  "frozenAt": "2026-09-05T15:29:00Z",
+  "fixtureLockedAt": "2026-09-05T16:37:00Z"
 }
