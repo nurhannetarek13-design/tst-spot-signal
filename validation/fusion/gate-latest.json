@@ -89,10 +89,10 @@
       "candidateFingerprint": "5a8be2536ed727aaa38e",
       "trades": 150,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.9034825428626998,
-      "baseExpectancyUSDT": -0.010527995200000003,
-      "stressProfitFactor": 0.7744061797327009,
-      "stressExpectancyUSDT": -0.027029853333333343
+      "baseProfitFactor": 0.9038085156012285,
+      "baseExpectancyUSDT": -0.01048865426666667,
+      "stressProfitFactor": 0.7746601518890662,
+      "stressExpectancyUSDT": -0.02699057153333334
     },
     "forward": {
       "status": "RESET_FOR_NEW_CANDIDATE",
@@ -106,6 +106,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T15:22:18.297533+00:00",
+  "generatedAt": "2026-09-05T15:22:35.020328+00:00",
   "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
