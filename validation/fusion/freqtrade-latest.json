@@ -1516,6 +1516,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T19:27:53.581374+00:00",
+  "generatedAt": "2026-09-05T20:56:52.896838+00:00",
   "notes": "Independent native Freqtrade Spot backtest of the frozen candidate. Canonical execution parity is validated separately by the canonical adapter and strict parity CI."
 }
