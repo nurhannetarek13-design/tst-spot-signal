@@ -3,7 +3,7 @@ import pathlib
 import numpy as np
 from jesse.strategies import Strategy
 
-MANIFEST_PATH=pathlib.Path("validation/fusion/candidate-manifest.json")
+MANIFEST_PATH=pathlib.Path("validation/fusion/frozen-parity-candidate.json")
 MANIFEST=json.loads(MANIFEST_PATH.read_text()) if MANIFEST_PATH.exists() else {}
 FAMILY=MANIFEST.get("family","TS_MOMENTUM")
 PARAMS=MANIFEST.get("params") or {}
@@ -14,8 +14,7 @@ _LEADER_CACHE=None
 
 def leader_value(ts):
     global _LEADER_CACHE
-    if FAMILY!="CROSS_CRYPTO_LEAD_LAG":
-        return 0.0
+    if FAMILY!="CROSS_CRYPTO_LEAD_LAG":return 0.0
     if _LEADER_CACHE is None:
         try:_LEADER_CACHE=json.loads(LEADER_PATH.read_text())
         except Exception:_LEADER_CACHE={}
@@ -32,12 +31,11 @@ def ema(values,n):
 def rsi_wilder(values,n=14):
     x=np.asarray(values,dtype=float)
     if len(x)<n+1:return 50.0
-    d=np.diff(x)
-    gains=np.clip(d,0,None);losses=np.clip(-d,0,None)
-    ag=float(gains[0]);al=float(losses[0]);alpha=1/n
-    for g,l in zip(gains[1:],losses[1:]):
-        ag=alpha*float(g)+(1-alpha)*ag
-        al=alpha*float(l)+(1-alpha)*al
+    d=np.diff(x);g=np.clip(d,0,None);l=np.clip(-d,0,None)
+    ag=float(g[0]);al=float(l[0]);alpha=1/n
+    for gv,lv in zip(g[1:],l[1:]):
+        ag=alpha*float(gv)+(1-alpha)*ag
+        al=alpha*float(lv)+(1-alpha)*al
     if al<=1e-15:return 100.0
     rs=ag/al
     return float(100-100/(1+rs))
@@ -46,8 +44,8 @@ def atr_pct(candles,n=14):
     if len(candles)<n+1:return 0.0
     vals=[]
     for i in range(len(candles)-n,len(candles)):
-        prev=float(candles[i-1,2]);h=float(candles[i,3]);l=float(candles[i,4])
-        vals.append(max(h-l,abs(h-prev),abs(l-prev)))
+        prev=float(candles[i-1,2]);h=float(candles[i,3]);lo=float(candles[i,4])
+        vals.append(max(h-lo,abs(h-prev),abs(lo-prev)))
     close=float(candles[-1,2])
     return (sum(vals)/len(vals))/close if close>0 else 0.0
 
@@ -65,13 +63,11 @@ class UnifiedCandidateValidator(Strategy):
         rel=float(qv[-1]/med) if med>0 else 0.0
 
         if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
-            lead=leader_value(self.current_candle[0]);alt3=float(close/closes[-4]-1);gap=lead-alt3
-            e24=ema(closes,int(p.get("emaFast",24)))
+            lead=leader_value(self.current_candle[0]);alt3=float(close/closes[-4]-1);gap=lead-alt3;e24=ema(closes,int(p.get("emaFast",24)))
             return bool(e24 and lead>=float(p.get("leaderRetMin",0.012)) and gap>=float(p.get("gapMin",0.008)) and alt3>float(p.get("altRetMin",-0.02)) and close>e24 and rel>=float(p.get("relvol",0.9)) and float(p.get("rsiMin",42))<=R<=float(p.get("rsiMax",70)))
 
         if FAMILY=="TS_MOMENTUM":
-            ef=ema(closes,int(p.get("emaFast",48)));es=ema(closes,int(p.get("emaSlow",120)))
-            lb=int(p.get("retLookback",24));ret=close/float(closes[-lb-1])-1;a=atr_pct(c)
+            ef=ema(closes,int(p.get("emaFast",48)));es=ema(closes,int(p.get("emaSlow",120)));lb=int(p.get("retLookback",24));ret=close/float(closes[-lb-1])-1;a=atr_pct(c)
             return bool(ef and es and close>ef>es and ret>float(p.get("retMin",0.02)) and float(p.get("atrMin",0.006))<=a<=float(p.get("atrMax",0.08)) and rel>=float(p.get("relvol",0.8)))
 
         if FAMILY=="LIQUIDITY_REVERSAL":
