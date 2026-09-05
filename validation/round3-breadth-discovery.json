@@ -1,15 +1,57 @@
 {
+  "generatedAt": "2026-09-05T16:56:36.261Z",
   "status": "RESEARCH_ONLY",
   "protocol": "validation/round3-breadth-definition.json",
   "category": "MARKET_BREADTH_AGGREGATED_LEAD_LAG",
   "days": 1825,
-  "thresholds": {"breadth50":0.7,"impulse24":0.15,"leader24":0.03,"pos24":0.7},
-  "eventCount": 3532,
+  "thresholds": {
+    "breadth50": 0.7,
+    "impulse24": 0.15,
+    "leader24": 0.03,
+    "pos24": 0.7
+  },
+  "eventCount": 3546,
   "horizons": {
-    "48": {"n":65766,"meanGross":0.006308180744008042,"medianGross":-0.0018598003228974536,"hitRate":0.4834260864276374,"medianMFE":0.038372156446701555,"medianMAE":0.03867330032828048,"medianMfeMaeRatio":0.9922131320827897,"pass":false},
-    "72": {"n":65766,"meanGross":0.004661192715903138,"medianGross":-0.003910487312655031,"hitRate":0.4743484475260773,"medianMFE":0.048241206030150696,"medianMAE":0.048727152308742416,"medianMfeMaeRatio":0.9900271972490268,"pass":false},
-    "120": {"n":65746,"meanGross":0.002197667734633311,"medianGross":-0.009690910288928545,"hitRate":0.4570316064855657,"medianMFE":0.0609010313182784,"medianMAE":0.06359612872033005,"medianMfeMaeRatio":0.9576216751509578,"pass":false},
-    "168": {"n":65706,"meanGross":0.0003452600367531484,"medianGross":-0.008794153173009467,"hitRate":0.4594861960855934,"medianMFE":0.07227465167143221,"medianMAE":0.07511028216111337,"medianMfeMaeRatio":0.9622471064134912,"pass":false}
+    "48": {
+      "n": 65810,
+      "meanGross": 0.006316455254508161,
+      "medianGross": -0.0018398353643079846,
+      "hitRate": 0.4835891201944993,
+      "medianMFE": 0.03835303789347899,
+      "medianMAE": 0.03866390393060726,
+      "medianMfeMaeRatio": 0.99195978663494,
+      "pass": false
+    },
+    "72": {
+      "n": 65750,
+      "meanGross": 0.004649854269522579,
+      "medianGross": -0.003907013237592849,
+      "hitRate": 0.4743574144486692,
+      "medianMFE": 0.04823957327251094,
+      "medianMAE": 0.0487166699668633,
+      "medianMfeMaeRatio": 0.9902067055347403,
+      "pass": false
+    },
+    "120": {
+      "n": 65750,
+      "meanGross": 0.0021836526524729423,
+      "medianGross": -0.009706774916672822,
+      "hitRate": 0.45697338403041826,
+      "medianMFE": 0.06087781407743997,
+      "medianMAE": 0.06359854470225751,
+      "medianMfeMaeRatio": 0.9572202377026882,
+      "pass": false
+    },
+    "168": {
+      "n": 65750,
+      "meanGross": 0.0003647606556851013,
+      "medianGross": -0.008770981629943109,
+      "hitRate": 0.45952851711026615,
+      "medianMFE": 0.07220325454746823,
+      "medianMAE": 0.07512573565369896,
+      "medianMfeMaeRatio": 0.9610988021508069,
+      "pass": false
+    }
   },
   "rawGatePassed": false,
   "verdict": "REJECT_BEFORE_STRATEGY_CONSTRUCTION"
