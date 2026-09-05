@@ -1,0 +1,13 @@
+services:
+  octobot:
+    image: drakkarsoftware/octobot:stable
+    container_name: tst-octobot
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./user:/octobot/user
+      - ./tentacles:/octobot/tentacles
+      - ./logs:/octobot/logs
+    environment:
+      - TZ=UTC
