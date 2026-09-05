@@ -4,11 +4,16 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "candidateFingerprint": "cba53276448a08d4eebc",
-  "symbol": "PROMUSDT",
-  "family": "MEAN_REVERSION",
-  "timeframe": "15m",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "dataset": {
+    "firstTs": "2025-09-05T16:00:00+00:00",
+    "lastTs": "2026-09-05T15:00:00+00:00",
+    "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
+  },
   "base": {
     "trades": 185,
     "wins": 62,
@@ -29,6 +34,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:51:15.481546+00:00",
-  "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
+  "generatedAt": "2026-09-05T15:52:52.029945+00:00",
+  "notes": "Freqtrade Spot backtest of the frozen parity candidate on the canonical fixture window; research only."
 }
