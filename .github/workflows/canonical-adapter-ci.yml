@@ -34,7 +34,7 @@ jobs:
       - name: Compile canonical tools
         run: python -m py_compile scripts/canonical-execution-adapter.py scripts/canonical-parity-gate.py
       - name: Run canonical execution contract regression tests
-        run: python -m unittest test/test_canonical_execution_adapter.py -v
+        run: python test/test_canonical_execution_adapter.py -v
       - name: Assert research-only policy markers
         run: |
           grep -q 'RESEARCH_ONLY' scripts/canonical-execution-adapter.py
