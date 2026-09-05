@@ -7,6 +7,7 @@ on:
     paths:
       - "validation/fusion/frozen-parity-candidate.json"
       - "scripts/build_execution_parity_fixture.py"
+      - "scripts/materialize_full_execution_parity_fixture.py"
       - ".github/workflows/execution-parity-fixture.yml"
 
 permissions:
@@ -29,7 +30,24 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --disable-pip-version-check pandas numpy
-      - run: python scripts/build_execution_parity_fixture.py
+      - name: Build and materialize full canonical fixture
+        run: python scripts/materialize_full_execution_parity_fixture.py
+      - name: Assert full audit trail is internally consistent
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/fusion/execution-parity-fixture.json'
+          d=json.load(open(p))
+          assert d.get('status') == 'READY', d.get('status')
+          a=d.get('auditTrail') or {}
+          assert a.get('strictParityReady') is True, a
+          assert len(d.get('baseTrades') or []) == int(d['base']['trades'])
+          assert len(d.get('stressTrades') or []) == int(d['stress2x']['trades'])
+          assert len((d.get('signals') or {}).get('all') or []) == int(d['signals']['count'])
+          assert d.get('authorization') == 'RESEARCH_ONLY'
+          assert d.get('liveTrading') is False
+          print(json.dumps({'candidateFingerprint': d.get('candidateFingerprint'), 'datasetSha256': d['dataset']['sha256'], 'signals': d['signals']['count'], 'baseTrades': d['base']['trades'], 'stressTrades': d['stress2x']['trades'], 'strictParityReady': a['strictParityReady']}, indent=2))
+          PY
       - name: Commit fixture safely
         run: |
           cp validation/fusion/execution-parity-fixture.json /tmp/execution-parity-fixture.json
