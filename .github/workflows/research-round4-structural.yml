@@ -1,0 +1,59 @@
+name: Round 4 structural discovery
+
+on:
+  push:
+    branches:
+      - fix/unified-execution-parity
+    paths:
+      - 'scripts/research-round4-structural.mjs'
+      - '.github/workflows/research-round4-structural.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  discovery:
+    runs-on: ubuntu-24.04
+    env:
+      TARGET_REF: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check scripts/research-round4-structural.mjs
+      - name: Run Round 4 raw structural discovery
+        run: node scripts/research-round4-structural.mjs
+      - name: Assert research-only output
+        run: |
+          node - <<'NODE'
+          const x=require('./validation/round4-structural-discovery.json');
+          if(x.status!=='RESEARCH_ONLY') process.exit(1);
+          if(!['FREEZE_PASSING_DEFINITIONS_AND_PROCEED_OOS','REJECT_ROUND4_AND_OPEN_NEW_HYPOTHESES'].includes(x.verdict)) process.exit(1);
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round4-structural-discovery
+          path: validation/round4-structural-discovery.json
+          if-no-files-found: error
+      - name: Persist research snapshot
+        run: |
+          cp validation/round4-structural-discovery.json /tmp/result.json
+          for i in 1 2 3 4 5; do
+            git fetch origin "$TARGET_REF"
+            git reset --hard "origin/$TARGET_REF"
+            cp /tmp/result.json validation/round4-structural-discovery.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/round4-structural-discovery.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update Round 4 structural discovery"
+            git push origin "HEAD:$TARGET_REF" && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
