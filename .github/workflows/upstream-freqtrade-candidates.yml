@@ -1,0 +1,64 @@
+name: Upstream Freqtrade candidates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - '.github/workflows/upstream-freqtrade-candidates.yml'
+
+jobs:
+  adx-momentum:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated upstream strategy workspace
+        run: |
+          set -euo pipefail
+          mkdir -p freqtrade/user_data/external-strategies freqtrade/user_data/backtest_results
+          curl -fsSL https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/main/user_data/strategies/berlinguyinca/ADXMomentum.py \
+            -o freqtrade/user_data/external-strategies/ADXMomentum.py
+          python - <<'PY'
+          import json
+          p='freqtrade/user_data/config.json'
+          c=json.load(open(p))
+          c.pop('timeframe',None)
+          c['dry_run']=True
+          c['dry_run_wallet']=50
+          c['stake_amount']=10
+          c['max_open_trades']=1
+          c['exchange']['pair_whitelist']=['BTC/USDT','ETH/USDT','SOL/USDT']
+          c['exchange']['pair_blacklist']=[]
+          c['pairlists']=[{'method':'StaticPairList'}]
+          c['order_types']['stoploss_on_exchange']=False
+          json.dump(c,open('freqtrade/user_data/config-upstream.json','w'),indent=2)
+          PY
+      - name: Download Binance public 1h data
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable download-data \
+            --config /freqtrade/user_data/config-upstream.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 1h --days 500
+      - name: Backtest upstream ADXMomentum
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable backtesting \
+            --config /freqtrade/user_data/config-upstream.json \
+            --strategy-path /freqtrade/user_data/external-strategies \
+            --strategy ADXMomentum \
+            --timeframe 1h \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/upstream-adx.json
+      - name: Preserve source fingerprint and license metadata
+        run: |
+          sha256sum freqtrade/user_data/external-strategies/ADXMomentum.py > freqtrade/user_data/backtest_results/upstream-adx.sha256
+          printf '%s\n' 'source=https://github.com/freqtrade/freqtrade-strategies' 'license=GPL-3.0' 'vendored=false' > freqtrade/user_data/backtest_results/upstream-adx-source.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-freqtrade-adx
+          path: freqtrade/user_data/backtest_results/
