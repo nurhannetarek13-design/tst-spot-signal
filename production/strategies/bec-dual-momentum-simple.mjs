@@ -51,14 +51,18 @@ export const BEC_DUAL_MOMENTUM_SIMPLE = Object.freeze({
   parameters: Object.freeze({ momentumWindow: 60 }),
 });
 
-export function evaluateBecDualMomentum({ currentCloses=[], dailyCloses=[], momentumWindow=60 } = {}) {
+export function evaluateBecDualMomentum({ currentCloses=[], dailyCloses=[], momentumWindow=60, inPosition=false } = {}) {
   const current = snapshot(currentCloses, momentumWindow);
   const daily = snapshot(dailyCloses, momentumWindow);
   if (!current.ok) return { action: 'NO_SIGNAL', reason: `CURRENT_${current.reason}` };
   if (!daily.ok) return { action: 'NO_SIGNAL', reason: `DAILY_${daily.reason}` };
 
-  if (current.bullish && daily.bullish) {
+  const bothBullish = current.bullish && daily.bullish;
+  if (!inPosition && bothBullish) {
     return { action: 'BUY_SIGNAL', reason: 'DUAL_TIMEFRAME_BULLISH_MOMENTUM', current, daily };
   }
-  return { action: 'NO_SIGNAL', reason: 'DUAL_MOMENTUM_FILTER', current, daily };
+  if (inPosition && !bothBullish) {
+    return { action: 'SELL_SIGNAL', reason: 'DUAL_MOMENTUM_EXIT_FILTER', current, daily };
+  }
+  return { action: 'NO_SIGNAL', reason: bothBullish ? 'HOLD_BULLISH_MOMENTUM' : 'DUAL_MOMENTUM_FILTER', current, daily };
 }
