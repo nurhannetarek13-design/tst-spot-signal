@@ -55,7 +55,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM","LIQUIDITY_CRASH_EXHAUSTION","STOP_HUNT_REVERSAL"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -76,7 +76,7 @@ export default {
     }
     return json(await scan(env,true));
   },
-  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true); })()); },
+  async scheduled(event,env,ctx){ ctx.waitUntil((async()=>{ await monitorUnifiedDerivative(env); await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true); })()); },
 };
 
 export class SignalState {
@@ -95,6 +95,66 @@ export class SignalState {
   }
 }
 
+async function sendPeriodicScanDigest(env){
+  try{
+    const bucket=Math.floor(Date.now()/300000);
+    const digestKey=`telegram:scan-digest:${bucket}`;
+    if(await getState(env,digestKey)) return {ok:true,status:"DIGEST_ALREADY_SENT"};
+
+    const [tickers,books,info,btc1hRaw,btc4hRaw]=await Promise.all([
+      binance("/api/v3/ticker/24hr"),
+      binance("/api/v3/ticker/bookTicker"),
+      binance("/api/v3/exchangeInfo"),
+      binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=120"),
+      binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=120")
+    ]);
+    const regime=btcRegime(closed(btc1hRaw.map(candle)),closed(btc4hRaw.map(candle)));
+    const tradable=new Map(info.symbols.filter(s=>s.status==="TRADING"&&s.quoteAsset==="USDT"&&s.isSpotTradingAllowed).map(s=>[s.symbol,s]));
+    const bookMap=new Map(books.map(x=>[x.symbol,x]));
+    const summaries=tickers
+      .map(t=>summarize(t,tradable.get(t.symbol),bookMap.get(t.symbol)))
+      .filter(x=>x&&x.volume>=20_000_000&&x.spreadPct<=0.15)
+      .sort((a,b)=>opportunityRank(b)-opportunityRank(a));
+
+    const crashCandidates=summaries
+      .filter(x=>x.change<=-4)
+      .sort((a,b)=>a.change-b.change)
+      .slice(0,3);
+    const selected=[...crashCandidates,...summaries]
+      .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
+      .slice(0,8);
+    const bySymbol=new Map(selected.map(x=>[x.symbol,x]));
+    const analyses=[];
+    for(let i=0;i<selected.length;i+=2){
+      analyses.push(...await Promise.all(selected.slice(i,i+2).map(x=>analyze(x,tradable.get(x.symbol),regime))));
+    }
+    const ranked=analyses.slice().sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5);
+    const rows=ranked.map((x,i)=>{
+      const q=bySymbol.get(x.symbol)||{};
+      const pair=String(x.symbol||"").replace("USDT","/USDT");
+      const state=x.valid?"✅ READY":`⏳ ${x.reason||x.status||"WAIT"}`;
+      const price=Number(q.ask)>0?` | الآن ${fmt(q.ask)}`:"";
+      const strategy=x.strategy?` | ${x.strategy}`:"";
+      const levels=(Number(x.entry)>0&&Number(x.stop)>0)?`\n   Entry ${fmt(x.entry)} | SL ${fmt(x.stop)}${Number(x.target)>0?` | TP ${fmt(x.target)}`:""}${Number(x.netRR)>0?` | R:R ${x.netRR}`:""}`:"";
+      return `${i+1}) ${pair} | Score ${x.score||0}/100${price}${strategy}\n   ${state}${levels}`;
+    });
+    const msg=[
+      "🔎 BINANCE SPOT SCAN — كل 5 دقايق",
+      `🌦️ BTC regime: ${regime.state||"UNKNOWN"}`,
+      `📊 ${selected.length} عملات اتفحصت بعمق — مع أولوية للـ crash/reversal`,
+      "",
+      ...(rows.length?rows:["مفيش candidates صالحة للتحليل دلوقتي."]),
+      "",
+      "⚠️ دي قائمة مرشحين للمراجعة، مش أمر BUY. لو Setup يعدّي التأكيدات هيوصل تنبيه منفصل."
+    ].join("\n");
+    const sent=await telegram(env,msg);
+    if(sent) await putState(env,digestKey,{sentAt:Date.now()},600);
+    return {ok:sent,status:sent?"DIGEST_SENT":"TELEGRAM_NOT_CONFIGURED",ranked:ranked.map(x=>({symbol:x.symbol,strategy:x.strategy,score:x.score||0,valid:!!x.valid,status:x.reason||x.status||null}))};
+  }catch(error){
+    return {ok:false,status:"DIGEST_ERROR",error:String(error?.message||error)};
+  }
+}
+
 async function scan(env,sendAlert){
   try{
     const daily=await getDaily(env); const validators=await getFusionValidators(env,false);
@@ -107,7 +167,6 @@ async function scan(env,sendAlert){
       binance("/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=120"),binance("/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=120")
     ]);
     const regime=btcRegime(closed(btc1hRaw.map(candle)),closed(btc4hRaw.map(candle)));
-    if(regime.state==="RISK_OFF") return {ok:true,status:"MARKET_RISK_OFF",marketRegime:regime,liveTrading:false};
 
     const tradable=new Map(info.symbols.filter(s=>s.status==="TRADING"&&s.quoteAsset==="USDT"&&s.isSpotTradingAllowed).map(s=>[s.symbol,s]));
     const bookMap=new Map(books.map(x=>[x.symbol,x]));
@@ -118,7 +177,14 @@ async function scan(env,sendAlert){
     const newPool=summaries.filter(x=>x.isNewListing&&!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const allPool=summaries.slice().sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const focusPool=allPool.filter(x=>!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.focusMinVolume&&x.volume<=CFG.focusMaxVolume).slice(0,CFG.focusUniverseSize);
-    const selected=await rotateSelection(env,focusPool,newPool);
+    const crashPool=summaries
+      .filter(x=>x.volume>=CFG.big.minVolume&&x.change<=-4&&x.spreadPct<=CFG.small.maxSpreadPct)
+      .sort((a,b)=>a.change-b.change)
+      .slice(0,3);
+    const rotated=await rotateSelection(env,focusPool,newPool);
+    const selected=[...crashPool,...rotated]
+      .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
+      .slice(0,Math.max(CFG.scanPerRun,10));
     const analyses=[];
     for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime))));
     const valid=analyses.filter(x=>x.valid).sort((a,b)=>b.score-a.score||b.edge-a.edge);
@@ -136,7 +202,10 @@ async function scan(env,sendAlert){
       const pair=best.symbol.replace("USDT","/USDT");
       const vline=`🧪 VBT: ${validators.vectorbt?.status||"PENDING"} | FT: ${validators.freqtrade?.status||"PENDING"} | Jesse: ${validators.jesse?.status||"PENDING"} | Nautilus: ${validators.nautilus?.status||"PENDING"} | Forward: ${validators.forward?.status||"PENDING"}`;
       const dline=derivatives?.status==="OK"?`📡 Futures pressure: ${derivatives.score}/100 | OI ${round((derivatives.oiChange2h||0)*100,2)}% | Taker ${round(derivatives.takerBuySellRatio1h||0,2)}x`:`📡 Futures pressure: ${derivatives?.status||"UNAVAILABLE"}`;
-      await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,dline,vline,"","Local Cloudflare setup only. Microstructure + derivatives context are included; this is not the unified validated candidate.","Paper only — مفيش شراء حقيقي من Binance."].join("\n"));
+      const baseAsset=best.symbol.endsWith("USDT")?best.symbol.slice(0,-4):best.symbol;
+      const tradeUrl=`https://www.binance.com/en/trade/${encodeURIComponent(baseAsset)}_USDT?type=spot`;
+      const tradeButtons={inline_keyboard:[[{text:"🟢 افتح الزوج على Binance Spot",url:tradeUrl}]]};
+      await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,dline,vline,"","Local Cloudflare setup only. Microstructure + derivatives context are included; this is not the unified validated candidate.","📐 Net R:R: ${best.netRR||\"-\"}","🔗 Binance Spot: ${tradeUrl}","Paper only — مفيش شراء حقيقي من Binance."].join("\n"),tradeButtons);
     }
     return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false};
   }catch(error){ return {ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; }
@@ -215,8 +284,12 @@ async function analyze(summary,symbolInfo,marketRegime){
     const flowScore=(relVol>=candidate.minRelVol?5:0)+(taker>=candidate.minTaker?5:0);
     const microScore=microComposite>=0.25?6:microComposite>=0.10?3:0;
     const score=Math.min(100,baseScore+liquidityScore+flowScore+microScore);
-    const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:microComposite>=0.08;
-    const hard=marketRegime.state!=="RISK_OFF"&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=1.6&&score>=cfg.minScore;
+    const reversalStrategy=candidate.strategy==="STOP_HUNT_REVERSAL"||candidate.strategy==="LIQUIDITY_CRASH_EXHAUSTION";
+    const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:(reversalStrategy?microComposite>=0.12:microComposite>=0.08);
+    const regimeOk=marketRegime.state!=="RISK_OFF"||reversalStrategy;
+    const rrFloor=reversalStrategy?1.8:1.6;
+    const scoreFloor=reversalStrategy?Math.max(cfg.minScore,93):cfg.minScore;
+    const hard=regimeOk&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=rrFloor&&score>=scoreFloor;
     return {symbol:summary.symbol,lane,valid:hard,status:hard?"READY":"WAIT",strategy:candidate.strategy,regime:symbolRegime,setup:candidate.setup,signalBar:candidate.signalBar,score,entry,stop,target,quantity:qty,notional:round(notional,4),riskUSDT:round(feeRisk,4),netRR:round(rr,2),edge:round(relVol*taker*depthStats.bidAskRatio*Math.max(0.1,1+microComposite),3),metrics:{relVol:round(relVol,2),taker:round(taker,3),rsi:round(rsi,1),atrPct:round(atrPct,2),spreadPct:round(summary.spreadPct,4),depthRatio:round(depthStats.bidAskRatio,2),l1Imbalance:round(depthStats.l1Imbalance,3),l5Imbalance:round(depthStats.l5Imbalance,3),micropriceOffsetBps:round(depthStats.micropriceOffsetBps,3),microComposite:round(microComposite,3)}};
   }catch(error){ return {symbol:summary.symbol,lane,valid:false,status:"DATA_ERROR",error:String(error?.message||error)}; }
 }
@@ -228,8 +301,68 @@ function classifySymbolRegime(x){
   return "RANGE";
 }
 
+function detectStopHuntReversal(c,ctx){
+  if(c.length<30) return null;
+  const last=c.at(-1);
+  const prior=c.slice(-22,-2);
+  if(!prior.length) return null;
+  const priorLow=Math.min(...prior.map(x=>x.low));
+  const range=Math.max(last.high-last.low,1e-12);
+  const lowerWick=Math.max(0,Math.min(last.open,last.close)-last.low);
+  const swept=last.low<priorLow*0.997;
+  const reclaimed=last.close>priorLow&&last.close>last.open&&((last.close-last.low)/range)>=0.60;
+  const wickOk=(lowerWick/range)>=0.30;
+  const relVolOk=ctx.relVol>=Math.max(ctx.cfg.minRelVol,1.35);
+  const takerOk=ctx.taker>=Math.max(0.53,ctx.cfg.minTaker-0.02);
+  const rsiOk=ctx.rsi<=48;
+  if(!(swept&&reclaimed&&wickOk&&relVolOk&&takerOk&&rsiOk)) return null;
+  return {
+    strategy:"STOP_HUNT_REVERSAL",
+    setup:"20_BAR_LOW_SWEEP_RECLAIM",
+    signalBar:last.openTime,
+    stop:last.low*0.996,
+    rewardR:2.4,
+    minRelVol:Math.max(ctx.cfg.minRelVol,1.35),
+    minTaker:Math.max(0.53,ctx.cfg.minTaker-0.02),
+    score:82
+  };
+}
+
+function detectLiquidityCrashExhaustion(c,ctx){
+  if(c.length<40) return null;
+  const last=c.at(-1);
+  const recent=c.slice(-6);
+  const anchor=c.at(-7);
+  const priorRanges=c.slice(-30,-6).map(x=>x.high-x.low).filter(x=>x>0);
+  const normalRange=median(priorRanges);
+  const maxRecentRange=Math.max(...recent.map(x=>x.high-x.low));
+  const flushLow=Math.min(...recent.map(x=>x.low));
+  const drop6=anchor?.close>0?(last.close/anchor.close)-1:0;
+  const bounced=flushLow>0&&((last.close-flushLow)/flushLow)>=0.012;
+  const capitulation=normalRange>0&&maxRecentRange>=normalRange*1.8;
+  const bullishTurn=last.close>last.open;
+  const relVolOk=ctx.relVol>=Math.max(ctx.cfg.minRelVol,1.60);
+  const takerOk=ctx.taker>=Math.max(0.54,ctx.cfg.minTaker-0.01);
+  const rsiOk=ctx.rsi<=42;
+  if(!(drop6<=-0.045&&bounced&&capitulation&&bullishTurn&&relVolOk&&takerOk&&rsiOk)) return null;
+  return {
+    strategy:"LIQUIDITY_CRASH_EXHAUSTION",
+    setup:"6_BAR_CAPITULATION_EXHAUSTION",
+    signalBar:last.openTime,
+    stop:flushLow*0.994,
+    rewardR:2.8,
+    minRelVol:Math.max(ctx.cfg.minRelVol,1.60),
+    minTaker:Math.max(0.54,ctx.cfg.minTaker-0.01),
+    score:84
+  };
+}
+
 function chooseStrategy(regime,c,ctx){
   const last=c.at(-1),prev=c.at(-2);
+  const stopHunt=detectStopHuntReversal(c,ctx);
+  if(stopHunt) return stopHunt;
+  const crashExhaustion=detectLiquidityCrashExhaustion(c,ctx);
+  if(crashExhaustion) return crashExhaustion;
   if(regime==="NEW_LISTING"){
     const lookback=Math.min(12,c.length-2);
     const prior=c.slice(-(lookback+1),-1);
