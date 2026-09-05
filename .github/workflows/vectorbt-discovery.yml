@@ -5,17 +5,21 @@ on:
   schedule:
     - cron: "13 1 * * *"
   push:
-    branches: [main]
+    branches: [main, fix/unified-execution-parity]
     paths:
       - "research/vectorbt_discovery.py"
+      - "scripts/build_candidate_manifest.py"
       - ".github/workflows/vectorbt-discovery.yml"
 
 permissions:
   contents: write
 
 concurrency:
-  group: vectorbt-discovery
+  group: vectorbt-discovery-${{ github.ref_name }}
   cancel-in-progress: true
+
+env:
+  TARGET_REF: ${{ github.ref_name }}
 
 jobs:
   discover:
@@ -24,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -36,16 +41,21 @@ jobs:
       - name: Run multi-family discovery
         run: python research/vectorbt_discovery.py
 
-      - name: Commit discovery snapshot
+      - name: Commit discovery snapshot and rebuild candidate manifest
         run: |
           cp validation/fusion/vectorbt-latest.json /tmp/vectorbt-latest.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p validation/fusion
-          cp /tmp/vectorbt-latest.json validation/fusion/vectorbt-latest.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add validation/fusion/vectorbt-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "Update VectorBT discovery snapshot"
-          git push
+          for i in 1 2 3 4 5; do
+            git fetch origin "$TARGET_REF"
+            git reset --hard "origin/$TARGET_REF"
+            mkdir -p validation/fusion
+            cp /tmp/vectorbt-latest.json validation/fusion/vectorbt-latest.json
+            python scripts/build_candidate_manifest.py
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/fusion/vectorbt-latest.json validation/fusion/candidate-manifest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update VectorBT discovery and unified candidate"
+            git push origin "HEAD:$TARGET_REF" && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
