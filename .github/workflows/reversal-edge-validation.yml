@@ -8,7 +8,7 @@ on:
       - '.github/workflows/reversal-edge-validation.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -21,19 +21,26 @@ jobs:
           python-version: '3.12'
       - name: Run frozen Binance Spot reversal backtest
         run: python scripts/backtest_reversal_edges.py
-      - name: Save latest validation to repository
+      - name: Print validation summary
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add validation/reversal/latest.json validation/reversal/latest.md
-          if git diff --cached --quiet; then
-            echo 'No validation changes to commit.'
-          else
-            git commit -m 'Update reversal historical validation'
-            git push
-          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('validation/reversal/latest.json')
+          r = json.loads(p.read_text())
+          print(json.dumps({
+            'base_all': r['base']['all'],
+            'base_by_strategy': r['base']['byStrategy'],
+            'symbol_holdout': r['base']['symbolHoldout'],
+            'chronological_oos': r['base']['chronologicalOOS'],
+            'positive_folds': r['base']['positiveFolds'],
+            'stress_all': r['stress']['all'],
+            'gate': r['gate'],
+          }, indent=2))
+          PY
       - name: Upload validation artifact
         uses: actions/upload-artifact@v4
         with:
           name: reversal-validation
           path: validation/reversal/
+          retention-days: 14
