@@ -11,7 +11,9 @@
     "deploy": "wrangler deploy",
     "start:oracle": "node scripts/oracle-executor.mjs",
     "start:fusion": "node fusion/server.mjs",
-    "check:fusion": "node --check fusion/server.mjs"
+    "check:fusion": "node --check fusion/server.mjs",
+    "start:octobot-gateway": "node scripts/octobot-signal-gateway.mjs",
+    "check:octobot-gateway": "node --check scripts/octobot-signal-gateway.mjs"
   },
   "engines": {
     "node": ">=22"
