@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "authority": "CANONICAL_EXECUTION_ADAPTER",
+  "signalTiming": "CANDLE_CLOSE",
+  "entryTiming": "NEXT_CANDLE_OPEN",
+  "positionMode": "ONE_POSITION_PER_SYMBOL",
+  "cooldownBars": 0,
+  "sameBarTpSlPolicy": "STOP_FIRST",
+  "feeRate": 0.001,
+  "slippageRate": 0.0,
+  "priceToleranceBps": 1.0,
+  "timestampToleranceSeconds": 0,
+  "reasonMatch": "EXACT",
+  "fingerprintMatch": "EXACT",
+  "notes": [
+    "This file defines canonical execution semantics and must not be tuned to imitate any engine.",
+    "Engine-native protections, cooldowns and implicit execution behavior are excluded from canonical validation.",
+    "Any semantic change requires an explicit schema/spec revision rather than config hacking."
+  ]
+}
