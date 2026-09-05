@@ -66,7 +66,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/fusion/jesse-latest.json
             git diff --cached --quiet && exit 0
-            git commit -m "Update unified Jesse candidate validation [skip ci]"
+            git commit -m "Update unified Jesse candidate validation"
             git push origin HEAD:main && exit 0
             sleep $((i * 2))
           done
