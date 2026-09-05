@@ -12,9 +12,9 @@
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "dataset": {
-    "firstTs": "2025-09-05T16:00:00+00:00",
-    "lastTs": "2026-09-05T15:00:00+00:00",
-    "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
+    "firstTs": "2025-09-05T17:00:00+00:00",
+    "lastTs": "2026-09-05T16:00:00+00:00",
+    "sha256": "6b7e4ea0c8675f1963e896437602897b6f5ae754556b843e4f0b834ecc29cf9c"
   },
   "base": {
     "trades": 131,
@@ -1516,6 +1516,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T16:33:10.675793+00:00",
+  "generatedAt": "2026-09-05T16:38:53.875706+00:00",
   "notes": "Independent native Freqtrade Spot backtest of the frozen candidate. Canonical execution parity is validated separately by the canonical adapter and strict parity CI."
 }
