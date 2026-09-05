@@ -1,0 +1,31 @@
+name: External Canonical Candidate Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - "research/external_candidate_lab.py"
+      - ".github/workflows/external-canonical-lab.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  external-candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check pandas numpy
+      - name: Run external canonical candidate lab
+        run: python research/external_candidate_lab.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-canonical-candidate-lab
+          path: validation/external-candidates/**
