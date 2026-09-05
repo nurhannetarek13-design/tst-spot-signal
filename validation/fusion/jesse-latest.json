@@ -1,13 +1,32 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "355f478a8b669d789baf",
+  "symbol": "SAHARAUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
+  "base": {
+    "trades": 25,
+    "winRate": 0.44,
+    "profitFactor": 0.0,
+    "expectancyUSDT": 0.017281540519756416,
+    "netPnlUSDT": 0.4320385129939104,
+    "maxDrawdown": -3.214009737402468
+  },
+  "stress2x": {
+    "trades": 25,
+    "winRate": 0.44,
+    "profitFactor": 0.0,
+    "expectancyUSDT": 0.07307920863266387,
+    "netPnlUSDT": 1.8269802158165969,
+    "maxDrawdown": -4.245132226112103
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-04T07:59:49.872119+00:00",
-  "notes": "No unified candidate; Jesse install and market download skipped."
+  "generatedAt": "2026-09-05T07:12:14.572539+00:00",
+  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
 }
