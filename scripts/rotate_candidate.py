@@ -9,6 +9,9 @@ REJECTED=pathlib.Path("validation/fusion/rejected-candidates.json")
 FORWARD=pathlib.Path("validation/fusion/forward-latest.json")
 LEDGER=pathlib.Path("paper/public-edge-forward-ledger.json")
 
+HISTORICAL_VALIDATORS=("vectorbt","freqtrade","jesse","nautilus")
+
+
 def load(p,default):
     try:return json.loads(p.read_text())
     except:return default
@@ -22,10 +25,29 @@ if not fp or g.get("candidateFingerprint")!=fp or g.get("liveReady") is True:
     raise SystemExit(0)
 
 summary=g.get("validatorSummary") or {}
-hard_fail=[]
-for name in ["vectorbt","freqtrade","jesse","nautilus"]:
+
+# Never rotate while validators are still talking about different candidates.
+# This was the source of the fingerprint churn: the gate can run after any single
+# validator finishes, while the remaining validators are still on the previous
+# candidate. Freeze the candidate until all historical engines have reported the
+# exact same fingerprint.
+waiting=[]
+for name in HISTORICAL_VALIDATORS:
     v=summary.get(name) or {}
-    if v.get("candidateFingerprint")!=fp: continue
+    if v.get("candidateFingerprint")!=fp:
+        waiting.append(name)
+if waiting:
+    print(json.dumps({
+      "changed":False,
+      "reason":"WAITING_FOR_VALIDATOR_CONSENSUS",
+      "candidateFingerprint":fp,
+      "waitingFor":waiting,
+    }))
+    raise SystemExit(0)
+
+hard_fail=[]
+for name in HISTORICAL_VALIDATORS:
+    v=summary.get(name) or {}
     trades=int(v.get("trades") or 0)
     # Reject on actual stressed economic failure, not merely on insufficient sample size.
     indep=v.get("independentEnginePass")
