@@ -1,17 +1,13 @@
 name: Nautilus Execution Validator
-# validates the latest VectorBT-selected candidate
+# validates the frozen parity candidate on the exact canonical dataset window
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Public Edge Lab"]
-    types: [completed]
-  schedule:
-    - cron: "50 3 * * *"
   push:
-    branches: [main]
+    branches: [fix/unified-execution-parity]
     paths:
-      - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/frozen-parity-candidate.json"
+      - "validation/fusion/execution-parity-fixture.json"
       - "research/nautilus_validator.py"
       - ".github/workflows/nautilus-validator.yml"
 
@@ -19,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: nautilus-validator
+  group: nautilus-parity-validator
   cancel-in-progress: true
 
 jobs:
@@ -29,46 +25,86 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: fix/unified-execution-parity
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Read candidate presence
+      - name: Read frozen candidate and canonical window
         run: |
           python - <<'PY'
           import json, pathlib, os, datetime
-          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
+          fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
           has=bool(m.get("candidateFingerprint"))
-          with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
           if not has:
-              out={"engine":"NAUTILUS_TRADER","strategyId":"TST_CANDIDATE_NAUTILUS_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; Nautilus install and execution validation skipped."}
+              out={"engine":"NAUTILUS_TRADER","strategyId":"TST_CANDIDATE_NAUTILUS_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat()}
               pathlib.Path("validation/fusion/nautilus-latest.json").write_text(json.dumps(out,indent=2))
+          else:
+              start=int(datetime.datetime.fromisoformat(fx["dataset"]["firstTs"].replace("Z","+00:00")).timestamp()*1000)
+              last=int(datetime.datetime.fromisoformat(fx["dataset"]["lastTs"].replace("Z","+00:00")).timestamp()*1000)
+              step=3600000 if m["timeframe"]=="1h" else 900000
+              end=last+step-1
+              with open(os.environ["GITHUB_ENV"],"a") as f:
+                  f.write(f"PARITY_START_MS={start}\n")
+                  f.write(f"PARITY_END_MS={end}\n")
           PY
 
       - name: Install NautilusTrader
         if: env.HAS_CANDIDATE == 'true'
         run: pip install --disable-pip-version-check nautilus_trader pandas numpy
 
+      - name: Patch validator runtime to frozen manifest and exact window
+        if: env.HAS_CANDIDATE == 'true'
+        run: |
+          python - <<'PY'
+          import pathlib
+          p=pathlib.Path("research/nautilus_validator.py")
+          s=p.read_text()
+          s=s.replace('validation/fusion/candidate-manifest.json','validation/fusion/frozen-parity-candidate.json')
+          old='end=int(time.time()*1000);start=end-DAYS*86400000'
+          new='start=int(__import__("os").environ["PARITY_START_MS"]);end=int(__import__("os").environ["PARITY_END_MS"])'
+          if old not in s:
+              raise SystemExit("expected rolling-window expression not found")
+          s=s.replace(old,new)
+          p.write_text(s)
+          PY
+
       - name: Run event-driven execution validation
         if: env.HAS_CANDIDATE == 'true'
         run: python research/nautilus_validator.py
 
-      - name: Commit Nautilus snapshot safely
+      - name: Attach canonical dataset identity to report
+        if: env.HAS_CANDIDATE == 'true'
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          rp=pathlib.Path("validation/fusion/nautilus-latest.json")
+          fx=json.loads(pathlib.Path("validation/fusion/execution-parity-fixture.json").read_text())
+          r=json.loads(rp.read_text())
+          r["dataset"]={"firstTs":fx["dataset"]["firstTs"],"lastTs":fx["dataset"]["lastTs"],"sha256":fx["dataset"]["sha256"]}
+          r["notes"]="NautilusTrader parity validation on frozen candidate and exact canonical dataset window; research only."
+          rp.write_text(json.dumps(r,indent=2))
+          PY
+
+      - name: Commit parity Nautilus snapshot safely
         run: |
           cp validation/fusion/nautilus-latest.json /tmp/nautilus-latest.json
           for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p "$(dirname validation/fusion/nautilus-latest.json)"
+            git fetch origin fix/unified-execution-parity
+            git reset --hard origin/fix/unified-execution-parity
+            mkdir -p validation/fusion
             cp /tmp/nautilus-latest.json validation/fusion/nautilus-latest.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/fusion/nautilus-latest.json
             git diff --cached --quiet && exit 0
-            git commit -m "Update unified Nautilus candidate validation"
-            git push origin HEAD:main && exit 0
+            git commit -m "Update parity Nautilus validation"
+            git push origin HEAD:fix/unified-execution-parity && exit 0
             sleep $((i * 2))
           done
           exit 1
