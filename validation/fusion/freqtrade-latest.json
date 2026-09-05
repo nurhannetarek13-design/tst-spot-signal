@@ -15,25 +15,25 @@
     "sha256": "6ec4335950f1afcdd6908cd7152ea16b8041ed7d32d0bff34ad65ff55b7c4989"
   },
   "base": {
-    "trades": 185,
-    "wins": 62,
-    "winRate": 0.33513513513513515,
-    "profitFactor": 0.8548375610345446,
-    "expectancyUSDT": -0.0160094867027027,
-    "netPnlUSDT": -2.96175504,
+    "trades": 178,
+    "wins": 60,
+    "winRate": 0.33707865168539325,
+    "profitFactor": 0.8521520339468777,
+    "expectancyUSDT": -0.016484196685393256,
+    "netPnlUSDT": -2.9341870099999996,
     "maxDrawdownUSDT": 4.271675680000002
   },
   "stress2x": {
-    "trades": 188,
-    "wins": 58,
-    "winRate": 0.30851063829787234,
-    "profitFactor": 0.7647830598507431,
-    "expectancyUSDT": -0.028815360478723403,
-    "netPnlUSDT": -5.41728777,
-    "maxDrawdownUSDT": 5.9770910000000015
+    "trades": 181,
+    "wins": 56,
+    "winRate": 0.30939226519337015,
+    "profitFactor": 0.7636723088827561,
+    "expectancyUSDT": -0.02923740044198895,
+    "netPnlUSDT": -5.29196948,
+    "maxDrawdownUSDT": 5.965375720000001
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:52:52.029945+00:00",
+  "generatedAt": "2026-09-05T16:03:24.158043+00:00",
   "notes": "Freqtrade Spot backtest of the frozen parity candidate on the canonical fixture window; research only."
 }
