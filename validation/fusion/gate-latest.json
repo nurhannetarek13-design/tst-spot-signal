@@ -1,24 +1,17 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "5a8be2536ed727aaa38e",
-  "symbol": "SAHARAUSDT",
-  "family": "TS_MOMENTUM",
+  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
+  "candidateFingerprint": "cba53276448a08d4eebc",
+  "symbol": "PROMUSDT",
+  "family": "MEAN_REVERSION",
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "freqtrade:BASE_PF_LT_1_15",
-    "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
-    "freqtrade:STRESS_PF_LT_1_0",
-    "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
-    "jesse:BASE_PF_LT_1_15",
-    "jesse:STRESS_PF_LT_1_0",
-    "jesse:STRESS_EXPECTANCY_NONPOSITIVE",
-    "nautilus:BASE_PF_LT_1_15",
-    "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
-    "nautilus:STRESS_PF_LT_1_0",
-    "nautilus:STRESS_EXPECTANCY_NONPOSITIVE",
+    "vectorbt:CANDIDATE_MISMATCH",
+    "freqtrade:CANDIDATE_MISMATCH",
+    "jesse:CANDIDATE_MISMATCH",
+    "nautilus:CANDIDATE_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -44,10 +37,14 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
+    "vectorbt:CANDIDATE_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
+    "freqtrade:CANDIDATE_MISMATCH",
     "freqtrade:FAIL",
+    "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
+    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
@@ -98,9 +95,9 @@
       "stressExpectancyUSDT": -0.027029853333333343
     },
     "forward": {
-      "status": "COLLECTING",
+      "status": "RESET_FOR_NEW_CANDIDATE",
       "pass": false,
-      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateFingerprint": "cba53276448a08d4eebc",
       "trades": 0,
       "independentEnginePass": null,
       "baseProfitFactor": null,
@@ -109,6 +106,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-05T15:22:07.896300+00:00",
+  "generatedAt": "2026-09-05T15:22:18.297533+00:00",
   "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
