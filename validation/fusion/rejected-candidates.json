@@ -82,6 +82,16 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-05T07:02:14.362134+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "82bc01511e155b64e664",
+      "symbol": "SAHARAUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "hardFailValidators": [
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-05T07:07:59.883053+00:00"
     }
   ],
   "ttlDays": 7,
