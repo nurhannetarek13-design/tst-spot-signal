@@ -2,15 +2,11 @@ name: Unified Candidate VectorBT Validator
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Public Edge Lab"]
-    types: [completed]
-  schedule:
-    - cron: "35 2 * * *"
   push:
-    branches: [main]
+    branches: [fix/unified-execution-parity]
     paths:
-      - "validation/fusion/candidate-manifest.json"
+      - "validation/fusion/frozen-parity-candidate.json"
+      - "validation/fusion/execution-parity-fixture.json"
       - "research/candidate_vectorbt_validator.py"
       - ".github/workflows/candidate-vectorbt-validator.yml"
 
@@ -18,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: unified-candidate-vectorbt
+  group: unified-candidate-vectorbt-parity
   cancel-in-progress: true
 
 jobs:
@@ -27,38 +23,42 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
+        with:
+          ref: fix/unified-execution-parity
+          fetch-depth: 0
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - name: Read candidate presence
+        with:
+          python-version: "3.12"
+      - name: Read frozen parity candidate presence
         run: |
           python - <<'PY'
           import json, pathlib, os, datetime
-          m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
+          m=json.loads(pathlib.Path("validation/fusion/frozen-parity-candidate.json").read_text())
           has=bool(m.get("candidateFingerprint"))
-          with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
           if not has:
-              out={"engine":"VECTORBT_CANDIDATE","strategyId":"TST_CANDIDATE_VECTORBT_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; heavy VectorBT validation skipped."}
+              out={"engine":"VECTORBT_CANDIDATE","strategyId":"TST_CANDIDATE_VECTORBT_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat()}
               pathlib.Path("validation/fusion/vectorbt-candidate-latest.json").write_text(json.dumps(out,indent=2))
           PY
       - if: env.HAS_CANDIDATE == 'true'
-        run: pip install --disable-pip-version-check 'plotly<7' vectorbt pandas numpy
+        run: pip install --disable-pip-version-check pandas numpy
       - if: env.HAS_CANDIDATE == 'true'
         run: python research/candidate_vectorbt_validator.py
-      - name: Commit VectorBT snapshot safely
+      - name: Commit VectorBT parity snapshot safely
         run: |
           cp validation/fusion/vectorbt-candidate-latest.json /tmp/vectorbt-candidate-latest.json
           for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p "$(dirname validation/fusion/vectorbt-candidate-latest.json)"
+            git fetch origin fix/unified-execution-parity
+            git reset --hard origin/fix/unified-execution-parity
+            mkdir -p validation/fusion
             cp /tmp/vectorbt-candidate-latest.json validation/fusion/vectorbt-candidate-latest.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add validation/fusion/vectorbt-candidate-latest.json
             git diff --cached --quiet && exit 0
-            git commit -m "Update unified VectorBT candidate validation"
-            git push origin HEAD:main && exit 0
+            git commit -m "Update parity VectorBT validation"
+            git push origin HEAD:fix/unified-execution-parity && exit 0
             sleep $((i * 2))
           done
           exit 1
