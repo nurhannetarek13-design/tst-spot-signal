@@ -12,8 +12,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: unified-candidate-rotation
+  group: unified-candidate-rotation-${{ github.ref_name }}
   cancel-in-progress: true
+
+env:
+  TARGET_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
 
 jobs:
   rotate:
@@ -22,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -39,14 +43,15 @@ jobs:
           print(row)
           PY
       - name: Persist rotation safely
+        if: steps.rotate.outputs.changed == 'true'
         run: |
           cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.json
           cp validation/fusion/rejected-candidates.json /tmp/rejected-candidates.json
           cp validation/fusion/forward-latest.json /tmp/forward-latest.json
           cp paper/public-edge-forward-ledger.json /tmp/public-edge-forward-ledger.json
           for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin "$TARGET_REF"
+            git reset --hard "origin/$TARGET_REF"
             mkdir -p validation/fusion
             cp /tmp/candidate-manifest.json validation/fusion/candidate-manifest.json
             cp /tmp/rejected-candidates.json validation/fusion/rejected-candidates.json
@@ -58,7 +63,7 @@ jobs:
             git add validation/fusion/candidate-manifest.json validation/fusion/rejected-candidates.json validation/fusion/forward-latest.json paper/public-edge-forward-ledger.json
             git diff --cached --quiet && exit 0
             git commit -m "Rotate rejected unified candidate"
-            git push origin HEAD:main && exit 0
+            git push origin "HEAD:$TARGET_REF" && exit 0
             sleep $((i * 2))
           done
           exit 1
@@ -69,7 +74,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for wf in             candidate-vectorbt-validator.yml             fusion-freqtrade-validator.yml             fusion-jesse-validator.yml             nautilus-validator.yml             forward-paper-public-edges.yml; do
-            gh workflow run "$wf" --ref main
+          for wf in \
+            candidate-vectorbt-validator.yml \
+            fusion-freqtrade-validator.yml \
+            fusion-jesse-validator.yml \
+            nautilus-validator.yml \
+            forward-paper-public-edges.yml; do
+            gh workflow run "$wf" --ref "$TARGET_REF"
           done
-          echo "Dispatched all unified validators for: ${{ steps.rotate.outputs.next_candidate }}"
+          echo "Dispatched all unified validators for: ${{ steps.rotate.outputs.next_candidate }} on $TARGET_REF"
