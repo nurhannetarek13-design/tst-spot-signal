@@ -21,6 +21,8 @@ EXPECTED={
   "nautilus":"TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
   "forward":"TST_UNIFIED_FORWARD_V1",
 }
+HISTORICAL=("vectorbt","freqtrade","jesse","nautilus")
+
 
 def load(p):
     try:return json.loads(p.read_text())
@@ -54,6 +56,49 @@ for name,p in FILES.items():
         n=int((row.get("base") or {}).get("trades") or 0)
         if n<100:reasons.append(f"{name}:LT_100_TRADES")
 
+# Full production-review gate remains intentionally strict and unchanged in spirit.
+full_ready=len(reasons)==0
+
+# Separate staged-live review gate. This does NOT enable trading. It exists so a
+# small, capped live trial does not have to wait for 50 forward trades, while still
+# requiring independent historical agreement on the exact same candidate.
+small_reasons=[]
+if not fp:
+    small_reasons.append("CANDIDATE:MISSING")
+
+independent_pass_count=0
+for name in HISTORICAL:
+    v=validators.get(name) or {}
+    if v.get("strategyId")!=EXPECTED[name]:
+        small_reasons.append(f"{name}:STRATEGY_ID_MISMATCH")
+    if v.get("candidateFingerprint")!=fp:
+        small_reasons.append(f"{name}:CANDIDATE_MISMATCH")
+        continue
+    base=v.get("base") or {}
+    stress=v.get("stress2x") or {}
+    n=int(base.get("trades") or 0)
+    bpf=float(base.get("profitFactor") or 0)
+    be=float(base.get("expectancyUSDT") or 0)
+    spf=float(stress.get("profitFactor") or 0)
+    se=float(stress.get("expectancyUSDT") or 0)
+    if n<30:
+        small_reasons.append(f"{name}:LT_30_TRADES")
+    if bpf<1.15:
+        small_reasons.append(f"{name}:BASE_PF_LT_1_15")
+    if be<=0:
+        small_reasons.append(f"{name}:BASE_EXPECTANCY_NONPOSITIVE")
+    if spf<1.0:
+        small_reasons.append(f"{name}:STRESS_PF_LT_1_0")
+    if se<=0:
+        small_reasons.append(f"{name}:STRESS_EXPECTANCY_NONPOSITIVE")
+    if v.get("independentEnginePass") is True:
+        independent_pass_count+=1
+
+if independent_pass_count<3:
+    small_reasons.append("HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES")
+
+small_ready=len(small_reasons)==0
+
 report={
   "engine":"UNIFIED_FUSION_GATE",
   "strategyId":"TST_UNIFIED_CANDIDATE_V1",
@@ -61,7 +106,24 @@ report={
   "candidateFingerprint":fp,
   "symbol":m.get("symbol"),
   "family":m.get("family"),
-  "liveReady":len(reasons)==0,
+  "liveReady":full_ready,
+  "smallLiveReviewReady":small_ready,
+  "smallLiveReviewReasons":list(dict.fromkeys(small_reasons)),
+  "smallLiveReviewPolicy":{
+      "purpose":"Manual review for a tiny capped live trial only; never auto-enables execution.",
+      "historicalValidatorsRequired":list(HISTORICAL),
+      "sameCandidateRequired":True,
+      "minTradesPerEngine":30,
+      "minIndependentEnginePasses":3,
+      "baseProfitFactorMin":1.15,
+      "baseExpectancyPositive":True,
+      "stressProfitFactorMin":1.0,
+      "stressExpectancyPositive":True,
+      "forwardTradesRequired":0,
+      "suggestedMaxPositionUSDT":7,
+      "suggestedMaxConcurrentPositions":1,
+      "suggestedDailyLossCapUSDT":0.5
+  },
   "liveTrading":False,
   "executorAutoEnable":False,
   "reasons":list(dict.fromkeys(reasons)),
@@ -72,12 +134,14 @@ report={
           "candidateFingerprint":v.get("candidateFingerprint"),
           "trades":int(((v.get("metrics") if k=="forward" else v.get("base")) or {}).get("trades") or 0),
           "independentEnginePass":v.get("independentEnginePass"),
+          "baseProfitFactor":float(((v.get("base") or {}).get("profitFactor") or 0)) if k!="forward" else None,
+          "baseExpectancyUSDT":float(((v.get("base") or {}).get("expectancyUSDT") or 0)) if k!="forward" else None,
           "stressProfitFactor":float(((v.get("stress2x") or {}).get("profitFactor") or 0)) if k!="forward" else None,
           "stressExpectancyUSDT":float(((v.get("stress2x") or {}).get("expectancyUSDT") or 0)) if k!="forward" else None,
       } for k,v in validators.items()
   },
   "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
-  "note":"Live can only be considered after this gate is ready, and still requires explicit user enable. This file never enables trading."
+  "note":"Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
 OUT.parent.mkdir(parents=True,exist_ok=True)
 OUT.write_text(json.dumps(report,indent=2))
