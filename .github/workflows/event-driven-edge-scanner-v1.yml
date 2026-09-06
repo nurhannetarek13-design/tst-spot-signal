@@ -1,0 +1,51 @@
+name: Event Driven Edge Scanner V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/event_driven_edge_scanner_v1.py"
+      - ".github/workflows/event-driven-edge-scanner-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: event-driven-edge-scanner-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/event_driven_edge_scanner_v1.py
+      - name: Run Round 5 event-driven raw-edge discovery
+        run: PYTHONPATH=. python research/event_driven_edge_scanner_v1.py
+      - name: Assert research-only output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/event-driven-edge-scanner-v1-latest.json'
+          x=json.load(open(p))
+          assert x['engine']=='EVENT_DRIVEN_EDGE_SCANNER_V1'
+          assert x['round']==5
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['multipleTesting']['method']=='Benjamini-Hochberg'
+          assert len(x['families'])==4
+          print('event-driven scanner research-only assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: event-driven-edge-scanner-v1-report
+          path: validation/edges/event-driven-edge-scanner-v1-latest.json
+          retention-days: 14
