@@ -3,10 +3,11 @@ name: Round 3 Canonical Binance Research
 on:
   workflow_dispatch:
   push:
-    branches: [feature/canonical-signal-engine-v1]
+    branches: [main]
     paths:
       - "research/round3_binance_canonical.py"
       - "research/discovery_pipeline.py"
+      - "research/candidate_builder.py"
       - ".github/workflows/round3-canonical-binance.yml"
 
 permissions:
@@ -28,7 +29,7 @@ jobs:
       - name: Install research dependencies
         run: pip install numpy pandas
       - name: Syntax check canonical Round 3
-        run: python -m py_compile research/round3_binance_canonical.py research/discovery_pipeline.py
+        run: python -m py_compile research/round3_binance_canonical.py research/discovery_pipeline.py research/candidate_builder.py
       - name: Run frozen Round 3 research
         run: python research/round3_binance_canonical.py
       - name: Assert research-only output
