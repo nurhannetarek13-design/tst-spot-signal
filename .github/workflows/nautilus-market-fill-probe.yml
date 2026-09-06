@@ -1,0 +1,38 @@
+name: Nautilus Market Fill Probe
+on:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - 'research/nautilus_market_fill_probe.py'
+      - '.github/workflows/nautilus-market-fill-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install NautilusTrader 2.x
+        run: python -m pip install --upgrade pip && python -m pip install --pre 'nautilus_trader>=2.0.0rc0'
+      - name: Run market fill probe
+        run: python research/nautilus_market_fill_probe.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('validation/engines/nautilus-market-fill-probe.json')
+          r=json.loads(p.read_text())
+          assert r['liveTrading'] is False
+          assert r['authorization'] == 'RESEARCH_ONLY'
+          assert r['passed'] is True
+          print(json.dumps(r, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nautilus-market-fill-probe
+          path: validation/engines/nautilus-market-fill-probe.json
+          if-no-files-found: error
