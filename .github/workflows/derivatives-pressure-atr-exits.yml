@@ -1,0 +1,38 @@
+name: Derivatives Pressure ATR Exit Design
+
+on:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - 'research/validate_derivatives_pressure_atr_exits.py'
+      - '.github/workflows/derivatives-pressure-atr-exits.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run ATR exit design validation
+        run: python research/validate_derivatives_pressure_atr_exits.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('validation/edges/derivatives-pressure-atr-exits.json')
+          r=json.loads(p.read_text())
+          print(json.dumps(r,indent=2))
+          if r.get('liveTrading') is not False: raise SystemExit('liveTrading must remain false')
+          if r.get('authorization') != 'RESEARCH_ONLY': raise SystemExit('authorization must remain RESEARCH_ONLY')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: derivatives-pressure-atr-exits
+          path: validation/edges/derivatives-pressure-atr-exits.json
+          if-no-files-found: error
