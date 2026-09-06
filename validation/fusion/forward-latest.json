@@ -1,10 +1,13 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "RESET_FOR_NEW_CANDIDATE",
+  "status": "COLLECTING",
   "pass": false,
   "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
   "candidateFingerprint": "4da78ca29267ffd54aa9",
+  "symbol": "TUTUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-06T07:23:35.683580+00:00",
-  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
+  "generatedAt": "2026-09-06T10:50:57.943Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
