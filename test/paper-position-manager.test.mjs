@@ -14,7 +14,7 @@ test('closes paper position at target and updates pnl', async () => {
   assert.equal(out.closed[0].reason, 'TARGET');
   assert.equal(out.state.openPositions, 0);
   assert.equal(out.state.positions.ABCUSDT, undefined);
-  assert.equal(out.state.realizedPnlTodayUsdt, 2.4);
+  assert.ok(Math.abs(out.state.realizedPnlTodayUsdt - 2.4) < 1e-12);
 });
 
 test('leaves position open when no exit condition is hit', async () => {
