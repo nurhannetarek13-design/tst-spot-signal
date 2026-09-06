@@ -30,7 +30,7 @@ jobs:
       - name: Syntax check canonical Round 3
         run: python -m py_compile research/round3_binance_canonical.py research/discovery_pipeline.py
       - name: Run frozen Round 3 research
-        run: python research/round3_binance_canonical.py
+        run: PYTHONPATH=. python research/round3_binance_canonical.py
       - name: Assert research-only output
         run: |
           python - <<'PY'
