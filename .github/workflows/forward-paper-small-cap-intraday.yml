@@ -1,17 +1,18 @@
-name: Small-cap semi-live forward tracker
+name: Small-cap unified forward tracker
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'scripts/forward-paper-small-cap-intraday.mjs'
+      - 'scripts/forward-paper-small-cap-unified.mjs'
       - 'src/strategies/small-cap-intraday.mjs'
+      - 'src/execution/**'
       - '.github/workflows/forward-paper-small-cap-intraday.yml'
   schedule:
     - cron: '*/15 * * * *'
 permissions:
   contents: write
 concurrency:
-  group: small-cap-semi-live-forward
+  group: small-cap-unified-forward
   cancel-in-progress: false
 jobs:
   track:
@@ -28,19 +29,20 @@ jobs:
         with:
           node-version: '22'
       - run: node --check src/strategies/small-cap-intraday.mjs
-      - run: node --check scripts/forward-paper-small-cap-intraday.mjs
-      - run: node scripts/forward-paper-small-cap-intraday.mjs
-      - name: Persist small-cap paper ledger
+      - run: node --check scripts/forward-paper-small-cap-unified.mjs
+      - run: npm test
+      - run: node scripts/forward-paper-small-cap-unified.mjs
+      - name: Persist unified paper state
         run: |
-          if ! git diff --quiet -- paper/small-cap-intraday-ledger.json; then
+          if [ -f paper/unified-small-cap-execution-state.json ] && ! git diff --quiet -- paper/unified-small-cap-execution-state.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add paper/small-cap-intraday-ledger.json
-            git commit -m "chore: update small-cap semi-live ledger [skip ci]"
+            git add paper/unified-small-cap-execution-state.json
+            git commit -m "chore: update unified small-cap paper state [skip ci]"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: forward-paper-small-cap-intraday
-          path: artifacts/forward-paper-small-cap-intraday.json
+          name: forward-paper-small-cap-unified
+          path: artifacts/forward-paper-small-cap-unified.json
