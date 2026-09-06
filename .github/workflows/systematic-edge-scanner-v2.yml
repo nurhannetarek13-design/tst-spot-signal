@@ -1,0 +1,48 @@
+name: Systematic Edge Scanner V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/systematic_edge_scanner_v2.py"
+      - ".github/workflows/systematic-edge-scanner-v2.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: systematic-edge-scanner-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/systematic_edge_scanner_v2.py
+      - name: Run systematic edge discovery v2
+        run: PYTHONPATH=. python research/systematic_edge_scanner_v2.py
+      - name: Assert research-only output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/systematic-edge-scanner-v2-latest.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['multipleTesting']['method']=='Benjamini-Hochberg'
+          print('systematic scanner v2 research-only assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: systematic-edge-scanner-v2-report
+          path: validation/edges/systematic-edge-scanner-v2-latest.json
+          retention-days: 14
