@@ -7,6 +7,7 @@ COPY research/coinalyze_liquidation_history.py /app/coinalyze_liquidation_histor
 COPY research/coinalyze_daily_regime_discovery.py /app/coinalyze_daily_regime_discovery.py
 COPY research/binance_vision_extreme_shock_validation.py /app/binance_vision_extreme_shock_validation.py
 COPY research/extreme_shock_frozen_oos.py /app/extreme_shock_frozen_oos.py
+COPY research/extreme_shock_frozen_multiyear.py /app/extreme_shock_frozen_multiyear.py
 COPY deploy/liquidation-collector-entrypoint.sh /app/liquidation-collector-entrypoint.sh
 RUN chmod +x /app/liquidation-collector-entrypoint.sh
 ENV LIQ_DATA_DIR=/data/forward-liquidations
@@ -14,4 +15,5 @@ ENV COINALYZE_DATA_DIR=/data/coinalyze-liquidations
 ENV COINALYZE_DISCOVERY_DIR=/data/coinalyze-regime-discovery
 ENV BINANCE_VISION_SHOCK_DIR=/data/binance-vision-extreme-shocks
 ENV FROZEN_OOS_DIR=/data/frozen-extreme-shock-oos
+ENV FROZEN_MULTIYEAR_DIR=/data/frozen-extreme-shock-multiyear
 CMD ["/app/liquidation-collector-entrypoint.sh"]
