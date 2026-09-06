@@ -1,4 +1,5 @@
 name: External Freqtrade strategy pack
+# Verification trigger: rerun official external pack after small-cap rejection.
 on:
   workflow_dispatch:
   push:
