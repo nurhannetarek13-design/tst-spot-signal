@@ -1,0 +1,124 @@
+name: External Freqtrade Shortlist OOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/external-freqtrade-shortlist-oos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FT_IMAGE: freqtradeorg/freqtrade:stable
+      OOS_TIMERANGE: 20250907-20260509
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull Freqtrade and official strategies
+        run: |
+          docker pull "$FT_IMAGE"
+          git clone --depth=1 https://github.com/freqtrade/freqtrade-strategies.git external/official
+          mkdir -p oos/user_data/strategies oos/user_data/results
+          python - <<'PY'
+          import pathlib, shutil
+          src=pathlib.Path('external/official')
+          out=pathlib.Path('oos/user_data/strategies')
+          for p in src.rglob('*.py'):
+              d=out/p.name
+              n=1
+              while d.exists():
+                  d=out/f'{p.stem}_{n}.py'; n+=1
+              shutil.copy2(p,d)
+          PY
+
+      - name: Create research config
+        run: |
+          cat > oos/user_data/config.json <<'JSON'
+          {
+            "$schema":"https://schema.freqtrade.io/schema.json",
+            "bot_name":"External Shortlist OOS",
+            "dry_run":true,
+            "dry_run_wallet":1000,
+            "trading_mode":"spot",
+            "margin_mode":"",
+            "max_open_trades":3,
+            "stake_currency":"USDT",
+            "stake_amount":100,
+            "tradable_balance_ratio":0.99,
+            "stoploss":-0.99,
+            "exchange":{
+              "name":"binance","key":"","secret":"",
+              "ccxt_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "ccxt_async_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT"],"pair_blacklist":[]
+            },
+            "pairlists":[{"method":"StaticPairList"}],
+            "entry_pricing":{"price_side":"same","use_order_book":false},
+            "exit_pricing":{"price_side":"same","use_order_book":false},
+            "order_types":{"entry":"limit","exit":"limit","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false}
+          }
+          JSON
+
+      - name: Download 365d Binance Spot data
+        run: |
+          docker run --rm \
+            -v "$PWD/oos/user_data:/freqtrade/user_data" \
+            "$FT_IMAGE" download-data \
+            --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d \
+            --days 365
+          sudo chown -R "$(id -u):$(id -g)" oos/user_data
+          sudo chmod -R a+rwX oos/user_data
+
+      - name: Frozen shortlist OOS backtests
+        run: |
+          python - <<'PY'
+          import os, re, json, pathlib, subprocess
+          names=['MACDStrategy','AverageStrategy','Strategy001_custom_exit','SwingHighToSky']
+          root=pathlib.Path('oos/user_data/results'); root.mkdir(parents=True,exist_ok=True)
+          mount=f"{os.getcwd()}/oos/user_data:/freqtrade/user_data"
+          base=['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
+          out=[]
+          for name in names:
+              cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee','0.001','--timerange',os.environ['OOS_TIMERANGE']]
+              r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)
+              txt=r.stdout
+              (root/f'{name}.log').write_text(txt[-120000:])
+              def grab(label, pat):
+                  m=re.search(re.escape(label)+r'\s*│\s*'+pat,txt)
+                  return m.group(1) if m else None
+              trades=grab('Total/Daily Avg Trades',r'(\d+)')
+              profit=grab('Total profit %',r'([-\d.]+)%')
+              pf=grab('Profit factor',r'([-\d.]+)')
+              sharpe=grab('Sharpe (closed trades)',r'([-\d.]+)')
+              ddm=re.search(r'Absolute drawdown\s*│\s*[-\d.]+\s+\w+\s+\(([-\d.]+)%\)',txt)
+              summ=re.search(rf'│\s*{re.escape(name)}\s*│\s*(\d+)\s*│.*?│\s*(\d+)\s+(\d+)\s+(\d+)\s+([-\d.]+)\s*│',txt,re.S)
+              row={'strategy':name,'returncode':r.returncode,'status':'ok' if trades and profit and pf and ddm else 'failed'}
+              if row['status']=='ok':
+                  row.update(trades=int(trades),netProfitPct=float(profit),profitFactor=float(pf),maxDrawdownPct=float(ddm.group(1)),winRatePct=float(summ.group(5)) if summ else None,sharpe=float(sharpe) if sharpe else None)
+                  row['oosPass']=row['trades']>=30 and row['netProfitPct']>0 and row['profitFactor']>=1.2 and row['maxDrawdownPct']<20
+              else:
+                  row['reason']='parse_or_backtest_failed'
+                  row['oosPass']=False
+              out.append(row)
+              print(json.dumps(row,separators=(',',':')))
+          report={'authorization':'RESEARCH_ONLY','liveTrading':False,'timerange':os.environ['OOS_TIMERANGE'],'fee':0.001,'pairs':['BTC/USDT','ETH/USDT','SOL/USDT'],'frozenCandidates':names,'results':out,'passCount':sum(x['oosPass'] for x in out)}
+          pathlib.Path('oos/oos-report.json').write_text(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload OOS artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-freqtrade-shortlist-oos
+          path: |
+            oos/oos-report.json
+            oos/user_data/results/*.log
+          retention-days: 14
