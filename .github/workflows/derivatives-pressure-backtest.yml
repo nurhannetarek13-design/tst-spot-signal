@@ -6,6 +6,7 @@ on:
     branches: [fix/unified-execution-parity]
     paths:
       - "research/backtest_derivatives_pressure.py"
+      - "research/binance_vision_archive.py"
       - ".github/workflows/derivatives-pressure-backtest.yml"
 
 permissions:
@@ -14,12 +15,23 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
+    env:
+      TST_LOOKBACK_DAYS: "90"
+      TST_MIN_METRICS_COVERAGE_PCT: "95"
+      BINANCE_VISION_CACHE: ".cache/binance-vision"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore Binance Vision archive cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/binance-vision
+          key: binance-vision-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: |
+            binance-vision-${{ runner.os }}-
       - name: Run historical derivatives pressure backtest
         run: python research/backtest_derivatives_pressure.py
       - name: Enforce research-only contract
@@ -27,13 +39,25 @@ jobs:
           python - <<'PY'
           import json, pathlib
           r=json.loads(pathlib.Path('validation/edges/derivatives-pressure-backtest.json').read_text())
-          print(json.dumps(r,indent=2))
+          print(json.dumps({
+            'strategyId': r.get('strategyId'),
+            'dataSource': r.get('dataSource'),
+            'lookbackDays': r.get('lookbackDays'),
+            'eventCount': r.get('eventCount'),
+            'forwardReturns': r.get('forwardReturns'),
+            'mfeMae': r.get('mfeMae'),
+            'validation': r.get('validation'),
+            'failures': r.get('failures'),
+          }, indent=2))
           if r.get('liveTrading') is not False:
               raise SystemExit('liveTrading must remain false')
           if r.get('authorization') != 'RESEARCH_ONLY':
               raise SystemExit('authorization must remain RESEARCH_ONLY')
+          if r.get('checksumVerification') is not True:
+              raise SystemExit('Binance Vision checksum verification must remain enabled')
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: derivatives-pressure-backtest
           path: validation/edges/derivatives-pressure-backtest.json
