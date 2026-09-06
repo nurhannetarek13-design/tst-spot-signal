@@ -1,0 +1,162 @@
+name: External Freqtrade Round 2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/external-freqtrade-round2.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  round2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FT_IMAGE: freqtradeorg/freqtrade:stable
+      DISCOVERY_TIMERANGE: 20260509-20260906
+      OOS_TIMERANGE: 20250907-20260509
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull candidate strategy sources
+        run: |
+          docker pull "$FT_IMAGE"
+          mkdir -p round2/user_data/strategies round2/user_data/results
+          git clone --depth=1 https://github.com/s4ng/freqtrade-strategy.git external/e0v1e
+          git clone --depth=1 https://github.com/remiotore/ccxt-freqtrade.git external/remio
+          curl -L --fail https://raw.githubusercontent.com/5drei1/freqtrade_pub_strats/main/ElliotV8.py -o round2/user_data/strategies/ElliotV8.py
+          cp external/e0v1e/user_data/strategies/E0V1E_49.py round2/user_data/strategies/
+          cp external/e0v1e/user_data/strategies/E0V1E_53.py round2/user_data/strategies/
+          cp external/e0v1e/user_data/strategies/E0V1E_55.py round2/user_data/strategies/
+          cp external/remio/strategies/NASOSv7.py round2/user_data/strategies/
+          cp external/remio/strategies/NASOSv4_SMA.py round2/user_data/strategies/
+
+          # Spot-only sanitization: remove explicit leverage hook from E0V1E_55.
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('round2/user_data/strategies/E0V1E_55.py')
+          t=p.read_text()
+          t=re.sub(r'\n\s*leverage_level\s*=\s*\d+\s*\n','\n',t)
+          t=re.sub(r'\n\s*def leverage\([\s\S]*?return self\.leverage_level\s*\n','\n',t)
+          p.write_text(t)
+          PY
+
+      - name: Create Binance Spot research config
+        run: |
+          cat > round2/user_data/config.json <<'JSON'
+          {
+            "$schema":"https://schema.freqtrade.io/schema.json",
+            "bot_name":"External Round2",
+            "dry_run":true,
+            "dry_run_wallet":1000,
+            "trading_mode":"spot",
+            "margin_mode":"",
+            "max_open_trades":3,
+            "stake_currency":"USDT",
+            "stake_amount":100,
+            "tradable_balance_ratio":0.99,
+            "stoploss":-0.99,
+            "exchange":{
+              "name":"binance","key":"","secret":"",
+              "ccxt_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "ccxt_async_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT"],
+              "pair_blacklist":[]
+            },
+            "pairlists":[{"method":"StaticPairList"}],
+            "entry_pricing":{"price_side":"same","use_order_book":false},
+            "exit_pricing":{"price_side":"same","use_order_book":false},
+            "order_types":{"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false}
+          }
+          JSON
+
+      - name: Download 365d Binance Spot data
+        run: |
+          docker run --rm \
+            -v "$PWD/round2/user_data:/freqtrade/user_data" \
+            "$FT_IMAGE" download-data \
+            --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --timeframes 5m 15m 1h 4h 1d \
+            --days 365
+          sudo chown -R "$(id -u):$(id -g)" round2/user_data
+          sudo chmod -R a+rwX round2/user_data
+
+      - name: Run discovery and frozen OOS
+        run: |
+          python - <<'PY'
+          import os,re,json,pathlib,subprocess
+
+          candidates=[
+            ('E0V1E_49','E0V1E_49.py'),
+            ('E0V1E_53','E0V1E_53.py'),
+            ('E0V1E_55','E0V1E_55.py'),
+            ('NASOSv7','NASOSv7.py'),
+            ('NASOSv4_SMA','NASOSv4_SMA.py'),
+            ('ElliotV8','ElliotV8.py'),
+          ]
+          root=pathlib.Path('round2/user_data/results'); root.mkdir(parents=True,exist_ok=True)
+          mount=f"{os.getcwd()}/round2/user_data:/freqtrade/user_data"
+          base=['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
+
+          def parse(name,txt,ret):
+              def grab(label,pat):
+                  m=re.search(re.escape(label)+r'\s*│\s*'+pat,txt)
+                  return m.group(1) if m else None
+              trades=grab('Total/Daily Avg Trades',r'(\d+)')
+              profit=grab('Total profit %',r'([-\d.]+)%')
+              pf=grab('Profit factor',r'([-\d.]+)')
+              ddm=re.search(r'Absolute drawdown\s*│\s*[-\d.]+\s+\w+\s+\(([-\d.]+)%\)',txt)
+              row={'returncode':ret,'status':'ok' if trades and profit and pf and ddm else 'failed'}
+              if row['status']=='ok':
+                  row.update(trades=int(trades),netProfitPct=float(profit),profitFactor=float(pf),maxDrawdownPct=float(ddm.group(1)))
+              else:
+                  low=txt.lower()
+                  row['reason']='load_failed' if ('could not import' in low or 'no module named' in low or 'impossible to load strategy' in low) else 'parse_or_backtest_failed'
+              return row
+
+          report=[]
+          for name,file in candidates:
+              item={'strategy':name,'file':file}
+              for phase,timerange,fee in [('discovery',os.environ['DISCOVERY_TIMERANGE'],0.001),('oos',os.environ['OOS_TIMERANGE'],0.001)]:
+                  cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee',str(fee),'--timerange',timerange]
+                  r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)
+                  txt=r.stdout
+                  (root/f'{name}.{phase}.log').write_text(txt[-120000:])
+                  item[phase]=parse(name,txt,r.returncode)
+              d=item['discovery']; o=item['oos']
+              item['discoveryPass']=d.get('status')=='ok' and d.get('trades',0)>=30 and d.get('netProfitPct',-999)>0 and d.get('profitFactor',0)>=1.2 and d.get('maxDrawdownPct',999)<20
+              item['oosPass']=o.get('status')=='ok' and o.get('trades',0)>=30 and o.get('netProfitPct',-999)>0 and o.get('profitFactor',0)>=1.2 and o.get('maxDrawdownPct',999)<20
+              item['candidatePass']=item['discoveryPass'] and item['oosPass']
+              report.append(item)
+              print(json.dumps(item,separators=(',',':')))
+
+          survivors=[x['strategy'] for x in report if x['candidatePass']]
+          out={
+            'authorization':'RESEARCH_ONLY',
+            'liveTrading':False,
+            'discoveryTimerange':os.environ['DISCOVERY_TIMERANGE'],
+            'oosTimerange':os.environ['OOS_TIMERANGE'],
+            'pairs':['BTC/USDT','ETH/USDT','SOL/USDT'],
+            'fee':0.001,
+            'results':report,
+            'survivors':survivors,
+            'survivorCount':len(survivors),
+            'nextStep':'Survivors only proceed to higher-fee/slippage stress and cross-engine validation.'
+          }
+          pathlib.Path('round2/round2-report.json').write_text(json.dumps(out,indent=2))
+          PY
+
+      - name: Upload Round 2 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-freqtrade-round2
+          path: |
+            round2/round2-report.json
+            round2/user_data/results/*.log
+          retention-days: 14
