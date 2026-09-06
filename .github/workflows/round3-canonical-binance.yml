@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: round3-canonical-binance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   round3:
     runs-on: ubuntu-latest
