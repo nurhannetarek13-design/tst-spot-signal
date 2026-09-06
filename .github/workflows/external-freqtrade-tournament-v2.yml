@@ -73,21 +73,10 @@ jobs:
             "tradable_balance_ratio":0.99,
             "stoploss":-0.99,
             "exchange":{
-              "name":"binance",
-              "key":"",
-              "secret":"",
-              "ccxt_config":{
-                "enableRateLimit":true,
-                "urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},
-                "options":{"defaultType":"spot","fetchMarkets":["spot"]}
-              },
-              "ccxt_async_config":{
-                "enableRateLimit":true,
-                "urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},
-                "options":{"defaultType":"spot","fetchMarkets":["spot"]}
-              },
-              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT"],
-              "pair_blacklist":[]
+              "name":"binance","key":"","secret":"",
+              "ccxt_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "ccxt_async_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT"],"pair_blacklist":[]
             },
             "pairlists":[{"method":"StaticPairList"}],
             "entry_pricing":{"price_side":"same","use_order_book":false},
@@ -111,32 +100,42 @@ jobs:
       - name: Backtest candidate pool
         run: |
           python - <<'PY'
-          import json,pathlib,subprocess,re,os
+          import json,pathlib,subprocess,re,os,shutil
           cands=json.loads(pathlib.Path('tournament/candidates.json').read_text())
           official=[x for x in cands if x['source']=='official']
           nfi=[x for x in cands if x['source']=='nfi'][-4:]
           mgm=[x for x in cands if x['source']=='mgm'][:4]
           pool=official+nfi+mgm
           results=pathlib.Path('tournament/user_data/results'); results.mkdir(parents=True,exist_ok=True)
+          rawroot=results/'_raw'; rawroot.mkdir(exist_ok=True)
           print('pool',len(pool),'official',len(official),'nfi',len(nfi),'mgm',len(mgm))
           mount=f"{os.getcwd()}/tournament/user_data:/freqtrade/user_data"
           base=['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
           uid=str(os.getuid()); gid=str(os.getgid())
-          pathlib.Path('tournament/resolver.log').write_text('Per-strategy direct resolution enabled; global list-strategies gate disabled.\n')
+          pathlib.Path('tournament/resolver.log').write_text('Per-strategy direct backtest resolution enabled. Freqtrade 2026 exports captured via --backtest-directory.\n')
           for i,x in enumerate(pool,1):
             name=x['strategy']; src=x['source']; safe=re.sub(r'[^A-Za-z0-9_.-]+','_',f'{src}__{name}')
             meta={'strategy':name,'source':src,'file':x['file'],'status':'failed','reason':'backtest_not_run'}
-            out=f'/freqtrade/user_data/results/{safe}.json'
-            cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee','0.001','--export','trades','--export-filename',out]
+            rawdir=rawroot/safe
+            shutil.rmtree(rawdir,ignore_errors=True); rawdir.mkdir(parents=True,exist_ok=True)
+            subprocess.run(['sudo','chmod','-R','a+rwX',str(results)],check=False)
+            cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee','0.001','--export','trades','--backtest-directory',f'/freqtrade/user_data/results/_raw/{safe}']
             try:
               r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)
               subprocess.run(['sudo','chown','-R',f'{uid}:{gid}',str(results)],check=False)
               subprocess.run(['sudo','chmod','-R','a+rwX',str(results)],check=False)
-              logpath=pathlib.Path(f'tournament/user_data/results/{safe}.log')
-              logpath.write_text(r.stdout[-120000:])
-              host=pathlib.Path(f'tournament/user_data/results/{safe}.json')
-              if host.exists():
-                meta.update(status='ok',reason='',result_file=host.name,returncode=r.returncode)
+              (results/f'{safe}.log').write_text(r.stdout[-120000:])
+              candidates=[]
+              for p in rawdir.rglob('*.json'):
+                if p.name.endswith('.meta.json'): continue
+                try:
+                  payload=json.loads(p.read_text())
+                  if isinstance(payload,dict) and ('strategy' in payload or 'strategy_comparison' in payload): candidates.append(p)
+                except Exception: pass
+              if candidates:
+                chosen=max(candidates,key=lambda p:p.stat().st_mtime)
+                dest=results/f'{safe}.result.json'; shutil.copy2(chosen,dest)
+                meta.update(status='ok',reason='',result_file=dest.name,returncode=r.returncode,raw_export=str(chosen.relative_to(results)))
               else:
                 lower=r.stdout.lower()
                 if 'could not import' in lower or 'impossible to load strategy' in lower or 'no module named' in lower:
@@ -147,14 +146,13 @@ jobs:
                   meta['reason']=f'backtest_exit_{r.returncode}_no_export'
             except subprocess.TimeoutExpired as e:
               subprocess.run(['sudo','chown','-R',f'{uid}:{gid}',str(results)],check=False)
-              subprocess.run(['sudo','chmod','-R','a+rwX',str(results)],check=False)
               meta['reason']='backtest_timeout_300s'
-              pathlib.Path(f'tournament/user_data/results/{safe}.log').write_text((e.stdout or '') if isinstance(e.stdout,str) else '')
+              (results/f'{safe}.log').write_text((e.stdout or '') if isinstance(e.stdout,str) else '')
             except Exception as e:
               meta['reason']=f'exception:{type(e).__name__}:{e}'
             subprocess.run(['sudo','chown','-R',f'{uid}:{gid}',str(results)],check=False)
             subprocess.run(['sudo','chmod','-R','a+rwX',str(results)],check=False)
-            pathlib.Path(f'tournament/user_data/results/{safe}.meta.json').write_text(json.dumps(meta,indent=2))
+            (results/f'{safe}.meta.json').write_text(json.dumps(meta,indent=2))
             print(i,'/',len(pool),src,name,meta['status'],meta['reason'])
           PY
 
@@ -175,5 +173,6 @@ jobs:
             tournament/resolver.log
             tournament/summary.log
             tournament/user_data/results/*.meta.json
+            tournament/user_data/results/*.result.json
             tournament/user_data/results/*.log
           retention-days: 14
