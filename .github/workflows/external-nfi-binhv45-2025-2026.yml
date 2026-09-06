@@ -71,9 +71,7 @@ jobs:
               "entry":"market","exit":"market","emergency_exit":"market",
               "force_entry":"market","force_exit":"market","stoploss":"market",
               "stoploss_on_exchange":false
-            },
-            "telegram":{"enabled":false},
-            "api_server":{"enabled":false}
+            }
           }
           JSON
 
@@ -93,7 +91,7 @@ jobs:
       - name: Run discovery and OOS with trade exports
         run: |
           python - <<'PY'
-          import json, os, pathlib, re, subprocess, shutil
+          import json, os, pathlib, re, subprocess
 
           root = pathlib.Path('extcheck')
           result_dir = root / 'user_data' / 'results'
@@ -106,6 +104,15 @@ jobs:
               ('discovery', os.environ['DISCOVERY_TIMERANGE']),
               ('oos', os.environ['OOS_TIMERANGE']),
           ]
+
+          # Pre-create every host-side export directory before Docker touches them.
+          # This avoids root-owned parent directories blocking the next phase.
+          for strategy in strategies:
+              for phase, _ in phases:
+                  d = export_root / strategy / phase
+                  d.mkdir(parents=True, exist_ok=True)
+                  d.chmod(0o777)
+
           mount = f"{os.getcwd()}/extcheck/user_data:/freqtrade/user_data"
           base = ['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
 
@@ -132,7 +139,6 @@ jobs:
               item = {'strategy': strategy}
               for phase, timerange in phases:
                   phase_dir = export_root / strategy / phase
-                  phase_dir.mkdir(parents=True, exist_ok=True)
                   cmd = base + [
                       'backtesting',
                       '--config','/freqtrade/user_data/config.json',
@@ -176,6 +182,8 @@ jobs:
           }
           pathlib.Path('extcheck/report.json').write_text(json.dumps(out, indent=2))
           PY
+
+          sudo chown -R "$(id -u):$(id -g)" extcheck/user_data extcheck/report.json 2>/dev/null || true
 
       - name: Upload validation artifacts
         if: always()
