@@ -1,5 +1,5 @@
 name: External strategy benchmark
-# Verification trigger: rerun internal external-strategy benchmark after small-cap rejection.
+# Benchmark trigger: run the actual Binance-data strategy benchmark and upload the report artifact.
 on:
   workflow_dispatch:
   push:
