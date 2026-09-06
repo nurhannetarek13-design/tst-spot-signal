@@ -1,0 +1,45 @@
+name: Derivatives Pressure Lab
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/derivatives_pressure.py'
+      - '.github/workflows/derivatives-pressure-lab.yml'
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run read-only derivatives pressure snapshot
+        run: python research/derivatives_pressure.py
+      - name: Enforce read-only contract
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('validation/edges/derivatives-pressure-latest.json')
+          r=json.loads(p.read_text())
+          print(json.dumps({
+            'strategyId':r.get('strategyId'),
+            'status':r.get('status'),
+            'universeCount':r.get('universeCount'),
+            'usableCount':r.get('usableCount'),
+            'topCandidates':r.get('candidates',[])[:10],
+            'failures':r.get('failures',{}),
+            'liveTrading':r.get('liveTrading')
+          },indent=2))
+          if r.get('liveTrading') is not False:
+              raise SystemExit('liveTrading must remain false')
+          if int(r.get('usableCount') or 0) < 1:
+              raise SystemExit('no usable derivatives data')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: derivatives-pressure-lab
+          path: validation/edges/derivatives-pressure-latest.json
+          if-no-files-found: error
