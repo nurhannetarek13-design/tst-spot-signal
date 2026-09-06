@@ -26,6 +26,13 @@ if [ -n "${COINALYZE_API_KEY:-}" ]; then
   else
     echo "{\"kind\":\"binance_vision_extreme_shock_validation_failed\",\"authorization\":\"RESEARCH_ONLY\"}" >&2
   fi
+
+  echo "{\"kind\":\"frozen_extreme_shock_oos_start\",\"authorization\":\"RESEARCH_ONLY\"}"
+  if python /app/extreme_shock_frozen_oos.py; then
+    echo "{\"kind\":\"frozen_extreme_shock_oos_complete_marker\",\"authorization\":\"RESEARCH_ONLY\"}"
+  else
+    echo "{\"kind\":\"frozen_extreme_shock_oos_failed\",\"authorization\":\"RESEARCH_ONLY\"}" >&2
+  fi
 else
   echo "{\"kind\":\"coinalyze_backfill_skipped\",\"reason\":\"missing_api_key\",\"authorization\":\"RESEARCH_ONLY\"}"
 fi
