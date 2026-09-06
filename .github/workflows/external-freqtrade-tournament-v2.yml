@@ -98,13 +98,13 @@ jobs:
       - name: Download Binance Spot data - 120d
         run: |
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "$PWD/tournament/user_data:/freqtrade/user_data" \
             "$FT_IMAGE" download-data \
             --config /freqtrade/user_data/config.json \
             --pairs BTC/USDT ETH/USDT SOL/USDT \
             --timeframes 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d \
             --days 120
-          sudo chown -R "$(id -u):$(id -g)" tournament/user_data
 
       - name: Load-screen and backtest
         run: |
@@ -118,7 +118,8 @@ jobs:
           results=pathlib.Path('tournament/user_data/results'); results.mkdir(parents=True,exist_ok=True)
           print('pool',len(pool),'official',len(official),'nfi',len(nfi),'mgm',len(mgm))
           mount=f"{os.getcwd()}/tournament/user_data:/freqtrade/user_data"
-          base=['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
+          uid=str(os.getuid()); gid=str(os.getgid())
+          base=['docker','run','--rm','--user',f'{uid}:{gid}','-v',mount,os.environ['FT_IMAGE']]
           lr=subprocess.run(base+['list-strategies','--strategy-path','/freqtrade/user_data/strategies','--recursive-strategy-search'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180)
           pathlib.Path('tournament/resolver.log').write_text(lr.stdout)
           for i,x in enumerate(pool,1):
