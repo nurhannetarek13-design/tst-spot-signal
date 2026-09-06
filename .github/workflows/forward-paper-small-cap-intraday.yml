@@ -1,4 +1,5 @@
 name: Small-cap semi-live forward tracker
+# Verification trigger for unified-execution-parity branch.
 on:
   workflow_dispatch:
   push:
