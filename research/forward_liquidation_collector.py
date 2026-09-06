@@ -30,6 +30,7 @@ HEALTH_PATH = DATA_DIR / "health.json"
 PARQUET_DIR = DATA_DIR / "parquet"
 FLUSH_SECONDS = int(os.getenv("LIQ_FLUSH_SECONDS", "60"))
 HEALTH_SECONDS = int(os.getenv("LIQ_HEALTH_SECONDS", "30"))
+LOG_SECONDS = int(os.getenv("LIQ_LOG_SECONDS", "60"))
 STALE_SECONDS = int(os.getenv("LIQ_STALE_SECONDS", "180"))
 AUTHORIZATION = "RESEARCH_ONLY"
 
@@ -95,6 +96,24 @@ class Store:
             safe_tmp = str(tmp).replace("'", "''")
             self.con.execute(f"COPY (SELECT * EXCLUDE(day, ingested_at) FROM liquidations WHERE day='{safe_day}' ORDER BY trade_ms, symbol) TO '{safe_tmp}' (FORMAT PARQUET, COMPRESSION ZSTD)")
             tmp.replace(target)
+    def stats(self) -> dict:
+        total, latest_ms, total_notional = self.con.execute(
+            "SELECT count(*), max(trade_ms), coalesce(sum(notional),0) FROM liquidations"
+        ).fetchone()
+        by_symbol = {
+            row[0]: int(row[1])
+            for row in self.con.execute(
+                "SELECT symbol, count(*) FROM liquidations GROUP BY symbol ORDER BY symbol"
+            ).fetchall()
+        }
+        return {
+            "rows": int(total or 0),
+            "latestTradeMs": int(latest_ms) if latest_ms is not None else None,
+            "notional": float(total_notional or 0.0),
+            "bySymbol": by_symbol,
+            "dbBytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+            "parquetFiles": len(list(PARQUET_DIR.glob("day=*/liquidations.parquet"))),
+        }
 
 def write_health(h: Health) -> None:
     HEALTH_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -111,14 +130,37 @@ def write_health(h: Health) -> None:
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     tmp.replace(HEALTH_PATH)
 
+def log_runtime(h: Health, store: Store) -> None:
+    try:
+        stats = store.stats()
+        payload = {
+            "kind": "collector_runtime",
+            "authorization": AUTHORIZATION,
+            "liveTrading": False,
+            "connected": h.connected,
+            "messagesSeen": h.messagesSeen,
+            "relevantEvents": h.relevantEvents,
+            "reconnects": h.reconnects,
+            "parseErrors": h.parseErrors,
+            "storageErrors": h.storageErrors,
+            "lastMessageAt": h.lastMessageAt,
+            "lastRelevantEventAt": h.lastRelevantEventAt,
+            **stats,
+        }
+        print(json.dumps(payload, separators=(",", ":")), flush=True)
+    except Exception as exc:
+        print(json.dumps({"kind":"collector_runtime_error","error":f"{type(exc).__name__}: {exc}"}), flush=True)
+
 async def run_collector(stop: asyncio.Event) -> None:
     store = Store(DB_PATH)
     health = Health(startedAt=iso_now(), symbols=tuple(sorted(SYMBOLS)))
-    last_flush = time.monotonic(); last_health = 0.0; backoff = 1.0
+    last_flush = time.monotonic(); last_health = 0.0; last_log = 0.0; backoff = 1.0
+    print(json.dumps({"kind":"collector_start","authorization":AUTHORIZATION,"liveTrading":False,"symbols":sorted(SYMBOLS),"dataDir":str(DATA_DIR),"dbPath":str(DB_PATH)}, separators=(",", ":")), flush=True)
     while not stop.is_set():
         try:
             async with websockets.connect(WS_URL,ping_interval=20,ping_timeout=20,close_timeout=10,max_queue=4096) as ws:
                 health.connected = True; health.lastConnectAt = iso_now(); health.lastError = None; write_health(health); backoff = 1.0
+                print(json.dumps({"kind":"collector_connected","at":health.lastConnectAt}, separators=(",", ":")), flush=True)
                 while not stop.is_set():
                     raw = await asyncio.wait_for(ws.recv(), timeout=max(HEALTH_SECONDS, 60))
                     received_ms = int(time.time() * 1000); health.messagesSeen += 1; health.lastMessageAt = iso_now()
@@ -137,17 +179,20 @@ async def run_collector(stop: asyncio.Event) -> None:
                         last_flush = now
                     if now - last_health >= HEALTH_SECONDS:
                         write_health(health); last_health = now
+                    if now - last_log >= LOG_SECONDS:
+                        log_runtime(health, store); last_log = now
         except (asyncio.CancelledError, KeyboardInterrupt):
             break
         except Exception as exc:
             health.connected = False; health.lastDisconnectAt = iso_now(); health.reconnects += 1; health.lastError = f"socket: {type(exc).__name__}: {exc}"; write_health(health)
+            print(json.dumps({"kind":"collector_disconnected","at":health.lastDisconnectAt,"reconnects":health.reconnects,"error":health.lastError}, separators=(",", ":")), flush=True)
             await asyncio.sleep(backoff + random.random()); backoff = min(backoff * 2, 60.0)
     health.connected = False; health.lastDisconnectAt = iso_now()
     try:
         store.checkpoint(); store.export_days()
     except Exception as exc:
         health.storageErrors += 1; health.lastError = f"shutdown-storage: {type(exc).__name__}: {exc}"
-    write_health(health)
+    write_health(health); log_runtime(health, store)
 
 def self_test() -> None:
     sample = {"e":"forceOrder","E":1704067200123,"o":{"s":"BTCUSDT","S":"SELL","o":"LIMIT","f":"IOC","q":"2.5","p":"42000","ap":"41990","X":"FILLED","T":1704067200000,"z":"2.0"}}
