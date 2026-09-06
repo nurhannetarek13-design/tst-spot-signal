@@ -1,0 +1,37 @@
+name: BEC EMA phase hard validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'production/strategies/bec-ema-cross-market-phase.mjs'
+      - 'scripts/validate-bec-ema-market-phase.mjs'
+      - '.github/workflows/bec-ema-phase-hard-validation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run hard validation
+        id: hard
+        continue-on-error: true
+        run: node scripts/validate-bec-ema-market-phase.mjs
+      - name: Show compact result
+        if: always()
+        run: |
+          node -e "const r=require('./validation/external/bec-ema-phase-hard-validation.json'); console.log(JSON.stringify({candidate:r.candidate,train:r.train,holdout:r.holdout,stress2x:r.stress2x,stress3x:r.stress3x,walkForward:r.walkForward,regimes:r.regimes,validation:r.validation,smallLiveReviewReady:r.smallLiveReviewReady,liveReady:r.liveReady},null,2))"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bec-ema-phase-hard-validation
+          path: validation/external/bec-ema-phase-hard-validation.json
+          if-no-files-found: error
+      - name: Enforce gate
+        if: steps.hard.outcome != 'success'
+        run: exit 1
