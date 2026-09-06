@@ -1,0 +1,136 @@
+name: External NFI + BinHV45 Data API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/external-nfi-binhv45-data-api.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FT_IMAGE: freqtradeorg/freqtrade:stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull strategies
+        run: |
+          set -euo pipefail
+          docker pull "$FT_IMAGE"
+          mkdir -p research/user_data/strategies research/user_data/results research/user_data/backtests external
+          git clone --depth=1 https://github.com/iterativv/NostalgiaForInfinity.git external/nfi
+          git clone --depth=1 https://github.com/TheoBrigitte/freqtrade.git external/theo
+          cp external/nfi/NostalgiaForInfinityX7.py research/user_data/strategies/
+          cp external/theo/strategies/BinHV45/BinHV45.py research/user_data/strategies/
+          echo "NFI_SHA=$(git -C external/nfi rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BINHV_SHA=$(git -C external/theo rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Create research config
+        run: |
+          cat > research/user_data/config.json <<'JSON'
+          {
+            "$schema":"https://schema.freqtrade.io/schema.json",
+            "dry_run":true,
+            "dry_run_wallet":1000,
+            "trading_mode":"spot",
+            "margin_mode":"",
+            "max_open_trades":10,
+            "stake_currency":"USDT",
+            "stake_amount":50,
+            "tradable_balance_ratio":0.99,
+            "exchange":{
+              "name":"binance",
+              "key":"",
+              "secret":"",
+              "ccxt_config":{
+                "enableRateLimit":true,
+                "options":{"defaultType":"spot","fetchMarkets":["spot"]},
+                "urls":{"api":{"public":"https://data-api.binance.vision/api"}}
+              },
+              "ccxt_async_config":{
+                "enableRateLimit":true,
+                "options":{"defaultType":"spot","fetchMarkets":["spot"]},
+                "urls":{"api":{"public":"https://data-api.binance.vision/api"}}
+              },
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"],
+              "pair_blacklist":[]
+            },
+            "pairlists":[{"method":"StaticPairList"}],
+            "entry_pricing":{"price_side":"other","use_order_book":false},
+            "exit_pricing":{"price_side":"other","use_order_book":false},
+            "order_types":{"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false}
+          }
+          JSON
+
+      - name: Verify official Binance market-data endpoint
+        run: |
+          set -euo pipefail
+          curl -fsS https://data-api.binance.vision/api/v3/ping
+          curl -fsS https://data-api.binance.vision/api/v3/exchangeInfo?symbol=BTCUSDT | head -c 500
+
+      - name: Download Binance Spot data
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/research/user_data:/freqtrade/user_data" "$FT_IMAGE" download-data \
+            --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT BNB/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT LTC/USDT \
+            --timeframes 5m 15m 1h 4h 1d \
+            --timerange 20241201-20260902
+          sudo chown -R "$(id -u):$(id -g)" research/user_data
+          sudo chmod -R a+rwX research/user_data
+
+      - name: Backtest discovery and frozen OOS
+        run: |
+          set -u
+          mkdir -p research/user_data/backtests/{BinHV45,NostalgiaForInfinityX7}/{discovery,oos}
+          chmod -R 777 research/user_data/backtests
+          for STRAT in BinHV45 NostalgiaForInfinityX7; do
+            for SPEC in "discovery:20250101-20251231" "oos:20260101-20260901"; do
+              PHASE="${SPEC%%:*}"
+              RANGE="${SPEC#*:}"
+              echo "=== $STRAT / $PHASE / $RANGE ==="
+              docker run --rm -v "$PWD/research/user_data:/freqtrade/user_data" "$FT_IMAGE" backtesting \
+                --config /freqtrade/user_data/config.json \
+                --strategy "$STRAT" \
+                --strategy-path /freqtrade/user_data/strategies \
+                --fee 0.001 \
+                --timerange "$RANGE" \
+                --export trades \
+                --backtest-directory "/freqtrade/user_data/backtests/$STRAT/$PHASE" \
+                2>&1 | tee "research/user_data/results/$STRAT.$PHASE.log"
+              echo "return_code=${PIPESTATUS[0]}" >> "research/user_data/results/$STRAT.$PHASE.meta"
+            done
+          done
+          sudo chown -R "$(id -u):$(id -g)" research/user_data || true
+
+      - name: Record provenance
+        if: always()
+        run: |
+          cat > research/provenance.txt <<EOF
+          nfi_sha=$NFI_SHA
+          binhv_repo_sha=$BINHV_SHA
+          exchange=binance
+          trading_mode=spot
+          market_data_endpoint=https://data-api.binance.vision
+          fee=0.001
+          discovery=20250101-20251231
+          oos=20260101-20260901
+          live_trading=false
+          EOF
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfi-binhv45-data-api-results
+          path: |
+            research/provenance.txt
+            research/user_data/results/*
+            research/user_data/backtests/**/*
+          retention-days: 14
