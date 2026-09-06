@@ -4,9 +4,34 @@
   "liveTrading": false,
   "startedAt": "2026-09-02T12:32:57.320Z",
   "initialCashUSDT": 20.12,
-  "cashUSDT": 19.93638691646138,
+  "cashUSDT": 14.43638691646138,
   "realizedPnLUSDT": -0.6774952813371193,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "ICPUSDT",
+      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "openedAt": "2026-09-06T12:57:54.128Z",
+      "entry": 2.696,
+      "stop": 2.6822156326373747,
+      "target": 2.72296,
+      "qty": 2.0400593471810087,
+      "notional": 5.5,
+      "maxHoldBars": 8,
+      "score": 80,
+      "metrics": {
+        "spreadPct": 0.03709198813057618,
+        "mom1h": 0.008598130841121598,
+        "mom4h": 0.01276276276276267,
+        "btc1h": -0.0001989896180200068,
+        "atrPct": 0.005676784186897917,
+        "takerBuyRatio": 0.6515647649184672,
+        "relativeVolume": 2.689982011589281,
+        "breakout": true,
+        "trend15": true,
+        "trend1h": true
+      }
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "JSTUSDT",
