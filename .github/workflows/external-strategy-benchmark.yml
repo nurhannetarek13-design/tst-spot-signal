@@ -1,4 +1,5 @@
 name: External strategy benchmark
+# Verification trigger: rerun internal external-strategy benchmark after small-cap rejection.
 on:
   workflow_dispatch:
   push:
