@@ -4,5 +4,4 @@ COPY research/requirements-forward-collector.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY research/forward_liquidation_collector.py /app/forward_liquidation_collector.py
 ENV LIQ_DATA_DIR=/data/forward-liquidations
-VOLUME ["/data"]
 CMD ["python", "/app/forward_liquidation_collector.py"]
