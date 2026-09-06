@@ -51,12 +51,12 @@ jobs:
               "ccxt_config":{
                 "enableRateLimit":true,
                 "options":{"defaultType":"spot","fetchMarkets":["spot"]},
-                "urls":{"api":{"public":"https://data-api.binance.vision/api"}}
+                "urls":{"api":{"public":"https://data-api.binance.vision/api/v3"}}
               },
               "ccxt_async_config":{
                 "enableRateLimit":true,
                 "options":{"defaultType":"spot","fetchMarkets":["spot"]},
-                "urls":{"api":{"public":"https://data-api.binance.vision/api"}}
+                "urls":{"api":{"public":"https://data-api.binance.vision/api/v3"}}
               },
               "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"],
               "pair_blacklist":[]
@@ -117,7 +117,7 @@ jobs:
           binhv_repo_sha=$BINHV_SHA
           exchange=binance
           trading_mode=spot
-          market_data_endpoint=https://data-api.binance.vision
+          market_data_endpoint=https://data-api.binance.vision/api/v3
           fee=0.001
           discovery=20250101-20251231
           oos=20260101-20260901
