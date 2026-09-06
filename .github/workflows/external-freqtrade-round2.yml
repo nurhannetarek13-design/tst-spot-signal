@@ -68,8 +68,8 @@ jobs:
               "pair_blacklist":[]
             },
             "pairlists":[{"method":"StaticPairList"}],
-            "entry_pricing":{"price_side":"same","use_order_book":false},
-            "exit_pricing":{"price_side":"same","use_order_book":false},
+            "entry_pricing":{"price_side":"other","use_order_book":false},
+            "exit_pricing":{"price_side":"other","use_order_book":false},
             "order_types":{"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false}
           }
           JSON
