@@ -44,10 +44,12 @@ export async function executePaperCandidate({
     takeProfitPrice: plan.protection.takeProfitPrice,
   });
 
+  const openedAt = new Date().toISOString();
   state = applyFillToState(state, {
     symbol: fill.symbol,
     quantity: fill.quantity,
     averagePrice: fill.averagePrice,
+    at: openedAt,
   });
   state.positions = {
     ...(state.positions || {}),
@@ -59,6 +61,10 @@ export async function executePaperCandidate({
       takeProfitPrice: protection.takeProfitPrice,
       entryOrderId: fill.orderId,
       protectionOrderListId: protection.orderListId,
+      openedAt,
+      maxHoldBars: Number.isFinite(Number(candidate.maxHoldBars)) ? Number(candidate.maxHoldBars) : null,
+      strategy: String(candidate.strategy || 'unknown'),
+      score: Number.isFinite(Number(candidate.score)) ? Number(candidate.score) : null,
       mode: 'PAPER',
     },
   };
