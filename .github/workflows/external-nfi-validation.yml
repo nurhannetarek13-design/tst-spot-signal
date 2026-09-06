@@ -1,4 +1,5 @@
 name: External NFI validation
+# Verification trigger: rerun NFI X7 after small-cap rejection.
 on:
   workflow_dispatch:
   push:
