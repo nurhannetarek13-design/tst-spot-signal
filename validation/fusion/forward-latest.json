@@ -3,11 +3,11 @@
   "strategyId": "TST_UNIFIED_FORWARD_V1",
   "status": "COLLECTING",
   "pass": false,
-  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "candidateFingerprint": "cba53276448a08d4eebc",
-  "symbol": "PROMUSDT",
-  "family": "MEAN_REVERSION",
-  "timeframe": "15m",
+  "candidateId": "PUBLIC_EDGE_LAB:ARBUSDT:VOLATILITY_BREAKOUT",
+  "candidateFingerprint": "bf01f22fc60141ca16b1",
+  "symbol": "ARBUSDT",
+  "family": "VOLATILITY_BREAKOUT",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-06T06:07:58.758Z",
+  "generatedAt": "2026-09-06T07:15:11.664Z",
   "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
