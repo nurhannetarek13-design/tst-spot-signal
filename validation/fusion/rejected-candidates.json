@@ -115,6 +115,18 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-05T15:22:04.258516+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:ARBUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "bf01f22fc60141ca16b1",
+      "symbol": "ARBUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "hardFailValidators": [
+        "freqtrade",
+        "jesse",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-09-06T07:23:35.683580+00:00"
     }
   ],
   "ttlDays": 7,

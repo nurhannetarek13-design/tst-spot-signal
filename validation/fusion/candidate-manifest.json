@@ -2,52 +2,53 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "source": "PUBLIC_EDGE_LAB",
   "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-  "symbol": "ARBUSDT",
-  "family": "VOLATILITY_BREAKOUT",
+  "symbol": "TUTUSDT",
+  "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "params": {
-    "lookback": 24,
-    "compressionLookback": 72,
-    "compressionPct": 0.25,
-    "relvol": 1.5,
-    "rsiMin": 55,
-    "rsiMax": 75,
-    "holdBars": 12,
-    "sl": 0.025,
-    "tp": 0.055
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
   },
   "sourceMetrics": {
     "base": {
-      "trades": 16,
-      "wins": 7,
-      "winRate": 0.4375,
-      "netPnlUSDT": 0.481214366588,
-      "expectancyUSDT": 0.03007589791175,
-      "profitFactor": 1.491305269598747,
-      "maxDrawdownUSDT": 0.5826928569439362
+      "trades": 129,
+      "wins": 57,
+      "winRate": 0.4418604651162791,
+      "netPnlUSDT": 3.513268367339053,
+      "expectancyUSDT": 0.02723463850650429,
+      "profitFactor": 1.2742662394219604,
+      "maxDrawdownUSDT": 4.832377789528836
     },
     "stress2x": {
-      "trades": 16,
-      "wins": 7,
-      "winRate": 0.4375,
-      "netPnlUSDT": 0.21609486578691636,
-      "expectancyUSDT": 0.013505929111682273,
-      "profitFactor": 1.1917923373548864,
-      "maxDrawdownUSDT": 0.7140158020762187
+      "trades": 129,
+      "wins": 56,
+      "winRate": 0.43410852713178294,
+      "netPnlUSDT": 1.3762930017396426,
+      "expectancyUSDT": 0.010668937997981727,
+      "profitFactor": 1.098330082678941,
+      "maxDrawdownUSDT": 5.783555990145465
     }
   },
   "liquidity": {
-    "quoteVolume24h": 101405244.7971,
-    "priceUSDT": 0.1936
+    "quoteVolume24h": 30889319.39486,
+    "priceUSDT": 0.02653
   },
   "rankKey": [
     1,
-    0.013505929111682273,
-    1.1917923373548864,
-    16
+    0.010668937997981727,
+    1.098330082678941,
+    129
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:ARBUSDT:VOLATILITY_BREAKOUT",
-  "candidateFingerprint": "bf01f22fc60141ca16b1",
+  "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "4da78ca29267ffd54aa9",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -411,6 +412,7 @@
     "82bc01511e155b64e664",
     "83e561f3d531f1bd9a71",
     "b7b8fd956817ecaced07",
+    "bf01f22fc60141ca16b1",
     "db0561831b32d3a2c528"
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
@@ -422,5 +424,13 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-06T07:14:55.499062+00:00"
+  "generatedAt": "2026-09-06T07:23:35.683580+00:00",
+  "rotationReason": {
+    "rejectedFingerprint": "bf01f22fc60141ca16b1",
+    "hardFailValidators": [
+      "freqtrade",
+      "jesse",
+      "nautilus"
+    ]
+  }
 }
