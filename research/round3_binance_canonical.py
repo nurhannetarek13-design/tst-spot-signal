@@ -6,6 +6,7 @@ Research only. No execution, sizing, or live authorization.
 from __future__ import annotations
 import datetime as dt
 import json
+import math
 import pathlib
 import time
 import urllib.parse
@@ -91,7 +92,6 @@ def candidate_masks(df, btc_close, breadth):
     taker_share=tq/qv.replace(0,np.nan)
     r=rsi(c)
 
-    # V1 frozen definitions. No future information appears in any mask.
     crash=(zscore(ret6,30*24)<=-2.5) & (qv_rel>=1.8) & (taker_share>=0.56) & (r<=30)
 
     btc=btc_close.reindex(df.index).ffill()
@@ -116,10 +116,15 @@ def breadth_series(data):
     return (frame>0).mean(axis=1) if not frame.empty else pd.Series(dtype=float)
 
 
+def json_safe_number(x):
+    x=float(x)
+    return x if math.isfinite(x) else None
+
+
 def serialize_evidence(ev):
     return {
         "name":ev.name,"events":ev.events,"passedHorizons":list(ev.passed_horizons),"pass":ev.all_required_pass,
-        "gates":{str(h):{"n":g.n,"mean":g.mean_return,"median":g.median_return,"hitRate":g.hit_rate,"medianMFE":g.median_mfe,"medianMAE":g.median_mae,"mfeMaeRatio":g.mfe_mae_ratio,"pass":g.passed} for h,g in ev.gates.items()}
+        "gates":{str(h):{"n":g.n,"mean":json_safe_number(g.mean_return),"median":json_safe_number(g.median_return),"hitRate":json_safe_number(g.hit_rate),"medianMFE":json_safe_number(g.median_mfe),"medianMAE":json_safe_number(g.median_mae),"mfeMaeRatio":json_safe_number(g.mfe_mae_ratio),"pass":g.passed} for h,g in ev.gates.items()}
     }
 
 
@@ -146,7 +151,7 @@ for s in symbols:
             if i+72 < len(df):
                 pooled[name].append((s,i))
 
-# Pooled raw evidence is aggregated as event-level forward returns across symbols.
+
 def pooled_stats(name):
     vals={24:[],48:[],72:[]}; mfes={24:[],48:[],72:[]}; maes={24:[],48:[],72:[]}
     for s,i in pooled[name]:
@@ -160,10 +165,11 @@ def pooled_stats(name):
         a=np.asarray(vals[h],float); m=np.asarray(mfes[h],float); d=np.asarray(maes[h],float)
         if len(a)==0:
             out[str(h)]={"n":0,"pass":False}; continue
-        ratio=float(np.median(m)/np.median(d)) if np.median(d)>0 else float("inf")
+        med_mfe=float(np.median(m)); med_mae=float(np.median(d))
+        ratio=(med_mfe/med_mae) if med_mae>0 else math.inf
         mean=float(a.mean()); med=float(np.median(a)); hit=float((a>0).mean())
         passed=bool(len(a)>=30 and mean>=0.015 and med>0 and hit>0.55 and ratio>=2.0)
-        out[str(h)]={"n":int(len(a)),"mean":mean,"median":med,"hitRate":hit,"medianMFE":float(np.median(m)),"medianMAE":float(np.median(d)),"mfeMaeRatio":ratio,"pass":passed}
+        out[str(h)]={"n":int(len(a)),"mean":json_safe_number(mean),"median":json_safe_number(med),"hitRate":json_safe_number(hit),"medianMFE":json_safe_number(med_mfe),"medianMAE":json_safe_number(med_mae),"mfeMaeRatio":json_safe_number(ratio),"mfeMaeRatioInfinite":bool(math.isinf(ratio)),"pass":passed}
     return {"name":name,"events":len(pooled[name]),"gates":out,"pass":any(x.get("pass") for x in out.values())}
 
 report={
@@ -171,4 +177,5 @@ report={
     "frozenDefinitions":True,"symbolsRequested":symbols,"symbolsTested":[s for s in symbols if s in data],"families":[pooled_stats(k) for k in pooled],
     "perSymbol":per_symbol,"dataFailures":failures,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat()
 }
-OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(report,indent=2,allow_nan=False)); print(json.dumps(report,indent=2,allow_nan=False))
+payload=json.dumps(report,indent=2,allow_nan=False)
+OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(payload); print(payload)
