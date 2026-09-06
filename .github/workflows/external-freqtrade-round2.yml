@@ -13,7 +13,7 @@ permissions:
 jobs:
   round2:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       FT_IMAGE: freqtradeorg/freqtrade:stable
       DISCOVERY_TIMERANGE: 20260509-20260906
@@ -34,7 +34,6 @@ jobs:
           cp external/remio/strategies/NASOSv7.py round2/user_data/strategies/
           cp external/remio/strategies/NASOSv4_SMA.py round2/user_data/strategies/
 
-          # Spot-only sanitization: remove explicit leverage hook from E0V1E_55.
           python - <<'PY'
           from pathlib import Path
           import re
@@ -55,16 +54,16 @@ jobs:
             "dry_run_wallet":1000,
             "trading_mode":"spot",
             "margin_mode":"",
-            "max_open_trades":3,
+            "max_open_trades":10,
             "stake_currency":"USDT",
-            "stake_amount":100,
+            "stake_amount":50,
             "tradable_balance_ratio":0.99,
             "stoploss":-0.99,
             "exchange":{
               "name":"binance","key":"","secret":"",
               "ccxt_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
               "ccxt_async_config":{"enableRateLimit":true,"urls":{"api":{"public":"https://data-api.binance.vision/api/v3","private":"https://api.binance.com/api","sapi":"https://api.binance.com/sapi"}},"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
-              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT"],
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","DOT/USDT","LTC/USDT","BCH/USDT","TRX/USDT","NEAR/USDT","UNI/USDT","AAVE/USDT","ETC/USDT","FIL/USDT","ATOM/USDT","XLM/USDT"],
               "pair_blacklist":[]
             },
             "pairlists":[{"method":"StaticPairList"}],
@@ -80,7 +79,7 @@ jobs:
             -v "$PWD/round2/user_data:/freqtrade/user_data" \
             "$FT_IMAGE" download-data \
             --config /freqtrade/user_data/config.json \
-            --pairs BTC/USDT ETH/USDT SOL/USDT \
+            --pairs BTC/USDT ETH/USDT SOL/USDT BNB/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT DOT/USDT LTC/USDT BCH/USDT TRX/USDT NEAR/USDT UNI/USDT AAVE/USDT ETC/USDT FIL/USDT ATOM/USDT XLM/USDT \
             --timeframes 5m 15m 1h 4h 1d \
             --days 365
           sudo chown -R "$(id -u):$(id -g)" round2/user_data
@@ -91,6 +90,7 @@ jobs:
           python - <<'PY'
           import os,re,json,pathlib,subprocess
 
+          pairs=['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT','LTC/USDT','BCH/USDT','TRX/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ETC/USDT','FIL/USDT','ATOM/USDT','XLM/USDT']
           candidates=[
             ('E0V1E_49','E0V1E_49.py'),
             ('E0V1E_53','E0V1E_53.py'),
@@ -111,9 +111,15 @@ jobs:
               profit=grab('Total profit %',r'([-\d.]+)%')
               pf=grab('Profit factor',r'([-\d.]+)')
               ddm=re.search(r'Absolute drawdown\s*│\s*[-\d.]+\s+\w+\s+\(([-\d.]+)%\)',txt)
-              row={'returncode':ret,'status':'ok' if trades and profit and pf and ddm else 'failed'}
+              if trades is None:
+                  sm=re.search(rf'│\s*{re.escape(name)}\s*│\s*(\d+)\s*│.*?│\s*([-\d.]+)\s*│.*?│\s*[-\d.]+\s+\w+\s+([-\d.]+)%\s*│',txt,re.S)
+                  if sm:
+                      trades, profit, dd = sm.group(1), sm.group(2), sm.group(3)
+                      row={'returncode':ret,'status':'ok','trades':int(trades),'netProfitPct':float(profit),'profitFactor':float(pf) if pf is not None else 0.0,'maxDrawdownPct':float(dd)}
+                      return row
+              row={'returncode':ret,'status':'ok' if trades is not None and profit is not None and ddm else 'failed'}
               if row['status']=='ok':
-                  row.update(trades=int(trades),netProfitPct=float(profit),profitFactor=float(pf),maxDrawdownPct=float(ddm.group(1)))
+                  row.update(trades=int(trades),netProfitPct=float(profit),profitFactor=float(pf) if pf is not None else 0.0,maxDrawdownPct=float(ddm.group(1)))
               else:
                   low=txt.lower()
                   row['reason']='load_failed' if ('could not import' in low or 'no module named' in low or 'impossible to load strategy' in low) else 'parse_or_backtest_failed'
@@ -124,9 +130,9 @@ jobs:
               item={'strategy':name,'file':file}
               for phase,timerange,fee in [('discovery',os.environ['DISCOVERY_TIMERANGE'],0.001),('oos',os.environ['OOS_TIMERANGE'],0.001)]:
                   cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee',str(fee),'--timerange',timerange]
-                  r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)
+                  r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)
                   txt=r.stdout
-                  (root/f'{name}.{phase}.log').write_text(txt[-120000:])
+                  (root/f'{name}.{phase}.log').write_text(txt[-160000:])
                   item[phase]=parse(name,txt,r.returncode)
               d=item['discovery']; o=item['oos']
               item['discoveryPass']=d.get('status')=='ok' and d.get('trades',0)>=30 and d.get('netProfitPct',-999)>0 and d.get('profitFactor',0)>=1.2 and d.get('maxDrawdownPct',999)<20
@@ -141,7 +147,7 @@ jobs:
             'liveTrading':False,
             'discoveryTimerange':os.environ['DISCOVERY_TIMERANGE'],
             'oosTimerange':os.environ['OOS_TIMERANGE'],
-            'pairs':['BTC/USDT','ETH/USDT','SOL/USDT'],
+            'pairs':pairs,
             'fee':0.001,
             'results':report,
             'survivors':survivors,
