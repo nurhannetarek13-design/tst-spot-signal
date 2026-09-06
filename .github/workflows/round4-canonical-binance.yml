@@ -1,0 +1,50 @@
+name: Round 4 Canonical Binance Research
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/round4_binance_canonical.py"
+      - "research/discovery_pipeline.py"
+      - ".github/workflows/round4-canonical-binance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: round4-canonical-binance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  round4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas
+      - name: Syntax check canonical Round 4
+        run: python -m py_compile research/round4_binance_canonical.py research/discovery_pipeline.py
+      - name: Run frozen Round 4 research
+        run: PYTHONPATH=. python research/round4_binance_canonical.py
+      - name: Assert research-only output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/round4-canonical-latest.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['frozenDefinitions'] is True
+          assert len(x['families'])==3
+          print('round4 research-only assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: round4-canonical-report
+          path: validation/edges/round4-canonical-latest.json
+          retention-days: 14
