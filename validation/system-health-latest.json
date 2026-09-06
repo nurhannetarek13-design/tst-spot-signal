@@ -3,8 +3,8 @@
   "status": "PASS",
   "pass": true,
   "liveTrading": false,
-  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "candidateFingerprint": "cba53276448a08d4eebc",
+  "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "4da78ca29267ffd54aa9",
   "candidateStatus": "ACTIVE",
   "gateLiveReady": false,
   "checks": [
@@ -72,8 +72,8 @@
       "name": "gate_candidate_matches",
       "ok": true,
       "detail": {
-        "manifest": "cba53276448a08d4eebc",
-        "gate": "cba53276448a08d4eebc"
+        "manifest": "4da78ca29267ffd54aa9",
+        "gate": "4da78ca29267ffd54aa9"
       }
     },
     {
@@ -209,6 +209,6 @@
       "detail": null
     }
   ],
-  "generatedAt": "2026-09-06T04:26:57.898440+00:00",
+  "generatedAt": "2026-09-06T10:48:57.745542+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
