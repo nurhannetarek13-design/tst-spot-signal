@@ -1,0 +1,189 @@
+name: External NFI + BinHV45 2025-2026
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/external-nfi-binhv45-2025-2026.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FT_IMAGE: freqtradeorg/freqtrade:stable
+      DISCOVERY_TIMERANGE: 20250101-20251231
+      OOS_TIMERANGE: 20260101-20260901
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull source strategies
+        run: |
+          set -euo pipefail
+          docker pull "$FT_IMAGE"
+          mkdir -p extcheck/user_data/strategies extcheck/user_data/results extcheck/user_data/backtests external
+
+          git clone --depth=1 https://github.com/iterativv/NostalgiaForInfinity.git external/nfi
+          git clone --depth=1 https://github.com/TheoBrigitte/freqtrade.git external/theo
+
+          cp external/theo/strategies/BinHV45/BinHV45.py extcheck/user_data/strategies/BinHV45.py
+          cp external/nfi/NostalgiaForInfinityX7.py extcheck/user_data/strategies/NostalgiaForInfinityX7.py
+
+          echo "NFI_SHA=$(git -C external/nfi rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BINHV_REPO_SHA=$(git -C external/theo rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Create Binance Spot research config
+        run: |
+          cat > extcheck/user_data/config.json <<'JSON'
+          {
+            "$schema":"https://schema.freqtrade.io/schema.json",
+            "bot_name":"External NFI BinHV45 Research",
+            "dry_run":true,
+            "dry_run_wallet":1000,
+            "trading_mode":"spot",
+            "margin_mode":"",
+            "max_open_trades":10,
+            "stake_currency":"USDT",
+            "stake_amount":50,
+            "tradable_balance_ratio":0.99,
+            "fiat_display_currency":"USD",
+            "cancel_open_orders_on_exit":false,
+            "exchange":{
+              "name":"binance",
+              "key":"",
+              "secret":"",
+              "ccxt_config":{"enableRateLimit":true,"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "ccxt_async_config":{"enableRateLimit":true,"options":{"defaultType":"spot","fetchMarkets":["spot"]}},
+              "pair_whitelist":[
+                "BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT",
+                "ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"
+              ],
+              "pair_blacklist":[]
+            },
+            "pairlists":[{"method":"StaticPairList"}],
+            "entry_pricing":{"price_side":"other","use_order_book":false},
+            "exit_pricing":{"price_side":"other","use_order_book":false},
+            "order_types":{
+              "entry":"market","exit":"market","emergency_exit":"market",
+              "force_entry":"market","force_exit":"market","stoploss":"market",
+              "stoploss_on_exchange":false
+            },
+            "telegram":{"enabled":false},
+            "api_server":{"enabled":false}
+          }
+          JSON
+
+      - name: Download Binance Spot data for 2025-2026
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD/extcheck/user_data:/freqtrade/user_data" \
+            "$FT_IMAGE" download-data \
+            --config /freqtrade/user_data/config.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT BNB/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT LTC/USDT \
+            --timeframes 1m 5m 15m 1h 4h 1d \
+            --timerange 20241201-20260902
+          sudo chown -R "$(id -u):$(id -g)" extcheck/user_data
+          sudo chmod -R a+rwX extcheck/user_data
+
+      - name: Run discovery and OOS with trade exports
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re, subprocess, shutil
+
+          root = pathlib.Path('extcheck')
+          result_dir = root / 'user_data' / 'results'
+          export_root = root / 'user_data' / 'backtests'
+          result_dir.mkdir(parents=True, exist_ok=True)
+          export_root.mkdir(parents=True, exist_ok=True)
+
+          strategies = ['BinHV45', 'NostalgiaForInfinityX7']
+          phases = [
+              ('discovery', os.environ['DISCOVERY_TIMERANGE']),
+              ('oos', os.environ['OOS_TIMERANGE']),
+          ]
+          mount = f"{os.getcwd()}/extcheck/user_data:/freqtrade/user_data"
+          base = ['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
+
+          def metric(txt, label, pattern):
+              m = re.search(re.escape(label) + r'\s*│\s*' + pattern, txt)
+              return m.group(1) if m else None
+
+          def parse(txt, rc):
+              trades = metric(txt, 'Total/Daily Avg Trades', r'(\d+)')
+              profit = metric(txt, 'Total profit %', r'([-\d.]+)%')
+              pf = metric(txt, 'Profit factor', r'([-\d.]+)')
+              dd = re.search(r'Absolute drawdown\s*│\s*[-\d.]+\s+\w+\s+\(([-\d.]+)%\)', txt)
+              out = {'returncode': rc}
+              if trades is not None and profit is not None and pf is not None and dd:
+                  out.update(status='ok', trades=int(trades), netProfitPct=float(profit), profitFactor=float(pf), maxDrawdownPct=float(dd.group(1)))
+              else:
+                  low = txt.lower()
+                  reason = 'load_failed' if ('could not import' in low or 'impossible to load strategy' in low or 'no module named' in low) else 'backtest_or_parse_failed'
+                  out.update(status='failed', reason=reason)
+              return out
+
+          report = []
+          for strategy in strategies:
+              item = {'strategy': strategy}
+              for phase, timerange in phases:
+                  phase_dir = export_root / strategy / phase
+                  phase_dir.mkdir(parents=True, exist_ok=True)
+                  cmd = base + [
+                      'backtesting',
+                      '--config','/freqtrade/user_data/config.json',
+                      '--strategy', strategy,
+                      '--strategy-path','/freqtrade/user_data/strategies',
+                      '--fee','0.001',
+                      '--timerange',timerange,
+                      '--export','trades',
+                      '--backtest-directory',f'/freqtrade/user_data/backtests/{strategy}/{phase}'
+                  ]
+                  try:
+                      r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=1200)
+                      txt = r.stdout
+                      rc = r.returncode
+                  except subprocess.TimeoutExpired as e:
+                      txt = (e.stdout or '') + '\nTIMEOUT\n'
+                      rc = 124
+                  (result_dir / f'{strategy}.{phase}.log').write_text(txt[-250000:])
+                  item[phase] = parse(txt, rc)
+                  item[phase]['exportFiles'] = [p.name for p in phase_dir.glob('*') if p.is_file()]
+              d, o = item['discovery'], item['oos']
+              item['discoveryPass'] = d.get('status') == 'ok' and d.get('trades',0) >= 30 and d.get('netProfitPct',-999) > 0 and d.get('profitFactor',0) >= 1.2 and d.get('maxDrawdownPct',999) < 20
+              item['oosPass'] = o.get('status') == 'ok' and o.get('trades',0) >= 30 and o.get('netProfitPct',-999) > 0 and o.get('profitFactor',0) >= 1.2 and o.get('maxDrawdownPct',999) < 20
+              item['candidatePass'] = item['discoveryPass'] and item['oosPass']
+              report.append(item)
+              print(json.dumps(item, separators=(',',':')))
+
+          out = {
+              'authorization':'RESEARCH_ONLY',
+              'liveTrading':False,
+              'exchange':'binance',
+              'tradingMode':'spot',
+              'pairs':['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','LTC/USDT'],
+              'fee':0.001,
+              'discoveryTimerange':os.environ['DISCOVERY_TIMERANGE'],
+              'oosTimerange':os.environ['OOS_TIMERANGE'],
+              'sourceCommits':{'NFI':os.environ.get('NFI_SHA'),'BinHV45Repo':os.environ.get('BINHV_REPO_SHA')},
+              'results':report,
+              'survivors':[x['strategy'] for x in report if x['candidatePass']],
+              'nextStep':'Only survivors proceed to fee/slippage stress, pair holdouts and cross-engine validation.'
+          }
+          pathlib.Path('extcheck/report.json').write_text(json.dumps(out, indent=2))
+          PY
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfi-binhv45-binance-spot-2025-2026
+          path: |
+            extcheck/report.json
+            extcheck/user_data/results/*.log
+            extcheck/user_data/backtests/**/*
+          retention-days: 14
