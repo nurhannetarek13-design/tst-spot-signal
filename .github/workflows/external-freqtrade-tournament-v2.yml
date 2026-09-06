@@ -98,13 +98,13 @@ jobs:
       - name: Download Binance Spot data - 120d
         run: |
           docker run --rm \
-            --user "$(id -u):$(id -g)" \
             -v "$PWD/tournament/user_data:/freqtrade/user_data" \
             "$FT_IMAGE" download-data \
             --config /freqtrade/user_data/config.json \
             --pairs BTC/USDT ETH/USDT SOL/USDT \
             --timeframes 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d \
             --days 120
+          sudo chown -R "$(id -u):$(id -g)" tournament/user_data
 
       - name: Load-screen and backtest
         run: |
@@ -118,10 +118,10 @@ jobs:
           results=pathlib.Path('tournament/user_data/results'); results.mkdir(parents=True,exist_ok=True)
           print('pool',len(pool),'official',len(official),'nfi',len(nfi),'mgm',len(mgm))
           mount=f"{os.getcwd()}/tournament/user_data:/freqtrade/user_data"
-          uid=str(os.getuid()); gid=str(os.getgid())
-          base=['docker','run','--rm','--user',f'{uid}:{gid}','-v',mount,os.environ['FT_IMAGE']]
+          base=['docker','run','--rm','-v',mount,os.environ['FT_IMAGE']]
           lr=subprocess.run(base+['list-strategies','--strategy-path','/freqtrade/user_data/strategies','--recursive-strategy-search'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180)
           pathlib.Path('tournament/resolver.log').write_text(lr.stdout)
+          uid=str(os.getuid()); gid=str(os.getgid())
           for i,x in enumerate(pool,1):
             name=x['strategy']; src=x['source']; safe=re.sub(r'[^A-Za-z0-9_.-]+','_',f'{src}__{name}')
             meta={'strategy':name,'source':src,'file':x['file'],'status':'failed','reason':'load_failed'}
@@ -130,11 +130,13 @@ jobs:
               cmd=base+['backtesting','--config','/freqtrade/user_data/config.json','--strategy',name,'--strategy-path','/freqtrade/user_data/strategies','--fee','0.001','--export','trades','--export-filename',out]
               try:
                 r=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)
+                subprocess.run(['sudo','chown','-R',f'{uid}:{gid}',str(results)],check=False)
                 pathlib.Path(f'tournament/user_data/results/{safe}.log').write_text(r.stdout[-120000:])
                 host=pathlib.Path(f'tournament/user_data/results/{safe}.json')
                 if r.returncode==0 and host.exists(): meta.update(status='ok',reason='',result_file=host.name)
                 else: meta['reason']=f'backtest_exit_{r.returncode}'
               except subprocess.TimeoutExpired as e:
+                subprocess.run(['sudo','chown','-R',f'{uid}:{gid}',str(results)],check=False)
                 meta['reason']='backtest_timeout_300s'
                 pathlib.Path(f'tournament/user_data/results/{safe}.log').write_text((e.stdout or '') if isinstance(e.stdout,str) else '')
               except Exception as e: meta['reason']=f'exception:{type(e).__name__}:{e}'
