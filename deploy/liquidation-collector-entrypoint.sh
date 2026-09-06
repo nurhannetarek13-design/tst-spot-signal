@@ -15,6 +15,13 @@ if [ -n "${COINALYZE_API_KEY:-}" ]; then
   else
     echo "{\"kind\":\"coinalyze_backfill_failed\",\"authorization\":\"RESEARCH_ONLY\"}" >&2
   fi
+
+  echo "{\"kind\":\"coinalyze_regime_discovery_start\",\"authorization\":\"RESEARCH_ONLY\"}"
+  if python /app/coinalyze_daily_regime_discovery.py; then
+    echo "{\"kind\":\"coinalyze_regime_discovery_complete_marker\",\"authorization\":\"RESEARCH_ONLY\"}"
+  else
+    echo "{\"kind\":\"coinalyze_regime_discovery_failed\",\"authorization\":\"RESEARCH_ONLY\"}" >&2
+  fi
 else
   echo "{\"kind\":\"coinalyze_backfill_skipped\",\"reason\":\"missing_api_key\",\"authorization\":\"RESEARCH_ONLY\"}"
 fi
