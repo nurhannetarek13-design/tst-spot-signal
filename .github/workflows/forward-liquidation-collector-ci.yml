@@ -1,0 +1,36 @@
+name: Forward Liquidation Collector CI
+
+on:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - 'research/forward_liquidation_collector.py'
+      - 'research/requirements-forward-collector.txt'
+      - 'deploy/Dockerfile.liquidation-collector'
+      - '.github/workflows/forward-liquidation-collector-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install collector dependencies
+        run: pip install -r research/requirements-forward-collector.txt
+      - name: Run parser self-test
+        run: python research/forward_liquidation_collector.py --self-test
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('research/forward_liquidation_collector.py').read_text()
+          assert 'AUTHORIZATION = "RESEARCH_ONLY"' in p
+          assert 'liveTrading: bool = False' in p
+          print('RESEARCH_ONLY_OK')
+          PY
+      - name: Build collector image
+        run: docker build -f deploy/Dockerfile.liquidation-collector -t tst-liquidation-collector:ci .
