@@ -1,0 +1,37 @@
+name: Microstructure Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - 'research/microstructure_discovery.py'
+      - 'research/tardis_sample_loader.py'
+      - '.github/workflows/microstructure-discovery.yml'
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Tardis microstructure discovery
+        run: python research/microstructure_discovery.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/microstructure/tardis-discovery.json'
+          d=json.load(open(p))
+          assert d.get('authorization')=='RESEARCH_ONLY'
+          assert d.get('liveTrading') is False
+          print('RESEARCH_ONLY_OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: microstructure-discovery
+          path: validation/microstructure/tardis-discovery.json
