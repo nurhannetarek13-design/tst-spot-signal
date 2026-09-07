@@ -113,10 +113,10 @@
       "candidateMatch": true,
       "trades": 496,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.849916771894857,
-      "baseExpectancyUSDT": -0.007232112137096773,
-      "stressProfitFactor": 0.5791646655736141,
-      "stressExpectancyUSDT": -0.023742849758064517
+      "baseProfitFactor": 0.8511439805879528,
+      "baseExpectancyUSDT": -0.007172976209677418,
+      "stressProfitFactor": 0.5801409127076695,
+      "stressExpectancyUSDT": -0.023687771471774192
     },
     "forward": {
       "status": "COLLECTING",
@@ -134,6 +134,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T20:35:19.791695+00:00",
+  "generatedAt": "2026-09-07T20:45:21.884226+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
