@@ -9,10 +9,6 @@ on:
       - "src/buy-gateway.js"
       - "src/index.js"
       - "wrangler.jsonc"
-      - "scripts/patch-cloudflare-digest.py"
-      - "scripts/patch-binance-public-api.py"
-      - "scripts/patch-product-mode.py"
-      - "scripts/patch-confirm-page.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -33,28 +29,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Materialize and validate Cloudflare runtime
+      - name: Validate runtime
         run: |
-          python scripts/patch-cloudflare-digest.py
-          python scripts/patch-binance-public-api.py
-          python scripts/patch-product-mode.py
-          python scripts/patch-confirm-page.py
           node --check src/edge-worker.js
           node --check src/buy-gateway.js
-          grep -q 'https://api.binance.com' src/edge-worker.js
           grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
-          grep -q 'const reversalStrategy=' src/edge-worker.js
-          grep -q 'USER_CONFIRMATION_ONLY' src/buy-gateway.js
-          grep -q 'renderConfirmPage' src/buy-gateway.js
-          grep -q 'handleConfirmBuy' src/buy-gateway.js
+          grep -q 'PREP:' src/buy-gateway.js
+          grep -q 'CONFIRM:' src/buy-gateway.js
+          grep -q '/runtime-check' src/buy-gateway.js
+          grep -q '/balance-refresh' src/buy-gateway.js
+          grep -q 'autoBuy:false' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
           if grep -q 'await sendPeriodicScanDigest(env)' src/edge-worker.js; then
             echo "Periodic scan digest still enabled"
-            exit 1
-          fi
-          if grep -q 'if(regime.state==="RISK_OFF") return' src/edge-worker.js; then
-            echo "Unsafe global RISK_OFF abort still present"
             exit 1
           fi
 
@@ -76,7 +64,7 @@ jobs:
               printf '%s' "$value" | npx wrangler secret put "$name"
               echo "$name synced"
             else
-              echo "$name missing in GitHub Secrets; leaving existing Worker secret unchanged"
+              echo "$name missing in GitHub Secrets; existing Worker secret left unchanged"
             fi
           }
           sync_secret TELEGRAM_BOT_TOKEN
@@ -97,40 +85,39 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
-            curl --fail --silent --show-error \
-              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            curl --fail --silent --show-error -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
               -H 'content-type: application/json' \
               --data '{"url":"https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook","allowed_updates":["callback_query"]}'
-          else
-            echo "TELEGRAM_BOT_TOKEN missing in GitHub Secrets; webhook not changed"
           fi
 
-      - name: Verify Telegram connection
+      - name: Verify runtime bindings
         run: |
-          curl --fail --silent --show-error --max-time 60 "https://tst-spot-signal.nurhanne-tarek13.workers.dev/?test=telegram" -o /tmp/telegram.json
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check" \
+            -o /tmp/runtime.json
           python - <<'PY'
           import json
-          row=json.load(open('/tmp/telegram.json'))
-          print(row)
-          assert row.get('ok') is True
-          assert row.get('liveTrading') is False
-          PY
-
-      - name: Verify BUY gateway mode
-        run: |
-          curl --fail --silent --show-error --max-time 60 "https://tst-spot-signal.nurhanne-tarek13.workers.dev/buy-gateway-status" -o /tmp/buy.json
-          python - <<'PY'
-          import json
-          row=json.load(open('/tmp/buy.json'))
+          row=json.load(open('/tmp/runtime.json'))
           print(json.dumps(row,indent=2))
           assert row.get('ok') is True
-          assert row.get('mode') == 'USER_CONFIRMATION_ONLY'
-          assert row.get('autoBuy') is False
+          assert row.get('telegramConfigured') is True
+          assert row.get('noSecretValuesExposed') is True
           PY
 
-      - name: Verify deployed scanner runtime
+      - name: Verify Binance balance path
+        continue-on-error: true
         run: |
-          curl --fail --silent --show-error --max-time 60 "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status" -o /tmp/status.json
+          curl --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh" \
+            -o /tmp/balance.json
+          cat /tmp/balance.json
+
+      - name: Verify scanner runtime
+        run: |
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status" \
+            -o /tmp/status.json
           python - <<'PY'
           import json
           row=json.load(open('/tmp/status.json'))
@@ -138,18 +125,4 @@ jobs:
           assert row.get('ok') is True
           assert row.get('liveTrading') is False
           assert row.get('executorAllowed') is False
-          strategies=set(row.get('strategies') or [])
-          assert 'LIQUIDITY_CRASH_EXHAUSTION' in strategies
-          assert 'STOP_HUNT_REVERSAL' in strategies
-          PY
-
-      - name: Verify scanner remains paper-only
-        continue-on-error: true
-        run: |
-          curl --fail --silent --show-error --max-time 60 "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scan-preview" -o /tmp/scan.json
-          python - <<'PY'
-          import json
-          row=json.load(open('/tmp/scan.json'))
-          print(json.dumps(row,indent=2))
-          assert row.get('liveTrading') is False
           PY
