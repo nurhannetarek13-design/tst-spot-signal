@@ -2,6 +2,11 @@ name: Unified Candidate Rotation
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/rotate_candidate.py"
+      - ".github/workflows/candidate-rotation.yml"
   workflow_run:
     workflows: ["Unified Fusion Gate"]
     types: [completed]
