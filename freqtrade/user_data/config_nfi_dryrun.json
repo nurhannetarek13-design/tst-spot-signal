@@ -20,67 +20,33 @@
     "secret": "",
     "ccxt_config": {
       "enableRateLimit": true,
-      "urls": {
-        "api": {
-          "public": "https://data-api.binance.vision/api/v3",
-          "private": "https://api.binance.com/api",
-          "sapi": "https://api.binance.com/sapi"
-        }
-      },
-      "options": {
-        "defaultType": "spot",
-        "fetchMarkets": ["spot"]
-      }
+      "urls": {"api": {"public": "https://data-api.binance.vision/api/v3", "private": "https://api.binance.com/api", "sapi": "https://api.binance.com/sapi"}},
+      "options": {"defaultType": "spot", "fetchMarkets": ["spot"]}
     },
     "ccxt_async_config": {
       "enableRateLimit": true,
-      "urls": {
-        "api": {
-          "public": "https://data-api.binance.vision/api/v3",
-          "private": "https://api.binance.com/api",
-          "sapi": "https://api.binance.com/sapi"
-        }
-      },
-      "options": {
-        "defaultType": "spot",
-        "fetchMarkets": ["spot"]
-      }
+      "urls": {"api": {"public": "https://data-api.binance.vision/api/v3", "private": "https://api.binance.com/api", "sapi": "https://api.binance.com/sapi"}},
+      "options": {"defaultType": "spot", "fetchMarkets": ["spot"]}
     },
-    "pair_whitelist": [
-      "BTC/USDT",
-      "ETH/USDT",
-      "SOL/USDT",
-      "BNB/USDT",
-      "XRP/USDT",
-      "ADA/USDT",
-      "DOGE/USDT",
-      "LINK/USDT",
-      "AVAX/USDT",
-      "LTC/USDT"
-    ],
-    "pair_blacklist": [
-      ".*(UP|DOWN|BULL|BEAR)/USDT",
-      "USDC/USDT",
-      "FDUSD/USDT",
-      "TUSD/USDT",
-      "USDP/USDT",
-      "DAI/USDT",
-      "EUR/USDT"
-    ]
+    "pair_whitelist": ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"],
+    "pair_blacklist": [".*(UP|DOWN|BULL|BEAR)/USDT","USDC/USDT","FDUSD/USDT","TUSD/USDT","USDP/USDT","DAI/USDT","EUR/USDT"]
   },
   "pairlists": [{"method": "StaticPairList"}],
   "entry_pricing": {"price_side": "other", "use_order_book": false},
   "exit_pricing": {"price_side": "other", "use_order_book": false},
-  "order_types": {
-    "entry": "market",
-    "exit": "market",
-    "emergency_exit": "market",
-    "force_entry": "market",
-    "force_exit": "market",
-    "stoploss": "market",
-    "stoploss_on_exchange": false
-  },
+  "order_types": {"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false},
   "telegram": {"enabled": false, "token": "", "chat_id": ""},
-  "api_server": {"enabled": false},
+  "api_server": {
+    "enabled": false,
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8080,
+    "verbosity": "error",
+    "enable_openapi": false,
+    "jwt_secret_key": "dryrun-local-only-not-exposed",
+    "ws_token": "dryrun-local-only-not-exposed",
+    "CORS_origins": [],
+    "username": "dryrun",
+    "password": "dryrun-local-only-not-exposed"
+  },
   "internals": {"process_throttle_secs": 5}
 }
