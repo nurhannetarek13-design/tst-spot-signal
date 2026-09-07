@@ -127,6 +127,18 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-06T07:23:35.683580+00:00"
+    },
+    {
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
+      "candidateFingerprint": "cba53276448a08d4eebc",
+      "symbol": "PROMUSDT",
+      "family": "MEAN_REVERSION",
+      "hardFailValidators": [
+        "vectorbt",
+        "freqtrade",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-09-07T21:30:44.462982+00:00"
     }
   ],
   "ttlDays": 7,

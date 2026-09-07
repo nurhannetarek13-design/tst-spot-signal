@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "candidateFingerprint": "cba53276448a08d4eebc",
-  "symbol": "PROMUSDT",
-  "family": "MEAN_REVERSION",
-  "timeframe": "15m",
+  "candidateId": null,
+  "candidateFingerprint": null,
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-07T20:36:00.113Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-07T21:30:44.462982+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }

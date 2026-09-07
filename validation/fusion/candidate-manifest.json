@@ -1,49 +1,8 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "source": "VECTORBT",
-  "sourceGeneratedAt": "2026-09-07T06:37:18.973008+00:00",
-  "symbol": "PROMUSDT",
-  "family": "MEAN_REVERSION",
-  "timeframe": "15m",
-  "params": {
-    "bb": 1.6,
-    "rsi_in": 28,
-    "rsi_out": 50,
-    "sl": 0.02,
-    "tp": 0.025
-  },
-  "sourceMetrics": {
-    "base": {
-      "trades": 22,
-      "wins": 13,
-      "winRate": 0.5909090909090909,
-      "netPnlUSDT": 1.3368389116848078,
-      "expectancyUSDT": 0.06076540507658217,
-      "profitFactor": 2.0117248673448973,
-      "maxDrawdownUSDT": 0.852283418893488
-    },
-    "stress2x": {
-      "trades": 22,
-      "wins": 13,
-      "winRate": 0.5909090909090909,
-      "netPnlUSDT": 1.093258492353792,
-      "expectancyUSDT": 0.04969356783426327,
-      "profitFactor": 1.7703762810112704,
-      "maxDrawdownUSDT": 0.9945734254811822
-    }
-  },
-  "liquidity": {
-    "quoteVolume24h": 73203707.44948,
-    "priceUSDT": null
-  },
-  "rankKey": [
-    0,
-    0.04969356783426327,
-    1.7703762810112704,
-    22
-  ],
-  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "candidateFingerprint": "cba53276448a08d4eebc",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -409,9 +368,10 @@
     "83e561f3d531f1bd9a71",
     "b7b8fd956817ecaced07",
     "bf01f22fc60141ca16b1",
+    "cba53276448a08d4eebc",
     "db0561831b32d3a2c528"
   ],
-  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -420,5 +380,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-07T07:26:45.098062+00:00"
+  "generatedAt": "2026-09-07T21:30:44.462982+00:00"
 }
