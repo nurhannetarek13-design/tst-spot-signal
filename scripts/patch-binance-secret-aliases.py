@@ -47,31 +47,35 @@ elif new_destructure not in s:
 signature_marker = '''  const binanceSignature = await hmacHex(secret, qs);
   const body = JSON.stringify({
 '''
-direct_testnet = '''  const binanceSignature = await hmacHex(secret, qs);
+railway_testnet = '''  const binanceSignature = await hmacHex(secret, qs);
   const signedQuery = `${qs}&signature=${binanceSignature}`;
 
   if (network === "testnet") {
-    const r = await fetch(`https://testnet.binance.vision${path}?${signedQuery}`, {
-      method: String(method).toUpperCase(),
-      headers: {
-        "X-MBX-APIKEY": key,
-        "content-type": "application/x-www-form-urlencoded",
-      },
+    if (String(method).toUpperCase() !== "GET" || path !== "/api/v3/account") {
+      throw new Error("DEMO_EXECUTION_DISABLED");
+    }
+    const r = await fetch("https://liquidation-collector-production.up.railway.app/signed-testnet-account", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: key, query: signedQuery }),
     });
     const text = await r.text();
     let row = {};
-    try { row = JSON.parse(text || "{}"); } catch { row = { code: r.status, msg: "NON_JSON_TESTNET_RESPONSE" }; }
-    if (!r.ok || Number(row?.code) < 0) {
-      throw new Error(`BINANCE_TESTNET_ERROR: ${row?.code ?? r.status} ${row?.msg || "request failed"}`);
+    try { row = JSON.parse(text || "{}"); } catch { row = { ok: false, status: "NON_JSON_RAILWAY_RESPONSE" }; }
+    if (!r.ok || row.ok !== true) {
+      const detail = row?.upstream?.code != null
+        ? `${row.upstream.code} ${row.upstream.msg || ""}`
+        : (row.reason || row.status || r.status);
+      throw new Error(`BINANCE_RAILWAY_TESTNET_ERROR: ${detail}`);
     }
-    return row;
+    return row.data;
   }
 
   const body = JSON.stringify({
 '''
 if signature_marker in s:
-    s = s.replace(signature_marker, direct_testnet, 1)
-elif 'https://testnet.binance.vision${path}?${signedQuery}' not in s:
+    s = s.replace(signature_marker, railway_testnet, 1)
+elif 'liquidation-collector-production.up.railway.app/signed-testnet-account' not in s:
     raise SystemExit('signed Binance signature marker changed unexpectedly')
 
 old_body = '''    method: String(method).toUpperCase(),
@@ -93,7 +97,7 @@ elif new_body not in s:
 old_balance = '''      source: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
       checkedAt: Date.now(),
 '''
-new_balance = '''      source: creds(env).network === "testnet" ? "CLOUDFLARE_DIRECT_TESTNET" : "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
+new_balance = '''      source: creds(env).network === "testnet" ? "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" : "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
       network: creds(env).network,
       credentialMode: creds(env).credentialMode,
       checkedAt: Date.now(),
@@ -103,6 +107,31 @@ if old_balance in s:
 elif new_balance not in s:
     raise SystemExit('balance metadata marker changed unexpectedly')
 
+runtime_old = '        executionRoute: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",'
+runtime_new = '        executionRoute: c.network === "testnet" ? "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" : "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",'
+if runtime_old in s:
+    s = s.replace(runtime_old, runtime_new, 1)
+elif runtime_new not in s:
+    raise SystemExit('runtime execution route marker changed unexpectedly')
+
+balance_route_old = '''      const error = balance ? null : await getState(env, "binance:balance:error");
+      return Response.json({ ok: Boolean(balance), balance, error, autoBuy: false, executionRoute: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT" });
+'''
+balance_route_new = '''      const error = balance ? null : await getState(env, "binance:balance:error");
+      const c = creds(env);
+      return Response.json({
+        ok: Boolean(balance),
+        balance,
+        error,
+        autoBuy: false,
+        executionRoute: c.network === "testnet" ? "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" : "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
+      });
+'''
+if balance_route_old in s:
+    s = s.replace(balance_route_old, balance_route_new, 1)
+elif 'executionRoute: c.network === "testnet" ? "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY"' not in s:
+    raise SystemExit('balance execution route marker changed unexpectedly')
+
 required = (
     'env.BINANCE_DEMO_API_KEY',
     'env.BINANCE_DEMO_SECRET_KEY',
@@ -110,8 +139,9 @@ required = (
     'network: "testnet"',
     'credentialMode: "LIVE"',
     'credentialMode: "DEMO"',
-    'https://testnet.binance.vision',
-    'CLOUDFLARE_DIRECT_TESTNET',
+    'liquidation-collector-production.up.railway.app/signed-testnet-account',
+    'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY',
+    'DEMO_EXECUTION_DISABLED',
     'demoApiKeyBindingPresent',
     'demoSecretBindingPresent',
     'noSecretValuesExposed',
@@ -125,4 +155,4 @@ if 'autoBuy: false' not in s and 'autoBuy:false' not in s:
     raise SystemExit('autoBuy=false guard is missing')
 
 p.write_text(s, encoding='utf-8')
-print('verified Binance routing: live=production via Vercel, demo=testnet direct via Cloudflare; no secret mutation performed')
+print('verified Binance routing: live=production via Vercel; demo=read-only testnet account via Railway; no secret mutation performed')
