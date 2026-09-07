@@ -1,19 +1,20 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "symbol": null,
-  "family": null,
+  "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "46ad824ea85b257ae59f",
+  "symbol": "XLMUSDT",
+  "family": "TS_MOMENTUM",
   "allValidatorsCurrentCandidate": false,
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "CANDIDATE:MISSING",
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
+    "jesse:CANDIDATE_ID_MISMATCH",
+    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
     "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
@@ -41,7 +42,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "CANDIDATE:MISSING",
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
@@ -56,8 +56,6 @@
     "nautilus:CANDIDATE_ID_MISMATCH",
     "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:FAIL",
-    "forward:CANDIDATE_ID_MISMATCH",
-    "forward:CANDIDATE_FINGERPRINT_MISMATCH",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -123,13 +121,13 @@
       "stressExpectancyUSDT": -0.023687771471774192
     },
     "forward": {
-      "status": "NO_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
+      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "46ad824ea85b257ae59f",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 0,
       "independentEnginePass": null,
       "baseProfitFactor": null,
@@ -138,6 +136,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T21:35:53.527600+00:00",
+  "generatedAt": "2026-09-07T21:36:51.069202+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
