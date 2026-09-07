@@ -1,0 +1,195 @@
+name: External NFI validation v4
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/unified-execution-parity]
+    paths:
+      - '.github/workflows/external-nfi-validation-v4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfi-x7-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PAIRS: BTC/USDT ETH/USDT SOL/USDT BNB/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT LTC/USDT
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare pinned NFI runtime and validation config
+        run: |
+          set -euo pipefail
+          git clone https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
+          git -C external/NostalgiaForInfinity checkout da50440bd5f8a829af9dc768822fa31cfe4b7867
+          mkdir -p validation/external-nfi-v4 external/NostalgiaForInfinity/user_data/backtest_results
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-v4/upstream-sha.txt
+          sha256sum external/NostalgiaForInfinity/NostalgiaForInfinityX7.py | tee validation/external-nfi-v4/strategy-sha256.txt
+          cat > external/NostalgiaForInfinity/user_data/tst-config.json <<'JSON'
+          {
+            "$schema":"https://schema.freqtrade.io/schema.json",
+            "bot_name":"TST NFI X7 validation",
+            "dry_run":true,
+            "dry_run_wallet":1000,
+            "trading_mode":"spot",
+            "margin_mode":"",
+            "max_open_trades":10,
+            "stake_currency":"USDT",
+            "stake_amount":50,
+            "tradable_balance_ratio":0.99,
+            "exchange":{
+              "name":"binance","key":"","secret":"","enable_ws":false,
+              "ccxt_config":{"enableRateLimit":true,"options":{"defaultType":"spot","fetchMarkets":["spot"]},"urls":{"api":{"public":"https://data-api.binance.vision/api/v3"}}},
+              "ccxt_async_config":{"enableRateLimit":true,"options":{"defaultType":"spot","fetchMarkets":["spot"]},"urls":{"api":{"public":"https://data-api.binance.vision/api/v3"}}},
+              "pair_whitelist":["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"],
+              "pair_blacklist":[]
+            },
+            "pairlists":[{"method":"StaticPairList"}],
+            "entry_pricing":{"price_side":"other","use_order_book":false},
+            "exit_pricing":{"price_side":"other","use_order_book":false},
+            "order_types":{"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false},
+            "telegram":{"enabled":false,"token":"","chat_id":""},
+            "api_server":{"enabled":false,"listen_ip_address":"127.0.0.1","listen_port":8080,"verbosity":"error","enable_openapi":false,"jwt_secret_key":"validation-only-key-12345678901234567890","ws_token":"validation-only-ws-12345678901234567890","CORS_origins":[],"username":"validation","password":"validation"}
+          }
+          JSON
+          cat > external/NostalgiaForInfinity/run-pinned.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          mounts=()
+          for f in NostalgiaForInfinityX*.py; do mounts+=( -v "$PWD/$f:/freqtrade/$f:ro" ); done
+          exec docker run --rm \
+            "${mounts[@]}" \
+            -v "$PWD/legacy:/freqtrade/legacy:ro" \
+            -v "$PWD/user_data:/freqtrade/user_data" \
+            nfi-x7-pinned "$@"
+          SH
+          chmod +x external/NostalgiaForInfinity/run-pinned.sh
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker build -t nfi-x7-pinned -f docker/Dockerfile.custom .
+
+      - name: Download Binance Spot data
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          ./run-pinned.sh download-data --config /freqtrade/user_data/tst-config.json \
+            --pairs $PAIRS --timeframes 1m 5m 15m 1h 4h 1d --timerange 20241201-20260905
+
+      - name: Baseline backtest
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          ./run-pinned.sh backtesting --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 --strategy-path /freqtrade \
+            --timerange 20250101-20260905 --fee 0.001 --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/nfi-base.json \
+            > ../../validation/external-nfi-v4/base.log 2>&1
+          echo $? > ../../validation/external-nfi-v4/base-exit-code.txt
+          tail -n 180 ../../validation/external-nfi-v4/base.log
+          exit 0
+
+      - name: Frozen OOS backtest
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          ./run-pinned.sh backtesting --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 --strategy-path /freqtrade \
+            --timerange 20260101-20260905 --fee 0.001 --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/nfi-oos.json \
+            > ../../validation/external-nfi-v4/oos.log 2>&1
+          echo $? > ../../validation/external-nfi-v4/oos-exit-code.txt
+          tail -n 180 ../../validation/external-nfi-v4/oos.log
+          exit 0
+
+      - name: Doubled-fee stress backtest
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          ./run-pinned.sh backtesting --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 --strategy-path /freqtrade \
+            --timerange 20250101-20260905 --fee 0.002 --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/nfi-stress.json \
+            > ../../validation/external-nfi-v4/stress.log 2>&1
+          echo $? > ../../validation/external-nfi-v4/stress-exit-code.txt
+          tail -n 180 ../../validation/external-nfi-v4/stress.log
+          exit 0
+
+      - name: Lookahead analysis
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          ./run-pinned.sh lookahead-analysis --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 --strategy-path /freqtrade \
+            --timerange 20250101-20260905 --fee 0.001 \
+            --minimum-trade-amount 20 --targeted-trade-amount 100 \
+            > ../../validation/external-nfi-v4/lookahead.log 2>&1
+          echo $? > ../../validation/external-nfi-v4/lookahead-exit-code.txt
+          tail -n 160 ../../validation/external-nfi-v4/lookahead.log
+          exit 0
+
+      - name: Build strict NFI gate
+        run: |
+          python - <<'PY'
+          import json, pathlib, re, math
+          root=pathlib.Path('validation/external-nfi-v4')
+          def code(n):
+              try:return int((root/f'{n}-exit-code.txt').read_text().strip())
+              except:return 999
+          def parse(n):
+              t=(root/f'{n}.log').read_text(errors='ignore') if (root/f'{n}.log').exists() else ''
+              def g(p,typ=float):
+                  m=re.search(p,t,re.I)
+                  if not m:return None
+                  try:return typ(m.group(1).replace(',','').strip())
+                  except:return None
+              trades=g(r'Total/Daily Avg Trades\s*│\s*(\d+)',int)
+              if trades is None: trades=g(r'│\s*TOTAL\s*│\s*(\d+)',int)
+              wins=draws=losses=None
+              m=re.search(r'│\s*TOTAL\s*│\s*\d+\s*│.*?│\s*(\d+)\s+(\d+)\s+(\d+)\s+[\d.]+',t,re.I)
+              if m: wins,draws,losses=map(int,m.groups())
+              rawpf=g(r'Profit factor\s*│\s*([-+0-9.]+)')
+              ap=g(r'Absolute profit\s*│\s*([-+0-9.]+)')
+              effective_pf=rawpf
+              if losses==0 and (trades or 0)>0 and (ap or 0)>0:
+                  effective_pf='INF'
+              return {'exitCode':code(n),'trades':trades,'wins':wins,'draws':draws,'losses':losses,'profitFactorRaw':rawpf,'profitFactorEffective':effective_pf,'absoluteProfit':ap,'maxDrawdownPct':g(r'Max % of account underwater\s*│\s*([-+0-9.]+)')}
+          b,o,s=parse('base'),parse('oos'),parse('stress')
+          lt=(root/'lookahead.log').read_text(errors='ignore') if (root/'lookahead.log').exists() else ''
+          inconclusive=bool(re.search(r'too few trades|less than minimum_trade_amount|Test failed',lt,re.I))
+          biased=bool(re.search(r'has bias\s*│\s*true|biased\s*[:=]\s*true',lt,re.I))
+          la={'exitCode':code('lookahead'),'biasDetected':biased,'inconclusive':inconclusive}
+          reasons=[]
+          def pf_ok(r,minpf):
+              if r['profitFactorEffective']=='INF': return True
+              return isinstance(r['profitFactorEffective'],(int,float)) and r['profitFactorEffective']>=minpf
+          for n,r,minpf in [('base',b,1.15),('oos',o,1.05),('stress',s,1.00)]:
+              if r['exitCode']!=0: reasons.append(f'{n}:BACKTEST_ERROR')
+              if r['trades'] is None or r['trades']<20: reasons.append(f'{n}:LT_20_TRADES')
+              if not pf_ok(r,minpf): reasons.append(f'{n}:PF_GATE_FAIL')
+              if r['absoluteProfit'] is None or r['absoluteProfit']<=0: reasons.append(f'{n}:PROFIT_GATE_FAIL')
+          if la['exitCode']!=0: reasons.append('lookahead:ANALYSIS_ERROR')
+          if la['inconclusive']: reasons.append('lookahead:INCONCLUSIVE')
+          if la['biasDetected']: reasons.append('lookahead:BIAS_DETECTED')
+          out={'engine':'NFI_X7_SPOT_GATE_V4','strategy':'NostalgiaForInfinityX7','upstreamSha':(root/'upstream-sha.txt').read_text().strip(),'strategySha256':(root/'strategy-sha256.txt').read_text().split()[0],'universe':['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','LTC/USDT'],'base':b,'oos':o,'stress':s,'lookahead':la,'pass':not reasons,'status':'PASS' if not reasons else 'FAIL','authorization':'DRY_RUN_AND_SIGNAL_ONLY' if not reasons else 'RESEARCH_ONLY','liveTrading':False,'reasons':reasons}
+          (root/'gate.json').write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-nfi-validation-v4
+          path: |
+            validation/external-nfi-v4/**
+            external/NostalgiaForInfinity/user_data/backtest_results/**
+
+      - name: Enforce gate
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('validation/external-nfi-v4/gate.json'))
+          if not r['pass']: raise SystemExit('NFI_GATE_FAIL: '+', '.join(r['reasons']))
+          print('NFI_GATE_PASS')
+          PY
