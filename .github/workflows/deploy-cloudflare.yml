@@ -76,6 +76,8 @@ jobs:
           grep -q 'claimState' src/buy-gateway.js
           grep -q 'VERCEL_SIGNED_RELAY_URL' src/buy-gateway.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway.js
+          grep -q 'CLOUDFLARE_DIRECT_TESTNET' src/buy-gateway.js
+          grep -q 'testnet.binance.vision' src/buy-gateway.js
           grep -q 'sendPromptForActive' src/buy-gateway.js
           grep -q '/runtime-check' src/buy-gateway.js
           grep -q '/balance-refresh' src/buy-gateway.js
@@ -131,12 +133,11 @@ jobs:
           assert row.get('hasApiKey') is True
           assert row.get('hasApiSecret') is True
           assert row.get('noSecretValuesExposed') is True
-          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
           assert row.get('atomicConfirmClaim') is True
           assert row.get('autoBuy') is False
           PY
 
-      - name: Verify Binance balance path through signed relay
+      - name: Verify Binance demo balance through Spot Testnet
         shell: bash
         run: |
           set -euo pipefail
@@ -153,11 +154,12 @@ jobs:
           print(json.dumps(row,indent=2))
           assert row.get('ok') is True
           assert row.get('autoBuy') is False
-          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
           bal=row.get('balance') or {}
           assert bal.get('ok') is True
           assert bal.get('status') == 'ACCOUNT_BALANCE_OK'
-          assert bal.get('source') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
+          assert bal.get('source') == 'CLOUDFLARE_DIRECT_TESTNET'
+          assert bal.get('network') == 'testnet'
+          assert bal.get('credentialMode') == 'DEMO'
           assert isinstance((bal.get('usdt') or {}).get('free'), (int,float))
           PY
 
