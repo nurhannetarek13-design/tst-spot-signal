@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tst-spot-signal",
-  "main": "src/buy-gateway.js",
+  "main": "src/buy-gateway-stable.js",
   "compatibility_date": "2026-08-29",
   "triggers": {
     "crons": ["* * * * *"]
