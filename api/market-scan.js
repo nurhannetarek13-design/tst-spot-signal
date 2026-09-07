@@ -94,6 +94,7 @@ export default async function handler(req, res) {
       ok: true,
       checkedAt: new Date().toISOString(),
       marketCount: rows.length,
+      symbols: rows.map(x => x.symbol),
       liquidMovers,
       momentum,
       newestCandidates,
