@@ -9,109 +9,130 @@
   "candidates": [
     {
       "symbol": "PUMPUSDT",
-      "price": 0.004119,
-      "quoteVolume24h": 39279525.655514,
+      "price": 0.004486,
+      "quoteVolume24h": 46133188.660594,
       "score": 100,
-      "oiChange2h": 0.04248524174496282,
-      "takerBuySellRatio1h": 1.323575,
+      "oiChange2h": 0.0768995745480896,
+      "takerBuySellRatio1h": 1.23975,
       "fundingRate": 5e-05,
-      "basis": -9.955249937476651e-05,
+      "basis": -0.00016054513994190334,
       "paperLongPressure": true
-    },
-    {
-      "symbol": "WLDUSDT",
-      "price": 0.4242,
-      "quoteVolume24h": 26989552.57076,
-      "score": 90,
-      "oiChange2h": 0.03154630905212685,
-      "takerBuySellRatio1h": 1.086925,
-      "fundingRate": 0.0001,
-      "basis": -9.204716067501284e-05,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "NEARUSDT",
-      "price": 2.425,
-      "quoteVolume24h": 90509404.4456,
-      "score": 80,
-      "oiChange2h": 0.010068100259931878,
-      "takerBuySellRatio1h": 1.10055,
-      "fundingRate": 0.0001,
-      "basis": -0.0005138395151437214,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "ENAUSDT",
-      "price": 0.1764,
-      "quoteVolume24h": 34982751.338347,
-      "score": 80,
-      "oiChange2h": 0.01850100554262446,
-      "takerBuySellRatio1h": 1.06125,
-      "fundingRate": 5e-05,
-      "basis": -0.0004609435254895322,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "price": 2.259,
-      "quoteVolume24h": 20970229.287984,
-      "score": 80,
-      "oiChange2h": 0.013464446337621228,
-      "takerBuySellRatio1h": 1.11035,
-      "fundingRate": -2.068e-05,
-      "basis": -0.001008759843023621,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "ARBUSDT",
-      "price": 0.1714,
-      "quoteVolume24h": 77894969.34583,
-      "score": 70,
-      "oiChange2h": 0.03368388068267736,
-      "takerBuySellRatio1h": 0.742275,
-      "fundingRate": 0.0001,
-      "basis": 3.4406332724667976e-05,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 0.8064,
-      "quoteVolume24h": 61163915.23237,
-      "score": 70,
-      "oiChange2h": 0.02279168077137994,
-      "takerBuySellRatio1h": 0.9015,
-      "fundingRate": 7.149e-05,
-      "basis": -0.0003392795414683958,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "MARSCOINUSDT",
-      "price": 0.1671,
-      "quoteVolume24h": 52697415.38349,
-      "score": 70,
-      "oiChange2h": 0.021432384064509646,
-      "takerBuySellRatio1h": 1.0449,
-      "fundingRate": 5e-05,
-      "basis": 0.000959063376171132,
-      "paperLongPressure": false
     },
     {
       "symbol": "SAHARAUSDT",
       "price": 0.00917,
-      "quoteVolume24h": 54290990.63804,
-      "score": 40,
-      "oiChange2h": -0.0058615711012440785,
-      "takerBuySellRatio1h": 0.8835,
+      "quoteVolume24h": 20525437.23229,
+      "score": 90,
+      "oiChange2h": 0.0028207419931283173,
+      "takerBuySellRatio1h": 1.554975,
       "fundingRate": 5e-05,
-      "basis": 2.944345330280207e-05,
+      "basis": 7.638827505429546e-06,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "NEARUSDT",
+      "price": 2.354,
+      "quoteVolume24h": 73008093.3066,
+      "score": 70,
+      "oiChange2h": -0.0025405520320040953,
+      "takerBuySellRatio1h": 1.16375,
+      "fundingRate": 0.0001,
+      "basis": -0.0007175063721326369,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.1706,
+      "quoteVolume24h": 31079271.149919,
+      "score": 70,
+      "oiChange2h": -0.01126581914490854,
+      "takerBuySellRatio1h": 1.270975,
+      "fundingRate": 5e-05,
+      "basis": -0.0006066801285177226,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ASTERUSDT",
+      "price": 0.802,
+      "quoteVolume24h": 20971543.43839,
+      "score": 70,
+      "oiChange2h": 0.03443708273339219,
+      "takerBuySellRatio1h": 1.02425,
+      "fundingRate": 5e-05,
+      "basis": -0.0005404240305151298,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "MARSCOINUSDT",
+      "price": 0.171,
+      "quoteVolume24h": 48006423.61599,
+      "score": 60,
+      "oiChange2h": 0.00323504404066588,
+      "takerBuySellRatio1h": 0.97405,
+      "fundingRate": 0.00037322,
+      "basis": 0.0018965557610808315,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "HEMIUSDT",
+      "price": 0.00897,
+      "quoteVolume24h": 23341950.322976,
+      "score": 55,
+      "oiChange2h": 0.05379498723351106,
+      "takerBuySellRatio1h": 0.982425,
+      "fundingRate": -0.00259854,
+      "basis": -0.007898188719265398,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ARBUSDT",
+      "price": 0.1652,
+      "quoteVolume24h": 70652553.73948,
+      "score": 40,
+      "oiChange2h": -0.006345039283613518,
+      "takerBuySellRatio1h": 0.9299,
+      "fundingRate": -5.743e-05,
+      "basis": -0.0007592262973763475,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.8141,
+      "quoteVolume24h": 67563378.19791,
+      "score": 40,
+      "oiChange2h": -0.005684779827348496,
+      "takerBuySellRatio1h": 0.8779250000000001,
+      "fundingRate": 0.0001,
+      "basis": -0.0004565191237968502,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "WLDUSDT",
+      "price": 0.4527,
+      "quoteVolume24h": 49184553.67948,
+      "score": 40,
+      "oiChange2h": -0.0002629588843532371,
+      "takerBuySellRatio1h": 0.9520500000000001,
+      "fundingRate": 0.0001,
+      "basis": -0.0004079273829203922,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ICPUSDT",
+      "price": 2.921,
+      "quoteVolume24h": 24155595.49645,
+      "score": 40,
+      "oiChange2h": -0.032157500650182747,
+      "takerBuySellRatio1h": 0.869275,
+      "fundingRate": 5.076e-05,
+      "basis": -0.00018397235941036705,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 11,
-  "usableCount": 9,
+  "universeCount": 12,
+  "usableCount": 11,
   "failures": {
-    "RAYUSDT": "NO_FUTURES_SERIES",
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "RAYUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-09-07T05:38:16.588428+00:00"
+  "generatedAt": "2026-09-07T11:27:55.267928+00:00"
 }
