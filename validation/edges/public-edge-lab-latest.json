@@ -8,163 +8,198 @@
   "universeMode": "LIQUID_SMALL_MID_CAP_USDT",
   "universe": [
     {
-      "symbol": "NEARUSDT",
-      "base": "NEAR",
-      "price": 2.383,
-      "quoteVolume24h": 90957489.4604
+      "symbol": "SUIUSDT",
+      "base": "SUI",
+      "price": 0.83,
+      "quoteVolume24h": 84677664.27458
     },
     {
       "symbol": "ARBUSDT",
       "base": "ARB",
-      "price": 0.1701,
-      "quoteVolume24h": 74295007.86051
-    },
-    {
-      "symbol": "SUIUSDT",
-      "base": "SUI",
-      "price": 0.8013,
-      "quoteVolume24h": 59369601.26365
-    },
-    {
-      "symbol": "SAHARAUSDT",
-      "base": "SAHARA",
-      "price": 0.00918,
-      "quoteVolume24h": 54783196.69542
-    },
-    {
-      "symbol": "MARSCOINUSDT",
-      "base": "MARSCOIN",
-      "price": 0.1612,
-      "quoteVolume24h": 49672361.39365
-    },
-    {
-      "symbol": "PUMPUSDT",
-      "base": "PUMP",
-      "price": 0.004086,
-      "quoteVolume24h": 39786163.14181
-    },
-    {
-      "symbol": "RAYUSDT",
-      "base": "RAY",
-      "price": 1.1921,
-      "quoteVolume24h": 36111248.14428
+      "price": 0.1704,
+      "quoteVolume24h": 64364859.75084
     },
     {
       "symbol": "WLDUSDT",
       "base": "WLD",
-      "price": 0.4387,
-      "quoteVolume24h": 31925716.0459
+      "price": 0.468,
+      "quoteVolume24h": 63097720.42022
+    },
+    {
+      "symbol": "PUMPUSDT",
+      "base": "PUMP",
+      "price": 0.004343,
+      "quoteVolume24h": 58374918.482694
+    },
+    {
+      "symbol": "NEARUSDT",
+      "base": "NEAR",
+      "price": 2.323,
+      "quoteVolume24h": 50770184.2258
+    },
+    {
+      "symbol": "MARSCOINUSDT",
+      "base": "MARSCOIN",
+      "price": 0.1541,
+      "quoteVolume24h": 43097091.3755
     },
     {
       "symbol": "ENAUSDT",
       "base": "ENA",
-      "price": 0.1733,
-      "quoteVolume24h": 31039887.134628
+      "price": 0.165,
+      "quoteVolume24h": 31129113.375437
+    },
+    {
+      "symbol": "SAHARAUSDT",
+      "base": "SAHARA",
+      "price": 0.00939,
+      "quoteVolume24h": 25300386.42559
+    },
+    {
+      "symbol": "XLMUSDT",
+      "base": "XLM",
+      "price": 0.1932,
+      "quoteVolume24h": 24470857.6361
+    },
+    {
+      "symbol": "PEPEUSDT",
+      "base": "PEPE",
+      "price": 3.63e-06,
+      "quoteVolume24h": 22787543.68231665
+    },
+    {
+      "symbol": "ASTERUSDT",
+      "base": "ASTER",
+      "price": 0.77,
+      "quoteVolume24h": 21748004.26568
+    },
+    {
+      "symbol": "UUSDT",
+      "base": "U",
+      "price": 0.9994,
+      "quoteVolume24h": 21676254.5393
+    },
+    {
+      "symbol": "TRUMPUSDT",
+      "base": "TRUMP",
+      "price": 2.272,
+      "quoteVolume24h": 21237437.222608
     },
     {
       "symbol": "HEMIUSDT",
       "base": "HEMI",
-      "price": 0.00861,
-      "quoteVolume24h": 21913319.001939
+      "price": 0.00875,
+      "quoteVolume24h": 20348375.890377
+    },
+    {
+      "symbol": "ONDOUSDT",
+      "base": "ONDO",
+      "price": 0.3851,
+      "quoteVolume24h": 20118348.38159
     }
   ],
   "symbolsTested": [
-    "NEARUSDT",
-    "ARBUSDT",
     "SUIUSDT",
-    "SAHARAUSDT",
-    "PUMPUSDT",
-    "RAYUSDT",
+    "ARBUSDT",
     "WLDUSDT",
+    "PUMPUSDT",
+    "NEARUSDT",
     "ENAUSDT",
-    "HEMIUSDT"
+    "SAHARAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "ASTERUSDT",
+    "UUSDT",
+    "TRUMPUSDT",
+    "HEMIUSDT",
+    "ONDOUSDT"
   ],
   "families": [
     {
       "family": "LIQUIDITY_REVERSAL",
       "base": {
-        "trades": 45,
-        "wins": 25,
-        "winRate": 0.5555555555555556,
-        "netPnlUSDT": 1.3589157036111001,
-        "expectancyUSDT": 0.030198126746913335,
-        "profitFactor": 1.4651096700361281,
-        "maxDrawdownUSDT": 0.7250100000000006
+        "trades": 56,
+        "wins": 31,
+        "winRate": 0.5535714285714286,
+        "netPnlUSDT": 0.9963065263034084,
+        "expectancyUSDT": 0.017791187969703724,
+        "profitFactor": 1.277986527860224,
+        "maxDrawdownUSDT": 1.324754400455677
       },
       "stress2x": {
-        "trades": 45,
-        "wins": 22,
-        "winRate": 0.4888888888888889,
-        "netPnlUSDT": 0.6132588447674183,
-        "expectancyUSDT": 0.013627974328164852,
-        "profitFactor": 1.187147967452104,
-        "maxDrawdownUSDT": 0.7907098148148157
+        "trades": 56,
+        "wins": 25,
+        "winRate": 0.44642857142857145,
+        "netPnlUSDT": 0.06942173933349866,
+        "expectancyUSDT": 0.0012396739166696188,
+        "profitFactor": 1.0171198182810868,
+        "maxDrawdownUSDT": 1.6036856657529392
       },
       "edgePass": true
     },
     {
-      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "family": "VOLATILITY_BREAKOUT",
       "base": {
-        "trades": 105,
-        "wins": 44,
-        "winRate": 0.41904761904761906,
-        "netPnlUSDT": 0.40402699210354154,
-        "expectancyUSDT": 0.0038478761152718243,
-        "profitFactor": 1.0663449482245964,
-        "maxDrawdownUSDT": 1.2213721881610202
+        "trades": 225,
+        "wins": 87,
+        "winRate": 0.38666666666666666,
+        "netPnlUSDT": -1.3430128035646138,
+        "expectancyUSDT": -0.005968945793620506,
+        "profitFactor": 0.9170293020288335,
+        "maxDrawdownUSDT": 2.29936440870821
       },
       "stress2x": {
-        "trades": 105,
-        "wins": 42,
-        "winRate": 0.4,
-        "netPnlUSDT": -1.331682612791957,
-        "expectancyUSDT": -0.01268269155039959,
-        "profitFactor": 0.8126936188281013,
-        "maxDrawdownUSDT": 1.7316484679720716
+        "trades": 225,
+        "wins": 82,
+        "winRate": 0.36444444444444446,
+        "netPnlUSDT": -5.059072373714491,
+        "expectancyUSDT": -0.02248476610539774,
+        "profitFactor": 0.7261340355010706,
+        "maxDrawdownUSDT": 5.468783535651804
       },
       "edgePass": false
     },
     {
-      "family": "VOLATILITY_BREAKOUT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
       "base": {
-        "trades": 164,
-        "wins": 67,
-        "winRate": 0.40853658536585363,
-        "netPnlUSDT": 0.3247280498649934,
-        "expectancyUSDT": 0.0019800490845426426,
-        "profitFactor": 1.0277066705872864,
-        "maxDrawdownUSDT": 1.6696678164551166
+        "trades": 202,
+        "wins": 60,
+        "winRate": 0.297029702970297,
+        "netPnlUSDT": -1.2095917130708949,
+        "expectancyUSDT": -0.0059880777874796775,
+        "profitFactor": 0.8699775256966882,
+        "maxDrawdownUSDT": 2.361988754812281
       },
       "stress2x": {
-        "trades": 164,
-        "wins": 64,
-        "winRate": 0.3902439024390244,
-        "netPnlUSDT": -2.385824871591989,
-        "expectancyUSDT": -0.014547712631658471,
-        "profitFactor": 0.8209192723098424,
-        "maxDrawdownUSDT": 2.9610226342117696
+        "trades": 202,
+        "wins": 55,
+        "winRate": 0.2722772277227723,
+        "netPnlUSDT": -4.545781610347202,
+        "expectancyUSDT": -0.022503869358154464,
+        "profitFactor": 0.6107067091611103,
+        "maxDrawdownUSDT": 4.749887925428535
       },
       "edgePass": false
     },
     {
       "family": "TS_MOMENTUM",
       "base": {
-        "trades": 767,
-        "wins": 280,
-        "winRate": 0.3650586701434159,
-        "netPnlUSDT": -7.520283931336624,
-        "expectancyUSDT": -0.009804803039552312,
-        "profitFactor": 0.9097264715799622,
-        "maxDrawdownUSDT": 12.446567319437724
+        "trades": 1017,
+        "wins": 375,
+        "winRate": 0.3687315634218289,
+        "netPnlUSDT": -7.574415739963165,
+        "expectancyUSDT": -0.007447803087476072,
+        "profitFactor": 0.9298029632225717,
+        "maxDrawdownUSDT": 9.395154620211825
       },
       "stress2x": {
-        "trades": 767,
-        "wins": 274,
-        "winRate": 0.35723598435462844,
-        "netPnlUSDT": -20.18349832703317,
-        "expectancyUSDT": -0.02631486092181639,
-        "profitFactor": 0.7788563502312451,
-        "maxDrawdownUSDT": 21.417353647951288
+        "trades": 1017,
+        "wins": 363,
+        "winRate": 0.35693215339233036,
+        "netPnlUSDT": -24.36874561116002,
+        "expectancyUSDT": -0.023961401780884975,
+        "profitFactor": 0.794245204547991,
+        "maxDrawdownUSDT": 25.24441819905265
       },
       "edgePass": false
     }
@@ -217,24 +252,47 @@
       "paperCandidate": true
     },
     {
+      "family": "VOLATILITY_BREAKOUT",
+      "symbol": "PEPEUSDT",
+      "base": {
+        "trades": 15,
+        "wins": 8,
+        "winRate": 0.5333333333333333,
+        "netPnlUSDT": 0.5302456361944723,
+        "expectancyUSDT": 0.03534970907963149,
+        "profitFactor": 1.6795724291406249,
+        "maxDrawdownUSDT": 0.35457395854522844
+      },
+      "stress2x": {
+        "trades": 15,
+        "wins": 8,
+        "winRate": 0.5333333333333333,
+        "netPnlUSDT": 0.2815772651836644,
+        "expectancyUSDT": 0.01877181767891096,
+        "profitFactor": 1.314694110717741,
+        "maxDrawdownUSDT": 0.4366652345213749
+      },
+      "paperCandidate": true
+    },
+    {
       "family": "CROSS_CRYPTO_LEAD_LAG",
       "symbol": "WLDUSDT",
       "base": {
-        "trades": 19,
-        "wins": 10,
-        "winRate": 0.5263157894736842,
-        "netPnlUSDT": 0.7065631733474996,
-        "expectancyUSDT": 0.037187535439342084,
-        "profitFactor": 1.839203006172262,
+        "trades": 18,
+        "wins": 9,
+        "winRate": 0.5,
+        "netPnlUSDT": 0.6104677699083471,
+        "expectancyUSDT": 0.03391487610601928,
+        "profitFactor": 1.7250680576107533,
         "maxDrawdownUSDT": 0.595739179151895
       },
       "stress2x": {
-        "trades": 19,
-        "wins": 10,
-        "winRate": 0.5263157894736842,
-        "netPnlUSDT": 0.39153077999745334,
-        "expectancyUSDT": 0.020606883157760703,
-        "profitFactor": 1.3957239725845032,
+        "trades": 18,
+        "wins": 9,
+        "winRate": 0.5,
+        "netPnlUSDT": 0.3121045233836975,
+        "expectancyUSDT": 0.017339140187983194,
+        "profitFactor": 1.3154470814677537,
         "maxDrawdownUSDT": 0.6939929510410008
       },
       "paperCandidate": true
@@ -287,23 +345,46 @@
     },
     {
       "family": "TS_MOMENTUM",
-      "symbol": "SAHARAUSDT",
+      "symbol": "XLMUSDT",
       "base": {
-        "trades": 73,
-        "wins": 31,
-        "winRate": 0.4246575342465753,
-        "netPnlUSDT": 1.3017565281303156,
-        "expectancyUSDT": 0.017832281207264596,
-        "profitFactor": 1.1759347632403971,
-        "maxDrawdownUSDT": 3.2078910060704047
+        "trades": 69,
+        "wins": 30,
+        "winRate": 0.43478260869565216,
+        "netPnlUSDT": 2.0060795770020214,
+        "expectancyUSDT": 0.029073617058000312,
+        "profitFactor": 1.305985987013512,
+        "maxDrawdownUSDT": 1.2687675000000012
       },
       "stress2x": {
-        "trades": 73,
+        "trades": 69,
+        "wins": 30,
+        "winRate": 0.43478260869565216,
+        "netPnlUSDT": 0.86285562170357,
+        "expectancyUSDT": 0.012505153937732898,
+        "profitFactor": 1.1199954928486637,
+        "maxDrawdownUSDT": 1.384796784396411
+      },
+      "paperCandidate": true
+    },
+    {
+      "family": "TS_MOMENTUM",
+      "symbol": "SAHARAUSDT",
+      "base": {
+        "trades": 72,
         "wins": 31,
-        "winRate": 0.4246575342465753,
-        "netPnlUSDT": 0.09349149578960836,
-        "expectancyUSDT": 0.001280705421775457,
-        "profitFactor": 1.01156784882537,
+        "winRate": 0.4305555555555556,
+        "netPnlUSDT": 1.4207364225460544,
+        "expectancyUSDT": 0.019732450313139645,
+        "profitFactor": 1.1968369494778404,
+        "maxDrawdownUSDT": 3.207891006070405
+      },
+      "stress2x": {
+        "trades": 72,
+        "wins": 31,
+        "winRate": 0.4305555555555556,
+        "netPnlUSDT": 0.2288174394375717,
+        "expectancyUSDT": 0.003178019992188496,
+        "profitFactor": 1.0290211464700731,
         "maxDrawdownUSDT": 3.8936972404741317
       },
       "paperCandidate": true
@@ -356,29 +437,6 @@
     },
     {
       "family": "LIQUIDITY_REVERSAL",
-      "symbol": "RAYUSDT",
-      "base": {
-        "trades": 6,
-        "wins": 4,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.5966512184607327,
-        "expectancyUSDT": 0.09944186974345544,
-        "profitFactor": 4.232416901334707,
-        "maxDrawdownUSDT": 0.1532410541225579
-      },
-      "stress2x": {
-        "trades": 6,
-        "wins": 4,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.49660617406645013,
-        "expectancyUSDT": 0.08276769567774168,
-        "profitFactor": 3.2847604475840004,
-        "maxDrawdownUSDT": 0.16953563441180797
-      },
-      "paperCandidate": false
-    },
-    {
-      "family": "LIQUIDITY_REVERSAL",
       "symbol": "SAHARAUSDT",
       "base": {
         "trades": 5,
@@ -424,71 +482,71 @@
       "paperCandidate": false
     },
     {
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "symbol": "PEPEUSDT",
+      "base": {
+        "trades": 8,
+        "wins": 4,
+        "winRate": 0.5,
+        "netPnlUSDT": 0.25116832069984923,
+        "expectancyUSDT": 0.031396040087481154,
+        "profitFactor": 1.8345838979650884,
+        "maxDrawdownUSDT": 0.2564312227423122
+      },
+      "stress2x": {
+        "trades": 8,
+        "wins": 3,
+        "winRate": 0.375,
+        "netPnlUSDT": 0.11859270479494205,
+        "expectancyUSDT": 0.014824088099367756,
+        "profitFactor": 1.3145431798834761,
+        "maxDrawdownUSDT": 0.3056203596135056
+      },
+      "paperCandidate": false
+    },
+    {
+      "family": "CROSS_CRYPTO_LEAD_LAG",
+      "symbol": "TRUMPUSDT",
+      "base": {
+        "trades": 14,
+        "wins": 5,
+        "winRate": 0.35714285714285715,
+        "netPnlUSDT": 0.20726233765089078,
+        "expectancyUSDT": 0.01480445268934934,
+        "profitFactor": 1.5032357063344157,
+        "maxDrawdownUSDT": 0.35413688633547913
+      },
+      "stress2x": {
+        "trades": 14,
+        "wins": 4,
+        "winRate": 0.2857142857142857,
+        "netPnlUSDT": -0.02439604342720271,
+        "expectancyUSDT": -0.0017425745305144793,
+        "profitFactor": 0.9570655090236448,
+        "maxDrawdownUSDT": 0.48580318044714343
+      },
+      "paperCandidate": false
+    },
+    {
       "family": "TS_MOMENTUM",
       "symbol": "NEARUSDT",
       "base": {
-        "trades": 77,
+        "trades": 78,
         "wins": 32,
-        "winRate": 0.4155844155844156,
-        "netPnlUSDT": 0.9508392356666929,
-        "expectancyUSDT": 0.012348561502164844,
-        "profitFactor": 1.127675683577903,
-        "maxDrawdownUSDT": 1.4616303097681385
+        "winRate": 0.41025641025641024,
+        "netPnlUSDT": 0.7341172361913797,
+        "expectancyUSDT": 0.009411759438351023,
+        "profitFactor": 1.0957874531408829,
+        "maxDrawdownUSDT": 1.4616303097681382
       },
       "stress2x": {
-        "trades": 77,
+        "trades": 78,
         "wins": 32,
-        "winRate": 0.4155844155844156,
-        "netPnlUSDT": -0.32299777870837,
-        "expectancyUSDT": -0.004194776346861948,
-        "profitFactor": 0.9605124088909643,
+        "winRate": 0.41025641025641024,
+        "netPnlUSDT": -0.5559189940082073,
+        "expectancyUSDT": -0.007127166589848812,
+        "profitFactor": 0.9339186813196255,
         "maxDrawdownUSDT": 2.0662296368482647
-      },
-      "paperCandidate": false
-    },
-    {
-      "family": "VOLATILITY_BREAKOUT",
-      "symbol": "RAYUSDT",
-      "base": {
-        "trades": 24,
-        "wins": 10,
-        "winRate": 0.4166666666666667,
-        "netPnlUSDT": 0.24882581209677473,
-        "expectancyUSDT": 0.010367742170698947,
-        "profitFactor": 1.1718438545743939,
-        "maxDrawdownUSDT": 0.5365557265334526
-      },
-      "stress2x": {
-        "trades": 24,
-        "wins": 10,
-        "winRate": 0.4166666666666667,
-        "netPnlUSDT": -0.14814287965900408,
-        "expectancyUSDT": -0.006172619985791837,
-        "profitFactor": 0.9116697632188149,
-        "maxDrawdownUSDT": 0.7836214915912392
-      },
-      "paperCandidate": false
-    },
-    {
-      "family": "TS_MOMENTUM",
-      "symbol": "RAYUSDT",
-      "base": {
-        "trades": 70,
-        "wins": 31,
-        "winRate": 0.44285714285714284,
-        "netPnlUSDT": 0.5120676412393321,
-        "expectancyUSDT": 0.007315252017704744,
-        "profitFactor": 1.0808476919072898,
-        "maxDrawdownUSDT": 1.6266455150615118
-      },
-      "stress2x": {
-        "trades": 70,
-        "wins": 29,
-        "winRate": 0.4142857142857143,
-        "netPnlUSDT": -0.6454367167595261,
-        "expectancyUSDT": -0.009220524525136086,
-        "profitFactor": 0.9075157846984719,
-        "maxDrawdownUSDT": 2.0207967736768424
       },
       "paperCandidate": false
     },
@@ -516,29 +574,6 @@
       "paperCandidate": false
     },
     {
-      "family": "TS_MOMENTUM",
-      "symbol": "ENAUSDT",
-      "base": {
-        "trades": 95,
-        "wins": 38,
-        "winRate": 0.4,
-        "netPnlUSDT": 0.5551458178734315,
-        "expectancyUSDT": 0.005843640188141384,
-        "profitFactor": 1.055099423950341,
-        "maxDrawdownUSDT": 2.4829640000000004
-      },
-      "stress2x": {
-        "trades": 95,
-        "wins": 38,
-        "winRate": 0.4,
-        "netPnlUSDT": -1.015542933981162,
-        "expectancyUSDT": -0.010689925620854336,
-        "profitFactor": 0.9076957397400414,
-        "maxDrawdownUSDT": 2.941928
-      },
-      "paperCandidate": false
-    },
-    {
       "family": "VOLATILITY_BREAKOUT",
       "symbol": "PUMPUSDT",
       "base": {
@@ -562,25 +597,48 @@
       "paperCandidate": false
     },
     {
-      "family": "CROSS_CRYPTO_LEAD_LAG",
-      "symbol": "RAYUSDT",
+      "family": "TS_MOMENTUM",
+      "symbol": "ENAUSDT",
       "base": {
-        "trades": 6,
-        "wins": 2,
-        "winRate": 0.3333333333333333,
-        "netPnlUSDT": 0.02591869554961712,
-        "expectancyUSDT": 0.004319782591602854,
-        "profitFactor": 1.0979983580497332,
-        "maxDrawdownUSDT": 0.1880885700847241
+        "trades": 95,
+        "wins": 38,
+        "winRate": 0.4,
+        "netPnlUSDT": 0.4343273178734308,
+        "expectancyUSDT": 0.004571866503930851,
+        "profitFactor": 1.0425971230331945,
+        "maxDrawdownUSDT": 2.603782500000001
       },
       "stress2x": {
-        "trades": 6,
-        "wins": 2,
-        "winRate": 0.3333333333333333,
-        "netPnlUSDT": -0.07326896398300625,
-        "expectancyUSDT": -0.012211493997167708,
-        "profitFactor": 0.7780957228636495,
-        "maxDrawdownUSDT": 0.2539051621176464
+        "trades": 95,
+        "wins": 38,
+        "winRate": 0.4,
+        "netPnlUSDT": -1.1361799339811625,
+        "expectancyUSDT": -0.011959788778749078,
+        "profitFactor": 0.8978509099216693,
+        "maxDrawdownUSDT": 3.062565
+      },
+      "paperCandidate": false
+    },
+    {
+      "family": "TS_MOMENTUM",
+      "symbol": "ONDOUSDT",
+      "base": {
+        "trades": 87,
+        "wins": 34,
+        "winRate": 0.39080459770114945,
+        "netPnlUSDT": 0.1625632732295614,
+        "expectancyUSDT": 0.0018685433704547288,
+        "profitFactor": 1.0194155228492525,
+        "maxDrawdownUSDT": 2.5985615971563116
+      },
+      "stress2x": {
+        "trades": 87,
+        "wins": 30,
+        "winRate": 0.3448275862068966,
+        "netPnlUSDT": -1.2753374227242142,
+        "expectancyUSDT": -0.014659050835910509,
+        "profitFactor": 0.8621442076168364,
+        "maxDrawdownUSDT": 3.470471619794534
       },
       "paperCandidate": false
     },
@@ -606,29 +664,6 @@
         "maxDrawdownUSDT": 0.4850831632653065
       },
       "paperCandidate": false
-    },
-    {
-      "family": "TS_MOMENTUM",
-      "symbol": "SUIUSDT",
-      "base": {
-        "trades": 47,
-        "wins": 16,
-        "winRate": 0.3404255319148936,
-        "netPnlUSDT": -0.08523096383084877,
-        "expectancyUSDT": -0.0018134247623584844,
-        "profitFactor": 0.9790563852664991,
-        "maxDrawdownUSDT": 1.3039399481696619
-      },
-      "stress2x": {
-        "trades": 47,
-        "wins": 15,
-        "winRate": 0.3191489361702128,
-        "netPnlUSDT": -0.861767922823592,
-        "expectancyUSDT": -0.018335487719650895,
-        "profitFactor": 0.811763820637088,
-        "maxDrawdownUSDT": 1.7374405107163846
-      },
-      "paperCandidate": false
     }
   ],
   "costs": {
@@ -646,7 +681,7 @@
     "A pass can authorize further forward-paper validation only, never live trading."
   ],
   "dataFailures": {
-    "MARSCOINUSDT": "MARSCOINUSDT: insufficient bars 67"
+    "MARSCOINUSDT": "MARSCOINUSDT: insufficient bars 81"
   },
-  "generatedAt": "2026-09-07T07:26:44.657128+00:00"
+  "generatedAt": "2026-09-07T21:36:25.415405+00:00"
 }
