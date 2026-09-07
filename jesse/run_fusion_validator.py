@@ -23,7 +23,7 @@ def fetch_1m(days=DAYS):
     end=int(time.time()*1000);start=end-days*86400000;out=[];cursor=start
     while cursor<end:
         qs=urllib.parse.urlencode({"symbol":SYMBOL_API,"interval":"1m","limit":1000,"startTime":cursor,"endTime":end})
-        req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse/1.0"})
+        req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse/1.1"})
         with urllib.request.urlopen(req,timeout=20) as r:rows=json.load(r)
         if not rows:break
         for k in rows:out.append([float(k[0]),float(k[1]),float(k[4]),float(k[2]),float(k[3]),float(k[5])])
@@ -42,7 +42,7 @@ def build_leader_map():
         rows=[];cursor=start
         while cursor<end:
             qs=urllib.parse.urlencode({"symbol":symbol,"interval":"1h","limit":1000,"startTime":cursor,"endTime":end})
-            req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse-leader/1.0"})
+            req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse-leader/1.1"})
             with urllib.request.urlopen(req,timeout=20) as r:batch=json.load(r)
             if not batch:break
             rows.extend(batch);nxt=int(batch[-1][0])+3600000
@@ -70,7 +70,9 @@ def metric(metrics,*names):
     return 0.0
 
 def run(candles,fee):
-    cfg={"starting_balance":20.08,"fee":fee,"type":"futures","futures_leverage":1,"futures_leverage_mode":"cross","exchange":EXCHANGE,"warm_up_candles":0}
+    # The production mandate is Binance Spot only. Jesse must therefore test
+    # the same long-only spot semantics instead of a 1x futures approximation.
+    cfg={"starting_balance":20.08,"fee":fee,"type":"spot","exchange":EXCHANGE,"warm_up_candles":0}
     routes=[{"exchange":EXCHANGE,"strategy":UnifiedCandidateValidator,"symbol":SYMBOL,"timeframe":TF}]
     cd={jh.key(EXCHANGE,SYMBOL):{"exchange":EXCHANGE,"symbol":SYMBOL,"candles":candles}}
     result=backtest(cfg,routes,[],candles=cd,generate_equity_curve=True,fast_mode=True)
@@ -85,5 +87,5 @@ if len(candles)<50000:raise RuntimeError(f"insufficient candles {len(candles)}")
 base=run(candles,0.0015);stress=run(candles,0.003)
 independent=base["trades"]>=30 and stress["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
 passed=independent and base["trades"]>=100 and stress["trades"]>=100
-report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."}
+report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of exact unified candidate using long-only Binance Spot semantics."}
 pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
