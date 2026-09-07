@@ -19,13 +19,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
           matched=0
-          for attempt in $(seq 1 30); do
-            echo "runtime attempt ${attempt}/30"
+          for attempt in $(seq 1 24); do
+            echo "runtime POST attempt ${attempt}/24"
             curl --silent --show-error --max-time 20 \
-              -H 'cache-control: no-cache' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}" \
+              -X POST \
+              -H 'cache-control: no-store, no-cache, max-age=0' \
+              -H 'pragma: no-cache' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
               -o /tmp/runtime.json || true
             cat /tmp/runtime.json 2>/dev/null || true
             echo
@@ -51,12 +52,35 @@ jobs:
               matched=1
               break
             fi
-            sleep 5
+            sleep 4
           done
           if [ "$matched" != "1" ]; then
             echo "Stable Worker never exposed the expected Railway testnet route"
             exit 1
           fi
+
+      - name: Wake Railway read-only relay
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            echo "Railway health attempt ${attempt}/10"
+            if curl --fail --silent --show-error --max-time 20 \
+              -H 'cache-control: no-store' \
+              "https://liquidation-collector-production.up.railway.app/health?nonce=$(date +%s%N)" \
+              -o /tmp/railway-health.json; then
+              cat /tmp/railway-health.json
+              echo
+              python - <<'PY'
+          import json
+          row=json.load(open('/tmp/railway-health.json'))
+          assert row.get('ok') is True
+          assert row.get('mode') == 'READ_ONLY_TESTNET_ACCOUNT'
+          PY
+              break
+            fi
+            sleep 3
+          done
 
       - name: Verify read-only Binance demo balance path
         shell: bash
@@ -65,10 +89,12 @@ jobs:
           passed=0
           seen_new_route=0
           for attempt in $(seq 1 24); do
-            echo "balance attempt ${attempt}/24"
+            echo "balance POST attempt ${attempt}/24"
             curl --silent --show-error --max-time 25 \
-              -H 'cache-control: no-cache' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?verify=${GITHUB_SHA}&attempt=${attempt}" \
+              -X POST \
+              -H 'cache-control: no-store, no-cache, max-age=0' \
+              -H 'pragma: no-cache' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
               -o /tmp/balance.json || true
             cat /tmp/balance.json 2>/dev/null || true
             echo
@@ -82,7 +108,7 @@ jobs:
           PY
           )"
             if [ "$route" != "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" ]; then
-              sleep 5
+              sleep 4
               continue
             fi
             seen_new_route=1
@@ -106,7 +132,7 @@ jobs:
               passed=1
               break
             fi
-            sleep 5
+            sleep 4
           done
           if [ "$seen_new_route" != "1" ]; then
             echo "Balance endpoint never reached the new Worker route"
@@ -124,8 +150,9 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 60 \
-            -H 'cache-control: no-cache' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?verify=${GITHUB_SHA}" \
+            -X POST \
+            -H 'cache-control: no-store, no-cache, max-age=0' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
             -o /tmp/status.json
           cat /tmp/status.json
           echo
