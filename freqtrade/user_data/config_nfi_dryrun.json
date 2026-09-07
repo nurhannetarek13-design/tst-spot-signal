@@ -42,8 +42,8 @@
     "listen_port": 8080,
     "verbosity": "error",
     "enable_openapi": false,
-    "jwt_secret_key": "dryrun-local-only-not-exposed",
-    "ws_token": "dryrun-local-only-not-exposed",
+    "jwt_secret_key": "dryrun-local-only-not-exposed-please-ignore-1234567890",
+    "ws_token": "dryrun-local-only-not-exposed-please-ignore-1234567890",
     "CORS_origins": [],
     "username": "dryrun",
     "password": "dryrun-local-only-not-exposed"
