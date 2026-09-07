@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 def fetch(url: str, out: str, min_size: int, needle: bytes):
-    req = Request(url, headers={"User-Agent": "tst-ready-bot/1.1"})
+    req = Request(url, headers={"User-Agent": "tst-ready-bot/1.2"})
     with urlopen(req, timeout=60) as r:
         data = r.read()
     if len(data) < min_size or needle not in data:
@@ -26,6 +26,67 @@ def fetch(url: str, out: str, min_size: int, needle: bytes):
 
 fetch("${NFI_URL}", "${STRATEGY_FILE}", 10000, b"class NostalgiaForInfinityX7")
 fetch("${PROTECTED_URL}", "${PROTECTED_FILE}", 500, b"class NFIProtectedX7")
+PY
+
+# Background market-wide scanner. It scans every Binance Spot USDT symbol, logs
+# pre-trading/newly-added markets, and prints the strongest liquid movers.
+python -u - <<'PY' &
+import json, time
+from urllib.request import Request, urlopen
+
+BASE = "https://data-api.binance.vision/api/v3"
+HEADERS = {"User-Agent": "tst-all-usdt-scanner/1.0"}
+known = None
+stable_bases = {"USDC","FDUSD","TUSD","USDP","DAI","EUR"}
+
+def get(path):
+    req = Request(BASE + path, headers=HEADERS)
+    with urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+while True:
+    try:
+        info = get("/exchangeInfo")
+        usdt = {
+            s["symbol"]: s for s in info.get("symbols", [])
+            if s.get("quoteAsset") == "USDT" and s.get("isSpotTradingAllowed", True)
+        }
+        current = set(usdt)
+        if known is None:
+            known = current
+            print(f"[market-scan] tracking {len(current)} Binance Spot USDT markets")
+        else:
+            for sym in sorted(current - known):
+                s = usdt[sym]
+                print(f"[new-listing] NEW MARKET {sym} status={s.get('status')}")
+            known = current
+
+        for sym, s in usdt.items():
+            if s.get("status") != "TRADING":
+                print(f"[new-listing] {sym} status={s.get('status')} (watch before trading opens)")
+
+        tickers = get("/ticker/24hr")
+        ranked = []
+        for t in tickers:
+            sym = t.get("symbol", "")
+            s = usdt.get(sym)
+            if not s or s.get("status") != "TRADING":
+                continue
+            base = s.get("baseAsset", "")
+            if base in stable_bases or any(x in base for x in ("UP","DOWN","BULL","BEAR")):
+                continue
+            qv = float(t.get("quoteVolume") or 0)
+            pct = float(t.get("priceChangePercent") or 0)
+            if qv >= 1_000_000:
+                ranked.append((abs(pct), pct, qv, sym))
+        ranked.sort(reverse=True)
+        top = ranked[:12]
+        if top:
+            summary = ", ".join(f"{s}:{p:+.1f}%" for _, p, _, s in top)
+            print(f"[market-scan] top liquid movers: {summary}")
+    except Exception as e:
+        print(f"[market-scan] warning: {type(e).__name__}: {e}")
+    time.sleep(60)
 PY
 
 exec freqtrade trade \
