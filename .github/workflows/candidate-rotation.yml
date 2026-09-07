@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: unified-candidate-rotation
@@ -64,12 +65,21 @@ jobs:
           exit 1
 
       - name: Dispatch validators for rotated candidate
-        if: steps.rotate.outputs.changed == 'true'
+        if: steps.rotate.outputs.changed == 'true' && steps.rotate.outputs.next_candidate != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for wf in             candidate-vectorbt-validator.yml             fusion-freqtrade-validator.yml             fusion-jesse-validator.yml             nautilus-validator.yml             forward-paper-public-edges.yml; do
+          for wf in \
+            candidate-vectorbt-validator.yml \
+            fusion-freqtrade-validator.yml \
+            fusion-jesse-validator.yml \
+            nautilus-validator.yml \
+            forward-paper-public-edges.yml; do
             gh workflow run "$wf" --ref main
           done
           echo "Dispatched all unified validators for: ${{ steps.rotate.outputs.next_candidate }}"
+
+      - name: Report exhausted candidate pool
+        if: steps.rotate.outputs.changed == 'true' && steps.rotate.outputs.next_candidate == ''
+        run: echo "Candidate pool exhausted; waiting for fresh discovery output."
