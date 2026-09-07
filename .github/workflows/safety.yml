@@ -72,6 +72,7 @@ jobs:
                   if row.get("candidateFingerprint") not in {None,m["candidateFingerprint"]}:
                       print(f"{name}: stale snapshot from prior candidate; gate must reject mismatch")
           gate_code=pathlib.Path("scripts/build_fusion_gate.py").read_text()
-          assert "CANDIDATE_MISMATCH" in gate_code
+          assert "CANDIDATE_ID_MISMATCH" in gate_code
+          assert "CANDIDATE_FINGERPRINT_MISMATCH" in gate_code
           print("Unified candidate wiring verified; stale snapshots are fail-closed during rotation.")
           PY
