@@ -1,0 +1,138 @@
+name: Verify Cloudflare Runtime Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-cloudflare-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify stable Worker runtime route
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
+          matched=0
+          for attempt in $(seq 1 30); do
+            echo "runtime attempt ${attempt}/30"
+            curl --silent --show-error --max-time 20 \
+              -H 'cache-control: no-cache' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}" \
+              -o /tmp/runtime.json || true
+            cat /tmp/runtime.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try:
+              row=json.load(open('/tmp/runtime.json'))
+          except Exception:
+              sys.exit(1)
+          checks = [
+              row.get('ok') is True,
+              row.get('telegramConfigured') is True,
+              row.get('hasApiKey') is True,
+              row.get('hasApiSecret') is True,
+              row.get('noSecretValuesExposed') is True,
+              row.get('atomicConfirmClaim') is True,
+              row.get('autoBuy') is False,
+              row.get('executionRoute') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY',
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then
+              matched=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$matched" != "1" ]; then
+            echo "Stable Worker never exposed the expected Railway testnet route"
+            exit 1
+          fi
+
+      - name: Verify read-only Binance demo balance path
+        shell: bash
+        run: |
+          set -euo pipefail
+          passed=0
+          seen_new_route=0
+          for attempt in $(seq 1 24); do
+            echo "balance attempt ${attempt}/24"
+            curl --silent --show-error --max-time 25 \
+              -H 'cache-control: no-cache' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?verify=${GITHUB_SHA}&attempt=${attempt}" \
+              -o /tmp/balance.json || true
+            cat /tmp/balance.json 2>/dev/null || true
+            echo
+            route="$(python - <<'PY'
+          import json
+          try:
+              row=json.load(open('/tmp/balance.json'))
+              print(row.get('executionRoute') or '')
+          except Exception:
+              print('')
+          PY
+          )"
+            if [ "$route" != "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" ]; then
+              sleep 5
+              continue
+            fi
+            seen_new_route=1
+            if python - <<'PY'
+          import json,sys
+          row=json.load(open('/tmp/balance.json'))
+          if row.get('ok') is not True or row.get('autoBuy') is not False:
+              sys.exit(1)
+          bal=row.get('balance') or {}
+          checks = [
+              bal.get('ok') is True,
+              bal.get('status') == 'ACCOUNT_BALANCE_OK',
+              bal.get('source') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY',
+              bal.get('network') == 'testnet',
+              bal.get('credentialMode') == 'DEMO',
+              isinstance((bal.get('usdt') or {}).get('free'), (int,float)),
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then
+              passed=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$seen_new_route" != "1" ]; then
+            echo "Balance endpoint never reached the new Worker route"
+            exit 1
+          fi
+          if [ "$passed" != "1" ]; then
+            echo "Railway route is active, but Binance account read still failed. Final safe response:"
+            cat /tmp/balance.json 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Verify scanner remains non-executing
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 60 \
+            -H 'cache-control: no-cache' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?verify=${GITHUB_SHA}" \
+            -o /tmp/status.json
+          cat /tmp/status.json
+          echo
+          python - <<'PY'
+          import json
+          row=json.load(open('/tmp/status.json'))
+          assert row.get('ok') is True
+          assert row.get('liveTrading') is False
+          assert row.get('executorAllowed') is False
+          PY
