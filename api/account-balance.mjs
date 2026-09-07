@@ -79,6 +79,8 @@ export default async function handler(req, res) {
       checkedAt: Date.now(),
     });
   } catch (e) {
-    return json(res, 500, { ok: false, status: "BALANCE_ERROR", reason: String(e?.message || e) });
+    const reason = String(e?.message || e);
+    console.error("[account-balance] BALANCE_ERROR", reason);
+    return json(res, 500, { ok: false, status: "BALANCE_ERROR", reason });
   }
 }
