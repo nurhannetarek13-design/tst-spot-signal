@@ -7,22 +7,20 @@ from NostalgiaForInfinityX7 import NostalgiaForInfinityX7
 
 
 class NFIProtectedX7(NostalgiaForInfinityX7):
-    """NFI X7 with hard account-level guardrails for small Spot accounts.
+    """NFI X7 with hard account-level guardrails and fast-trade exits.
 
-    This wrapper intentionally leaves NFI's entry/exit signal logic untouched while
-    constraining risk at execution time.
+    Upstream entry logic is preserved. Risk and holding time are constrained here.
     """
 
-    # Hard per-trade loss cap. With a 5.5 USDT stake this is about 0.44 USDT
-    # before fees/slippage, far below the account's 2 USDT daily loss ceiling.
     stoploss = -0.08
-
-    # NFI can otherwise add repeatedly to losing positions. Disable DCA completely.
     position_adjustment_enable = False
     max_entry_position_adjustment = 0
 
-    # Absolute realized-loss ceiling for each UTC day.
     DAILY_LOSS_LIMIT_USDT = 2.0
+    MAX_HOLD_MINUTES = 90
+    FAST_TP = 0.012
+    SOFT_PROFIT = 0.002
+    SOFT_PROFIT_AFTER_MINUTES = 45
 
     @staticmethod
     def _realized_pnl_today(current_time: datetime) -> float:
@@ -43,11 +41,9 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
         side: str,
         **kwargs,
     ) -> bool:
-        # Fail closed after the realized daily loss ceiling is reached.
         if self._realized_pnl_today(current_time) <= -self.DAILY_LOSS_LIMIT_USDT:
             return False
 
-        # Preserve any entry confirmation logic implemented by upstream NFI.
         return bool(
             super().confirm_trade_entry(
                 pair=pair,
@@ -61,3 +57,33 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
                 **kwargs,
             )
         )
+
+    def custom_exit(
+        self,
+        pair: str,
+        trade: Trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ):
+        age_minutes = (current_time - trade.open_date_utc).total_seconds() / 60.0
+
+        if current_profit >= self.FAST_TP:
+            return "fast_tp_1p2"
+
+        if age_minutes >= self.SOFT_PROFIT_AFTER_MINUTES and current_profit >= self.SOFT_PROFIT:
+            return "fast_soft_profit"
+
+        if age_minutes >= self.MAX_HOLD_MINUTES:
+            return "fast_time_cap_90m"
+
+        parent_exit = super().custom_exit(
+            pair=pair,
+            trade=trade,
+            current_time=current_time,
+            current_rate=current_rate,
+            current_profit=current_profit,
+            **kwargs,
+        )
+        return parent_exit
