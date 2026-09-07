@@ -1,6 +1,5 @@
 import json
 import os
-import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
         for base in BASES:
             try:
                 url = base + upstream.path + (("?" + upstream.query) if upstream.query else "")
-                r = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "tst-railway-binance-proxy/1.0"})
+                r = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "tst-railway-binance-proxy/2.0"})
                 with urllib.request.urlopen(r, timeout=12) as resp:
                     data = resp.read()
                     self.send_response(200)
@@ -68,6 +67,6 @@ class Handler(BaseHTTPRequestHandler):
         print(json.dumps({"kind": "binance_public_proxy", "message": fmt % args}), flush=True)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8080"))
+    port = int(os.environ.get("PROXY_PORT", "8080"))
     print(json.dumps({"kind": "binance_public_proxy_start", "port": port}), flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
