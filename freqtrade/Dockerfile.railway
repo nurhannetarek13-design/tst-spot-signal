@@ -1,0 +1,18 @@
+FROM freqtradeorg/freqtrade:stable
+
+USER root
+WORKDIR /freqtrade
+
+COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
+COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
+COPY user_data /freqtrade/user_data
+
+RUN chmod +x /freqtrade/run_ready_bot.sh \
+    && chown -R ftuser:ftuser /freqtrade
+
+USER ftuser
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8080
+
+CMD ["/freqtrade/run_ready_bot.sh"]
