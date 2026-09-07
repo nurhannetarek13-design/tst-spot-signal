@@ -58,6 +58,10 @@ function safeRequest(body) {
   return { ok: true, method, path, apiKey, query };
 }
 
+function safeMessage(value) {
+  return String(value || "").replace(/[A-Za-z0-9_-]{20,}/g, "[redacted]").slice(0, 240);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { ok: false, status: "METHOD_NOT_ALLOWED" });
   try {
@@ -85,12 +89,30 @@ export default async function handler(req, res) {
           return json(res, 200, { ok: true, status: "BINANCE_RELAY_OK", data });
         }
         last = { status: r.status, code: data?.code ?? null, msg: data?.msg || text.slice(0, 500) };
+        console.warn("[binance-signed-relay] upstream", JSON.stringify({
+          host: new URL(base).host,
+          method: parsed.method,
+          path: parsed.path,
+          status: last.status,
+          code: last.code,
+          msg: safeMessage(last.msg),
+          apiKeyLength: parsed.apiKey.length,
+          queryLength: parsed.query.length,
+        }));
+        if (Number(last.code) < 0 && [-1022, -2014, -2015].includes(Number(last.code))) break;
       } catch (e) {
         last = { status: 502, code: null, msg: String(e?.message || e) };
+        console.warn("[binance-signed-relay] transport", JSON.stringify({
+          host: new URL(base).host,
+          method: parsed.method,
+          path: parsed.path,
+          status: last.status,
+          msg: safeMessage(last.msg),
+        }));
       }
     }
-    return json(res, 502, { ok: false, status: "BINANCE_RELAY_FAILED", upstream: last });
+    return json(res, 502, { ok: false, status: "BINANCE_RELAY_FAILED", upstream: { status: last.status, code: last.code, msg: safeMessage(last.msg) } });
   } catch (e) {
-    return json(res, 500, { ok: false, status: "RELAY_ERROR", reason: String(e?.message || e) });
+    return json(res, 500, { ok: false, status: "RELAY_ERROR", reason: safeMessage(e?.message || e) });
   }
 }
