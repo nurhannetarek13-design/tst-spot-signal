@@ -13,15 +13,20 @@ if canonical not in s:
 old = 'async function binance(path){let last;for(const base of API_BASES){try{const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/2.0"},signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error(`${r.status}`);return await r.json();}catch(e){last=e;}}throw last||new Error("Binance unavailable");}'
 new = '''async function binance(path){
   let last;
-  const proxy=`https://tst-spot-signal.vercel.app/api/binance-public?path=${encodeURIComponent(path)}`;
-  try{
-    const r=await fetch(proxy,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/3.0"},signal:AbortSignal.timeout(15000)});
-    if(r.ok) return await r.json();
-    last=new Error(`Vercel Binance proxy ${r.status}`);
-  }catch(e){ last=e; }
+  const proxies=[
+    `https://liquidation-collector-v2-production.up.railway.app/api/binance-public?path=${encodeURIComponent(path)}`,
+    `https://tst-spot-signal.vercel.app/api/binance-public?path=${encodeURIComponent(path)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r=await fetch(proxy,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/4.0"},signal:AbortSignal.timeout(15000)});
+      if(r.ok) return await r.json();
+      last=new Error(`Binance proxy ${r.status}`);
+    }catch(e){ last=e; }
+  }
   for(const base of API_BASES){
     try{
-      const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/3.0"},signal:AbortSignal.timeout(12000)});
+      const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/4.0"},signal:AbortSignal.timeout(12000)});
       if(!r.ok)throw new Error(`${r.status}`);
       return await r.json();
     }catch(e){last=e;}
