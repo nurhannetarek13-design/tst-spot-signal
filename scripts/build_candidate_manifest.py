@@ -10,6 +10,7 @@ REJECTED=pathlib.Path("validation/fusion/rejected-candidates.json")
 OUT=pathlib.Path("validation/fusion/candidate-manifest.json")
 POOL_SIZE=8
 REJECT_TTL_DAYS=7
+MIN_VALIDATION_TRADES=30
 
 COMPATIBLE_EDGE={
   "TS_MOMENTUM":{"timeframe":"1h","params":{"emaFast":48,"emaSlow":120,"retLookback":24,"retMin":0.02,"atrMin":0.006,"atrMax":0.08,"relvol":0.8,"holdBars":24,"sl":0.03,"tp":0.06}},
@@ -55,10 +56,13 @@ if EDGE.exists():
         m=meta.get(sym,{})
         qv=float(m.get("quoteVolume24h") or 0); price=float(m.get("price") or 0)
         stress=x.get("stress2x") or {}; base=x.get("base") or {}
-        # Candidate pool is exploratory but still requires positive stressed economics
-        # and enough observations to avoid promoting one-off noise.
+        # Do not spend independent-engine validation time on tiny or marginal samples.
+        # A candidate must already satisfy the small-live historical floor before entering the pool.
         if not (20_000_000<=qv<=150_000_000 and 0<price<=3
-                and int(stress.get("trades",0))>=10
+                and int(stress.get("trades",0))>=MIN_VALIDATION_TRADES
+                and int(base.get("trades",0))>=MIN_VALIDATION_TRADES
+                and float(base.get("expectancyUSDT",0))>0
+                and float(base.get("profitFactor",0))>=1.15
                 and float(stress.get("expectancyUSDT",0))>0
                 and float(stress.get("profitFactor",0))>=1.0):
             continue
@@ -84,7 +88,10 @@ if VBT.exists():
         qv=float(x.get("quoteVolume24h") or 0)
         stress=x.get("holdoutStress2x") or {}; base=x.get("holdoutBase") or {}
         if not (20_000_000<=qv<=150_000_000
-                and int(stress.get("trades",0))>=20
+                and int(stress.get("trades",0))>=MIN_VALIDATION_TRADES
+                and int(base.get("trades",0))>=MIN_VALIDATION_TRADES
+                and float(base.get("expectancyUSDT",0))>0
+                and float(base.get("profitFactor",0))>=1.15
                 and float(stress.get("expectancyUSDT",0))>0
                 and float(stress.get("profitFactor",0))>=1.0):
             continue
