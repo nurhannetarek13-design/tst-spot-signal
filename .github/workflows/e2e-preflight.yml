@@ -29,9 +29,10 @@ jobs:
           assert x.get('mode') == 'USER_CONFIRMATION_ONLY'
           assert x.get('autoBuy') is False
           assert x.get('telegramConfigured') is True
+          assert x.get('balanceBackend') == 'CLOUDFLARE_DIRECT_BINANCE'
           PY
 
-      - name: Check signed Binance balance relay
+      - name: Check direct Cloudflare Binance balance
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 60 \
@@ -61,4 +62,4 @@ jobs:
           test "$code" = "401"
 
       - name: Summary
-        run: echo 'NO-MONEY E2E PREFLIGHT PASSED — no order endpoint was authorized or executed.'
+        run: echo 'NO-MONEY E2E PREFLIGHT PASSED — direct Cloudflare balance verified; no order endpoint was authorized or executed.'
