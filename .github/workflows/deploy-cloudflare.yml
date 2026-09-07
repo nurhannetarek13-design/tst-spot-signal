@@ -120,11 +120,40 @@ jobs:
               --data '{"url":"https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook","allowed_updates":["callback_query"]}'
           fi
 
-      - name: Verify runtime bindings and execution guards
+      - name: Wait for deployed Worker version and verify runtime guards
+        shell: bash
         run: |
-          curl --fail --silent --show-error --max-time 60 \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check" \
-            -o /tmp/runtime.json
+          set -euo pipefail
+          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
+          matched=0
+          for attempt in $(seq 1 15); do
+            echo "runtime-check attempt ${attempt}/15"
+            if curl --fail --silent --show-error --max-time 20 \
+              -H 'cache-control: no-cache' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?deploy=${GITHUB_SHA}&attempt=${attempt}" \
+              -o /tmp/runtime.json; then
+              cat /tmp/runtime.json
+              echo
+              route="$(python - <<'PY'
+          import json
+          try:
+              row=json.load(open('/tmp/runtime.json'))
+              print(row.get('executionRoute') or '')
+          except Exception:
+              print('')
+          PY
+          )"
+              if [ "$route" = "$expected" ]; then
+                matched=1
+                break
+              fi
+            fi
+            sleep 3
+          done
+          if [ "$matched" != "1" ]; then
+            echo "New Worker route did not propagate"
+            exit 1
+          fi
           python - <<'PY'
           import json
           row=json.load(open('/tmp/runtime.json'))
@@ -144,8 +173,9 @@ jobs:
         run: |
           set -euo pipefail
           http_code="$(curl --silent --show-error --max-time 60 \
+            -H 'cache-control: no-cache' \
             -w '%{http_code}' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh" \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?deploy=${GITHUB_SHA}" \
             -o /tmp/balance.json)"
           echo "balance-refresh HTTP ${http_code}"
           cat /tmp/balance.json
@@ -169,7 +199,8 @@ jobs:
       - name: Verify scanner runtime
         run: |
           curl --fail --silent --show-error --max-time 60 \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status" \
+            -H 'cache-control: no-cache' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?deploy=${GITHUB_SHA}" \
             -o /tmp/status.json
           python - <<'PY'
           import json
