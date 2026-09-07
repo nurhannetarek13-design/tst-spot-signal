@@ -19,27 +19,26 @@ def load(p,default):
 m=load(MANIFEST,{})
 g=load(GATE,{})
 r=load(REJECTED,{"rejected":[],"ttlDays":7})
+cid=m.get("candidateId")
 fp=m.get("candidateFingerprint")
-if not fp or g.get("candidateFingerprint")!=fp or g.get("liveReady") is True:
+if not cid or not fp or g.get("candidateId")!=cid or g.get("candidateFingerprint")!=fp or g.get("liveReady") is True:
     print(json.dumps({"changed":False,"reason":"NO_ROTATION_NEEDED"}))
     raise SystemExit(0)
 
 summary=g.get("validatorSummary") or {}
 
-# Never rotate while validators are still talking about different candidates.
-# This was the source of the fingerprint churn: the gate can run after any single
-# validator finishes, while the remaining validators are still on the previous
-# candidate. Freeze the candidate until all historical engines have reported the
-# exact same fingerprint.
+# Candidate rotation is only legal once every historical engine has reported the
+# exact same candidate identity. Old artifacts can never cause rejection/rotation.
 waiting=[]
 for name in HISTORICAL_VALIDATORS:
     v=summary.get(name) or {}
-    if v.get("candidateFingerprint")!=fp:
+    if v.get("candidateId")!=cid or v.get("candidateFingerprint")!=fp or v.get("candidateMatch") is not True:
         waiting.append(name)
 if waiting:
     print(json.dumps({
       "changed":False,
       "reason":"WAITING_FOR_VALIDATOR_CONSENSUS",
+      "candidateId":cid,
       "candidateFingerprint":fp,
       "waitingFor":waiting,
     }))
@@ -49,7 +48,6 @@ hard_fail=[]
 for name in HISTORICAL_VALIDATORS:
     v=summary.get(name) or {}
     trades=int(v.get("trades") or 0)
-    # Reject on actual stressed economic failure, not merely on insufficient sample size.
     indep=v.get("independentEnginePass")
     stress_exp=v.get("stressExpectancyUSDT")
     stress_pf=v.get("stressProfitFactor")
@@ -66,10 +64,7 @@ for name in HISTORICAL_VALIDATORS:
     elif trades>=100 and indep is None and v.get("pass") is False:
         hard_fail.append(name)
 
-strong_fail=[
-    name for name in hard_fail
-    if int((summary.get(name) or {}).get("trades") or 0)>=30
-]
+strong_fail=[name for name in hard_fail if int((summary.get(name) or {}).get("trades") or 0)>=30]
 if not strong_fail and len(hard_fail)<2:
     print(json.dumps({"changed":False,"reason":"INSUFFICIENT_HARD_FAILURES","hardFail":hard_fail}))
     raise SystemExit(0)
@@ -78,7 +73,7 @@ now=dt.datetime.now(dt.timezone.utc).isoformat()
 rows=list(r.get("rejected") or [])
 if not any(x.get("candidateFingerprint")==fp for x in rows):
     rows.append({
-      "candidateId":m.get("candidateId"),
+      "candidateId":cid,
       "candidateFingerprint":fp,
       "symbol":m.get("symbol"),
       "family":m.get("family"),
@@ -117,12 +112,12 @@ else:
       "authorization":"VALIDATION_AND_FORWARD_PAPER_ONLY","liveTrading":False,
       "validatorsRequired":["vectorbt","freqtrade","jesse","nautilus","forward"],
       "generatedAt":now,
-      "rotationReason":{"rejectedFingerprint":fp,"hardFailValidators":hard_fail},
+      "rotationReason":{"rejectedCandidateId":cid,"rejectedFingerprint":fp,"hardFailValidators":hard_fail},
     }
 MANIFEST.write_text(json.dumps(new,indent=2))
 
-# Candidate rotation must also reset forward state immediately. Rotation commits use
-# [skip ci], so we cannot rely on a downstream push-trigger to clear a stale paper candidate.
+# Reset forward state atomically with rotation; a stale paper position is never
+# counted against the newly selected candidate.
 forward={
   "engine":"FORWARD_PAPER",
   "strategyId":"TST_UNIFIED_FORWARD_V1",
@@ -154,4 +149,4 @@ ledger["open"]=None
 LEDGER.parent.mkdir(parents=True,exist_ok=True)
 LEDGER.write_text(json.dumps(ledger,indent=2))
 
-print(json.dumps({"changed":True,"rejected":fp,"hardFail":hard_fail,"next":new.get("candidateId"),"forwardReset":True},indent=2))
+print(json.dumps({"changed":True,"rejectedCandidateId":cid,"rejected":fp,"hardFail":hard_fail,"next":new.get("candidateId"),"forwardReset":True},indent=2))
