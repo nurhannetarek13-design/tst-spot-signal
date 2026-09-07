@@ -1,2 +1,3 @@
 trigger 2026-08-30 automatic deployment
 reconnect test 20:08 EET
+force production redeploy 2026-09-07 14:45Z — binance public proxy
