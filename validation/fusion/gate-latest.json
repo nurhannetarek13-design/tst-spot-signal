@@ -16,7 +16,10 @@
     "freqtrade:STRESS_PF_LT_1_0",
     "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
     "jesse:CANDIDATE_MISMATCH",
-    "nautilus:CANDIDATE_MISMATCH",
+    "nautilus:BASE_PF_LT_1_15",
+    "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
+    "nautilus:STRESS_PF_LT_1_0",
+    "nautilus:STRESS_EXPECTANCY_NONPOSITIVE",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -47,7 +50,6 @@
     "freqtrade:FAIL",
     "jesse:CANDIDATE_MISMATCH",
     "jesse:FAIL",
-    "nautilus:CANDIDATE_MISMATCH",
     "nautilus:FAIL",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
@@ -89,13 +91,13 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
-      "candidateFingerprint": "4da78ca29267ffd54aa9",
-      "trades": 218,
+      "candidateFingerprint": "cba53276448a08d4eebc",
+      "trades": 496,
       "independentEnginePass": false,
-      "baseProfitFactor": 1.109713520429208,
-      "baseExpectancyUSDT": 0.012854000321100914,
-      "stressProfitFactor": 0.9708794320128211,
-      "stressExpectancyUSDT": -0.003693418027522937
+      "baseProfitFactor": 0.849916771894857,
+      "baseExpectancyUSDT": -0.007232112137096773,
+      "stressProfitFactor": 0.5791646655736141,
+      "stressExpectancyUSDT": -0.023742849758064517
     },
     "forward": {
       "status": "COLLECTING",
@@ -109,6 +111,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T07:28:42.103958+00:00",
+  "generatedAt": "2026-09-07T07:29:02.780639+00:00",
   "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
 }
