@@ -1,54 +1,8 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-07T21:36:25.415405+00:00",
-  "symbol": "XLMUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "params": {
-    "emaFast": 48,
-    "emaSlow": 120,
-    "retLookback": 24,
-    "retMin": 0.02,
-    "atrMin": 0.006,
-    "atrMax": 0.08,
-    "relvol": 0.8,
-    "holdBars": 24,
-    "sl": 0.03,
-    "tp": 0.06
-  },
-  "sourceMetrics": {
-    "base": {
-      "trades": 69,
-      "wins": 30,
-      "winRate": 0.43478260869565216,
-      "netPnlUSDT": 2.0060795770020214,
-      "expectancyUSDT": 0.029073617058000312,
-      "profitFactor": 1.305985987013512,
-      "maxDrawdownUSDT": 1.2687675000000012
-    },
-    "stress2x": {
-      "trades": 69,
-      "wins": 30,
-      "winRate": 0.43478260869565216,
-      "netPnlUSDT": 0.86285562170357,
-      "expectancyUSDT": 0.012505153937732898,
-      "profitFactor": 1.1199954928486637,
-      "maxDrawdownUSDT": 1.384796784396411
-    }
-  },
-  "liquidity": {
-    "quoteVolume24h": 24470857.6361,
-    "priceUSDT": 0.1932
-  },
-  "rankKey": [
-    1,
-    0.012505153937732898,
-    1.1199954928486637,
-    69
-  ],
-  "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "46ad824ea85b257ae59f",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -159,6 +113,7 @@
     "1b7dc1733caf8b96d86e",
     "355f478a8b669d789baf",
     "385a252d2323f398b13a",
+    "46ad824ea85b257ae59f",
     "491ef3dee6fa939725a4",
     "4d447ed53b9d56d398d4",
     "5a8be2536ed727aaa38e",
@@ -169,7 +124,7 @@
     "cba53276448a08d4eebc",
     "db0561831b32d3a2c528"
   ],
-  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -178,5 +133,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-07T21:36:25.852184+00:00"
+  "generatedAt": "2026-09-07T21:42:35.428273+00:00"
 }

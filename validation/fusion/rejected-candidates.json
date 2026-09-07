@@ -139,6 +139,17 @@
         "nautilus"
       ],
       "rejectedAt": "2026-09-07T21:30:44.462982+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "46ad824ea85b257ae59f",
+      "symbol": "XLMUSDT",
+      "family": "TS_MOMENTUM",
+      "hardFailValidators": [
+        "vectorbt",
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-07T21:42:35.428273+00:00"
     }
   ],
   "ttlDays": 7,
