@@ -1,0 +1,64 @@
+name: E2E Preflight No Money
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/e2e-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check confirmation-only gateway
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/buy-gateway-status" \
+            -o /tmp/gateway.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/gateway.json'))
+          print(json.dumps(x,indent=2))
+          assert x.get('ok') is True
+          assert x.get('mode') == 'USER_CONFIRMATION_ONLY'
+          assert x.get('autoBuy') is False
+          assert x.get('telegramConfigured') is True
+          PY
+
+      - name: Check signed Binance balance relay
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 60 \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh" \
+            -o /tmp/balance.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/balance.json'))
+          print(json.dumps(x,indent=2))
+          assert x.get('ok') is True
+          b=x.get('balance') or {}
+          assert b.get('status') == 'ACCOUNT_BALANCE_OK'
+          assert b.get('canTrade') is True
+          usdt=b.get('usdt') or {}
+          assert float(usdt.get('free',0)) >= 0
+          PY
+
+      - name: Verify live executor rejects unsigned calls
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 60 \
+            -o /tmp/unsigned.json -w '%{http_code}' \
+            -X POST "https://tst-spot-signal.vercel.app/api/user-confirmed-buy" \
+            -H 'content-type: application/json' \
+            --data '{"userConfirmed":true,"symbol":"BTCUSDT","entry":1,"stop":0.99,"target":1.02,"createdAt":1}')
+          cat /tmp/unsigned.json
+          test "$code" = "401"
+
+      - name: Summary
+        run: echo 'NO-MONEY E2E PREFLIGHT PASSED — no order endpoint was authorized or executed.'
