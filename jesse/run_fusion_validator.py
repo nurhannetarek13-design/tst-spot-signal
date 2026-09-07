@@ -4,6 +4,8 @@ import jesse.helpers as jh
 from jesse.research import backtest
 from strategies.UnifiedCandidateValidator import UnifiedCandidateValidator
 
+# Always resolve the candidate from the checked-out canonical manifest so Jesse
+# cannot validate a stale symbol/fingerprint from a previous discovery round.
 MANIFEST=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
 if not MANIFEST.get("candidateFingerprint"):
     report={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":MANIFEST.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate is active; Jesse exits without downloading market data."}
