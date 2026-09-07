@@ -139,3 +139,5 @@ jobs:
           assert row.get('liveTrading') is False
           assert row.get('executorAllowed') is False
           PY
+
+# redeploy-marker: runtime-verify-20260907
