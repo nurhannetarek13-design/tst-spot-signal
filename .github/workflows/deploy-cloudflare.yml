@@ -11,6 +11,7 @@ on:
       - "wrangler.jsonc"
       - "scripts/patch-cloudflare-digest.py"
       - "scripts/patch-binance-public-api.py"
+      - "scripts/patch-product-mode.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -35,6 +36,7 @@ jobs:
         run: |
           python scripts/patch-cloudflare-digest.py
           python scripts/patch-binance-public-api.py
+          python scripts/patch-product-mode.py
           node --check src/edge-worker.js
           node --check src/buy-gateway.js
           grep -q 'https://api.binance.com' src/edge-worker.js
@@ -42,6 +44,11 @@ jobs:
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'const reversalStrategy=' src/edge-worker.js
           grep -q 'USER_CONFIRMATION_ONLY' src/buy-gateway.js
+          grep -q 'await scan(env,false)' src/edge-worker.js
+          if grep -q 'await sendPeriodicScanDigest(env)' src/edge-worker.js; then
+            echo "Periodic scan digest still enabled"
+            exit 1
+          fi
           if grep -q 'if(regime.state==="RISK_OFF") return' src/edge-worker.js; then
             echo "Unsafe global RISK_OFF abort still present"
             exit 1
