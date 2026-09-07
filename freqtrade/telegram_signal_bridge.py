@@ -17,6 +17,7 @@ SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '').strip()
 PUBLIC_BASE_URL = os.getenv('SIGNAL_PUBLIC_BASE_URL', '').rstrip('/')
+BINANCE_PUBLIC = 'https://data-api.binance.vision/api/v3'
 
 
 def tg_api(method: str, payload: dict) -> dict:
@@ -26,6 +27,12 @@ def tg_api(method: str, payload: dict) -> dict:
     body = json.dumps(payload).encode()
     req = Request(url, data=body, headers={'Content-Type': 'application/json'})
     with urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+
+def binance_get(path: str) -> dict:
+    req = Request(BINANCE_PUBLIC + path, headers={'User-Agent': 'tst-new-listing-watch/1.0'})
+    with urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode())
 
 
@@ -61,7 +68,6 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
     now = time.time()
     sig = Signal(signal_id, pair, stake_usdt, entry, tp, sl, now, now + 15 * 60, tag)
     save_signal(sig)
-
     symbol = pair.replace('/', '')
     text = (
         f'🚨 فرصة Spot\n'
@@ -74,12 +80,10 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
         f'Strategy: {tag or "NFIProtectedX7"}\n\n'
         f'البوت لن يشتري تلقائيًا. اضغطي BUY لفتح صفحة الصفقة جاهزة بكل البيانات.'
     )
-
     buttons = []
     if PUBLIC_BASE_URL:
         buttons.append({'text': '✅ BUY', 'url': f'{PUBLIC_BASE_URL}/buy?id={signal_id}'})
     buttons.append({'text': '📈 Binance', 'url': f'https://www.binance.com/en/trade/{symbol}?type=spot'})
-
     tg_api('sendMessage', {
         'chat_id': TELEGRAM_CHAT_ID,
         'text': text,
@@ -93,9 +97,7 @@ def order_preview(sig: Signal) -> str:
     pair = html.escape(sig.pair)
     symbol = html.escape(sig.pair.replace('/', ''))
     strategy = html.escape(sig.tag or 'NFIProtectedX7')
-    entry = f'{sig.entry:.8g}'
-    tp = f'{sig.tp:.8g}'
-    sl = f'{sig.sl:.8g}'
+    entry, tp, sl = f'{sig.entry:.8g}', f'{sig.tp:.8g}', f'{sig.sl:.8g}'
     stake = f'{sig.stake_usdt:.2f}'
     qty = sig.stake_usdt / sig.entry if sig.entry > 0 else 0
     qty_text = f'{qty:.8g}'
@@ -104,27 +106,45 @@ def order_preview(sig: Signal) -> str:
     reward_pct = ((sig.tp / sig.entry) - 1) * 100 if sig.entry else 0
     risk_pct = (1 - (sig.sl / sig.entry)) * 100 if sig.entry else 0
     seconds = max(0, int(sig.expires_at - time.time()))
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{pair} Order Preview</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:20px}}.card{{max-width:520px;margin:20px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:22px}}h1{{font-size:24px;margin:0 0 6px}}.sub{{color:#848e9c;margin-bottom:20px}}.row{{display:flex;justify-content:space-between;gap:20px;padding:12px 0;border-bottom:1px solid #2b3139}}.label{{color:#848e9c}}.value{{font-weight:700;text-align:right}}.green{{color:#0ecb81}}.red{{color:#f6465d}}.note{{font-size:13px;color:#848e9c;line-height:1.5;margin:18px 0}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:800;padding:15px;border-radius:10px;margin-top:16px}}.badge{{display:inline-block;padding:5px 9px;background:#2b3139;border-radius:8px;font-size:12px;margin-bottom:12px}}</style></head><body><div class="card"><div class="badge">SPOT · MANUAL CONFIRMATION</div><h1>{pair}</h1><div class="sub">{strategy}</div><div class="row"><span class="label">Amount</span><span class="value">{stake} USDT</span></div><div class="row"><span class="label">Estimated quantity</span><span class="value">{qty_text}</span></div><div class="row"><span class="label">Entry</span><span class="value">{entry}</span></div><div class="row"><span class="label">Take Profit</span><span class="value green">{tp} (+{reward_pct:.2f}%)</span></div><div class="row"><span class="label">Stop Loss</span><span class="value red">{sl} (-{risk_pct:.2f}%)</span></div><div class="row"><span class="label">Estimated TP profit</span><span class="value green">+{profit_usdt:.4f} USDT</span></div><div class="row"><span class="label">Estimated SL loss</span><span class="value red">-{loss_usdt:.4f} USDT</span></div><div class="row"><span class="label">Signal expires in</span><span class="value">{seconds // 60}:{seconds % 60:02d}</span></div><p class="note">كل بيانات الصفقة معروضة هنا تلقائيًا من الإشارة. الصفحة لا تنفذ أي شراء ولا تحتاج كتابة الأرقام يدويًا. افتحي Binance من الزر بالأسفل لإتمام العملية بنفسك.</p><a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a></div></body></html>'''
 
-    return f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{pair} Order Preview</title>
-<style>
-*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:20px}}
-.card{{max-width:520px;margin:20px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:22px}}
-h1{{font-size:24px;margin:0 0 6px}}.sub{{color:#848e9c;margin-bottom:20px}}.row{{display:flex;justify-content:space-between;gap:20px;padding:12px 0;border-bottom:1px solid #2b3139}}.label{{color:#848e9c}}.value{{font-weight:700;text-align:right}}.green{{color:#0ecb81}}.red{{color:#f6465d}}.note{{font-size:13px;color:#848e9c;line-height:1.5;margin:18px 0}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:800;padding:15px;border-radius:10px;margin-top:16px}}.badge{{display:inline-block;padding:5px 9px;background:#2b3139;border-radius:8px;font-size:12px;margin-bottom:12px}}
-</style></head><body><div class="card">
-<div class="badge">SPOT · MANUAL CONFIRMATION</div><h1>{pair}</h1><div class="sub">{strategy}</div>
-<div class="row"><span class="label">Amount</span><span class="value">{stake} USDT</span></div>
-<div class="row"><span class="label">Estimated quantity</span><span class="value">{qty_text}</span></div>
-<div class="row"><span class="label">Entry</span><span class="value">{entry}</span></div>
-<div class="row"><span class="label">Take Profit</span><span class="value green">{tp} (+{reward_pct:.2f}%)</span></div>
-<div class="row"><span class="label">Stop Loss</span><span class="value red">{sl} (-{risk_pct:.2f}%)</span></div>
-<div class="row"><span class="label">Estimated TP profit</span><span class="value green">+{profit_usdt:.4f} USDT</span></div>
-<div class="row"><span class="label">Estimated SL loss</span><span class="value red">-{loss_usdt:.4f} USDT</span></div>
-<div class="row"><span class="label">Signal expires in</span><span class="value">{seconds // 60}:{seconds % 60:02d}</span></div>
-<p class="note">كل بيانات الصفقة معروضة هنا تلقائيًا من الإشارة. الصفحة لا تنفذ أي شراء ولا تحتاج كتابة الأرقام يدويًا. افتحي Binance من الزر بالأسفل لإتمام العملية بنفسك.</p>
-<a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a>
-</div></body></html>'''
+
+def watch_new_listings() -> None:
+    known: set[str] | None = None
+    while True:
+        try:
+            info = binance_get('/exchangeInfo')
+            markets = {
+                s['symbol']: s for s in info.get('symbols', [])
+                if s.get('quoteAsset') == 'USDT' and s.get('isSpotTradingAllowed', True)
+            }
+            current = set(markets)
+            if known is None:
+                known = current
+            else:
+                for sym in sorted(current - known):
+                    s = markets[sym]
+                    pair = f"{s.get('baseAsset')}/USDT"
+                    status = s.get('status', 'UNKNOWN')
+                    text = (
+                        f'🆕 NEW LISTING WATCH\n'
+                        f'Pair: {pair}\n'
+                        f'Status: {status}\n'
+                        f'البوت ضافها للسكان تلقائيًا. الإشارة لن تتبعت غير بعد ما يبقى فيه بيانات كفاية وNFI يوافق على الدخول.'
+                    )
+                    tg_api('sendMessage', {
+                        'chat_id': TELEGRAM_CHAT_ID,
+                        'text': text,
+                        'reply_markup': {'inline_keyboard': [[{
+                            'text': '📈 Open Binance',
+                            'url': f'https://www.binance.com/en/trade/{sym}?type=spot'
+                        }]]},
+                        'disable_web_page_preview': True,
+                    })
+                known = current
+        except Exception as e:
+            print(f'[new-listing-watch] warning: {type(e).__name__}: {e}')
+        time.sleep(60)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -162,4 +182,5 @@ def run_http():
 
 
 if __name__ == '__main__':
+    threading.Thread(target=watch_new_listings, daemon=True).start()
     threading.Thread(target=run_http, daemon=False).start()
