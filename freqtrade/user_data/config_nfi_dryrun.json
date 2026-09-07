@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.freqtrade.io/schema.json",
-  "bot_name": "TST Fast All-USDT Dry Run",
+  "bot_name": "TST NFI All-USDT Dry Run",
   "initial_state": "running",
   "max_open_trades": 1,
   "stake_currency": "USDT",
@@ -38,9 +38,9 @@
   "pairlists": [
     {
       "method": "VolumePairList",
-      "number_assets": 120,
+      "number_assets": 1000,
       "sort_key": "quoteVolume",
-      "min_value": 1000000,
+      "min_value": 0,
       "refresh_period": 60
     }
   ],
