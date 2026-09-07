@@ -1,59 +1,104 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-  "symbol": "TUTUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
+  "source": "VECTORBT",
+  "sourceGeneratedAt": "2026-09-07T06:37:18.973008+00:00",
+  "symbol": "PROMUSDT",
+  "family": "MEAN_REVERSION",
+  "timeframe": "15m",
   "params": {
-    "emaFast": 48,
-    "emaSlow": 120,
-    "retLookback": 24,
-    "retMin": 0.02,
-    "atrMin": 0.006,
-    "atrMax": 0.08,
-    "relvol": 0.8,
-    "holdBars": 24,
-    "sl": 0.03,
-    "tp": 0.06
+    "bb": 1.6,
+    "rsi_in": 28,
+    "rsi_out": 50,
+    "sl": 0.02,
+    "tp": 0.025
   },
   "sourceMetrics": {
     "base": {
-      "trades": 129,
-      "wins": 57,
-      "winRate": 0.4418604651162791,
-      "netPnlUSDT": 3.513268367339053,
-      "expectancyUSDT": 0.02723463850650429,
-      "profitFactor": 1.2742662394219604,
-      "maxDrawdownUSDT": 4.832377789528836
+      "trades": 22,
+      "wins": 13,
+      "winRate": 0.5909090909090909,
+      "netPnlUSDT": 1.3368389116848078,
+      "expectancyUSDT": 0.06076540507658217,
+      "profitFactor": 2.0117248673448973,
+      "maxDrawdownUSDT": 0.852283418893488
     },
     "stress2x": {
-      "trades": 129,
-      "wins": 56,
-      "winRate": 0.43410852713178294,
-      "netPnlUSDT": 1.3762930017396426,
-      "expectancyUSDT": 0.010668937997981727,
-      "profitFactor": 1.098330082678941,
-      "maxDrawdownUSDT": 5.783555990145465
+      "trades": 22,
+      "wins": 13,
+      "winRate": 0.5909090909090909,
+      "netPnlUSDT": 1.093258492353792,
+      "expectancyUSDT": 0.04969356783426327,
+      "profitFactor": 1.7703762810112704,
+      "maxDrawdownUSDT": 0.9945734254811822
     }
   },
   "liquidity": {
-    "quoteVolume24h": 30889319.39486,
-    "priceUSDT": 0.02653
+    "quoteVolume24h": 73203707.44948,
+    "priceUSDT": null
   },
   "rankKey": [
-    1,
-    0.010668937997981727,
-    1.098330082678941,
-    129
+    0,
+    0.04969356783426327,
+    1.7703762810112704,
+    22
   ],
-  "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "4da78ca29267ffd54aa9",
+  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
+  "candidateFingerprint": "cba53276448a08d4eebc",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-      "symbol": "ZKPUSDT",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
+      "symbol": "SAHARAUSDT",
+      "family": "VOLATILITY_BREAKOUT",
+      "timeframe": "1h",
+      "params": {
+        "lookback": 24,
+        "compressionLookback": 72,
+        "compressionPct": 0.25,
+        "relvol": 1.5,
+        "rsiMin": 55,
+        "rsiMax": 75,
+        "holdBars": 12,
+        "sl": 0.025,
+        "tp": 0.055
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 11,
+          "wins": 6,
+          "winRate": 0.5454545454545454,
+          "netPnlUSDT": 1.1916108825556546,
+          "expectancyUSDT": 0.10832826205051406,
+          "profitFactor": 3.28423832905656,
+          "maxDrawdownUSDT": 0.21407911744434327
+        },
+        "stress2x": {
+          "trades": 11,
+          "wins": 6,
+          "winRate": 0.5454545454545454,
+          "netPnlUSDT": 1.0080481220911244,
+          "expectancyUSDT": 0.0916407383719204,
+          "profitFactor": 2.6703175373642285,
+          "maxDrawdownUSDT": 0.2633318779088736
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 54783196.69542,
+        "priceUSDT": 0.00918
+      },
+      "rankKey": [
+        1,
+        0.0916407383719204,
+        2.6703175373642285,
+        11
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:VOLATILITY_BREAKOUT",
+      "candidateFingerprint": "355f478a8b669d789baf"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
+      "symbol": "SAHARAUSDT",
       "family": "CROSS_CRYPTO_LEAD_LAG",
       "timeframe": "1h",
       "params": {
@@ -70,90 +115,91 @@
       },
       "sourceMetrics": {
         "base": {
-          "trades": 11,
-          "wins": 7,
-          "winRate": 0.6363636363636364,
-          "netPnlUSDT": 0.7671940804434726,
-          "expectancyUSDT": 0.06974491640395206,
-          "profitFactor": 6.524713904347154,
-          "maxDrawdownUSDT": 0.053858843537415005
+          "trades": 18,
+          "wins": 11,
+          "winRate": 0.6111111111111112,
+          "netPnlUSDT": 1.20032200090242,
+          "expectancyUSDT": 0.06668455560569,
+          "profitFactor": 2.8710640560873486,
+          "maxDrawdownUSDT": 0.4196559937966311
         },
         "stress2x": {
-          "trades": 11,
-          "wins": 6,
-          "winRate": 0.5454545454545454,
-          "netPnlUSDT": 0.5842689015544738,
-          "expectancyUSDT": 0.05311535468677034,
-          "profitFactor": 3.7689471345508787,
-          "maxDrawdownUSDT": 0.07030272108843541
+          "trades": 18,
+          "wins": 10,
+          "winRate": 0.5555555555555556,
+          "netPnlUSDT": 0.9010726438655112,
+          "expectancyUSDT": 0.050059591325861734,
+          "profitFactor": 2.183017858436096,
+          "maxDrawdownUSDT": 0.490569436502659
         }
       },
       "liquidity": {
-        "quoteVolume24h": 23534302.74139,
-        "priceUSDT": 0.0486
+        "quoteVolume24h": 54783196.69542,
+        "priceUSDT": 0.00918
       },
       "rankKey": [
         1,
-        0.05311535468677034,
-        3.7689471345508787,
-        11
+        0.050059591325861734,
+        2.183017858436096,
+        18
       ],
-      "candidateId": "PUBLIC_EDGE_LAB:ZKPUSDT:CROSS_CRYPTO_LEAD_LAG",
-      "candidateFingerprint": "b7b8fd956817ecaced07"
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "82bc01511e155b64e664"
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-      "symbol": "PEPEUSDT",
-      "family": "VOLATILITY_BREAKOUT",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
+      "symbol": "WLDUSDT",
+      "family": "CROSS_CRYPTO_LEAD_LAG",
       "timeframe": "1h",
       "params": {
-        "lookback": 24,
-        "compressionLookback": 72,
-        "compressionPct": 0.25,
-        "relvol": 1.5,
-        "rsiMin": 55,
-        "rsiMax": 75,
-        "holdBars": 12,
+        "leaderRetMin": 0.012,
+        "gapMin": 0.008,
+        "altRetMin": -0.02,
+        "relvol": 0.9,
+        "rsiMin": 42,
+        "rsiMax": 70,
+        "emaFast": 24,
+        "holdBars": 6,
         "sl": 0.025,
-        "tp": 0.055
+        "tp": 0.05
       },
       "sourceMetrics": {
         "base": {
-          "trades": 15,
-          "wins": 8,
-          "winRate": 0.5333333333333333,
-          "netPnlUSDT": 0.5302456361944723,
-          "expectancyUSDT": 0.03534970907963149,
-          "profitFactor": 1.6795724291406249,
-          "maxDrawdownUSDT": 0.35457395854522844
+          "trades": 19,
+          "wins": 10,
+          "winRate": 0.5263157894736842,
+          "netPnlUSDT": 0.7065631733474996,
+          "expectancyUSDT": 0.037187535439342084,
+          "profitFactor": 1.839203006172262,
+          "maxDrawdownUSDT": 0.595739179151895
         },
         "stress2x": {
-          "trades": 15,
-          "wins": 8,
-          "winRate": 0.5333333333333333,
-          "netPnlUSDT": 0.2815772651836644,
-          "expectancyUSDT": 0.01877181767891096,
-          "profitFactor": 1.314694110717741,
-          "maxDrawdownUSDT": 0.4366652345213749
+          "trades": 19,
+          "wins": 10,
+          "winRate": 0.5263157894736842,
+          "netPnlUSDT": 0.39153077999745334,
+          "expectancyUSDT": 0.020606883157760703,
+          "profitFactor": 1.3957239725845032,
+          "maxDrawdownUSDT": 0.6939929510410008
         }
       },
       "liquidity": {
-        "quoteVolume24h": 26972172.9163869,
-        "priceUSDT": 3.63e-06
+        "quoteVolume24h": 31925716.0459,
+        "priceUSDT": 0.4387
       },
       "rankKey": [
         1,
-        0.01877181767891096,
-        1.314694110717741,
-        15
+        0.020606883157760703,
+        1.3957239725845032,
+        19
       ],
-      "candidateId": "PUBLIC_EDGE_LAB:PEPEUSDT:VOLATILITY_BREAKOUT",
-      "candidateFingerprint": "385a252d2323f398b13a"
+      "candidateId": "PUBLIC_EDGE_LAB:WLDUSDT:CROSS_CRYPTO_LEAD_LAG",
+      "candidateFingerprint": "491ef3dee6fa939725a4"
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
       "symbol": "NEARUSDT",
       "family": "CROSS_CRYPTO_LEAD_LAG",
       "timeframe": "1h",
@@ -190,8 +236,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 47508249.798,
-        "priceUSDT": 2.253
+        "quoteVolume24h": 90957489.4604,
+        "priceUSDT": 2.383
       },
       "rankKey": [
         1,
@@ -204,7 +250,7 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
       "symbol": "ARBUSDT",
       "family": "VOLATILITY_BREAKOUT",
       "timeframe": "1h",
@@ -240,8 +286,8 @@
         }
       },
       "liquidity": {
-        "quoteVolume24h": 101405244.7971,
-        "priceUSDT": 0.1936
+        "quoteVolume24h": 74295007.86051,
+        "priceUSDT": 0.1701
       },
       "rankKey": [
         1,
@@ -254,8 +300,8 @@
     },
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-      "symbol": "TUTUSDT",
+      "sourceGeneratedAt": "2026-09-07T07:26:44.657128+00:00",
+      "symbol": "SAHARAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
       "params": {
@@ -272,90 +318,40 @@
       },
       "sourceMetrics": {
         "base": {
-          "trades": 129,
-          "wins": 57,
-          "winRate": 0.4418604651162791,
-          "netPnlUSDT": 3.513268367339053,
-          "expectancyUSDT": 0.02723463850650429,
-          "profitFactor": 1.2742662394219604,
-          "maxDrawdownUSDT": 4.832377789528836
+          "trades": 73,
+          "wins": 31,
+          "winRate": 0.4246575342465753,
+          "netPnlUSDT": 1.3017565281303156,
+          "expectancyUSDT": 0.017832281207264596,
+          "profitFactor": 1.1759347632403971,
+          "maxDrawdownUSDT": 3.2078910060704047
         },
         "stress2x": {
-          "trades": 129,
-          "wins": 56,
-          "winRate": 0.43410852713178294,
-          "netPnlUSDT": 1.3762930017396426,
-          "expectancyUSDT": 0.010668937997981727,
-          "profitFactor": 1.098330082678941,
-          "maxDrawdownUSDT": 5.783555990145465
+          "trades": 73,
+          "wins": 31,
+          "winRate": 0.4246575342465753,
+          "netPnlUSDT": 0.09349149578960836,
+          "expectancyUSDT": 0.001280705421775457,
+          "profitFactor": 1.01156784882537,
+          "maxDrawdownUSDT": 3.8936972404741317
         }
       },
       "liquidity": {
-        "quoteVolume24h": 30889319.39486,
-        "priceUSDT": 0.02653
+        "quoteVolume24h": 54783196.69542,
+        "priceUSDT": 0.00918
       },
       "rankKey": [
         1,
-        0.010668937997981727,
-        1.098330082678941,
-        129
+        0.001280705421775457,
+        1.01156784882537,
+        73
       ],
-      "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "4da78ca29267ffd54aa9"
-    },
-    {
-      "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-06T07:14:55.168101+00:00",
-      "symbol": "ZKCUSDT",
-      "family": "VOLATILITY_BREAKOUT",
-      "timeframe": "1h",
-      "params": {
-        "lookback": 24,
-        "compressionLookback": 72,
-        "compressionPct": 0.25,
-        "relvol": 1.5,
-        "rsiMin": 55,
-        "rsiMax": 75,
-        "holdBars": 12,
-        "sl": 0.025,
-        "tp": 0.055
-      },
-      "sourceMetrics": {
-        "base": {
-          "trades": 14,
-          "wins": 6,
-          "winRate": 0.42857142857142855,
-          "netPnlUSDT": 0.33011404506212877,
-          "expectancyUSDT": 0.02357957464729491,
-          "profitFactor": 1.4459942543446271,
-          "maxDrawdownUSDT": 0.43852432254871376
-        },
-        "stress2x": {
-          "trades": 14,
-          "wins": 6,
-          "winRate": 0.42857142857142855,
-          "netPnlUSDT": 0.09827110959132938,
-          "expectancyUSDT": 0.007019364970809241,
-          "profitFactor": 1.1127916957185677,
-          "maxDrawdownUSDT": 0.5535390581683202
-        }
-      },
-      "liquidity": {
-        "quoteVolume24h": 79008669.6605,
-        "priceUSDT": 0.0494
-      },
-      "rankKey": [
-        1,
-        0.007019364970809241,
-        1.1127916957185677,
-        14
-      ],
-      "candidateId": "PUBLIC_EDGE_LAB:ZKCUSDT:VOLATILITY_BREAKOUT",
-      "candidateFingerprint": "1b7dc1733caf8b96d86e"
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e"
     },
     {
       "source": "VECTORBT",
-      "sourceGeneratedAt": "2026-09-06T06:18:03.980589+00:00",
+      "sourceGeneratedAt": "2026-09-07T06:37:18.973008+00:00",
       "symbol": "PROMUSDT",
       "family": "MEAN_REVERSION",
       "timeframe": "15m",
@@ -371,29 +367,29 @@
           "trades": 22,
           "wins": 13,
           "winRate": 0.5909090909090909,
-          "netPnlUSDT": 1.3428088359810766,
-          "expectancyUSDT": 0.06103676527186712,
-          "profitFactor": 1.960831386164056,
-          "maxDrawdownUSDT": 0.7409494206657591
+          "netPnlUSDT": 1.3368389116848078,
+          "expectancyUSDT": 0.06076540507658217,
+          "profitFactor": 2.0117248673448973,
+          "maxDrawdownUSDT": 0.852283418893488
         },
         "stress2x": {
           "trades": 22,
           "wins": 13,
           "winRate": 0.5909090909090909,
-          "netPnlUSDT": 1.0992224407498643,
-          "expectancyUSDT": 0.0499646563977211,
-          "profitFactor": 1.735143385052795,
-          "maxDrawdownUSDT": 0.8943618837081357
+          "netPnlUSDT": 1.093258492353792,
+          "expectancyUSDT": 0.04969356783426327,
+          "profitFactor": 1.7703762810112704,
+          "maxDrawdownUSDT": 0.9945734254811822
         }
       },
       "liquidity": {
-        "quoteVolume24h": 73396594.1294,
+        "quoteVolume24h": 73203707.44948,
         "priceUSDT": null
       },
       "rankKey": [
         0,
-        0.0499646563977211,
-        1.735143385052795,
+        0.04969356783426327,
+        1.7703762810112704,
         22
       ],
       "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
@@ -424,13 +420,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-06T07:23:35.683580+00:00",
-  "rotationReason": {
-    "rejectedFingerprint": "bf01f22fc60141ca16b1",
-    "hardFailValidators": [
-      "freqtrade",
-      "jesse",
-      "nautilus"
-    ]
-  }
+  "generatedAt": "2026-09-07T07:26:45.098062+00:00"
 }
