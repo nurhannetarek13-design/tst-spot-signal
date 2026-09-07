@@ -5,6 +5,7 @@
   "candidateFingerprint": "cba53276448a08d4eebc",
   "symbol": "PROMUSDT",
   "family": "MEAN_REVERSION",
+  "allValidatorsCurrentCandidate": false,
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
@@ -15,7 +16,8 @@
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
     "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
-    "jesse:CANDIDATE_MISMATCH",
+    "jesse:CANDIDATE_ID_MISMATCH",
+    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:BASE_PF_LT_1_15",
     "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
     "nautilus:STRESS_PF_LT_1_0",
@@ -30,7 +32,7 @@
       "jesse",
       "nautilus"
     ],
-    "sameCandidateRequired": true,
+    "sameCandidateIdAndFingerprintRequired": true,
     "minTradesPerEngine": 30,
     "minIndependentEnginePasses": 3,
     "baseProfitFactorMin": 1.15,
@@ -48,7 +50,8 @@
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
-    "jesse:CANDIDATE_MISMATCH",
+    "jesse:CANDIDATE_ID_MISMATCH",
+    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
     "nautilus:FAIL",
     "forward:FAIL",
@@ -58,7 +61,11 @@
     "vectorbt": {
       "status": "FAIL",
       "pass": false,
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
       "candidateFingerprint": "cba53276448a08d4eebc",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 42,
       "independentEnginePass": false,
       "baseProfitFactor": 1.1289598637634926,
@@ -69,7 +76,11 @@
     "freqtrade": {
       "status": "FAIL",
       "pass": false,
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
       "candidateFingerprint": "cba53276448a08d4eebc",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 281,
       "independentEnginePass": false,
       "baseProfitFactor": 0.6519026931363958,
@@ -80,7 +91,11 @@
     "jesse": {
       "status": "FAIL",
       "pass": false,
+      "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
       "candidateFingerprint": "4da78ca29267ffd54aa9",
+      "candidateIdMatch": false,
+      "candidateFingerprintMatch": false,
+      "candidateMatch": false,
       "trades": 273,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
@@ -91,7 +106,11 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
       "candidateFingerprint": "cba53276448a08d4eebc",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 496,
       "independentEnginePass": false,
       "baseProfitFactor": 0.849916771894857,
@@ -102,7 +121,11 @@
     "forward": {
       "status": "COLLECTING",
       "pass": false,
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
       "candidateFingerprint": "cba53276448a08d4eebc",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 0,
       "independentEnginePass": null,
       "baseProfitFactor": null,
@@ -111,6 +134,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T19:13:04.824335+00:00",
-  "note": "Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
+  "generatedAt": "2026-09-07T20:35:19.791695+00:00",
+  "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
