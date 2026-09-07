@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "bot_name": "TST NFI X7 Dry Run",
+  "initial_state": "running",
+  "max_open_trades": 1,
+  "stake_currency": "USDT",
+  "stake_amount": 5.5,
+  "tradable_balance_ratio": 0.9,
+  "fiat_display_currency": "USD",
+  "dry_run": true,
+  "dry_run_wallet": 20.08,
+  "cancel_open_orders_on_exit": true,
+  "trading_mode": "spot",
+  "margin_mode": "",
+  "timeframe": "5m",
+  "process_only_new_candles": true,
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {
+      "enableRateLimit": true,
+      "urls": {
+        "api": {
+          "public": "https://data-api.binance.vision/api/v3",
+          "private": "https://api.binance.com/api",
+          "sapi": "https://api.binance.com/sapi"
+        }
+      },
+      "options": {
+        "defaultType": "spot",
+        "fetchMarkets": ["spot"]
+      }
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true,
+      "urls": {
+        "api": {
+          "public": "https://data-api.binance.vision/api/v3",
+          "private": "https://api.binance.com/api",
+          "sapi": "https://api.binance.com/sapi"
+        }
+      },
+      "options": {
+        "defaultType": "spot",
+        "fetchMarkets": ["spot"]
+      }
+    },
+    "pair_whitelist": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "SOL/USDT",
+      "BNB/USDT",
+      "XRP/USDT",
+      "ADA/USDT",
+      "DOGE/USDT",
+      "LINK/USDT",
+      "AVAX/USDT",
+      "LTC/USDT"
+    ],
+    "pair_blacklist": [
+      ".*(UP|DOWN|BULL|BEAR)/USDT",
+      "USDC/USDT",
+      "FDUSD/USDT",
+      "TUSD/USDT",
+      "USDP/USDT",
+      "DAI/USDT",
+      "EUR/USDT"
+    ]
+  },
+  "pairlists": [{"method": "StaticPairList"}],
+  "entry_pricing": {"price_side": "other", "use_order_book": false},
+  "exit_pricing": {"price_side": "other", "use_order_book": false},
+  "order_types": {
+    "entry": "market",
+    "exit": "market",
+    "emergency_exit": "market",
+    "force_entry": "market",
+    "force_exit": "market",
+    "stoploss": "market",
+    "stoploss_on_exchange": false
+  },
+  "telegram": {"enabled": false, "token": "", "chat_id": ""},
+  "api_server": {"enabled": false},
+  "internals": {"process_throttle_secs": 5}
+}
