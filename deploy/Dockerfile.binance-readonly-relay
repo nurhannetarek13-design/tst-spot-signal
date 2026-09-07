@@ -1,0 +1,6 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY research/binance_signed_account_proxy.py /app/binance_signed_account_proxy.py
+ENV PORT=8080
+EXPOSE 8080
+CMD ["python", "/app/binance_signed_account_proxy.py"]
