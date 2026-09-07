@@ -5,7 +5,6 @@ s = p.read_text(encoding='utf-8')
 
 old_creds = 'function creds(env){return{key:env.BINANCE_API_KEY||env.BINANCE_KEY||env.BINANCE_APIKEY||"",secret:env.BINANCE_API_SECRET||env.BINANCE_SECRET||env.BINANCE_SECRET_KEY||""};}'
 new_creds = 'function creds(env){return{key:env.BINANCE_API_KEY||env.BINANCE_KEY||env.BINANCE_APIKEY||env.BINANCE_DEMO_API_KEY||"",secret:env.BINANCE_API_SECRET||env.BINANCE_SECRET||env.BINANCE_SECRET_KEY||env.BINANCE_DEMO_SECRET_KEY||""};}'
-
 if old_creds in s:
     s = s.replace(old_creds, new_creds, 1)
 elif new_creds not in s:
@@ -25,18 +24,23 @@ if old_secret_alias in s:
 elif new_secret_alias not in s:
     raise SystemExit('Runtime secret alias probe changed; refusing unsafe patch')
 
-# Safe diagnostics: report only whether the Cloudflare binding exists and its JS type.
-# Never return secret contents or lengths.
-needle = 'telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),noSecretValuesExposed:true'
-replacement = 'telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),demoApiKeyBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_API_KEY"),demoApiKeyType:typeof env.BINANCE_DEMO_API_KEY,demoSecretBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_SECRET_KEY"),demoSecretType:typeof env.BINANCE_DEMO_SECRET_KEY,noSecretValuesExposed:true'
-if needle in s:
-    s = s.replace(needle, replacement, 1)
-elif replacement not in s:
-    raise SystemExit('Runtime diagnostic marker changed; refusing unsafe patch')
+# Safe diagnostics only: binding presence/type, never secret values or lengths.
+if 'demoApiKeyBindingPresent:' not in s:
+    marker = 'telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),'
+    diagnostics = (
+        marker
+        + 'demoApiKeyBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_API_KEY"),'
+        + 'demoApiKeyType:typeof env.BINANCE_DEMO_API_KEY,'
+        + 'demoSecretBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_SECRET_KEY"),'
+        + 'demoSecretType:typeof env.BINANCE_DEMO_SECRET_KEY,'
+    )
+    if marker not in s:
+        raise SystemExit('Runtime telegram marker changed; refusing unsafe patch')
+    s = s.replace(marker, diagnostics, 1)
 
 for required in ('env.BINANCE_DEMO_API_KEY', 'env.BINANCE_DEMO_SECRET_KEY'):
     if required not in s:
         raise SystemExit(f'Missing required existing secret alias: {required}')
 
 p.write_text(s, encoding='utf-8')
-print('existing Binance Cloudflare secret aliases enabled with non-sensitive binding diagnostics')
+print('existing Binance Cloudflare secret aliases enabled; relay runtime preserved')
