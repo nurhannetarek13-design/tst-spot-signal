@@ -5,16 +5,15 @@ services:
     container_name: tst-freqtrade
     volumes:
       - "./user_data:/freqtrade/user_data"
-    command: >
-      trade
-      --logfile /freqtrade/user_data/logs/freqtrade.log
-      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-      --config /freqtrade/user_data/config.json
-      --strategy AdaptiveRegimeStrategy
+      - "./run_ready_bot.sh:/freqtrade/run_ready_bot.sh:ro"
+    entrypoint: ["/bin/bash", "/freqtrade/run_ready_bot.sh"]
     environment:
       - TZ=Africa/Cairo
+      # Safe default: stay in dry-run until explicitly changed in the host secret/env store.
+      - FREQTRADE__DRY_RUN=${FREQTRADE__DRY_RUN:-true}
       # Keep credentials out of git. Set these only in the host secret store.
       - FREQTRADE__EXCHANGE__KEY=${FREQTRADE__EXCHANGE__KEY:-}
       - FREQTRADE__EXCHANGE__SECRET=${FREQTRADE__EXCHANGE__SECRET:-}
+      - FREQTRADE__TELEGRAM__ENABLED=${FREQTRADE__TELEGRAM__ENABLED:-false}
       - FREQTRADE__TELEGRAM__TOKEN=${FREQTRADE__TELEGRAM__TOKEN:-}
       - FREQTRADE__TELEGRAM__CHAT_ID=${FREQTRADE__TELEGRAM__CHAT_ID:-}
