@@ -1,34 +1,13 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "46ad824ea85b257ae59f",
-  "symbol": "XLMUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "base": {
-    "trades": 116,
-    "wins": 46,
-    "winRate": 0.39655172413793105,
-    "profitFactor": 0.9726535232955078,
-    "expectancyUSDT": -0.002721266379310344,
-    "netPnlUSDT": -0.3156668999999999,
-    "maxDrawdownUSDT": 1.9211212
-  },
-  "stress2x": {
-    "trades": 111,
-    "wins": 40,
-    "winRate": 0.36036036036036034,
-    "profitFactor": 0.860136343561214,
-    "expectancyUSDT": -0.015132550450450451,
-    "netPnlUSDT": -1.6797131,
-    "maxDrawdownUSDT": 2.5031084
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-07T21:43:02.921226+00:00",
-  "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
+  "generatedAt": "2026-09-07T22:11:39.287177+00:00",
+  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
 }
