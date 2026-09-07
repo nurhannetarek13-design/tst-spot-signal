@@ -8,7 +8,9 @@ import os
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", os.environ.get("PROXY_PORT", "8080")))
-UPSTREAM = "https://testnet.binance.vision/api/v3/account"
+# BINANCE_DEMO_* credentials belong to Binance Spot Demo Mode, not the legacy Spot Testnet.
+# Keep the external read-only relay contract stable while routing to the official Demo REST API.
+UPSTREAM = "https://demo-api.binance.com/api/v3/account"
 MAX_BODY = 8192
 
 
@@ -45,15 +47,19 @@ def safe_msg(value):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "tst-binance-readonly-relay/1.1"
+    server_version = "tst-binance-readonly-relay/1.2"
 
     def do_GET(self):
-        if self.path == "/health":
-            return send_json(self, 200, {"ok": True, "mode": "READ_ONLY_TESTNET_ACCOUNT"})
+        if self.path.startswith("/health"):
+            return send_json(self, 200, {
+                "ok": True,
+                "mode": "READ_ONLY_TESTNET_ACCOUNT",
+                "upstreamMode": "BINANCE_SPOT_DEMO",
+            })
         return send_json(self, 404, {"ok": False, "status": "NOT_FOUND"})
 
     def do_POST(self):
-        if self.path != "/signed-testnet-account":
+        if not self.path.startswith("/signed-testnet-account"):
             return send_json(self, 404, {"ok": False, "status": "NOT_FOUND"})
         try:
             length = int(self.headers.get("content-length", "0"))
@@ -80,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             headers={
                 "X-MBX-APIKEY": api_key,
                 "Accept": "application/json",
-                "User-Agent": "tst-railway-readonly-relay/1.1",
+                "User-Agent": "tst-railway-readonly-relay/1.2",
             },
         )
         try:
@@ -90,7 +96,12 @@ class Handler(BaseHTTPRequestHandler):
                     upstream = json.loads(raw or "{}")
                 except Exception:
                     upstream = {"raw": raw[:500]}
-                return send_json(self, 200, {"ok": True, "network": "testnet", "data": upstream})
+                return send_json(self, 200, {
+                    "ok": True,
+                    "network": "testnet",
+                    "upstreamMode": "BINANCE_SPOT_DEMO",
+                    "data": upstream,
+                })
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
             try:
@@ -100,6 +111,7 @@ class Handler(BaseHTTPRequestHandler):
             payload = {
                 "ok": False,
                 "network": "testnet",
+                "upstreamMode": "BINANCE_SPOT_DEMO",
                 "upstream": {
                     "status": exc.code,
                     "code": upstream.get("code"),
@@ -108,14 +120,24 @@ class Handler(BaseHTTPRequestHandler):
             }
             print(json.dumps({
                 "kind": "binance_readonly_upstream_error",
+                "upstreamMode": "BINANCE_SPOT_DEMO",
                 "status": exc.code,
                 "code": upstream.get("code"),
                 "msg": safe_msg(upstream.get("msg", "upstream error")),
             }), flush=True)
             return send_json(self, 200, payload)
         except Exception as exc:
-            payload = {"ok": False, "status": "UPSTREAM_UNAVAILABLE", "reason": safe_msg(exc)}
-            print(json.dumps({"kind": "binance_readonly_transport_error", "reason": safe_msg(exc)}), flush=True)
+            payload = {
+                "ok": False,
+                "status": "UPSTREAM_UNAVAILABLE",
+                "upstreamMode": "BINANCE_SPOT_DEMO",
+                "reason": safe_msg(exc),
+            }
+            print(json.dumps({
+                "kind": "binance_readonly_transport_error",
+                "upstreamMode": "BINANCE_SPOT_DEMO",
+                "reason": safe_msg(exc),
+            }), flush=True)
             return send_json(self, 200, payload)
 
     def log_message(self, fmt, *args):
@@ -123,5 +145,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(json.dumps({"kind": "binance_readonly_relay_start", "port": PORT, "mode": "READ_ONLY_TESTNET_ACCOUNT"}), flush=True)
+    print(json.dumps({
+        "kind": "binance_readonly_relay_start",
+        "port": PORT,
+        "mode": "READ_ONLY_TESTNET_ACCOUNT",
+        "upstreamMode": "BINANCE_SPOT_DEMO",
+    }), flush=True)
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
