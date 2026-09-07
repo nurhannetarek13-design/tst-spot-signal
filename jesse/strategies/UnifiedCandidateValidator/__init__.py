@@ -97,7 +97,6 @@ class UnifiedCandidateValidator(Strategy):
 
         if FAMILY=="VOLATILITY_BREAKOUT":
             lb=int(p.get("lookback",24));hh=float(np.max(highs[-lb-1:-1]))
-            # rank recent ATR% observations
             a=[];clb=int(p.get("compressionLookback",72))
             for off in range(clb,0,-1):
                 sub=c[:-off] if off>0 else c
@@ -123,8 +122,17 @@ class UnifiedCandidateValidator(Strategy):
     def go_long(self):
         entry=float(self.price);size_usd=min(5.5,max(0,float(self.balance)))
         qty=max(size_usd/entry,1e-8)
-        sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
         self.buy=qty,entry
+        try:self.vars["signal_ts"]=float(self.current_candle[0])
+        except Exception:pass
+
+    def on_open_position(self, order):
+        # Jesse Spot only supports contingent exits after the entry has opened.
+        # Use the actual filled position rather than the signal price so the
+        # stop/target are attached to real Spot execution semantics.
+        qty=abs(float(self.position.qty))
+        entry=float(self.position.entry_price)
+        sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
         self.stop_loss=qty,entry*(1-sl)
         self.take_profit=qty,entry*(1+tp)
         try:self.vars["entry_ts"]=float(self.current_candle[0])
