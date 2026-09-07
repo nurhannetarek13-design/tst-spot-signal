@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - "research/vectorbt_discovery.py"
+      - "scripts/build_candidate_manifest.py"
       - ".github/workflows/vectorbt-discovery.yml"
 
 permissions:
@@ -36,16 +37,25 @@ jobs:
       - name: Run multi-family discovery
         run: python research/vectorbt_discovery.py
 
-      - name: Commit discovery snapshot
+      - name: Commit discovery and rebuild candidate manifest safely
         run: |
           cp validation/fusion/vectorbt-latest.json /tmp/vectorbt-latest.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p validation/fusion
-          cp /tmp/vectorbt-latest.json validation/fusion/vectorbt-latest.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add validation/fusion/vectorbt-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "Update VectorBT discovery snapshot"
-          git push
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/fusion
+            cp /tmp/vectorbt-latest.json validation/fusion/vectorbt-latest.json
+
+            # Rebuild against the latest edge and rejection state so a fresh
+            # VectorBT candidate can enter validation immediately.
+            python scripts/build_candidate_manifest.py
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/fusion/vectorbt-latest.json validation/fusion/candidate-manifest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update VectorBT discovery and unified candidate"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
