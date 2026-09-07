@@ -1,22 +1,414 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
 export { SignalState };
 
-const SIGNAL_TTL_SEC=10*60, PREPARE_TTL_SEC=5*60, MIN_ORDER_USDT=5, MAX_BALANCE_FRACTION=.80, MAX_RISK_USDT=.20;
-const VERCEL_BALANCE_URL="https://tst-spot-signal.vercel.app/api/account-balance";
-const VERCEL_BUY_URL="https://tst-spot-signal.vercel.app/api/user-confirmed-buy";
-function creds(env){return{key:env.BINANCE_API_KEY||env.BINANCE_KEY||env.BINANCE_APIKEY||"",secret:env.BINANCE_API_SECRET||env.BINANCE_SECRET||env.BINANCE_SECRET_KEY||""};}
-function stateStub(env){const id=env.STATE_COORDINATOR.idFromName("global");return env.STATE_COORDINATOR.get(id);}
-async function getState(env,key){const r=await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);return r.ok?await r.json():null;}
-async function putState(env,key,value,ttl){await stateStub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({value,expiresAt:Date.now()+ttl*1000})});}
-async function claimState(env,key,value,ttl){const r=await stateStub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({value,expiresAt:Date.now()+ttl*1000})});return r.ok;}
-async function tg(env,method,payload){const r=await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)}),j=await r.json().catch(()=>({ok:false}));if(!r.ok||j.ok===false)throw new Error(`Telegram ${method} failed`);return j;}
-function fmt(v){return Number(v||0).toLocaleString("en-US",{useGrouping:false,maximumFractionDigits:8});}
-function compactId(p){const raw=`${p.symbol}:${p.openedAt||p.createdAt||Date.now()}:${p.entry}`;let h=2166136261;for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619);}return(h>>>0).toString(36);}
-async function hmacHex(secret,text){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]),sig=await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(text));return[...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,"0")).join("");}
-function dynamicQuote(f,e,s){const p=(e-s)/e;if(!(p>0))throw new Error("INVALID_STOP_DISTANCE");return Math.floor(Math.min(MAX_RISK_USDT/p,f*MAX_BALANCE_FRACTION)*100)/100;}
-async function getBalanceViaVercel(env){if(!env.TELEGRAM_BOT_TOKEN)throw new Error("RELAY_SECRET_UNAVAILABLE");const ts=String(Date.now()),signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.balance`),r=await fetch(VERCEL_BALANCE_URL,{headers:{"x-executor-timestamp":ts,"x-executor-signature":signature}}),text=await r.text();let data={};try{data=JSON.parse(text||"{}")}catch{data={ok:false,status:"BAD_BALANCE_RESPONSE"}}if(!r.ok||data.ok!==true)throw new Error(`${data.status||r.status}: ${data.reason||data.error||"balance relay failed"}`);return{...data,source:"VERCEL_SIGNED_BINANCE_RELAY",at:Number(data.checkedAt||Date.now())};}
-async function refreshBalance(env){try{const b=await getBalanceViaVercel(env);await putState(env,"binance:balance:last",b,7200);await putState(env,"binance:balance:error",null,60);return b}catch(e){await putState(env,"binance:balance:error",{at:Date.now(),error:String(e?.message||e)},1800);return null}}
-async function executeViaVercel(env,s){if(!env.TELEGRAM_BOT_TOKEN)throw new Error("RELAY_SECRET_UNAVAILABLE");const body=JSON.stringify({userConfirmed:true,symbol:String(s.symbol||"").toUpperCase(),entry:Number(s.entry),stop:Number(s.stop),target:Number(s.target),createdAt:Number(s.createdAt),signalId:String(s.id),quoteUSDT:Number(s.confirmedQuoteUSDT||s.recommendedUSDT||0)}),ts=String(Date.now()),signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`),r=await fetch(VERCEL_BUY_URL,{method:"POST",headers:{"content-type":"application/json","x-executor-timestamp":ts,"x-executor-signature":signature},body}),text=await r.text();let data={};try{data=JSON.parse(text||"{}")}catch{data={ok:false,status:"BAD_EXECUTOR_RESPONSE"}}if(!r.ok||data.ok!==true)throw new Error(`${data.status||r.status}: ${data.reason||data.error||"executor failed"}`);return data;}
-async function sendPromptForActive(env){if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return;const active=(await getState(env,"paper:active"))||[],b=(await getState(env,"binance:balance:last"))||await refreshBalance(env),free=Number(b?.usdt?.free||0);for(const p of active){const id=compactId(p);if(await getState(env,`buy-prompt:${id}`))continue;const s={id,symbol:p.symbol,entry:Number(p.entry),stop:Number(p.stop),target:Number(p.target),strategy:p.strategy||"Scanner",score:p.score||null,createdAt:Date.now(),expiresAt:Date.now()+SIGNAL_TTL_SEC*1000};if(!(s.stop<s.entry&&s.target>s.entry))continue;const rec=free>0?dynamicQuote(free,s.entry,s.stop):0;s.recommendedUSDT=rec;await putState(env,`live-signal:${id}`,s,SIGNAL_TTL_SEC);if(rec>=MIN_ORDER_USDT)await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:`🚨 ${p.symbol}\n💵 ${fmt(rec)} USDT\n💲 Entry ${fmt(s.entry)}\n🎯 TP ${fmt(s.target)}\n🛑 SL ${fmt(s.stop)}\n⭐ Score ${s.score??"—"}/100`,reply_markup:{inline_keyboard:[[{text:`🧾 PREPARE ${fmt(rec)} USDT`,callback_data:`PREP:${id}`}]]}});await putState(env,`buy-prompt:${id}`,{sentAt:Date.now()},SIGNAL_TTL_SEC)}}
-async function handleTelegramWebhook(request,env){const u=await request.json().catch(()=>null),q=u?.callback_query;if(!q)return new Response("ok");if(String(q.message?.chat?.id||"")!==String(env.TELEGRAM_CHAT_ID||""))return new Response("ok");const [action,id]=String(q.data||"").split(":"),s=await getState(env,`live-signal:${id}`);if(action==="PREP"&&s){const b=await refreshBalance(env);if(!b?.ok){await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Binance balance unavailable — no trade prepared",show_alert:true});return new Response("ok")}const free=Number(b.usdt?.free||0),rec=dynamicQuote(free,Number(s.entry),Number(s.stop));if(rec<MIN_ORDER_USDT){await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Free USDT is below the safe minimum",show_alert:true});return new Response("ok")}const p={...s,confirmedQuoteUSDT:rec,prepareExpiresAt:Date.now()+PREPARE_TTL_SEC*1000};await putState(env,`prepared:${id}`,p,PREPARE_TTL_SEC);await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Trade prepared — no purchase yet"});await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:`🧾 TRADE READY — ${p.symbol}\n💵 ${fmt(rec)} USDT\n💲 Entry ${fmt(p.entry)}\n🎯 TP ${fmt(p.target)}\n🛑 SL ${fmt(p.stop)}\n\n⚠️ CONFIRM BUY ينفذ شراء حقيقي.`,reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]}});return new Response("ok")}if(action==="CANCEL"){await putState(env,`prepared:${id}`,null,1);await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Cancelled"});return new Response("ok")}if(action==="CONFIRM"){const p=await getState(env,`prepared:${id}`);if(!p||Date.now()>Number(p.prepareExpiresAt||0)){await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Expired",show_alert:true});return new Response("ok")}const claimed=await claimState(env,`execution-lock:${id}`,{claimedAt:Date.now(),symbol:p.symbol},SIGNAL_TTL_SEC);if(!claimed){await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Already confirmed — duplicate blocked",show_alert:true});return new Response("ok")}await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Executing confirmed Spot BUY…"});try{const r=await executeViaVercel(env,p);await putState(env,`execution-result:${id}`,{ok:true,at:Date.now(),status:r.status,symbol:p.symbol,quoteUSDT:r.quoteUSDT,ocoPlaced:r.ocoPlaced},86400);await putState(env,`prepared:${id}`,null,1);await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:`✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n${r.ocoPlaced?`✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}`:`⚠️ OCO failed: ${r.ocoError}`}`})}catch(e){await putState(env,`execution-result:${id}`,{ok:false,at:Date.now(),error:String(e?.message||e)},86400);await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:`❌ BUY failed: ${String(e?.message||e).slice(0,250)}`})}return new Response("ok")}return new Response("ok")}
-export default{async fetch(request,env,ctx){const url=new URL(request.url);if(url.pathname==="/telegram-webhook"&&request.method==="POST")return handleTelegramWebhook(request,env);if(url.pathname==="/runtime-check"){const c=creds(env);return Response.json({ok:true,hasApiKey:Boolean(c.key),hasApiSecret:Boolean(c.secret),keyAlias:env.BINANCE_API_KEY?"BINANCE_API_KEY":env.BINANCE_KEY?"BINANCE_KEY":env.BINANCE_APIKEY?"BINANCE_APIKEY":null,secretAlias:env.BINANCE_API_SECRET?"BINANCE_API_SECRET":env.BINANCE_SECRET?"BINANCE_SECRET":env.BINANCE_SECRET_KEY?"BINANCE_SECRET_KEY":null,telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),executionRoute:"VERCEL_SIGNED_BINANCE_RELAY",atomicConfirmClaim:true,noSecretValuesExposed:true})}if(url.pathname==="/balance-refresh"){const balance=await refreshBalance(env),error=balance?null:await getState(env,"binance:balance:error");return Response.json({ok:Boolean(balance),balance,error,autoBuy:false,executionRoute:"VERCEL_SIGNED_BINANCE_RELAY"})}return baseWorker.fetch(request,env,ctx)},async scheduled(event,env,ctx){ctx.waitUntil((async()=>{if(baseWorker.scheduled)await baseWorker.scheduled(event,env,ctx);await refreshBalance(env);await sendPromptForActive(env)})())}};
+const SIGNAL_TTL_SEC = 10 * 60;
+const PREPARE_TTL_SEC = 5 * 60;
+const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
+const MIN_ORDER_USDT = 5;
+const MAX_BALANCE_FRACTION = 0.80;
+const MAX_RISK_USDT = 0.20;
+const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
+
+function creds(env) {
+  return {
+    key: env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || env.BINANCE_DEMO_API_KEY || "",
+    secret: env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || env.BINANCE_DEMO_SECRET_KEY || "",
+  };
+}
+
+function stateStub(env) {
+  const id = env.STATE_COORDINATOR.idFromName("global");
+  return env.STATE_COORDINATOR.get(id);
+}
+
+async function getState(env, key) {
+  const r = await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);
+  return r.ok ? await r.json() : null;
+}
+
+async function putState(env, key, value, ttl) {
+  await stateStub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
+  });
+}
+
+async function claimState(env, key, value, ttl) {
+  const r = await stateStub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
+  });
+  return r.ok;
+}
+
+async function hmacHex(secret, text) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function tg(env, method, payload) {
+  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const j = await r.json().catch(() => ({ ok: false }));
+  if (!r.ok || j.ok === false) throw new Error(`Telegram ${method} failed`);
+  return j;
+}
+
+function fmt(v) {
+  return Number(v || 0).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 8 });
+}
+
+function compactId(p) {
+  const raw = `${p.symbol}:${p.openedAt || p.createdAt || Date.now()}:${p.entry}`;
+  let h = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function dynamicQuote(freeUSDT, entry, stop, requested = null) {
+  const stopPct = (entry - stop) / entry;
+  if (!(stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
+  const riskSized = MAX_RISK_USDT / stopPct;
+  const balanceCap = freeUSDT * MAX_BALANCE_FRACTION;
+  let size = Math.min(riskSized, balanceCap);
+  const req = Number(requested);
+  if (Number.isFinite(req) && req > 0) size = Math.min(size, req);
+  return Math.floor(size * 100) / 100;
+}
+
+function decimals(step) {
+  const s = String(step);
+  if (s.includes("e-")) return Number(s.split("e-")[1]);
+  return (s.split(".")[1] || "").replace(/0+$/, "").length;
+}
+
+function floorTo(value, step) {
+  if (!step || step <= 0) return value;
+  return Number((Math.floor((value + 1e-12) / step) * step).toFixed(decimals(step)));
+}
+
+function roundTo(value, tick) {
+  if (!tick || tick <= 0) return value;
+  return Number((Math.round(value / tick) * tick).toFixed(decimals(tick)));
+}
+
+async function publicBinance(path) {
+  const bases = [
+    "https://data-api.binance.vision",
+    "https://api-gcp.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+  ];
+  let last = "unavailable";
+  for (const base of bases) {
+    try {
+      const r = await fetch(base + path);
+      const text = await r.text();
+      if (r.ok) return JSON.parse(text || "{}");
+      last = `${r.status} ${text.slice(0, 300)}`;
+    } catch (e) {
+      last = String(e?.message || e);
+    }
+  }
+  throw new Error(`BINANCE_PUBLIC_FAILED: ${last}`);
+}
+
+async function signedBinanceViaRelay(env, method, path, params = {}) {
+  const { key, secret } = creds(env);
+  if (!key || !secret) throw new Error("BINANCE_CLOUDFLARE_KEYS_MISSING");
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
+
+  const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
+  const qs = new URLSearchParams(Object.entries(all).map(([k, v]) => [k, String(v)])).toString();
+  const binanceSignature = await hmacHex(secret, qs);
+  const body = JSON.stringify({
+    method: String(method).toUpperCase(),
+    path,
+    apiKey: key,
+    query: `${qs}&signature=${binanceSignature}`,
+  });
+  const ts = String(Date.now());
+  const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+
+  const r = await fetch(VERCEL_SIGNED_RELAY_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-executor-timestamp": ts,
+      "x-executor-signature": relaySignature,
+    },
+    body,
+  });
+  const text = await r.text();
+  let row = {};
+  try { row = JSON.parse(text || "{}"); } catch { row = { ok: false, status: "BAD_RELAY_RESPONSE" }; }
+  if (!r.ok || row.ok !== true) {
+    const detail = row?.upstream?.code ? `${row.upstream.code} ${row.upstream.msg || ""}` : (row.reason || row.status || r.status);
+    throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
+  }
+  return row.data;
+}
+
+async function refreshBalance(env) {
+  try {
+    const account = await signedBinanceViaRelay(env, "GET", "/api/v3/account", {});
+    const balances = (account.balances || [])
+      .map((b) => ({ asset: b.asset, free: Number(b.free || 0), locked: Number(b.locked || 0) }))
+      .filter((b) => b.free > 0 || b.locked > 0);
+    const usdt = balances.find((b) => b.asset === "USDT") || { asset: "USDT", free: 0, locked: 0 };
+    const balance = {
+      ok: true,
+      status: "ACCOUNT_BALANCE_OK",
+      canTrade: Boolean(account.canTrade),
+      usdt: { free: usdt.free, locked: usdt.locked, total: usdt.free + usdt.locked },
+      nonZeroAssets: balances,
+      source: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
+      checkedAt: Date.now(),
+    };
+    await putState(env, "binance:balance:last", balance, 7200);
+    await putState(env, "binance:balance:error", null, 60);
+    return balance;
+  } catch (e) {
+    await putState(env, "binance:balance:error", { at: Date.now(), error: String(e?.message || e) }, 1800);
+    return null;
+  }
+}
+
+async function executeConfirmedBuy(env, s) {
+  const symbol = String(s.symbol || "").toUpperCase();
+  if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) throw new Error("BAD_SYMBOL");
+  const createdAt = Number(s.createdAt || 0);
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt > MAX_SIGNAL_AGE_MS || createdAt > Date.now() + 30_000) {
+    throw new Error("STALE_SIGNAL");
+  }
+  const entryRef = Number(s.entry), stopRef = Number(s.stop), targetRef = Number(s.target);
+  if (![entryRef, stopRef, targetRef].every(Number.isFinite) || !(stopRef < entryRef && targetRef > entryRef)) {
+    throw new Error("INVALID_TP_SL_GEOMETRY");
+  }
+
+  const info = await publicBinance(`/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`);
+  const market = info.symbols?.[0];
+  if (!market || market.status !== "TRADING" || !market.isSpotTradingAllowed || market.quoteAsset !== "USDT") {
+    throw new Error("PAIR_NOT_TRADABLE_SPOT");
+  }
+
+  const account = await signedBinanceViaRelay(env, "GET", "/api/v3/account", {});
+  if (!account.canTrade) throw new Error("ACCOUNT_CANNOT_TRADE");
+  const freeUSDT = Number((account.balances || []).find((b) => b.asset === "USDT")?.free || 0);
+  const quoteUSDT = dynamicQuote(freeUSDT, entryRef, stopRef, s.confirmedQuoteUSDT || s.recommendedUSDT);
+  if (quoteUSDT < MIN_ORDER_USDT) throw new Error("SIZE_TOO_SMALL");
+  if (freeUSDT < quoteUSDT) throw new Error("INSUFFICIENT_USDT");
+
+  const buy = await signedBinanceViaRelay(env, "POST", "/api/v3/order", {
+    symbol,
+    side: "BUY",
+    type: "MARKET",
+    quoteOrderQty: quoteUSDT.toFixed(2),
+    newOrderRespType: "FULL",
+    newClientOrderId: `TSTU${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+  });
+  const executedQty = Number(buy.executedQty || 0);
+  const quoteQty = Number(buy.cummulativeQuoteQty || 0);
+  if (!(executedQty > 0 && quoteQty > 0)) throw new Error("MARKET_BUY_ZERO_FILL");
+
+  const avg = quoteQty / executedQty;
+  const lot = market.filters.find((x) => x.filterType === "LOT_SIZE");
+  const pf = market.filters.find((x) => x.filterType === "PRICE_FILTER");
+  const step = Number(lot?.stepSize || "0.00000001");
+  const tick = Number(pf?.tickSize || "0.00000001");
+  const stop = roundTo(avg * (stopRef / entryRef), tick);
+  const tp = roundTo(avg * (targetRef / entryRef), tick);
+  const stopLimit = roundTo(stop * 0.997, tick);
+  const sellQty = floorTo(executedQty * 0.999, step);
+
+  let oco = null, ocoError = null;
+  try {
+    oco = await signedBinanceViaRelay(env, "POST", "/api/v3/orderList/oco", {
+      symbol,
+      side: "SELL",
+      quantity: sellQty,
+      aboveType: "LIMIT_MAKER",
+      abovePrice: tp,
+      belowType: "STOP_LOSS_LIMIT",
+      belowStopPrice: stop,
+      belowPrice: stopLimit,
+      belowTimeInForce: "GTC",
+    });
+  } catch (e) {
+    ocoError = String(e?.message || e);
+  }
+
+  return {
+    ok: true,
+    status: oco ? "BOUGHT_AND_PROTECTED" : "BOUGHT_PROTECTION_FAILED",
+    symbol,
+    quoteUSDT: quoteQty,
+    recommendedUSDT: quoteUSDT,
+    executedQty,
+    avg,
+    tp,
+    stop,
+    stopLimit,
+    ocoPlaced: Boolean(oco),
+    ocoError,
+    autoBuy: false,
+    userConfirmed: true,
+  };
+}
+
+async function sendPromptForActive(env) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+  const active = (await getState(env, "paper:active")) || [];
+  const b = (await getState(env, "binance:balance:last")) || await refreshBalance(env);
+  const free = Number(b?.usdt?.free || 0);
+  for (const p of active) {
+    const id = compactId(p);
+    if (await getState(env, `buy-prompt:${id}`)) continue;
+    const s = {
+      id,
+      symbol: p.symbol,
+      entry: Number(p.entry),
+      stop: Number(p.stop),
+      target: Number(p.target),
+      strategy: p.strategy || "Scanner",
+      score: p.score || null,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + SIGNAL_TTL_SEC * 1000,
+    };
+    if (!(s.stop < s.entry && s.target > s.entry)) continue;
+    const rec = free > 0 ? dynamicQuote(free, s.entry, s.stop) : 0;
+    s.recommendedUSDT = rec;
+    await putState(env, `live-signal:${id}`, s, SIGNAL_TTL_SEC);
+    if (rec >= MIN_ORDER_USDT) {
+      await tg(env, "sendMessage", {
+        chat_id: String(env.TELEGRAM_CHAT_ID),
+        text: `🚨 ${p.symbol}\n💵 ${fmt(rec)} USDT\n💲 Entry ${fmt(s.entry)}\n🎯 TP ${fmt(s.target)}\n🛑 SL ${fmt(s.stop)}\n⭐ Score ${s.score ?? "—"}/100`,
+        reply_markup: { inline_keyboard: [[{ text: `🧾 PREPARE ${fmt(rec)} USDT`, callback_data: `PREP:${id}` }]] },
+      });
+    }
+    await putState(env, `buy-prompt:${id}`, { sentAt: Date.now() }, SIGNAL_TTL_SEC);
+  }
+}
+
+async function handleTelegramWebhook(request, env) {
+  const u = await request.json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q) return new Response("ok");
+  if (String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
+  const [action, id] = String(q.data || "").split(":");
+  const s = await getState(env, `live-signal:${id}`);
+
+  if (action === "PREP" && s) {
+    const b = await refreshBalance(env);
+    if (!b?.ok) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Binance balance unavailable — no trade prepared", show_alert: true });
+      return new Response("ok");
+    }
+    const free = Number(b.usdt?.free || 0);
+    const rec = dynamicQuote(free, Number(s.entry), Number(s.stop));
+    if (rec < MIN_ORDER_USDT) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Free USDT is below the safe minimum", show_alert: true });
+      return new Response("ok");
+    }
+    const p = { ...s, confirmedQuoteUSDT: rec, prepareExpiresAt: Date.now() + PREPARE_TTL_SEC * 1000 };
+    await putState(env, `prepared:${id}`, p, PREPARE_TTL_SEC);
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Trade prepared — no purchase yet" });
+    await tg(env, "sendMessage", {
+      chat_id: String(env.TELEGRAM_CHAT_ID),
+      text: `🧾 TRADE READY — ${p.symbol}\n💵 ${fmt(rec)} USDT\n💲 Entry ${fmt(p.entry)}\n🎯 TP ${fmt(p.target)}\n🛑 SL ${fmt(p.stop)}\n\n⚠️ CONFIRM BUY ينفذ شراء حقيقي.`,
+      reply_markup: { inline_keyboard: [[{ text: `✅ CONFIRM BUY ${fmt(rec)} USDT`, callback_data: `CONFIRM:${id}` }], [{ text: "❌ CANCEL", callback_data: `CANCEL:${id}` }]] },
+    });
+    return new Response("ok");
+  }
+
+  if (action === "CANCEL") {
+    await putState(env, `prepared:${id}`, null, 1);
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Cancelled" });
+    return new Response("ok");
+  }
+
+  if (action === "CONFIRM") {
+    const p = await getState(env, `prepared:${id}`);
+    if (!p || Date.now() > Number(p.prepareExpiresAt || 0)) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Expired", show_alert: true });
+      return new Response("ok");
+    }
+    const claimed = await claimState(env, `execution-lock:${id}`, { claimedAt: Date.now(), symbol: p.symbol }, SIGNAL_TTL_SEC);
+    if (!claimed) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Already confirmed — duplicate blocked", show_alert: true });
+      return new Response("ok");
+    }
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Executing confirmed Spot BUY…" });
+    try {
+      const r = await executeConfirmedBuy(env, p);
+      await putState(env, `execution-result:${id}`, { ok: true, at: Date.now(), status: r.status, symbol: p.symbol, quoteUSDT: r.quoteUSDT, ocoPlaced: r.ocoPlaced }, 86400);
+      await putState(env, `prepared:${id}`, null, 1);
+      await tg(env, "sendMessage", {
+        chat_id: String(env.TELEGRAM_CHAT_ID),
+        text: `✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n${r.ocoPlaced ? `✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}` : `⚠️ OCO failed: ${r.ocoError}`}`,
+      });
+    } catch (e) {
+      await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), error: String(e?.message || e) }, 86400);
+      await tg(env, "sendMessage", { chat_id: String(env.TELEGRAM_CHAT_ID), text: `❌ BUY failed: ${String(e?.message || e).slice(0, 250)}` });
+    }
+    return new Response("ok");
+  }
+
+  return new Response("ok");
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/telegram-webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
+    if (url.pathname === "/runtime-check") {
+      const c = creds(env);
+      return Response.json({
+        ok: true,
+        hasApiKey: Boolean(c.key),
+        hasApiSecret: Boolean(c.secret),
+        keyAlias: env.BINANCE_API_KEY ? "BINANCE_API_KEY" : env.BINANCE_KEY ? "BINANCE_KEY" : env.BINANCE_APIKEY ? "BINANCE_APIKEY" : env.BINANCE_DEMO_API_KEY ? "BINANCE_DEMO_API_KEY" : null,
+        secretAlias: env.BINANCE_API_SECRET ? "BINANCE_API_SECRET" : env.BINANCE_SECRET ? "BINANCE_SECRET" : env.BINANCE_SECRET_KEY ? "BINANCE_SECRET_KEY" : env.BINANCE_DEMO_SECRET_KEY ? "BINANCE_DEMO_SECRET_KEY" : null,
+        telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
+        demoApiKeyBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_API_KEY"),
+        demoApiKeyType: typeof env.BINANCE_DEMO_API_KEY,
+        demoSecretBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_SECRET_KEY"),
+        demoSecretType: typeof env.BINANCE_DEMO_SECRET_KEY,
+        executionRoute: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT",
+        atomicConfirmClaim: true,
+        autoBuy: false,
+        noSecretValuesExposed: true,
+      });
+    }
+    if (url.pathname === "/balance-refresh") {
+      const balance = await refreshBalance(env);
+      const error = balance ? null : await getState(env, "binance:balance:error");
+      return Response.json({ ok: Boolean(balance), balance, error, autoBuy: false, executionRoute: "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT" });
+    }
+    return baseWorker.fetch(request, env, ctx);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
+      await refreshBalance(env);
+      await sendPromptForActive(env);
+    })());
+  },
+};
