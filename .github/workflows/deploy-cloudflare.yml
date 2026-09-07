@@ -9,6 +9,7 @@ on:
       - "src/buy-gateway.js"
       - "src/index.js"
       - "wrangler.jsonc"
+      - "scripts/disable-periodic-digest.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -29,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Materialize notification runtime
+        run: python scripts/disable-periodic-digest.py
+
       - name: Validate runtime
         run: |
           node --check src/edge-worker.js
@@ -41,6 +45,10 @@ jobs:
           grep -q '/balance-refresh' src/buy-gateway.js
           grep -q 'autoBuy:false' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
+          if grep -q 'await monitorUnifiedDerivative(env); await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true);' src/edge-worker.js; then
+            echo "Periodic scan digest still scheduled"
+            exit 1
+          fi
 
       - name: Sync Worker secrets from GitHub Secrets
         env:
