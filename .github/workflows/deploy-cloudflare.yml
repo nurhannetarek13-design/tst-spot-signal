@@ -9,7 +9,6 @@ on:
       - "src/buy-gateway.js"
       - "src/index.js"
       - "wrangler.jsonc"
-      - "scripts/disable-periodic-digest.py"
       - "scripts/patch-binance-secret-aliases.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -31,55 +30,63 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Materialize notification runtime
+      - name: Materialize actionable Telegram runtime
+        shell: bash
         run: |
-          python scripts/disable-periodic-digest.py
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path("src/edge-worker.js")
+          s = p.read_text(encoding="utf-8")
+
+          # Remove the legacy periodic scan digest completely from the deployed runtime.
+          start = s.find("async function sendPeriodicScanDigest(env){")
+          if start != -1:
+              end = s.find("async function scan(env,sendAlert){", start)
+              if end == -1:
+                  raise SystemExit("scan() marker missing; refusing unsafe digest removal")
+              s = s[:start] + s[end:]
+
+          # The scanner may create/refresh the paper opportunity, but it must never send
+          # a separate Telegram scan/paper message. buy-gateway owns user notifications.
+          s = s.replace("return json(await scan(env,true));", "return json(await scan(env,false));")
+          s = s.replace("await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true);", "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);")
+
+          if "sendPeriodicScanDigest" in s:
+              raise SystemExit("legacy periodic digest still present")
+          if "scan(env,true)" in s:
+              raise SystemExit("direct scanner Telegram alert path still present")
+          if "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);" not in s:
+              raise SystemExit("scheduled no-alert scanner path missing")
+
+          p.write_text(s, encoding="utf-8")
+          PY
           python scripts/patch-binance-secret-aliases.py
 
       - name: Validate runtime
+        shell: bash
         run: |
+          set -euo pipefail
           node --check src/edge-worker.js
           node --check src/buy-gateway.js
           grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'PREP:' src/buy-gateway.js
           grep -q 'CONFIRM:' src/buy-gateway.js
+          grep -q 'sendPromptForActive' src/buy-gateway.js
           grep -q '/runtime-check' src/buy-gateway.js
           grep -q '/balance-refresh' src/buy-gateway.js
           grep -q 'autoBuy:false' src/buy-gateway.js
-          grep -q 'BINANCE_DEMO_API_KEY' src/buy-gateway.js
-          grep -q 'BINANCE_DEMO_SECRET_KEY' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
-          if grep -q 'await monitorUnifiedDerivative(env); await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true);' src/edge-worker.js; then
-            echo "Periodic scan digest still scheduled"
+          if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
+            echo "Legacy periodic scan digest still exists"
             exit 1
           fi
-
-      - name: Sync Worker secrets from GitHub Secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
-          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          sync_secret() {
-            local name="$1"
-            local value="${!name:-}"
-            if [ -n "$value" ]; then
-              printf '%s' "$value" | npx wrangler secret put "$name"
-              echo "$name synced"
-            else
-              echo "$name missing in GitHub Secrets; existing Worker secret left unchanged"
-            fi
-          }
-          sync_secret TELEGRAM_BOT_TOKEN
-          sync_secret TELEGRAM_CHAT_ID
-          sync_secret BINANCE_API_KEY
-          sync_secret BINANCE_API_SECRET
+          if grep -q 'scan(env,true)' src/edge-worker.js; then
+            echo "Scanner can still send a direct Telegram message"
+            exit 1
+          fi
 
       - name: Deploy Worker
         env:
@@ -91,10 +98,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler secret list
+        run: npx wrangler secret list
 
       - name: Configure Telegram webhook
         env:
