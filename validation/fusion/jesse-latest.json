@@ -1,32 +1,24 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "ERROR",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "4da78ca29267ffd54aa9",
-  "symbol": "TUTUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
+  "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
+  "candidateFingerprint": "cba53276448a08d4eebc",
+  "symbol": "PROMUSDT",
+  "family": "MEAN_REVERSION",
+  "timeframe": "15m",
   "base": {
-    "trades": 273,
-    "winRate": 0.38461538461538464,
-    "profitFactor": 0.0,
-    "expectancyUSDT": 0.009373464009236249,
-    "netPnlUSDT": 2.558955674521496,
-    "maxDrawdown": -27.316965378765843
+    "trades": 0
   },
   "stress2x": {
-    "trades": 273,
-    "winRate": 0.38095238095238093,
-    "profitFactor": 0.0,
-    "expectancyUSDT": -0.007158969807897905,
-    "netPnlUSDT": -1.9543987575561281,
-    "maxDrawdown": -40.332274335368524
+    "trades": 0
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-06T08:03:36.981352+00:00",
-  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
+  "generatedAt": "2026-09-07T21:30:18.793204+00:00",
+  "error": "InvalidStrategy: Setting self.take_profit in the go_long() method is not supported for spot trading (it's only supported in futures trading). Try setting it in self.on_open_position() instead.",
+  "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/tst-spot-signal/tst-spot-signal/jesse/run_fusion_validator.py\", line 90, in <module>\n    base=run(candles,0.0015);stress=run(candles,0.003)\n         ^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/tst-spot-signal/tst-spot-signal/jesse/run_fusion_validator.py\", line 78, in run\n    result=backtest(cfg,routes,[],candles=cd,generate_equity_curve=True,fast_mode=True)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 104, in backtest\n    return _isolated_backtest(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 162, in _isolated_backtest\n    return _execute_isolated_backtest(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 251, in _execute_isolated_backtest\n    backtest_result = simulator(\n                      ^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 540, in simulator\n    return _skip_simulator(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 1896, in _skip_simulator\n    _execute_routes(i, candles_step)\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 2240, in _execute_routes\n    r.strategy._execute()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 1322, in _execute\n    self._check()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 1136, in _check\n    self._execute_long()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 625, in _execute_long\n    raise exceptions.InvalidStrategy(\njesse.exceptions.InvalidStrategy: Setting self.take_profit in the go_long() method is not supported for spot trading (it's only supported in futures trading). Try setting it in self.on_open_position() instead.\n",
+  "notes": "Jesse infrastructure/backtest error. Snapshot is deliberately current-candidate and fail-closed so Fusion Gate cannot mistake stale results for this candidate."
 }
