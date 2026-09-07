@@ -40,7 +40,6 @@ jobs:
           p = Path("src/edge-worker.js")
           s = p.read_text(encoding="utf-8")
 
-          # Remove the legacy periodic scan digest completely from the deployed runtime.
           start = s.find("async function sendPeriodicScanDigest(env){")
           if start != -1:
               end = s.find("async function scan(env,sendAlert){", start)
@@ -48,8 +47,6 @@ jobs:
                   raise SystemExit("scan() marker missing; refusing unsafe digest removal")
               s = s[:start] + s[end:]
 
-          # The scanner may create/refresh the paper opportunity, but it must never send
-          # a separate Telegram scan/paper message. buy-gateway owns user notifications.
           s = s.replace("return json(await scan(env,true));", "return json(await scan(env,false));")
           s = s.replace("await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true);", "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);")
 
@@ -74,11 +71,15 @@ jobs:
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'PREP:' src/buy-gateway.js
           grep -q 'CONFIRM:' src/buy-gateway.js
+          grep -q 'claimState' src/buy-gateway.js
+          grep -q 'VERCEL_SIGNED_RELAY_URL' src/buy-gateway.js
+          grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway.js
           grep -q 'sendPromptForActive' src/buy-gateway.js
           grep -q '/runtime-check' src/buy-gateway.js
           grep -q '/balance-refresh' src/buy-gateway.js
-          grep -q 'autoBuy:false' src/buy-gateway.js
+          grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
+          grep -q 'url.pathname==="/claim"' src/edge-worker.js
           if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
             echo "Legacy periodic scan digest still exists"
             exit 1
@@ -100,7 +101,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler secret list
 
-      - name: Configure Telegram webhook
+      - name: Configure Telegram webhook when Actions secret exists
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         shell: bash
@@ -113,7 +114,7 @@ jobs:
               --data '{"url":"https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook","allowed_updates":["callback_query"]}'
           fi
 
-      - name: Verify runtime bindings
+      - name: Verify runtime bindings and execution guards
         run: |
           curl --fail --silent --show-error --max-time 60 \
             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check" \
@@ -127,15 +128,29 @@ jobs:
           assert row.get('hasApiKey') is True
           assert row.get('hasApiSecret') is True
           assert row.get('noSecretValuesExposed') is True
+          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
+          assert row.get('atomicConfirmClaim') is True
+          assert row.get('autoBuy') is False
           PY
 
-      - name: Verify Binance balance path
-        continue-on-error: true
+      - name: Verify Binance balance path through signed relay
         run: |
-          curl --silent --show-error --max-time 60 \
+          curl --fail --silent --show-error --max-time 60 \
             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh" \
             -o /tmp/balance.json
-          cat /tmp/balance.json
+          python - <<'PY'
+          import json
+          row=json.load(open('/tmp/balance.json'))
+          print(json.dumps(row,indent=2))
+          assert row.get('ok') is True
+          assert row.get('autoBuy') is False
+          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
+          bal=row.get('balance') or {}
+          assert bal.get('ok') is True
+          assert bal.get('status') == 'ACCOUNT_BALANCE_OK'
+          assert bal.get('source') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
+          assert isinstance((bal.get('usdt') or {}).get('free'), (int,float))
+          PY
 
       - name: Verify scanner runtime
         run: |
