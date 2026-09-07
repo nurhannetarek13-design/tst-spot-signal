@@ -25,9 +25,18 @@ if old_secret_alias in s:
 elif new_secret_alias not in s:
     raise SystemExit('Runtime secret alias probe changed; refusing unsafe patch')
 
+# Safe diagnostics: report only whether the Cloudflare binding exists and its JS type.
+# Never return secret contents or lengths.
+needle = 'telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),noSecretValuesExposed:true'
+replacement = 'telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),demoApiKeyBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_API_KEY"),demoApiKeyType:typeof env.BINANCE_DEMO_API_KEY,demoSecretBindingPresent:Object.prototype.hasOwnProperty.call(env,"BINANCE_DEMO_SECRET_KEY"),demoSecretType:typeof env.BINANCE_DEMO_SECRET_KEY,noSecretValuesExposed:true'
+if needle in s:
+    s = s.replace(needle, replacement, 1)
+elif replacement not in s:
+    raise SystemExit('Runtime diagnostic marker changed; refusing unsafe patch')
+
 for required in ('env.BINANCE_DEMO_API_KEY', 'env.BINANCE_DEMO_SECRET_KEY'):
     if required not in s:
         raise SystemExit(f'Missing required existing secret alias: {required}')
 
 p.write_text(s, encoding='utf-8')
-print('existing Binance Cloudflare secret aliases enabled and runtime-check aware')
+print('existing Binance Cloudflare secret aliases enabled with non-sensitive binding diagnostics')
