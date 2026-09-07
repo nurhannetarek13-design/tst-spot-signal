@@ -27,26 +27,20 @@ if not cid or not fp or g.get("candidateId")!=cid or g.get("candidateFingerprint
 
 summary=g.get("validatorSummary") or {}
 
-# Candidate rotation is only legal once every historical engine has reported the
-# exact same candidate identity. Old artifacts can never cause rejection/rotation.
+# Only exact-current-candidate artifacts are ever allowed to influence rotation.
+# We do not need to waste all four engines once two independent current engines
+# have already demonstrated an economic hard failure.
+current={}
 waiting=[]
 for name in HISTORICAL_VALIDATORS:
     v=summary.get(name) or {}
-    if v.get("candidateId")!=cid or v.get("candidateFingerprint")!=fp or v.get("candidateMatch") is not True:
+    if v.get("candidateId")==cid and v.get("candidateFingerprint")==fp and v.get("candidateMatch") is True:
+        current[name]=v
+    else:
         waiting.append(name)
-if waiting:
-    print(json.dumps({
-      "changed":False,
-      "reason":"WAITING_FOR_VALIDATOR_CONSENSUS",
-      "candidateId":cid,
-      "candidateFingerprint":fp,
-      "waitingFor":waiting,
-    }))
-    raise SystemExit(0)
 
 hard_fail=[]
-for name in HISTORICAL_VALIDATORS:
-    v=summary.get(name) or {}
+for name,v in current.items():
     trades=int(v.get("trades") or 0)
     indep=v.get("independentEnginePass")
     stress_exp=v.get("stressExpectancyUSDT")
@@ -64,7 +58,23 @@ for name in HISTORICAL_VALIDATORS:
     elif trades>=100 and indep is None and v.get("pass") is False:
         hard_fail.append(name)
 
-strong_fail=[name for name in hard_fail if int((summary.get(name) or {}).get("trades") or 0)>=30]
+strong_fail=[name for name in hard_fail if int((current.get(name) or {}).get("trades") or 0)>=30]
+
+# Reject early when two exact, independent engines hard-fail. Otherwise wait for
+# the remaining exact-current-candidate validators before making a rejection.
+early_reject=len(hard_fail)>=2
+all_current=not waiting
+if not early_reject and not all_current:
+    print(json.dumps({
+      "changed":False,
+      "reason":"WAITING_FOR_VALIDATOR_CONSENSUS",
+      "candidateId":cid,
+      "candidateFingerprint":fp,
+      "waitingFor":waiting,
+      "hardFailSoFar":hard_fail,
+    }))
+    raise SystemExit(0)
+
 if not strong_fail and len(hard_fail)<2:
     print(json.dumps({"changed":False,"reason":"INSUFFICIENT_HARD_FAILURES","hardFail":hard_fail}))
     raise SystemExit(0)
@@ -116,8 +126,6 @@ else:
     }
 MANIFEST.write_text(json.dumps(new,indent=2))
 
-# Reset forward state atomically with rotation; a stale paper position is never
-# counted against the newly selected candidate.
 forward={
   "engine":"FORWARD_PAPER",
   "strategyId":"TST_UNIFIED_FORWARD_V1",
