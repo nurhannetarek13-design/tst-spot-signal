@@ -5,12 +5,14 @@ on:
   push:
     branches: [main]
     paths:
+      - "validation/fusion/candidate-manifest.json"
       - "validation/fusion/freqtrade-latest.json"
       - "validation/fusion/jesse-latest.json"
       - "validation/fusion/vectorbt-candidate-latest.json"
       - "validation/fusion/nautilus-latest.json"
       - "validation/fusion/forward-latest.json"
       - "scripts/build-fusion-validator-bundle.py"
+      - ".github/workflows/fusion-validator-bundle.yml"
 
 permissions:
   contents: write
@@ -35,9 +37,14 @@ jobs:
           row=json.load(open(p))
           assert row.get('liveTrading') is False
           assert row.get('authorization') == 'RESEARCH_ONLY'
+          assert row.get('bundleId') == 'TST_FUSION_VALIDATORS_BUNDLE_V2'
           assert set(row.get('reports',{})) == {'freqtrade','jesse','vectorbt','nautilus','forward'}
           assert all(v.get('liveTrading') is False for v in row['reports'].values())
-          print('validator bundle safe')
+          for name,v in row['reports'].items():
+              if v.get('candidateMatch') is not True:
+                  assert v.get('usable') is False, (name,v)
+                  assert v.get('bundleStatus') == 'STALE_CANDIDATE_ARTIFACT', (name,v)
+          print('validator bundle exact-candidate safety verified')
           PY
 
       - name: Commit bundle if changed
