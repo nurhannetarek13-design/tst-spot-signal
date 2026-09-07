@@ -32,6 +32,21 @@ b = buy.read_text()
 # Balance is still refreshed every five minutes and after execution, but no
 # standalone balance digest is sent. Balance remains embedded in opportunity data.
 b = b.replace('await refreshBalance(env,true);', 'await refreshBalance(env,false);')
+
+# During the no-money E2E preflight only, expose the already-sanitized error
+# stored by refreshBalance so we can diagnose the relay without exposing keys.
+old = '''    if(url.pathname==="/balance-refresh"){
+      const balance=await refreshBalance(env,false);
+      return Response.json({ok:Boolean(balance),balance,autoBuy:false});
+    }'''
+new = '''    if(url.pathname==="/balance-refresh"){
+      const balance=await refreshBalance(env,false);
+      const error=balance?null:await getState(env,"binance:balance:error");
+      return Response.json({ok:Boolean(balance),balance,error,autoBuy:false});
+    }'''
+if old in b:
+    b = b.replace(old, new, 1)
+
 buy.write_text(b)
 
 print("Product mode enabled: Telegram sends actionable opportunities/execution results only")
