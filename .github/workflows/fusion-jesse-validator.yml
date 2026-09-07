@@ -48,17 +48,21 @@ jobs:
         run: pip install --disable-pip-version-check jesse
 
       - name: Run independent Jesse backtest
+        id: jesse_run
         if: env.HAS_CANDIDATE == 'true'
+        continue-on-error: true
         env:
           PYTHONPATH: jesse
         run: python jesse/run_fusion_validator.py
 
       - name: Prove result belongs to checked-out candidate
-        if: env.HAS_CANDIDATE == 'true'
+        if: env.HAS_CANDIDATE == 'true' && always()
         run: |
           python - <<'PY'
-          import json, os
-          row=json.load(open("validation/fusion/jesse-latest.json"))
+          import json, os, pathlib
+          p=pathlib.Path("validation/fusion/jesse-latest.json")
+          assert p.exists(), "Jesse must always persist a fail-closed snapshot"
+          row=json.load(open(p))
           assert row.get("candidateId") == os.environ["EXPECTED_CANDIDATE_ID"]
           assert row.get("candidateFingerprint") == os.environ["EXPECTED_CANDIDATE_FP"]
           assert row.get("strategyId") == "TST_CANDIDATE_JESSE_VALIDATOR_V1"
@@ -67,7 +71,9 @@ jobs:
           PY
 
       - name: Commit Jesse snapshot safely
+        if: always()
         run: |
+          test -f validation/fusion/jesse-latest.json
           cp validation/fusion/jesse-latest.json /tmp/jesse-latest.json
           for i in 1 2 3 4 5; do
             git fetch origin main
@@ -83,3 +89,7 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Surface Jesse infrastructure failure
+        if: env.HAS_CANDIDATE == 'true' && steps.jesse_run.outcome == 'failure'
+        run: exit 1
