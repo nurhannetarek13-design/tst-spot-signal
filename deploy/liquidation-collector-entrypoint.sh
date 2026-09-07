@@ -5,6 +5,10 @@ COINALYZE_OUT="${COINALYZE_DATA_DIR:-/data/coinalyze-liquidations}"
 COINALYZE_DAYS="${COINALYZE_BACKFILL_DAYS:-365}"
 COINALYZE_INTERVAL="${COINALYZE_INTERVAL:-daily}"
 
+python /app/binance_public_proxy.py &
+PROXY_PID=$!
+trap 'kill "$PROXY_PID" 2>/dev/null || true' EXIT INT TERM
+
 if [ -n "${COINALYZE_API_KEY:-}" ]; then
   echo "{\"kind\":\"coinalyze_backfill_start\",\"authorization\":\"RESEARCH_ONLY\",\"days\":${COINALYZE_DAYS},\"interval\":\"${COINALYZE_INTERVAL}\",\"outputDir\":\"${COINALYZE_OUT}\"}"
   python /app/coinalyze_liquidation_history.py --days "${COINALYZE_DAYS}" --interval "${COINALYZE_INTERVAL}" --output-dir "${COINALYZE_OUT}" || true
@@ -21,4 +25,6 @@ if [ "${TV_BREAKOUT_RUN:-0}" = "1" ]; then
   python /app/tradingview_breakout_raw_gate.py || true
 fi
 
-exec python /app/forward_liquidation_collector.py
+python /app/forward_liquidation_collector.py &
+COLLECTOR_PID=$!
+wait "$COLLECTOR_PID"
