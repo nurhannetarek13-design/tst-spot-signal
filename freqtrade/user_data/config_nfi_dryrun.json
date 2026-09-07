@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.freqtrade.io/schema.json",
-  "bot_name": "TST NFI X7 Dry Run",
+  "bot_name": "TST Fast All-USDT Dry Run",
   "initial_state": "running",
   "max_open_trades": 1,
   "stake_currency": "USDT",
@@ -29,10 +29,21 @@
       "urls": {"api": {"public": "https://data-api.binance.vision/api/v3", "private": "https://api.binance.com/api", "sapi": "https://api.binance.com/sapi"}},
       "options": {"defaultType": "spot", "fetchMarkets": ["spot"]}
     },
-    "pair_whitelist": ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","ADA/USDT","DOGE/USDT","LINK/USDT","AVAX/USDT","LTC/USDT"],
-    "pair_blacklist": [".*(UP|DOWN|BULL|BEAR)/USDT","USDC/USDT","FDUSD/USDT","TUSD/USDT","USDP/USDT","DAI/USDT","EUR/USDT"]
+    "pair_whitelist": [".*/USDT"],
+    "pair_blacklist": [
+      ".*(UP|DOWN|BULL|BEAR)/USDT",
+      "USDC/USDT","FDUSD/USDT","TUSD/USDT","USDP/USDT","DAI/USDT","EUR/USDT"
+    ]
   },
-  "pairlists": [{"method": "StaticPairList"}],
+  "pairlists": [
+    {
+      "method": "VolumePairList",
+      "number_assets": 120,
+      "sort_key": "quoteVolume",
+      "min_value": 1000000,
+      "refresh_period": 60
+    }
+  ],
   "entry_pricing": {"price_side": "other", "use_order_book": false},
   "exit_pricing": {"price_side": "other", "use_order_book": false},
   "order_types": {"entry":"market","exit":"market","emergency_exit":"market","force_entry":"market","force_exit":"market","stoploss":"market","stoploss_on_exchange":false},
