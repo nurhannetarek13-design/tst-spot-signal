@@ -18,13 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone NFI at current upstream revision
+      - name: Clone pinned NFI X7 source
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
+          git clone https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
+          git -C external/NostalgiaForInfinity checkout da50440bd5f8a829af9dc768822fa31cfe4b7867
           cp freqtrade/user_data/config-external-pack.json external/NostalgiaForInfinity/user_data/tst-config.json
-          mkdir -p validation/external-nfi
+          mkdir -p external/NostalgiaForInfinity/user_data/nfi_x7_only validation/external-nfi
+          cp external/NostalgiaForInfinity/NostalgiaForInfinityX7.py \
+             external/NostalgiaForInfinity/user_data/nfi_x7_only/NostalgiaForInfinityX7.py
           git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi/upstream-sha.txt
+          sha256sum external/NostalgiaForInfinity/NostalgiaForInfinityX7.py | tee validation/external-nfi/strategy-sha256.txt
 
       - name: Build NFI official custom image
         working-directory: external/NostalgiaForInfinity
@@ -42,7 +46,7 @@ jobs:
           set -euo pipefail
           docker compose run --rm freqtrade list-strategies \
             --config /freqtrade/user_data/tst-config.json \
-            --strategy-path /freqtrade | tee ../../validation/external-nfi/list-strategies.log
+            --strategy-path /freqtrade/user_data/nfi_x7_only | tee ../../validation/external-nfi/list-strategies.log
           grep -q 'NostalgiaForInfinityX7' ../../validation/external-nfi/list-strategies.log
 
       - name: Download Binance Spot data
@@ -65,7 +69,7 @@ jobs:
           docker compose run --rm freqtrade backtesting \
             --config /freqtrade/user_data/tst-config.json \
             --strategy NostalgiaForInfinityX7 \
-            --strategy-path /freqtrade \
+            --strategy-path /freqtrade/user_data/nfi_x7_only \
             --timerange 20250101-20260905 \
             --fee 0.001 \
             --export trades \
@@ -82,7 +86,7 @@ jobs:
           docker compose run --rm freqtrade backtesting \
             --config /freqtrade/user_data/tst-config.json \
             --strategy NostalgiaForInfinityX7 \
-            --strategy-path /freqtrade \
+            --strategy-path /freqtrade/user_data/nfi_x7_only \
             --timerange 20260101-20260905 \
             --fee 0.001 \
             --export trades \
@@ -99,7 +103,7 @@ jobs:
           docker compose run --rm freqtrade backtesting \
             --config /freqtrade/user_data/tst-config.json \
             --strategy NostalgiaForInfinityX7 \
-            --strategy-path /freqtrade \
+            --strategy-path /freqtrade/user_data/nfi_x7_only \
             --timerange 20250101-20260905 \
             --fee 0.002 \
             --export trades \
@@ -116,7 +120,7 @@ jobs:
           docker compose run --rm freqtrade lookahead-analysis \
             --config /freqtrade/user_data/tst-config.json \
             --strategy NostalgiaForInfinityX7 \
-            --strategy-path /freqtrade \
+            --strategy-path /freqtrade/user_data/nfi_x7_only \
             --timerange 20250101-20260905 \
             --fee 0.001 \
             --minimum-trade-amount 20 \
@@ -188,6 +192,8 @@ jobs:
           result = {
               'engine': 'NFI_X7_SPOT_GATE',
               'strategy': 'NostalgiaForInfinityX7',
+              'upstreamSha': (root / 'upstream-sha.txt').read_text().strip() if (root / 'upstream-sha.txt').exists() else None,
+              'strategySha256': (root / 'strategy-sha256.txt').read_text().split()[0] if (root / 'strategy-sha256.txt').exists() else None,
               'universe': ['BTC/USDT','ETH/USDT','SOL/USDT'],
               'period': '2025-01-01..2026-09-05',
               'oosPeriod': '2026-01-01..2026-09-05',
@@ -202,7 +208,7 @@ jobs:
               'authorization': 'DRY_RUN_AND_SIGNAL_ONLY' if passed else 'RESEARCH_ONLY',
               'liveTrading': False,
               'reasons': reasons,
-              'note': 'Standalone NFI gate. Jesse/Nautilus/Fusion are not required by this decision path.'
+              'note': 'Standalone pinned NFI X7 gate. Jesse/Nautilus/Fusion are not required by this decision path.'
           }
           (root / 'gate.json').write_text(json.dumps(result, indent=2))
           print(json.dumps(result, indent=2))
