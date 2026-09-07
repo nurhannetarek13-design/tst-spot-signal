@@ -4,7 +4,7 @@
   "bundleId": "TST_FUSION_VALIDATORS_BUNDLE_V2",
   "candidateFingerprint": "cba53276448a08d4eebc",
   "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
-  "generatedAt": "2026-09-07T20:34:52.140619+00:00",
+  "generatedAt": "2026-09-07T20:36:12.340178+00:00",
   "liveTrading": false,
   "reports": {
     "forward": {
@@ -17,7 +17,7 @@
       "candidateMatch": true,
       "engine": "FORWARD_PAPER",
       "family": "MEAN_REVERSION",
-      "generatedAt": "2026-09-07T19:08:56.447Z",
+      "generatedAt": "2026-09-07T20:36:00.113Z",
       "liveTrading": false,
       "metrics": {
         "expectancyUSDT": 0,
