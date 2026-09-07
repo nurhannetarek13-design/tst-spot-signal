@@ -12,6 +12,7 @@ on:
       - "scripts/patch-cloudflare-digest.py"
       - "scripts/patch-binance-public-api.py"
       - "scripts/patch-product-mode.py"
+      - "scripts/patch-confirm-page.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -37,6 +38,7 @@ jobs:
           python scripts/patch-cloudflare-digest.py
           python scripts/patch-binance-public-api.py
           python scripts/patch-product-mode.py
+          python scripts/patch-confirm-page.py
           node --check src/edge-worker.js
           node --check src/buy-gateway.js
           grep -q 'https://api.binance.com' src/edge-worker.js
@@ -44,6 +46,8 @@ jobs:
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'const reversalStrategy=' src/edge-worker.js
           grep -q 'USER_CONFIRMATION_ONLY' src/buy-gateway.js
+          grep -q 'renderConfirmPage' src/buy-gateway.js
+          grep -q 'handleConfirmBuy' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
           if grep -q 'await sendPeriodicScanDigest(env)' src/edge-worker.js; then
             echo "Periodic scan digest still enabled"
