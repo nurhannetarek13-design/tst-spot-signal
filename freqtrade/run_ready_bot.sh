@@ -11,6 +11,7 @@ NFI_COMMIT="da50440bd5f8a829af9dc768822fa31cfe4b7867"
 NFI_ARCHIVE="https://github.com/iterativv/NostalgiaForInfinity/archive/${NFI_COMMIT}.tar.gz"
 PROTECTED_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/user_data/strategies/NFIProtectedX7.py"
 BRIDGE_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/telegram_signal_bridge.py"
+SCANNER_URL="${VERCEL_SCANNER_URL:-https://tst-spot-signal.vercel.app/api/market-scan}"
 
 mkdir -p "$STRATEGY_DIR" "$USER_DATA/logs" "$USER_DATA/signals"
 
@@ -76,11 +77,65 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 3
 fi
 
-# Signal bridge only. Market-wide scanner is intentionally separated from this
-# service so NFI has the full Railway memory budget.
+# Signal bridge. Freqtrade remains dry-run / manual-confirmation only.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
-trap 'kill "$BRIDGE_PID" 2>/dev/null || true' EXIT
+
+# Lightweight watcher: heavy all-market scan executes on Vercel. This process
+# only fetches the compact result, remembers symbols, and alerts on new listings.
+SCANNER_URL="$SCANNER_URL" python -u - <<'PY' &
+import json, os, time
+from urllib.request import Request, urlopen
+
+url = os.environ['SCANNER_URL']
+token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
+trigger_secret = os.environ.get('SCANNER_TRIGGER_SECRET', '')
+known = None
+
+def get_scan():
+    headers = {'User-Agent': 'tst-vercel-trigger/1.0', 'Accept': 'application/json'}
+    if trigger_secret:
+        headers['Authorization'] = f'Bearer {trigger_secret}'
+    with urlopen(Request(url, headers=headers), timeout=25) as r:
+        return json.loads(r.read())
+
+def telegram(text):
+    if not token or not chat_id:
+        return
+    payload = json.dumps({'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}).encode()
+    endpoint = f'https://api.telegram.org/bot{token}/sendMessage'
+    req = Request(endpoint, data=payload, headers={'Content-Type': 'application/json'})
+    with urlopen(req, timeout=12) as r:
+        r.read()
+
+while True:
+    try:
+        data = get_scan()
+        symbols = set(data.get('symbols') or [])
+        if symbols:
+            if known is None:
+                known = symbols
+                print(f"[vercel-scan] tracking {len(symbols)} Spot/USDT markets remotely")
+            else:
+                added = sorted(symbols - known)
+                if added:
+                    for sym in added:
+                        print(f"[new-listing] {sym}")
+                        try:
+                            telegram(f"🆕 NEW LISTING WATCH\n{sym}\nدخل السكان العام تلقائيًا. مفيش BUY إلا لو شروط الاستراتيجية اتأكدت.")
+                        except Exception as e:
+                            print(f"[new-listing] telegram warning: {type(e).__name__}: {e}")
+                known = symbols
+        top = data.get('liquidMovers') or []
+        if top:
+            print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('changePct',0)):+.1f}%" for x in top[:8]))
+    except Exception as e:
+        print(f"[vercel-scan] warning: {type(e).__name__}: {e}")
+    time.sleep(60)
+PY
+WATCHER_PID=$!
+trap 'kill "$BRIDGE_PID" "$WATCHER_PID" 2>/dev/null || true' EXIT
 
 exec freqtrade trade \
   --logfile "$USER_DATA/logs/freqtrade.log" \
