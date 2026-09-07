@@ -29,6 +29,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-07T21:37:13.812293+00:00",
+  "generatedAt": "2026-09-07T21:43:02.921226+00:00",
   "notes": "Freqtrade Spot backtest of the exact unified candidate; realistic base and doubled friction."
 }
