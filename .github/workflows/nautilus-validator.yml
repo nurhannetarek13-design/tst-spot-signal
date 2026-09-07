@@ -3,17 +3,6 @@ name: Nautilus Execution Validator
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Public Edge Lab"]
-    types: [completed]
-  schedule:
-    - cron: "50 3 * * *"
-  push:
-    branches: [main]
-    paths:
-      - "validation/fusion/candidate-manifest.json"
-      - "research/nautilus_validator.py"
-      - ".github/workflows/nautilus-validator.yml"
 
 permissions:
   contents: write
