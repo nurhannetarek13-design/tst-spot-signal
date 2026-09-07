@@ -1,0 +1,53 @@
+name: Fusion Validator Bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "validation/fusion/freqtrade-latest.json"
+      - "validation/fusion/jesse-latest.json"
+      - "validation/fusion/vectorbt-candidate-latest.json"
+      - "validation/fusion/nautilus-latest.json"
+      - "validation/fusion/forward-latest.json"
+      - "scripts/build-fusion-validator-bundle.py"
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build validator bundle
+        run: python scripts/build-fusion-validator-bundle.py
+
+      - name: Validate safety invariants
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/fusion/validators-bundle-latest.json'
+          row=json.load(open(p))
+          assert row.get('liveTrading') is False
+          assert row.get('authorization') == 'RESEARCH_ONLY'
+          assert set(row.get('reports',{})) == {'freqtrade','jesse','vectorbt','nautilus','forward'}
+          assert all(v.get('liveTrading') is False for v in row['reports'].values())
+          print('validator bundle safe')
+          PY
+
+      - name: Commit bundle if changed
+        run: |
+          if git diff --quiet -- validation/fusion/validators-bundle-latest.json; then
+            echo "bundle unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation/fusion/validators-bundle-latest.json
+          git commit -m "Update fusion validator bundle [skip ci]"
+          git push
