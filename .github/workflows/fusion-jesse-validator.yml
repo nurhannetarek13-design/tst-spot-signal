@@ -2,17 +2,6 @@ name: Fusion Jesse Validator
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Public Edge Lab"]
-    types: [completed]
-  schedule:
-    - cron: "20 3 * * *"
-  push:
-    branches: [main]
-    paths:
-      - "jesse/**"
-      - "validation/fusion/candidate-manifest.json"
-      - ".github/workflows/fusion-jesse-validator.yml"
 
 permissions:
   contents: write
