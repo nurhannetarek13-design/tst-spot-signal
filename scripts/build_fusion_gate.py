@@ -29,24 +29,34 @@ def load(p):
     except Exception:return None
 
 m=load(MANIFEST) or {}
+cid=m.get("candidateId")
 fp=m.get("candidateFingerprint")
 reasons=[]
 validators={}
 
-if not fp:
+if not cid or not fp:
     reasons.append("CANDIDATE:MISSING")
 
 for name,p in FILES.items():
     row=load(p)
     if not row:
-        validators[name]={"status":"MISSING","pass":False}
+        validators[name]={"status":"MISSING","pass":False,"candidateMatch":False}
         reasons.append(f"{name}:MISSING")
         continue
+    row=dict(row)
+    id_match=bool(cid) and row.get("candidateId")==cid
+    fp_match=bool(fp) and row.get("candidateFingerprint")==fp
+    candidate_match=id_match and fp_match
+    row["candidateIdMatch"]=id_match
+    row["candidateFingerprintMatch"]=fp_match
+    row["candidateMatch"]=candidate_match
     validators[name]=row
     if row.get("strategyId")!=EXPECTED[name]:
         reasons.append(f"{name}:STRATEGY_ID_MISMATCH")
-    if fp and row.get("candidateFingerprint")!=fp:
-        reasons.append(f"{name}:CANDIDATE_MISMATCH")
+    if not id_match:
+        reasons.append(f"{name}:CANDIDATE_ID_MISMATCH")
+    if not fp_match:
+        reasons.append(f"{name}:CANDIDATE_FINGERPRINT_MISMATCH")
     if row.get("pass") is not True:
         reasons.append(f"{name}:FAIL")
     if name=="forward":
@@ -56,14 +66,13 @@ for name,p in FILES.items():
         n=int((row.get("base") or {}).get("trades") or 0)
         if n<100:reasons.append(f"{name}:LT_100_TRADES")
 
-# Full production-review gate remains intentionally strict and unchanged in spirit.
+# Full production-review gate remains intentionally strict and fail-closed.
 full_ready=len(reasons)==0
 
-# Separate staged-live review gate. This does NOT enable trading. It exists so a
-# small, capped live trial does not have to wait for 50 forward trades, while still
-# requiring independent historical agreement on the exact same candidate.
+# Separate staged-live review gate. This NEVER enables trading. A validator only
+# contributes when both candidateId and candidateFingerprint match the manifest.
 small_reasons=[]
-if not fp:
+if not cid or not fp:
     small_reasons.append("CANDIDATE:MISSING")
 
 independent_pass_count=0
@@ -71,8 +80,11 @@ for name in HISTORICAL:
     v=validators.get(name) or {}
     if v.get("strategyId")!=EXPECTED[name]:
         small_reasons.append(f"{name}:STRATEGY_ID_MISMATCH")
+    if v.get("candidateId")!=cid:
+        small_reasons.append(f"{name}:CANDIDATE_ID_MISMATCH")
     if v.get("candidateFingerprint")!=fp:
-        small_reasons.append(f"{name}:CANDIDATE_MISMATCH")
+        small_reasons.append(f"{name}:CANDIDATE_FINGERPRINT_MISMATCH")
+    if v.get("candidateMatch") is not True:
         continue
     base=v.get("base") or {}
     stress=v.get("stress2x") or {}
@@ -102,17 +114,18 @@ small_ready=len(small_reasons)==0
 report={
   "engine":"UNIFIED_FUSION_GATE",
   "strategyId":"TST_UNIFIED_CANDIDATE_V1",
-  "candidateId":m.get("candidateId"),
+  "candidateId":cid,
   "candidateFingerprint":fp,
   "symbol":m.get("symbol"),
   "family":m.get("family"),
+  "allValidatorsCurrentCandidate":bool(cid and fp) and all((validators.get(k) or {}).get("candidateMatch") is True for k in FILES),
   "liveReady":full_ready,
   "smallLiveReviewReady":small_ready,
   "smallLiveReviewReasons":list(dict.fromkeys(small_reasons)),
   "smallLiveReviewPolicy":{
       "purpose":"Manual review for a tiny capped live trial only; never auto-enables execution.",
       "historicalValidatorsRequired":list(HISTORICAL),
-      "sameCandidateRequired":True,
+      "sameCandidateIdAndFingerprintRequired":True,
       "minTradesPerEngine":30,
       "minIndependentEnginePasses":3,
       "baseProfitFactorMin":1.15,
@@ -131,7 +144,11 @@ report={
       k:{
           "status":v.get("status"),
           "pass":bool(v.get("pass")),
+          "candidateId":v.get("candidateId"),
           "candidateFingerprint":v.get("candidateFingerprint"),
+          "candidateIdMatch":v.get("candidateIdMatch"),
+          "candidateFingerprintMatch":v.get("candidateFingerprintMatch"),
+          "candidateMatch":v.get("candidateMatch"),
           "trades":int(((v.get("metrics") if k=="forward" else v.get("base")) or {}).get("trades") or 0),
           "independentEnginePass":v.get("independentEnginePass"),
           "baseProfitFactor":float(((v.get("base") or {}).get("profitFactor") or 0)) if k!="forward" else None,
@@ -141,7 +158,7 @@ report={
       } for k,v in validators.items()
   },
   "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
-  "note":"Full live readiness remains strict. smallLiveReviewReady is only a manual-review signal for a tiny capped live trial and never enables trading automatically."
+  "note":"Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
 OUT.parent.mkdir(parents=True,exist_ok=True)
 OUT.write_text(json.dumps(report,indent=2))
