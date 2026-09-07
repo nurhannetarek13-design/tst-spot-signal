@@ -3,14 +3,7 @@ export { SignalState };
 
 const QUOTE_USDT = 5.5;
 const SIGNAL_TTL_SEC = 10 * 60;
-const API_BASES = [
-  "https://api.binance.com",
-  "https://api-gcp.binance.com",
-  "https://api1.binance.com",
-  "https://api2.binance.com",
-  "https://api3.binance.com",
-  "https://api4.binance.com",
-];
+const VERCEL_BUY_URL = "https://tst-spot-signal.vercel.app/api/user-confirmed-buy";
 
 function stateStub(env){const id=env.STATE_COORDINATOR.idFromName("global");return env.STATE_COORDINATOR.get(id);}
 async function getState(env,key){const r=await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);return r.ok?await r.json():null;}
@@ -36,57 +29,25 @@ async function hmacHex(secret, text){
   return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,"0")).join("");
 }
 
-async function signedBinance(env,path,params,method="POST"){
-  if(!env.BINANCE_API_KEY||!env.BINANCE_API_SECRET) throw new Error("Binance API secrets missing");
-  const baseParams={...params,recvWindow:5000,timestamp:Date.now()};
-  const qs=new URLSearchParams(Object.entries(baseParams).map(([k,v])=>[k,String(v)])).toString();
-  const signature=await hmacHex(env.BINANCE_API_SECRET,qs);
-  let last="unknown";
-  for(const base of API_BASES){
-    try{
-      const r=await fetch(`${base}${path}?${qs}&signature=${signature}`,{method,headers:{"X-MBX-APIKEY":env.BINANCE_API_KEY,"content-type":"application/x-www-form-urlencoded"}});
-      const text=await r.text();
-      const data=JSON.parse(text||"{}");
-      if(!r.ok||data.code<0){last=`${data.code||r.status} ${data.msg||text}`;continue;}
-      return data;
-    }catch(e){last=String(e?.message||e);}
-  }
-  throw new Error(`Binance signed request failed: ${last}`);
-}
-
-async function publicBinance(path){
-  for(const base of ["https://data-api.binance.vision",...API_BASES]){
-    try{const r=await fetch(base+path);if(r.ok)return await r.json();}catch{}
-  }
-  throw new Error("Binance public API unavailable");
-}
-
-function floorTo(value,step){if(!step||step<=0)return value;const n=Math.floor((value+1e-12)/step)*step;const d=Math.max(0,Math.ceil(-Math.log10(step)));return Number(n.toFixed(d));}
-function roundTo(value,tick){if(!tick||tick<=0)return value;const n=Math.round(value/tick)*tick;const d=Math.max(0,Math.ceil(-Math.log10(tick)));return Number(n.toFixed(d));}
-
-async function executeBuy(env, signal){
-  const symbol=signal.symbol;
-  const info=await publicBinance(`/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`);
-  const market=info.symbols?.[0];
-  if(!market||market.status!=="TRADING"||!market.isSpotTradingAllowed) throw new Error("Pair is not tradable on Spot");
-  const lot=market.filters.find(x=>x.filterType==="LOT_SIZE");
-  const pf=market.filters.find(x=>x.filterType==="PRICE_FILTER");
-  const step=Number(lot?.stepSize||"0.00000001"), tick=Number(pf?.tickSize||"0.00000001");
-
-  const buy=await signedBinance(env,"/api/v3/order",{symbol,side:"BUY",type:"MARKET",quoteOrderQty:QUOTE_USDT,newOrderRespType:"FULL"});
-  const executedQty=Number(buy.executedQty||0), quoteQty=Number(buy.cummulativeQuoteQty||0);
-  if(executedQty<=0||quoteQty<=0) throw new Error("Market BUY returned zero fill");
-  const avg=quoteQty/executedQty;
-
-  const entryRef=Number(signal.entry||avg), stopRef=Number(signal.stop||entryRef*0.98), targetRef=Number(signal.target||entryRef*1.012);
-  const stopRatio=stopRef/entryRef, tpRatio=targetRef/entryRef;
-  const stop=roundTo(avg*stopRatio,tick), tp=roundTo(avg*tpRatio,tick), stopLimit=roundTo(stop*(1-0.003),tick);
-  const sellQty=floorTo(executedQty*0.999,step);
-  let oco=null, ocoError=null;
-  try{
-    oco=await signedBinance(env,"/api/v3/orderList/oco",{symbol,side:"SELL",quantity:sellQty,aboveType:"LIMIT_MAKER",abovePrice:tp,belowType:"STOP_LOSS_LIMIT",belowStopPrice:stop,belowPrice:stopLimit,belowTimeInForce:"GTC"});
-  }catch(e){ocoError=String(e?.message||e);}
-  return {buy,avg,executedQty,quoteQty,tp,stop,stopLimit,sellQty,oco,ocoError};
+async function executeViaVercel(env, signal){
+  if(!env.TELEGRAM_BOT_TOKEN) throw new Error("Relay secret unavailable");
+  const body=JSON.stringify({
+    userConfirmed:true,
+    symbol:signal.symbol,
+    entry:Number(signal.entry),
+    stop:Number(signal.stop),
+    target:Number(signal.target),
+    createdAt:Number(signal.createdAt),
+    signalId:String(signal.id),
+    quoteUSDT:QUOTE_USDT,
+  });
+  const ts=String(Date.now());
+  const signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+  const r=await fetch(VERCEL_BUY_URL,{method:"POST",headers:{"content-type":"application/json","x-executor-timestamp":ts,"x-executor-signature":signature},body});
+  const text=await r.text();
+  let data={}; try{data=JSON.parse(text||"{}");}catch{data={ok:false,status:"BAD_EXECUTOR_RESPONSE",reason:text};}
+  if(!r.ok||data.ok!==true) throw new Error(`${data.status||r.status}: ${data.reason||data.error||text}`);
+  return data;
 }
 
 async function sendPromptForActive(env){
@@ -96,9 +57,11 @@ async function sendPromptForActive(env){
     if(!p?.symbol) continue;
     const id=compactId(p), promptKey=`buy-prompt:${id}`;
     if(await getState(env,promptKey)) continue;
-    const ageMs=Date.now()-Number(p.openedAt||p.createdAt||Date.now());
+    const sourceTime=Number(p.openedAt||p.createdAt||Date.now());
+    const ageMs=Date.now()-sourceTime;
     if(ageMs>10*60*1000) continue;
     const signal={id,symbol:p.symbol,entry:Number(p.entry),stop:Number(p.stop),target:Number(p.target),quantity:Number(p.quantity||0),strategy:p.strategy||"NFI/Scanner",score:p.score||null,createdAt:Date.now(),expiresAt:Date.now()+SIGNAL_TTL_SEC*1000};
+    if(!(signal.entry>0&&signal.stop>0&&signal.target>0&&signal.stop<signal.entry&&signal.target>signal.entry)) continue;
     await putState(env,`live-signal:${id}`,signal,SIGNAL_TTL_SEC);
     const baseAsset=p.symbol.endsWith("USDT")?p.symbol.slice(0,-4):p.symbol;
     const url=`https://www.binance.com/en/trade/${encodeURIComponent(baseAsset)}_USDT?type=spot`;
@@ -140,9 +103,9 @@ async function handleTelegramWebhook(request,env){
   await putState(env,`live-used:${id}`,{startedAt:Date.now()},24*3600);
   await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"جاري تنفيذ BUY على Binance Spot…"});
   try{
-    const r=await executeBuy(env,signal);
-    const protection=r.oco?`✅ OCO اتفعل: TP ${fmt(r.tp)} | SL ${fmt(r.stop)}`:`⚠️ الشراء تم لكن OCO فشل: ${r.ocoError}`;
-    await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:[`✅ BUY تم — ${signal.symbol.replace("USDT","/USDT")}`,`💵 المصروف: ${fmt(r.quoteQty)} USDT`,`📦 الكمية: ${fmt(r.executedQty)}`,`💲 متوسط التنفيذ: ${fmt(r.avg)}`,protection].join("\n")});
+    const r=await executeViaVercel(env,signal);
+    const protection=r.ocoPlaced?`✅ OCO اتفعل: TP ${fmt(r.tp)} | SL ${fmt(r.stop)}`:`⚠️ الشراء تم لكن OCO فشل: ${r.ocoError||"unknown"}`;
+    await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:[`✅ BUY تم — ${signal.symbol.replace("USDT","/USDT")}`,`💵 المصروف: ${fmt(r.quoteUSDT)} USDT`,`📦 الكمية: ${fmt(r.executedQty)}`,`💲 متوسط التنفيذ: ${fmt(r.avg)}`,protection].join("\n")});
     return new Response("ok");
   }catch(e){
     await putState(env,`live-used:${id}`,{failedAt:Date.now(),error:String(e?.message||e)},300);
@@ -155,7 +118,7 @@ export default {
   async fetch(request,env,ctx){
     const url=new URL(request.url);
     if(url.pathname==="/telegram-webhook"&&request.method==="POST") return handleTelegramWebhook(request,env);
-    if(url.pathname==="/buy-gateway-status") return Response.json({ok:true,mode:"USER_CONFIRMATION_ONLY",autoBuy:false,quoteUSDT:QUOTE_USDT,telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),binanceConfigured:Boolean(env.BINANCE_API_KEY&&env.BINANCE_API_SECRET)});
+    if(url.pathname==="/buy-gateway-status") return Response.json({ok:true,mode:"USER_CONFIRMATION_ONLY",autoBuy:false,quoteUSDT:QUOTE_USDT,telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),executionBackend:"VERCEL_EXISTING_BINANCE_API",vercelBuyUrl:VERCEL_BUY_URL});
     return baseWorker.fetch(request,env,ctx);
   },
   async scheduled(event,env,ctx){
