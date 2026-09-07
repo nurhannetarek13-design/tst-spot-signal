@@ -6,11 +6,9 @@ on:
     branches: [main]
     paths:
       - "src/edge-worker.js"
-      - "src/buy-gateway.js"
-      - "src/index.js"
+      - "src/buy-gateway-stable.js"
+      - "src/buy-gateway-canonical.js"
       - "wrangler.jsonc"
-      - "scripts/patch-binance-secret-aliases.py"
-      - "scripts/patch-relay-diagnostics.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -31,79 +29,32 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Materialize actionable Telegram runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          p = Path("src/edge-worker.js")
-          s = p.read_text(encoding="utf-8")
-
-          start = s.find("async function sendPeriodicScanDigest(env){")
-          if start != -1:
-              end = s.find("async function scan(env,sendAlert){", start)
-              if end == -1:
-                  raise SystemExit("scan() marker missing; refusing unsafe digest removal")
-              s = s[:start] + s[end:]
-
-          s = s.replace("return json(await scan(env,true));", "return json(await scan(env,false));")
-          s = s.replace("await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true);", "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);")
-
-          if "sendPeriodicScanDigest" in s:
-              raise SystemExit("legacy periodic digest still present")
-          if "scan(env,true)" in s:
-              raise SystemExit("direct scanner Telegram alert path still present")
-          if "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);" not in s:
-              raise SystemExit("scheduled no-alert scanner path missing")
-
-          p.write_text(s, encoding="utf-8")
-          PY
-          python scripts/patch-binance-secret-aliases.py
-          python scripts/patch-relay-diagnostics.py
-
-      - name: Validate runtime
+      - name: Validate canonical Worker source
         shell: bash
         run: |
           set -euo pipefail
           node --check src/edge-worker.js
-          node --check src/buy-gateway.js
+          node --check src/buy-gateway-stable.js
+          node --check src/buy-gateway-canonical.js
+          grep -q '"main": "src/buy-gateway-canonical.js"' wrangler.jsonc
           grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
-          grep -q 'PREP:' src/buy-gateway.js
-          grep -q 'CONFIRM:' src/buy-gateway.js
-          grep -q 'claimState' src/buy-gateway.js
-          grep -q 'VERCEL_SIGNED_RELAY_URL' src/buy-gateway.js
-          grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway.js
-          grep -q 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY' src/buy-gateway.js
-          grep -q 'liquidation-collector-production.up.railway.app/signed-testnet-account' src/buy-gateway.js
-          grep -q 'DEMO_EXECUTION_DISABLED' src/buy-gateway.js
-          grep -q 'sendPromptForActive' src/buy-gateway.js
-          grep -q '/runtime-check' src/buy-gateway.js
-          grep -q '/balance-refresh' src/buy-gateway.js
-          grep -q 'relayBodyPreview' src/buy-gateway.js
-          grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
           grep -q 'url.pathname==="/claim"' src/edge-worker.js
-          python - <<'PY'
-          from pathlib import Path
-          s=Path('src/buy-gateway.js').read_text()
-          a=s.index('async function signedBinanceViaRelay')
-          b=s.index('async function refreshBalance', a)
-          block=s[a:b]
-          assert 'const { key, secret, network } = creds(env);' in block
-          assert 'if (network === "testnet")' in block
-          assert 'liquidation-collector-production.up.railway.app/signed-testnet-account' in block
-          assert block.index('if (network === "testnet")') < block.index('VERCEL_SIGNED_RELAY_URL') if 'VERCEL_SIGNED_RELAY_URL' in block else True
-          assert 'DEMO_EXECUTION_DISABLED' in block
-          PY
+          grep -q 'PREP:' src/buy-gateway-stable.js
+          grep -q 'CONFIRM:' src/buy-gateway-stable.js
+          grep -q 'claimState' src/buy-gateway-stable.js
+          grep -q 'LIVE_CREDENTIALS_REQUIRED' src/buy-gateway-stable.js
+          grep -q 'DEMO_EXECUTION_DISABLED' src/buy-gateway-stable.js
+          grep -q 'CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY' src/buy-gateway-canonical.js
+          grep -q 'network: "demo"' src/buy-gateway-canonical.js
+          grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway-canonical.js
           if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
-            echo "Legacy periodic scan digest still exists"
+            echo "Legacy periodic digest still exists"
             exit 1
           fi
           if grep -q 'scan(env,true)' src/edge-worker.js; then
-            echo "Scanner can still send a direct Telegram message"
+            echo "Scanner can still send direct Telegram alerts"
             exit 1
           fi
 
@@ -132,68 +83,60 @@ jobs:
               --data '{"url":"https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook","allowed_updates":["callback_query"]}'
           fi
 
-      - name: Wait for deployed Worker version and verify runtime guards
+      - name: Verify canonical runtime guards
         shell: bash
         run: |
           set -euo pipefail
-          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
+          expected='CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY'
           matched=0
-          for attempt in $(seq 1 15); do
-            echo "runtime-check attempt ${attempt}/15"
-            if curl --fail --silent --show-error --max-time 20 \
-              -H 'cache-control: no-cache' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?deploy=${GITHUB_SHA}&attempt=${attempt}" \
-              -o /tmp/runtime.json; then
-              cat /tmp/runtime.json
-              echo
-              route="$(python - <<'PY'
-          import json
+          for attempt in $(seq 1 20); do
+            curl --silent --show-error --max-time 20 \
+              -X POST \
+              -H 'cache-control: no-store, no-cache, max-age=0' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?deploy=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
+              -o /tmp/runtime.json || true
+            cat /tmp/runtime.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
           try:
               row=json.load(open('/tmp/runtime.json'))
-              print(row.get('executionRoute') or '')
           except Exception:
-              print('')
+              sys.exit(1)
+          checks=[
+              row.get('ok') is True,
+              row.get('telegramConfigured') is True,
+              row.get('hasApiKey') is True,
+              row.get('hasApiSecret') is True,
+              row.get('credentialMode') == 'DEMO',
+              row.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY',
+              row.get('atomicConfirmClaim') is True,
+              row.get('demoExecutionDisabled') is True,
+              row.get('autoBuy') is False,
+              row.get('noSecretValuesExposed') is True,
+          ]
+          sys.exit(0 if all(checks) else 1)
           PY
-          )"
-              if [ "$route" = "$expected" ]; then
-                matched=1
-                break
-              fi
+            then
+              matched=1
+              break
             fi
             sleep 3
           done
-          if [ "$matched" != "1" ]; then
-            echo "New Worker route did not propagate"
-            exit 1
-          fi
-          python - <<'PY'
-          import json
-          row=json.load(open('/tmp/runtime.json'))
-          print(json.dumps(row,indent=2))
-          assert row.get('ok') is True
-          assert row.get('telegramConfigured') is True
-          assert row.get('hasApiKey') is True
-          assert row.get('hasApiSecret') is True
-          assert row.get('noSecretValuesExposed') is True
-          assert row.get('atomicConfirmClaim') is True
-          assert row.get('autoBuy') is False
-          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
-          PY
+          test "$matched" = "1"
 
-      - name: Verify Binance demo balance through Railway read-only relay
+      - name: Verify Binance Spot Demo account read through Vercel relay
         shell: bash
         run: |
           set -euo pipefail
-          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
           passed=0
-          for attempt in $(seq 1 20); do
-            echo "balance-refresh attempt ${attempt}/20"
-            http_code="$(curl --silent --show-error --max-time 25 \
-              -H 'cache-control: no-cache' \
-              -w '%{http_code}' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?deploy=${GITHUB_SHA}&attempt=${attempt}" \
-              -o /tmp/balance.json || true)"
-            echo "HTTP ${http_code}"
+          for attempt in $(seq 1 24); do
+            echo "balance attempt ${attempt}/24"
+            curl --silent --show-error --max-time 25 \
+              -X POST \
+              -H 'cache-control: no-store, no-cache, max-age=0' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?deploy=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
+              -o /tmp/balance.json || true
             cat /tmp/balance.json 2>/dev/null || true
             echo
             if python - <<'PY'
@@ -202,19 +145,20 @@ jobs:
               row=json.load(open('/tmp/balance.json'))
           except Exception:
               sys.exit(1)
-          if row.get('executionRoute') != 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY':
+          if row.get('executionRoute') != 'CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY':
               sys.exit(1)
           if row.get('ok') is not True or row.get('autoBuy') is not False:
               sys.exit(1)
           bal=row.get('balance') or {}
-          if bal.get('ok') is not True or bal.get('status') != 'ACCOUNT_BALANCE_OK':
-              sys.exit(1)
-          if bal.get('source') != 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY':
-              sys.exit(1)
-          if bal.get('network') != 'testnet' or bal.get('credentialMode') != 'DEMO':
-              sys.exit(1)
-          if not isinstance((bal.get('usdt') or {}).get('free'), (int,float)):
-              sys.exit(1)
+          checks=[
+              bal.get('ok') is True,
+              bal.get('status') == 'ACCOUNT_BALANCE_OK',
+              bal.get('source') == 'CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY',
+              bal.get('network') == 'demo',
+              bal.get('credentialMode') == 'DEMO',
+              isinstance((bal.get('usdt') or {}).get('free'), (int,float)),
+          ]
+          sys.exit(0 if all(checks) else 1)
           PY
             then
               passed=1
@@ -223,26 +167,25 @@ jobs:
             sleep 3
           done
           if [ "$passed" != "1" ]; then
-            echo "Balance relay did not become ready"
+            echo "Demo account read did not pass. Final safe response:"
             cat /tmp/balance.json 2>/dev/null || true
             exit 1
           fi
-          python - <<'PY'
-          import json
-          row=json.load(open('/tmp/balance.json'))
-          print(json.dumps(row,indent=2))
-          PY
 
-      - name: Verify scanner runtime
+      - name: Verify scanner remains non-executing
+        shell: bash
         run: |
+          set -euo pipefail
           curl --fail --silent --show-error --max-time 60 \
-            -H 'cache-control: no-cache' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?deploy=${GITHUB_SHA}" \
+            -X POST \
+            -H 'cache-control: no-store, no-cache, max-age=0' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?deploy=${GITHUB_SHA}&nonce=$(date +%s%N)" \
             -o /tmp/status.json
+          cat /tmp/status.json
+          echo
           python - <<'PY'
           import json
           row=json.load(open('/tmp/status.json'))
-          print(json.dumps(row,indent=2))
           assert row.get('ok') is True
           assert row.get('liveTrading') is False
           assert row.get('executorAllowed') is False
