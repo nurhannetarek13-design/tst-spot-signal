@@ -4,6 +4,7 @@ export { SignalState };
 
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
 const DEMO_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY";
+const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 
 function mode(env) {
   const liveKey = env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "";
@@ -50,6 +51,60 @@ async function hmacHex(secret, text) {
   );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function telegramApi(env, method, payload = null) {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_TOKEN_MISSING");
+  const init = payload == null
+    ? { method: "GET", headers: { "cache-control": "no-store" } }
+    : {
+        method: "POST",
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        body: JSON.stringify(payload),
+      };
+  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, init);
+  const row = await r.json().catch(() => ({ ok: false, description: "NON_JSON_TELEGRAM_RESPONSE" }));
+  if (!r.ok || row.ok !== true) throw new Error(`TELEGRAM_${method.toUpperCase()}_FAILED`);
+  return row.result;
+}
+
+function safeWebhookState(info) {
+  const allowed = Array.isArray(info?.allowed_updates) ? info.allowed_updates : [];
+  return {
+    urlMatches: String(info?.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL,
+    callbackQueryAllowed: allowed.includes("callback_query"),
+    pendingUpdateCount: Number(info?.pending_update_count || 0),
+    hasLastError: Boolean(info?.last_error_message),
+    lastErrorDate: Number(info?.last_error_date || 0) || null,
+  };
+}
+
+async function ensureTelegramWebhook(env) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    return { ok: false, status: "TELEGRAM_NOT_CONFIGURED", noSecretValuesExposed: true };
+  }
+
+  let info = await telegramApi(env, "getWebhookInfo");
+  let state = safeWebhookState(info);
+  let changed = false;
+  if (!state.urlMatches || !state.callbackQueryAllowed) {
+    await telegramApi(env, "setWebhook", {
+      url: EXPECTED_TELEGRAM_WEBHOOK_URL,
+      allowed_updates: ["callback_query"],
+      drop_pending_updates: false,
+    });
+    changed = true;
+    info = await telegramApi(env, "getWebhookInfo");
+    state = safeWebhookState(info);
+  }
+
+  return {
+    ok: state.urlMatches && state.callbackQueryAllowed,
+    status: state.urlMatches && state.callbackQueryAllowed ? "TELEGRAM_WEBHOOK_OK" : "TELEGRAM_WEBHOOK_MISMATCH",
+    changed,
+    ...state,
+    noSecretValuesExposed: true,
+  };
 }
 
 async function demoAccountViaVercel(env) {
@@ -130,6 +185,19 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const c = mode(env);
+
+    if (url.pathname === "/telegram-webhook-check" && request.method === "POST") {
+      try {
+        return Response.json(await ensureTelegramWebhook(env));
+      } catch (e) {
+        return Response.json({
+          ok: false,
+          status: "TELEGRAM_WEBHOOK_CHECK_FAILED",
+          reason: String(e?.message || e).slice(0, 120),
+          noSecretValuesExposed: true,
+        }, { status: 502 });
+      }
+    }
 
     if (c.credentialMode === "DEMO" && url.pathname === "/runtime-check") {
       return Response.json({
