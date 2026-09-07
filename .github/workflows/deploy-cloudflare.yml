@@ -86,6 +86,18 @@ jobs:
           grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway.js
           grep -q 'await scan(env,false)' src/edge-worker.js
           grep -q 'url.pathname==="/claim"' src/edge-worker.js
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/buy-gateway.js').read_text()
+          a=s.index('async function signedBinanceViaRelay')
+          b=s.index('async function refreshBalance', a)
+          block=s[a:b]
+          assert 'const { key, secret, network } = creds(env);' in block
+          assert 'if (network === "testnet")' in block
+          assert 'liquidation-collector-production.up.railway.app/signed-testnet-account' in block
+          assert block.index('if (network === "testnet")') < block.index('VERCEL_SIGNED_RELAY_URL') if 'VERCEL_SIGNED_RELAY_URL' in block else True
+          assert 'DEMO_EXECUTION_DISABLED' in block
+          PY
           if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
             echo "Legacy periodic scan digest still exists"
             exit 1
@@ -172,28 +184,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          http_code="$(curl --silent --show-error --max-time 60 \
-            -H 'cache-control: no-cache' \
-            -w '%{http_code}' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?deploy=${GITHUB_SHA}" \
-            -o /tmp/balance.json)"
-          echo "balance-refresh HTTP ${http_code}"
-          cat /tmp/balance.json
-          echo
+          expected='CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
+          passed=0
+          for attempt in $(seq 1 20); do
+            echo "balance-refresh attempt ${attempt}/20"
+            http_code="$(curl --silent --show-error --max-time 25 \
+              -H 'cache-control: no-cache' \
+              -w '%{http_code}' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?deploy=${GITHUB_SHA}&attempt=${attempt}" \
+              -o /tmp/balance.json || true)"
+            echo "HTTP ${http_code}"
+            cat /tmp/balance.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try:
+              row=json.load(open('/tmp/balance.json'))
+          except Exception:
+              sys.exit(1)
+          if row.get('executionRoute') != 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY':
+              sys.exit(1)
+          if row.get('ok') is not True or row.get('autoBuy') is not False:
+              sys.exit(1)
+          bal=row.get('balance') or {}
+          if bal.get('ok') is not True or bal.get('status') != 'ACCOUNT_BALANCE_OK':
+              sys.exit(1)
+          if bal.get('source') != 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY':
+              sys.exit(1)
+          if bal.get('network') != 'testnet' or bal.get('credentialMode') != 'DEMO':
+              sys.exit(1)
+          if not isinstance((bal.get('usdt') or {}).get('free'), (int,float)):
+              sys.exit(1)
+          PY
+            then
+              passed=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "$passed" != "1" ]; then
+            echo "Balance relay did not become ready"
+            cat /tmp/balance.json 2>/dev/null || true
+            exit 1
+          fi
           python - <<'PY'
           import json
           row=json.load(open('/tmp/balance.json'))
           print(json.dumps(row,indent=2))
-          assert row.get('ok') is True
-          assert row.get('autoBuy') is False
-          assert row.get('executionRoute') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
-          bal=row.get('balance') or {}
-          assert bal.get('ok') is True
-          assert bal.get('status') == 'ACCOUNT_BALANCE_OK'
-          assert bal.get('source') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY'
-          assert bal.get('network') == 'testnet'
-          assert bal.get('credentialMode') == 'DEMO'
-          assert isinstance((bal.get('usdt') or {}).get('free'), (int,float))
           PY
 
       - name: Verify scanner runtime
