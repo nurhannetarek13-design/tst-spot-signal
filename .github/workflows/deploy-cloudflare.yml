@@ -10,6 +10,7 @@ on:
       - "src/index.js"
       - "wrangler.jsonc"
       - "scripts/patch-cloudflare-digest.py"
+      - "scripts/patch-binance-public-api.py"
       - ".github/workflows/deploy-cloudflare.yml"
 
 permissions:
@@ -33,8 +34,10 @@ jobs:
       - name: Materialize and validate Cloudflare runtime
         run: |
           python scripts/patch-cloudflare-digest.py
+          python scripts/patch-binance-public-api.py
           node --check src/edge-worker.js
           node --check src/buy-gateway.js
+          grep -q 'https://api.binance.com' src/edge-worker.js
           grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'const reversalStrategy=' src/edge-worker.js
