@@ -12,8 +12,6 @@
     "CANDIDATE:MISSING",
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
-    "freqtrade:CANDIDATE_ID_MISMATCH",
-    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -51,6 +49,7 @@
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:FAIL",
+    "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
@@ -80,19 +79,19 @@
       "stressExpectancyUSDT": -0.021907179144954443
     },
     "freqtrade": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "46ad824ea85b257ae59f",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 116,
-      "independentEnginePass": false,
-      "baseProfitFactor": 0.9726535232955078,
-      "baseExpectancyUSDT": -0.002721266379310344,
-      "stressProfitFactor": 0.860136343561214,
-      "stressExpectancyUSDT": -0.015132550450450451
+      "trades": 0,
+      "independentEnginePass": null,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": 0.0,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "jesse": {
       "status": "ERROR",
@@ -140,6 +139,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T22:03:19.296743+00:00",
+  "generatedAt": "2026-09-07T22:11:50.068782+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
