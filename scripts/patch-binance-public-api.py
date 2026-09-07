@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Railway proxy is the primary public Binance data path; Vercel/direct are fallbacks.
 p = Path("src/edge-worker.js")
 s = p.read_text()
 
