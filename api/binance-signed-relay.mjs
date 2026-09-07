@@ -9,6 +9,7 @@ const API_BASES = {
     "https://api3.binance.com",
     "https://api4.binance.com",
   ],
+  demo: ["https://demo-api.binance.com"],
   testnet: ["https://testnet.binance.vision"],
 };
 
@@ -48,8 +49,12 @@ function safeRequest(body) {
   const apiKey = String(body?.apiKey || "");
   const query = String(body?.query || "");
   const network = String(body?.network || "production").toLowerCase();
-  if (!ALLOWED.has(`${method} ${path}`)) return { ok: false, status: "ROUTE_NOT_ALLOWED" };
+  const route = `${method} ${path}`;
+  if (!ALLOWED.has(route)) return { ok: false, status: "ROUTE_NOT_ALLOWED" };
   if (!Object.hasOwn(API_BASES, network)) return { ok: false, status: "NETWORK_NOT_ALLOWED" };
+  if (network === "demo" && route !== "GET /api/v3/account") {
+    return { ok: false, status: "DEMO_ROUTE_READ_ONLY" };
+  }
   if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey)) return { ok: false, status: "BAD_API_KEY" };
   if (!query || query.length > 4000) return { ok: false, status: "BAD_QUERY" };
   const qs = new URLSearchParams(query);
@@ -80,13 +85,21 @@ export default async function handler(req, res) {
     let last = { status: 502, code: null, msg: "Binance unavailable" };
     for (const base of API_BASES[parsed.network]) {
       try {
-        const r = await fetch(`${base}${parsed.path}?${parsed.query}`, {
-          method: parsed.method,
-          headers: {
-            "X-MBX-APIKEY": parsed.apiKey,
-            "content-type": "application/x-www-form-urlencoded",
-          },
-        });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        let r;
+        try {
+          r = await fetch(`${base}${parsed.path}?${parsed.query}`, {
+            method: parsed.method,
+            headers: {
+              "X-MBX-APIKEY": parsed.apiKey,
+              "content-type": "application/x-www-form-urlencoded",
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
         const text = await r.text();
         let data = {};
         try { data = JSON.parse(text || "{}"); } catch { data = { raw: text.slice(0, 500) }; }
@@ -118,7 +131,12 @@ export default async function handler(req, res) {
         }));
       }
     }
-    return json(res, 502, { ok: false, status: "BINANCE_RELAY_FAILED", network: parsed.network, upstream: { status: last.status, code: last.code, msg: safeMessage(last.msg) } });
+    return json(res, 502, {
+      ok: false,
+      status: "BINANCE_RELAY_FAILED",
+      network: parsed.network,
+      upstream: { status: last.status, code: last.code, msg: safeMessage(last.msg) },
+    });
   } catch (e) {
     return json(res, 500, { ok: false, status: "RELAY_ERROR", reason: safeMessage(e?.message || e) });
   }
