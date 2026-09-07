@@ -5,7 +5,7 @@
   "candidateFingerprint": "cba53276448a08d4eebc",
   "symbol": "PROMUSDT",
   "family": "MEAN_REVERSION",
-  "allValidatorsCurrentCandidate": false,
+  "allValidatorsCurrentCandidate": true,
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
@@ -16,8 +16,11 @@
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
     "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
+    "jesse:LT_30_TRADES",
+    "jesse:BASE_PF_LT_1_15",
+    "jesse:BASE_EXPECTANCY_NONPOSITIVE",
+    "jesse:STRESS_PF_LT_1_0",
+    "jesse:STRESS_EXPECTANCY_NONPOSITIVE",
     "nautilus:BASE_PF_LT_1_15",
     "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
     "nautilus:STRESS_PF_LT_1_0",
@@ -50,9 +53,8 @@
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
+    "jesse:LT_100_TRADES",
     "nautilus:FAIL",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
@@ -89,19 +91,19 @@
       "stressExpectancyUSDT": -0.038521028064516134
     },
     "jesse": {
-      "status": "FAIL",
+      "status": "ERROR",
       "pass": false,
-      "candidateId": "PUBLIC_EDGE_LAB:TUTUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "4da78ca29267ffd54aa9",
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 273,
+      "candidateId": "VECTORBT:PROMUSDT:MEAN_REVERSION",
+      "candidateFingerprint": "cba53276448a08d4eebc",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 0,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.009373464009236249,
+      "baseExpectancyUSDT": 0.0,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": -0.007158969807897905
+      "stressExpectancyUSDT": 0.0
     },
     "nautilus": {
       "status": "FAIL",
@@ -134,6 +136,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-07T21:22:54.355207+00:00",
+  "generatedAt": "2026-09-07T21:30:32.570150+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
