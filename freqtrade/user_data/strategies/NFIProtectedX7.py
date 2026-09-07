@@ -7,23 +7,23 @@ from NostalgiaForInfinityX7 import NostalgiaForInfinityX7
 
 
 class NFIProtectedX7(NostalgiaForInfinityX7):
-    """NFI X7 as a signal-only scanner with hard risk metadata.
-
-    Entry/exit logic comes from NFI, but this wrapper never allows Freqtrade to
-    place an order. Valid opportunities are sent to Telegram for explicit user
-    approval. BUY execution is a separate, user-confirmed path.
-    """
+    """NFI X7 signal-only scanner with fast-trade and hard-risk filters."""
 
     stoploss = -0.08
     position_adjustment_enable = False
     max_entry_position_adjustment = 0
 
     DAILY_LOSS_LIMIT_USDT = 2.0
-    MAX_HOLD_MINUTES = 90
-    FAST_TP = 0.012
-    SOFT_PROFIT = 0.002
-    SOFT_PROFIT_AFTER_MINUTES = 45
+    MAX_HOLD_MINUTES = 60
+    FAST_TP = 0.015
+    SOFT_PROFIT = 0.004
+    SOFT_PROFIT_AFTER_MINUTES = 30
     ALERT_COOLDOWN_MINUTES = 15
+
+    # A BUY alert is allowed only when recent realized movement shows enough
+    # capacity to plausibly cover the requested 1.5% target within ~1 hour.
+    MIN_1H_RANGE = 0.018
+    MIN_15M_MOMENTUM = 0.0015
 
     _last_alert_by_pair: dict[str, datetime] = {}
 
@@ -39,6 +39,29 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
         if prev is None:
             return True
         return (current_time - prev).total_seconds() >= self.ALERT_COOLDOWN_MINUTES * 60
+
+    def _fast_trade_ok(self, pair: str) -> bool:
+        """Require enough recent movement and positive short momentum.
+
+        Runtime timeframe is 5m, so 12 candles ~= 1h and 3 candles ~= 15m.
+        This does not guarantee the target; it rejects setups where the recent
+        market has not even demonstrated enough movement capacity.
+        """
+        try:
+            dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+            if dataframe is None or len(dataframe) < 13:
+                return False
+            d = dataframe.iloc[-12:]
+            last = float(d['close'].iloc[-1])
+            if last <= 0:
+                return False
+            one_hour_range = (float(d['high'].max()) - float(d['low'].min())) / last
+            close_15m_ago = float(dataframe['close'].iloc[-4])
+            momentum_15m = (last / close_15m_ago) - 1.0 if close_15m_ago > 0 else -1.0
+            return one_hour_range >= self.MIN_1H_RANGE and momentum_15m >= self.MIN_15M_MOMENTUM
+        except Exception as exc:
+            print(f'[fast-filter] failed for {pair}: {exc}')
+            return False
 
     def confirm_trade_entry(
         self,
@@ -68,7 +91,7 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
                 **kwargs,
             )
         )
-        if not parent_ok:
+        if not parent_ok or not self._fast_trade_ok(pair):
             return False
 
         if self._alert_allowed(pair, current_time):
@@ -83,13 +106,13 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
                     entry=float(rate),
                     tp=tp,
                     sl=sl,
-                    tag=entry_tag or 'NFIProtectedX7',
+                    tag=(entry_tag or 'NFIProtectedX7') + '|FAST<=60M',
                 )
                 self._last_alert_by_pair[pair] = current_time
             except Exception as exc:
                 print(f'[telegram-signal] failed for {pair}: {exc}')
 
-        # Critical: never let Freqtrade auto-place the trade.
+        # Never auto-place the trade.
         return False
 
     def custom_exit(
@@ -103,11 +126,11 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
     ):
         age_minutes = (current_time - trade.open_date_utc).total_seconds() / 60.0
         if current_profit >= self.FAST_TP:
-            return 'fast_tp_1p2'
+            return 'fast_tp_1p5'
         if age_minutes >= self.SOFT_PROFIT_AFTER_MINUTES and current_profit >= self.SOFT_PROFIT:
-            return 'fast_soft_profit'
+            return 'fast_soft_profit_30m'
         if age_minutes >= self.MAX_HOLD_MINUTES:
-            return 'fast_time_cap_90m'
+            return 'fast_time_cap_60m'
         return super().custom_exit(
             pair=pair,
             trade=trade,
