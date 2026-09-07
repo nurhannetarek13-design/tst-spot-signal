@@ -90,6 +90,13 @@ export class SignalState {
       if(row.expiresAt&&Date.now()>=row.expiresAt){ await this.ctx.storage.delete(key); return Response.json(null); }
       return Response.json(row.value);
     }
+    if(request.method==="POST"&&url.pathname==="/claim"){
+      const existing=await this.ctx.storage.get(key);
+      if(existing&&(!existing.expiresAt||Date.now()<existing.expiresAt)) return Response.json({ok:false,claimed:false},{status:409});
+      const row=await request.json();
+      await this.ctx.storage.put(key,row);
+      return Response.json({ok:true,claimed:true});
+    }
     if(request.method==="PUT"){ const row=await request.json(); await this.ctx.storage.put(key,row); return Response.json({ok:true}); }
     return new Response("not found",{status:404});
   }
