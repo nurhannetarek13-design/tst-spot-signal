@@ -69,64 +69,18 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 2
 fi
 
-# NFI X7 imports sibling/legacy NFI modules. Keep the complete pinned package
-# on PYTHONPATH while exposing only the protected wrapper to Freqtrade.
 export PYTHONPATH="$NFI_DIR:${PYTHONPATH:-}"
 
-# Signal-only mode needs Telegram configured. Fail closed rather than running
-# silently if alerts cannot be delivered.
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   echo "[ready-bot] TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required" >&2
   exit 3
 fi
 
-# Telegram signal HTTP bridge. BUY links are confirmation-only; Freqtrade never
-# auto-places orders because NFIProtectedX7.confirm_trade_entry returns False.
+# Signal bridge only. Market-wide scanner is intentionally separated from this
+# service so NFI has the full Railway memory budget.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 trap 'kill "$BRIDGE_PID" 2>/dev/null || true' EXIT
-
-# Background market-wide visibility scanner. NFI itself uses the configured
-# liquid VolumePairList; this scanner is informational only.
-python -u - <<'PY' &
-import json, time
-from urllib.request import Request, urlopen
-BASE = "https://data-api.binance.vision/api/v3"
-HEADERS = {"User-Agent": "tst-all-usdt-scanner/2.0"}
-known = None
-stable_bases = {"USDC","FDUSD","TUSD","USDP","DAI","EUR"}
-def get(path):
-    with urlopen(Request(BASE + path, headers=HEADERS), timeout=20) as r:
-        return json.loads(r.read())
-while True:
-    try:
-        info = get("/exchangeInfo")
-        usdt = {s["symbol"]: s for s in info.get("symbols", []) if s.get("quoteAsset") == "USDT" and s.get("isSpotTradingAllowed", True)}
-        current = set(usdt)
-        if known is None:
-            known = current
-            print(f"[market-scan] tracking {len(current)} Binance Spot USDT markets")
-        else:
-            for sym in sorted(current - known):
-                print(f"[new-listing] NEW MARKET {sym} status={usdt[sym].get('status')}")
-            known = current
-        tickers = get("/ticker/24hr")
-        ranked = []
-        for t in tickers:
-            sym = t.get("symbol", "")
-            s = usdt.get(sym)
-            if not s or s.get("status") != "TRADING": continue
-            base = s.get("baseAsset", "")
-            if base in stable_bases or any(x in base for x in ("UP","DOWN","BULL","BEAR")): continue
-            qv = float(t.get("quoteVolume") or 0); pct = float(t.get("priceChangePercent") or 0)
-            if qv >= 1_000_000: ranked.append((abs(pct), pct, qv, sym))
-        ranked.sort(reverse=True)
-        if ranked[:12]:
-            print("[market-scan] top liquid movers: " + ", ".join(f"{s}:{p:+.1f}%" for _,p,_,s in ranked[:12]))
-    except Exception as e:
-        print(f"[market-scan] warning: {type(e).__name__}: {e}")
-    time.sleep(60)
-PY
 
 exec freqtrade trade \
   --logfile "$USER_DATA/logs/freqtrade.log" \
