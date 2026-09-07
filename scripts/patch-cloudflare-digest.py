@@ -1,16 +1,31 @@
 from pathlib import Path
 
 p = Path("src/edge-worker.js")
-s = p.read_text()
+s = p.read_text(encoding="utf-8")
 
-# User wants Telegram messages only for actionable trade opportunities.
-# Keep scanning every minute, but remove the 5-minute candidate digest from the scheduled runtime.
-old = "await monitorPaper(env); await sendPeriodicScanDigest(env); await scan(env,true);"
-new = "await monitorPaper(env); await scan(env,true);"
+# Telegram must receive actionable opportunities only. The legacy five-minute
+# candidate digest is removed from canonical source, not merely skipped at runtime.
+start = s.find("async function sendPeriodicScanDigest(env){")
+if start != -1:
+    end = s.find("async function scan(env,sendAlert){", start)
+    if end == -1:
+        raise SystemExit("scan() marker missing; refusing unsafe digest removal")
+    s = s[:start] + s[end:]
 
-if old in s:
-    s = s.replace(old, new, 1)
-elif new not in s:
-    raise SystemExit("scheduled handler changed; refusing unsafe patch")
+# Scanner owns discovery/state only. buy-gateway owns the one user-facing
+# Opportunity -> PREPARE -> CONFIRM BUY flow.
+s = s.replace("return json(await scan(env,true));", "return json(await scan(env,false));")
+s = s.replace(
+    "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,true);",
+    "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);",
+)
 
-p.write_text(s)
+if "sendPeriodicScanDigest" in s:
+    raise SystemExit("legacy periodic digest still present")
+if "scan(env,true)" in s:
+    raise SystemExit("direct scanner Telegram alert path still present")
+if "await monitorUnifiedDerivative(env); await monitorPaper(env); await scan(env,false);" not in s:
+    raise SystemExit("scheduled no-alert scanner path missing")
+
+p.write_text(s, encoding="utf-8")
+print("canonical runtime: actionable Telegram notifications only")
