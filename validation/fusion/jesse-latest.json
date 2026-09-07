@@ -1,13 +1,24 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "ERROR",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "46ad824ea85b257ae59f",
+  "symbol": "XLMUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "base": {
+    "trades": 0
+  },
+  "stress2x": {
+    "trades": 0
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-07T21:35:41.233234+00:00",
-  "notes": "No unified candidate; Jesse install and market download skipped."
+  "generatedAt": "2026-09-07T21:53:24.020097+00:00",
+  "error": "InsufficientBalance: Not enough balance. Available balance at Binance Spot Synthetic Feed for XLM is 13.882077856420628 but you're trying to sell 27.764155712841255",
+  "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/tst-spot-signal/tst-spot-signal/jesse/run_fusion_validator.py\", line 90, in <module>\n    base=run(candles,0.0015);stress=run(candles,0.003)\n         ^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/tst-spot-signal/tst-spot-signal/jesse/run_fusion_validator.py\", line 78, in run\n    result=backtest(cfg,routes,[],candles=cd,generate_equity_curve=True,fast_mode=True)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 104, in backtest\n    return _isolated_backtest(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 162, in _isolated_backtest\n    return _execute_isolated_backtest(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/research/backtest.py\", line 251, in _execute_isolated_backtest\n    backtest_result = simulator(\n                      ^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 540, in simulator\n    return _skip_simulator(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 1896, in _skip_simulator\n    _execute_routes(i, candles_step)\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/modes/backtest_mode.py\", line 2240, in _execute_routes\n    r.strategy._execute()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 1322, in _execute\n    self._check()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 1097, in _check\n    self._update_position()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 910, in _update_position\n    self._detect_and_handle_entry_and_exit_modifications()\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/strategies/Strategy.py\", line 986, in _detect_and_handle_entry_and_exit_modifications\n    submitted_order: Order = self.broker.reduce_position_at(o[0], order_price, self.price)\n                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/services/broker.py\", line 102, in reduce_position_at\n    return self.api.market_order(\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/services/api.py\", line 57, in market_order\n    return self.drivers[exchange].market_order(symbol, qty, current_price, side, reduce_only)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/exchanges/sandbox/Sandbox.py\", line 16, in market_order\n    return order_service.create_order({\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/services/order_service.py\", line 35, in create_order\n    e.on_order_submission(order)\n  File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/jesse/models/SpotExchange.py\", line 71, in on_order_submission\n    raise InsufficientBalance(\njesse.exceptions.InsufficientBalance: Not enough balance. Available balance at Binance Spot Synthetic Feed for XLM is 13.882077856420628 but you're trying to sell 27.764155712841255\n",
+  "notes": "Jesse infrastructure/backtest error. Snapshot is deliberately current-candidate and fail-closed so Fusion Gate cannot mistake stale results for this candidate."
 }
