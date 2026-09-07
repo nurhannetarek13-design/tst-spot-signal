@@ -72,6 +72,33 @@ function safeMessage(value) {
   return String(value || "").replace(/[A-Za-z0-9_-]{20,}/g, "[redacted]").slice(0, 240);
 }
 
+async function triggerMarketScanner(req) {
+  try {
+    const host = String(req.headers["x-forwarded-host"] || req.headers.host || "tst-spot-signal.vercel.app").split(",")[0].trim();
+    const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const r = await fetch(`${proto}://${host}/api/market-scanner`, {
+        headers: { Accept: "application/json", "x-scanner-trigger": "minute-relay" },
+        signal: controller.signal,
+      });
+      const report = await r.json().catch(() => ({}));
+      console.log("[market-scanner-trigger]", JSON.stringify({
+        ok: r.ok && report?.ok === true,
+        status: r.status,
+        totalSpotUsdt: report?.totalSpotUsdt ?? null,
+        liquidCount: Array.isArray(report?.liquid) ? report.liquid.length : 0,
+        topMovers: Array.isArray(report?.movers) ? report.movers.slice(0, 5).map(x => `${x.symbol}:${Number(x.change).toFixed(1)}%`) : [],
+      }));
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (e) {
+    console.warn("[market-scanner-trigger] failed", safeMessage(e?.message || e));
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { ok: false, status: "METHOD_NOT_ALLOWED" });
   try {
@@ -104,6 +131,9 @@ export default async function handler(req, res) {
         let data = {};
         try { data = JSON.parse(text || "{}"); } catch { data = { raw: text.slice(0, 500) }; }
         if (r.ok && !(Number(data?.code) < 0)) {
+          if (parsed.method === "GET" && parsed.path === "/api/v3/account") {
+            await triggerMarketScanner(req);
+          }
           return json(res, 200, { ok: true, status: "BINANCE_RELAY_OK", network: parsed.network, data });
         }
         last = { status: r.status, code: data?.code ?? null, msg: data?.msg || text.slice(0, 500) };
