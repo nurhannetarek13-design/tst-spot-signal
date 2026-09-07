@@ -1,56 +1,65 @@
 name: External NFI validation
-# Verification trigger: rerun NFI X7 after small-cap rejection.
+
 on:
   workflow_dispatch:
   push:
+    branches: [fix/unified-execution-parity]
     paths:
       - '.github/workflows/external-nfi-validation.yml'
       - 'freqtrade/user_data/config-external-pack.json'
 
+permissions:
+  contents: read
+
 jobs:
   nfi-spot:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
       - name: Clone NFI at current upstream revision
         run: |
+          set -euo pipefail
           git clone --depth 1 https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
           cp freqtrade/user_data/config-external-pack.json external/NostalgiaForInfinity/user_data/tst-config.json
           mkdir -p validation/external-nfi
           git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi/upstream-sha.txt
+
       - name: Build NFI official custom image
         working-directory: external/NostalgiaForInfinity
         env:
           FREQTRADE__TRADING_MODE: spot
           FREQTRADE__STRATEGY: NostalgiaForInfinityX7
         run: docker compose build freqtrade
+
       - name: Smoke strategy loading in Spot mode
         working-directory: external/NostalgiaForInfinity
         env:
           FREQTRADE__TRADING_MODE: spot
           FREQTRADE__STRATEGY: NostalgiaForInfinityX7
         run: |
+          set -euo pipefail
           docker compose run --rm freqtrade list-strategies \
             --config /freqtrade/user_data/tst-config.json \
             --strategy-path /freqtrade | tee ../../validation/external-nfi/list-strategies.log
           grep -q 'NostalgiaForInfinityX7' ../../validation/external-nfi/list-strategies.log
-      - name: Download restricted Binance Spot data
+
+      - name: Download Binance Spot data
         working-directory: external/NostalgiaForInfinity
         env:
           FREQTRADE__TRADING_MODE: spot
           FREQTRADE__STRATEGY: NostalgiaForInfinityX7
         run: |
+          set -euo pipefail
           docker compose run --rm freqtrade download-data \
             --config /freqtrade/user_data/tst-config.json \
             --pairs BTC/USDT ETH/USDT SOL/USDT \
             --timeframes 1m 5m 15m 1h 4h 1d \
             --timerange 20250101-20260905
-      - name: Backtest NFI X7 on restricted Spot universe
+
+      - name: Baseline backtest
         working-directory: external/NostalgiaForInfinity
-        env:
-          FREQTRADE__TRADING_MODE: spot
-          FREQTRADE__STRATEGY: NostalgiaForInfinityX7
         run: |
           set +e
           docker compose run --rm freqtrade backtesting \
@@ -60,16 +69,160 @@ jobs:
             --timerange 20250101-20260905 \
             --fee 0.001 \
             --export trades \
-            --export-filename /freqtrade/user_data/backtest_results/tst-nfi-x7.json \
-            > ../../validation/external-nfi/backtest.log 2>&1
-          CODE=$?
-          echo "$CODE" > ../../validation/external-nfi/exit-code.txt
-          cat ../../validation/external-nfi/backtest.log
+            --export-filename /freqtrade/user_data/backtest_results/tst-nfi-x7-base.json \
+            > ../../validation/external-nfi/base.log 2>&1
+          echo $? > ../../validation/external-nfi/base-exit-code.txt
+          cat ../../validation/external-nfi/base.log
           exit 0
+
+      - name: Out-of-sample backtest
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          docker compose run --rm freqtrade backtesting \
+            --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 \
+            --strategy-path /freqtrade \
+            --timerange 20260101-20260905 \
+            --fee 0.001 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/tst-nfi-x7-oos.json \
+            > ../../validation/external-nfi/oos.log 2>&1
+          echo $? > ../../validation/external-nfi/oos-exit-code.txt
+          cat ../../validation/external-nfi/oos.log
+          exit 0
+
+      - name: Doubled-friction stress backtest
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          docker compose run --rm freqtrade backtesting \
+            --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 \
+            --strategy-path /freqtrade \
+            --timerange 20250101-20260905 \
+            --fee 0.002 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/tst-nfi-x7-stress.json \
+            > ../../validation/external-nfi/stress.log 2>&1
+          echo $? > ../../validation/external-nfi/stress-exit-code.txt
+          cat ../../validation/external-nfi/stress.log
+          exit 0
+
+      - name: Lookahead-bias analysis
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          docker compose run --rm freqtrade lookahead-analysis \
+            --config /freqtrade/user_data/tst-config.json \
+            --strategy NostalgiaForInfinityX7 \
+            --strategy-path /freqtrade \
+            --timerange 20250101-20260905 \
+            --fee 0.001 \
+            --minimum-trade-amount 20 \
+            --targeted-trade-amount 100 \
+            > ../../validation/external-nfi/lookahead.log 2>&1
+          echo $? > ../../validation/external-nfi/lookahead-exit-code.txt
+          cat ../../validation/external-nfi/lookahead.log
+          exit 0
+
+      - name: Build NFI-only machine-readable gate
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+
+          root = pathlib.Path('validation/external-nfi')
+
+          def code(name):
+              try: return int((root / f'{name}-exit-code.txt').read_text().strip())
+              except Exception: return 999
+
+          def parse(name):
+              p = root / f'{name}.log'
+              text = p.read_text(errors='ignore') if p.exists() else ''
+              def grab(pattern, cast=float):
+                  m = re.search(pattern, text, flags=re.I)
+                  if not m: return None
+                  try: return cast(m.group(1).replace(',', '').strip())
+                  except Exception: return None
+              trades = grab(r'Total/Daily Avg Trades\s*│\s*(\d+)', int)
+              if trades is None:
+                  trades = grab(r'│\s*TOTAL\s*│\s*(\d+)', int)
+              pf = grab(r'Profit factor\s*│\s*([-+0-9.]+)')
+              total_profit_pct = grab(r'Total profit %\s*│\s*([-+0-9.]+)')
+              abs_profit = grab(r'Absolute profit\s*│\s*([-+0-9.]+)')
+              max_dd_pct = grab(r'Max % of account underwater\s*│\s*([-+0-9.]+)')
+              return {
+                  'exitCode': code(name),
+                  'trades': trades,
+                  'profitFactor': pf,
+                  'totalProfitPct': total_profit_pct,
+                  'absoluteProfit': abs_profit,
+                  'maxDrawdownPct': max_dd_pct,
+              }
+
+          base = parse('base')
+          oos = parse('oos')
+          stress = parse('stress')
+          look_text = (root / 'lookahead.log').read_text(errors='ignore') if (root / 'lookahead.log').exists() else ''
+          lookahead = {
+              'exitCode': code('lookahead'),
+              'biasDetected': bool(re.search(r'has bias\s*│\s*true|biased\s*[:=]\s*true', look_text, re.I)),
+          }
+
+          reasons=[]
+          for label,row in [('base',base),('oos',oos),('stress',stress)]:
+              if row['exitCode'] != 0: reasons.append(f'{label}:BACKTEST_ERROR')
+              if row['trades'] is None or row['trades'] < 20: reasons.append(f'{label}:LT_20_TRADES')
+              if row['profitFactor'] is None: reasons.append(f'{label}:PF_UNAVAILABLE')
+              elif label == 'base' and row['profitFactor'] < 1.15: reasons.append('base:PF_LT_1_15')
+              elif label == 'oos' and row['profitFactor'] < 1.05: reasons.append('oos:PF_LT_1_05')
+              elif label == 'stress' and row['profitFactor'] < 1.00: reasons.append('stress:PF_LT_1_00')
+              if row['absoluteProfit'] is not None and row['absoluteProfit'] <= 0:
+                  reasons.append(f'{label}:NONPOSITIVE_PROFIT')
+          if lookahead['exitCode'] != 0: reasons.append('lookahead:ANALYSIS_ERROR')
+          if lookahead['biasDetected']: reasons.append('lookahead:BIAS_DETECTED')
+
+          passed = not reasons
+          result = {
+              'engine': 'NFI_X7_SPOT_GATE',
+              'strategy': 'NostalgiaForInfinityX7',
+              'universe': ['BTC/USDT','ETH/USDT','SOL/USDT'],
+              'period': '2025-01-01..2026-09-05',
+              'oosPeriod': '2026-01-01..2026-09-05',
+              'baseFeePerSide': 0.001,
+              'stressFeePerSide': 0.002,
+              'base': base,
+              'oos': oos,
+              'stress': stress,
+              'lookahead': lookahead,
+              'pass': passed,
+              'status': 'PASS' if passed else 'FAIL',
+              'authorization': 'DRY_RUN_AND_SIGNAL_ONLY' if passed else 'RESEARCH_ONLY',
+              'liveTrading': False,
+              'reasons': reasons,
+              'note': 'Standalone NFI gate. Jesse/Nautilus/Fusion are not required by this decision path.'
+          }
+          (root / 'gate.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2))
+          PY
+
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: external-nfi-validation
           path: |
             validation/external-nfi/**
             external/NostalgiaForInfinity/user_data/backtest_results/**
           if-no-files-found: warn
+
+      - name: Enforce NFI-only gate
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('validation/external-nfi/gate.json'))
+          if not r.get('pass'):
+              raise SystemExit('NFI gate failed: ' + ', '.join(r.get('reasons') or []))
+          print('NFI_GATE_PASS')
+          PY
