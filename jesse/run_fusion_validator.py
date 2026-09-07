@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-import datetime, json, pathlib, time, urllib.parse, urllib.request, numpy as np
+import datetime, json, pathlib, time, urllib.parse, urllib.request, traceback, numpy as np
 import jesse.helpers as jh
 from jesse.research import backtest
 from strategies.UnifiedCandidateValidator import UnifiedCandidateValidator
 
-# Always resolve the candidate from the checked-out canonical manifest so Jesse
-# cannot validate a stale symbol/fingerprint from a previous discovery round.
 MANIFEST=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
 if not MANIFEST.get("candidateFingerprint"):
     report={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":MANIFEST.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate is active; Jesse exits without downloading market data."}
     pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2))
-    print(json.dumps(report,indent=2))
-    raise SystemExit(0)
+    print(json.dumps(report,indent=2)); raise SystemExit(0)
 SYMBOL_API=MANIFEST["symbol"]
 SYMBOL=SYMBOL_API[:-4]+"-USDT"
 TF=MANIFEST["timeframe"]
@@ -19,12 +16,22 @@ EXCHANGE="Binance Spot Synthetic Feed"
 STRATEGY_ID="TST_CANDIDATE_JESSE_VALIDATOR_V1"
 DAYS=365
 
+def get_json(url, user_agent, attempts=6):
+    last=None
+    for attempt in range(attempts):
+        try:
+            req=urllib.request.Request(url,headers={"User-Agent":user_agent})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+        except Exception as exc:
+            last=exc
+            if attempt+1<attempts: time.sleep(min(2**attempt,12))
+    raise RuntimeError(f"market-data request failed after {attempts} attempts: {last}")
+
 def fetch_1m(days=DAYS):
     end=int(time.time()*1000);start=end-days*86400000;out=[];cursor=start
     while cursor<end:
         qs=urllib.parse.urlencode({"symbol":SYMBOL_API,"interval":"1m","limit":1000,"startTime":cursor,"endTime":end})
-        req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse/1.1"})
-        with urllib.request.urlopen(req,timeout=20) as r:rows=json.load(r)
+        rows=get_json("https://data-api.binance.vision/api/v3/klines?"+qs,"tst-unified-jesse/1.2")
         if not rows:break
         for k in rows:out.append([float(k[0]),float(k[1]),float(k[4]),float(k[2]),float(k[3]),float(k[5])])
         nxt=int(rows[-1][0])+60000
@@ -34,16 +41,13 @@ def fetch_1m(days=DAYS):
 
 def build_leader_map():
     if MANIFEST.get("family")!="CROSS_CRYPTO_LEAD_LAG":
-        pathlib.Path("validation/fusion/jesse-leader.json").write_text("{}")
-        return
-    end=int(time.time()*1000);start=end-DAYS*86400000
-    series={}
+        pathlib.Path("validation/fusion/jesse-leader.json").write_text("{}"); return
+    end=int(time.time()*1000);start=end-DAYS*86400000;series={}
     for symbol in ["BTCUSDT","ETHUSDT","SOLUSDT"]:
         rows=[];cursor=start
         while cursor<end:
             qs=urllib.parse.urlencode({"symbol":symbol,"interval":"1h","limit":1000,"startTime":cursor,"endTime":end})
-            req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+qs,headers={"User-Agent":"tst-unified-jesse-leader/1.1"})
-            with urllib.request.urlopen(req,timeout=20) as r:batch=json.load(r)
+            batch=get_json("https://data-api.binance.vision/api/v3/klines?"+qs,"tst-unified-jesse-leader/1.2")
             if not batch:break
             rows.extend(batch);nxt=int(batch[-1][0])+3600000
             if nxt<=cursor:break
@@ -51,13 +55,11 @@ def build_leader_map():
         vals={}
         for i,row in enumerate(rows):
             if i<3:continue
-            ts=int(row[0]);close=float(row[4]);prev=float(rows[i-3][4])
-            vals[ts]=close/prev-1
+            ts=int(row[0]);close=float(row[4]);prev=float(rows[i-3][4]);vals[ts]=close/prev-1
         series[symbol]=vals
     keys=set.intersection(*(set(v.keys()) for v in series.values())) if series else set()
     out={str(ts):sum(series[s][ts] for s in series)/len(series) for ts in keys}
-    pathlib.Path("validation/fusion/jesse-leader.json").write_text(json.dumps(out))
-    print(f"leader points: {len(out)}")
+    pathlib.Path("validation/fusion/jesse-leader.json").write_text(json.dumps(out));print(f"leader points: {len(out)}")
 
 def metric(metrics,*names):
     if not isinstance(metrics,dict):return 0.0
@@ -70,8 +72,6 @@ def metric(metrics,*names):
     return 0.0
 
 def run(candles,fee):
-    # The production mandate is Binance Spot only. Jesse must therefore test
-    # the same long-only spot semantics instead of a 1x futures approximation.
     cfg={"starting_balance":20.08,"fee":fee,"type":"spot","exchange":EXCHANGE,"warm_up_candles":0}
     routes=[{"exchange":EXCHANGE,"strategy":UnifiedCandidateValidator,"symbol":SYMBOL,"timeframe":TF}]
     cd={jh.key(EXCHANGE,SYMBOL):{"exchange":EXCHANGE,"symbol":SYMBOL,"candles":candles}}
@@ -81,11 +81,16 @@ def run(candles,fee):
     netusdt=(netpct/100*20.08) if abs(netpct)>1 else (netpct*20.08);ex=netusdt/n if n else 0
     return {"trades":n,"winRate":win,"profitFactor":pf,"expectancyUSDT":ex,"netPnlUSDT":netusdt,"maxDrawdown":maxdd}
 
-build_leader_map()
-candles=fetch_1m()
-if len(candles)<50000:raise RuntimeError(f"insufficient candles {len(candles)}")
-base=run(candles,0.0015);stress=run(candles,0.003)
-independent=base["trades"]>=30 and stress["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
-passed=independent and base["trades"]>=100 and stress["trades"]>=100
-report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of exact unified candidate using long-only Binance Spot semantics."}
-pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
+def write_report(report):
+    pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
+
+try:
+    build_leader_map();candles=fetch_1m()
+    if len(candles)<50000:raise RuntimeError(f"insufficient candles {len(candles)}")
+    base=run(candles,0.0015);stress=run(candles,0.003)
+    independent=base["trades"]>=30 and stress["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
+    passed=independent and base["trades"]>=100 and stress["trades"]>=100
+    write_report({"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of exact unified candidate using long-only Binance Spot semantics."})
+except Exception as exc:
+    write_report({"engine":"JESSE","strategyId":STRATEGY_ID,"status":"ERROR","pass":False,"independentEnginePass":False,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"base":{"trades":0},"stress2x":{"trades":0},"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"error":f"{type(exc).__name__}: {exc}","traceback":traceback.format_exc()[-6000:],"notes":"Jesse infrastructure/backtest error. Snapshot is deliberately current-candidate and fail-closed so Fusion Gate cannot mistake stale results for this candidate."})
+    raise
