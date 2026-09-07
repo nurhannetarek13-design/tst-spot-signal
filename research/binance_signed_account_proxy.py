@@ -40,8 +40,12 @@ def safe_query(query):
     return True, None
 
 
+def safe_msg(value):
+    return str(value or "")[:240]
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "tst-binance-readonly-relay/1.0"
+    server_version = "tst-binance-readonly-relay/1.1"
 
     def do_GET(self):
         if self.path == "/health":
@@ -76,7 +80,7 @@ class Handler(BaseHTTPRequestHandler):
             headers={
                 "X-MBX-APIKEY": api_key,
                 "Accept": "application/json",
-                "User-Agent": "tst-railway-readonly-relay/1.0",
+                "User-Agent": "tst-railway-readonly-relay/1.1",
             },
         )
         try:
@@ -93,17 +97,26 @@ class Handler(BaseHTTPRequestHandler):
                 upstream = json.loads(raw or "{}")
             except Exception:
                 upstream = {"msg": raw[:500]}
-            return send_json(self, 502, {
+            payload = {
                 "ok": False,
                 "network": "testnet",
                 "upstream": {
                     "status": exc.code,
                     "code": upstream.get("code"),
-                    "msg": upstream.get("msg", "upstream error"),
+                    "msg": safe_msg(upstream.get("msg", "upstream error")),
                 },
-            })
+            }
+            print(json.dumps({
+                "kind": "binance_readonly_upstream_error",
+                "status": exc.code,
+                "code": upstream.get("code"),
+                "msg": safe_msg(upstream.get("msg", "upstream error")),
+            }), flush=True)
+            return send_json(self, 200, payload)
         except Exception as exc:
-            return send_json(self, 502, {"ok": False, "status": "UPSTREAM_UNAVAILABLE", "reason": str(exc)[:240]})
+            payload = {"ok": False, "status": "UPSTREAM_UNAVAILABLE", "reason": safe_msg(exc)}
+            print(json.dumps({"kind": "binance_readonly_transport_error", "reason": safe_msg(exc)}), flush=True)
+            return send_json(self, 200, payload)
 
     def log_message(self, fmt, *args):
         print(json.dumps({"kind": "binance_readonly_relay", "message": fmt % args}), flush=True)
