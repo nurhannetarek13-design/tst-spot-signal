@@ -1,13 +1,16 @@
 import crypto from "node:crypto";
 
-const API_BASES = [
-  "https://api.binance.com",
-  "https://api-gcp.binance.com",
-  "https://api1.binance.com",
-  "https://api2.binance.com",
-  "https://api3.binance.com",
-  "https://api4.binance.com",
-];
+const API_BASES = {
+  production: [
+    "https://api.binance.com",
+    "https://api-gcp.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+  ],
+  testnet: ["https://testnet.binance.vision"],
+};
 
 const ALLOWED = new Set([
   "GET /api/v3/account",
@@ -44,7 +47,9 @@ function safeRequest(body) {
   const path = String(body?.path || "");
   const apiKey = String(body?.apiKey || "");
   const query = String(body?.query || "");
+  const network = String(body?.network || "production").toLowerCase();
   if (!ALLOWED.has(`${method} ${path}`)) return { ok: false, status: "ROUTE_NOT_ALLOWED" };
+  if (!Object.hasOwn(API_BASES, network)) return { ok: false, status: "NETWORK_NOT_ALLOWED" };
   if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey)) return { ok: false, status: "BAD_API_KEY" };
   if (!query || query.length > 4000) return { ok: false, status: "BAD_QUERY" };
   const qs = new URLSearchParams(query);
@@ -55,7 +60,7 @@ function safeRequest(body) {
     return { ok: false, status: "STALE_BINANCE_REQUEST" };
   }
   if (!/^[a-f0-9]{64}$/i.test(signature)) return { ok: false, status: "BAD_BINANCE_SIGNATURE_FORMAT" };
-  return { ok: true, method, path, apiKey, query };
+  return { ok: true, method, path, apiKey, query, network };
 }
 
 function safeMessage(value) {
@@ -73,7 +78,7 @@ export default async function handler(req, res) {
     if (!parsed.ok) return json(res, 400, parsed);
 
     let last = { status: 502, code: null, msg: "Binance unavailable" };
-    for (const base of API_BASES) {
+    for (const base of API_BASES[parsed.network]) {
       try {
         const r = await fetch(`${base}${parsed.path}?${parsed.query}`, {
           method: parsed.method,
@@ -86,11 +91,12 @@ export default async function handler(req, res) {
         let data = {};
         try { data = JSON.parse(text || "{}"); } catch { data = { raw: text.slice(0, 500) }; }
         if (r.ok && !(Number(data?.code) < 0)) {
-          return json(res, 200, { ok: true, status: "BINANCE_RELAY_OK", data });
+          return json(res, 200, { ok: true, status: "BINANCE_RELAY_OK", network: parsed.network, data });
         }
         last = { status: r.status, code: data?.code ?? null, msg: data?.msg || text.slice(0, 500) };
         console.warn("[binance-signed-relay] upstream", JSON.stringify({
           host: new URL(base).host,
+          network: parsed.network,
           method: parsed.method,
           path: parsed.path,
           status: last.status,
@@ -104,6 +110,7 @@ export default async function handler(req, res) {
         last = { status: 502, code: null, msg: String(e?.message || e) };
         console.warn("[binance-signed-relay] transport", JSON.stringify({
           host: new URL(base).host,
+          network: parsed.network,
           method: parsed.method,
           path: parsed.path,
           status: last.status,
@@ -111,7 +118,7 @@ export default async function handler(req, res) {
         }));
       }
     }
-    return json(res, 502, { ok: false, status: "BINANCE_RELAY_FAILED", upstream: { status: last.status, code: last.code, msg: safeMessage(last.msg) } });
+    return json(res, 502, { ok: false, status: "BINANCE_RELAY_FAILED", network: parsed.network, upstream: { status: last.status, code: last.code, msg: safeMessage(last.msg) } });
   } catch (e) {
     return json(res, 500, { ok: false, status: "RELAY_ERROR", reason: safeMessage(e?.message || e) });
   }
