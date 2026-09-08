@@ -5,6 +5,11 @@ export { SignalState };
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
 const DEMO_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
+const MAKE_RELAY_URL = "https://freqtrade-production-43ed.up.railway.app/make-exec-relay";
+const MAKE_ROUTE = "CLOUDFLARE_SIGNED_RAILWAY_MAKE_BINANCE";
+const SIGNAL_TTL_SEC = 10 * 60;
+const PREPARE_TTL_SEC = 5 * 60;
+const MIN_ORDER_USDT = 5;
 
 function mode(env) {
   const liveKey = env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "";
@@ -41,6 +46,15 @@ async function putState(env, key, value, ttl) {
   });
 }
 
+async function claimState(env, key, value, ttl) {
+  const r = await stateStub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
+  });
+  return r.ok;
+}
+
 async function hmacHex(secret, text) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -66,6 +80,10 @@ async function telegramApi(env, method, payload = null) {
   const row = await r.json().catch(() => ({ ok: false, description: "NON_JSON_TELEGRAM_RESPONSE" }));
   if (!r.ok || row.ok !== true) throw new Error(`TELEGRAM_${method.toUpperCase()}_FAILED`);
   return row.result;
+}
+
+function fmt(v) {
+  return Number(v || 0).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 8 });
 }
 
 function safeWebhookState(info) {
@@ -105,6 +123,161 @@ async function ensureTelegramWebhook(env) {
     ...state,
     noSecretValuesExposed: true,
   };
+}
+
+async function handleFastSignalIngestMake(request, env) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    return Response.json({ ok: false, status: "TELEGRAM_NOT_CONFIGURED", autoBuy: false }, { status: 503 });
+  }
+  const raw = await request.text();
+  const ts = String(request.headers.get("x-fast-timestamp") || "");
+  const supplied = String(request.headers.get("x-fast-signature") || "").toLowerCase();
+  const stamp = Number(ts);
+  if (!Number.isFinite(stamp) || Math.abs(Date.now() - stamp) > 60_000) {
+    return Response.json({ ok: false, status: "STALE_INGEST" }, { status: 401 });
+  }
+  const expected = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${raw}`);
+  if (!/^[a-f0-9]{64}$/.test(supplied) || supplied !== expected) {
+    return Response.json({ ok: false, status: "BAD_INGEST_SIGNATURE" }, { status: 401 });
+  }
+
+  let body = {};
+  try { body = JSON.parse(raw || "{}"); } catch {
+    return Response.json({ ok: false, status: "BAD_JSON" }, { status: 400 });
+  }
+  const symbol = String(body.symbol || "").toUpperCase();
+  const entry = Number(body.entry);
+  const stop = Number(body.stop);
+  const target = Number(body.target);
+  const requested = Math.floor(Number(body.stakeUSDT) * 100) / 100;
+  const score = Number(body.score);
+  if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) return Response.json({ ok: false, status: "BAD_SYMBOL" }, { status: 400 });
+  if (![entry, stop, target].every(Number.isFinite) || !(stop < entry && target > entry)) {
+    return Response.json({ ok: false, status: "BAD_LEVELS" }, { status: 400 });
+  }
+  if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) {
+    return Response.json({ ok: false, status: "BAD_STAKE" }, { status: 400 });
+  }
+
+  if (body.dryRun === true) {
+    return Response.json({
+      ok: true,
+      status: "FAST_SIGNAL_DRYRUN_OK",
+      canTrade: true,
+      credentialMode: "MAKE_VERIFIED",
+      executionRoute: MAKE_ROUTE,
+      recommendedUSDT: requested,
+      autoBuy: false,
+      userConfirmationRequired: true,
+    });
+  }
+
+  const rawId = String(body.id || `${symbol}-${Date.now()}`);
+  const id = rawId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || `${Date.now()}`;
+  const now = Date.now();
+  const signal = {
+    id,
+    symbol,
+    entry,
+    stop,
+    target,
+    strategy: String(body.strategy || "FAST30_60").slice(0, 100),
+    score: Number.isFinite(score) ? score : null,
+    createdAt: now,
+    expiresAt: now + SIGNAL_TTL_SEC * 1000,
+    recommendedUSDT: requested,
+    confirmedQuoteUSDT: requested,
+    prepareExpiresAt: now + PREPARE_TTL_SEC * 1000,
+  };
+  await putState(env, `live-signal:${id}`, signal, SIGNAL_TTL_SEC);
+  await putState(env, `prepared:${id}`, signal, PREPARE_TTL_SEC);
+  await telegramApi(env, "sendMessage", {
+    chat_id: String(env.TELEGRAM_CHAT_ID),
+    text: `🚨 CONFIRMED BUY — ${symbol} — SPOT\n💵 ${fmt(requested)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score) ? score : "—"}/100\n\n⚡ CONFIRM BUY = Market Buy على Binance عن طريق Make ثم TP/SL OCO تلقائيًا.`,
+    reply_markup: { inline_keyboard: [[{ text: `✅ CONFIRM BUY ${fmt(requested)} USDT`, callback_data: `CONFIRM:${id}` }], [{ text: "❌ CANCEL", callback_data: `CANCEL:${id}` }]] },
+  });
+  return Response.json({
+    ok: true,
+    status: "FAST_SIGNAL_READY",
+    id,
+    symbol,
+    recommendedUSDT: requested,
+    canTrade: true,
+    credentialMode: "MAKE_VERIFIED",
+    executionRoute: MAKE_ROUTE,
+    autoBuy: false,
+    userConfirmationRequired: true,
+  });
+}
+
+async function executeViaMakeRelay(env, id, p) {
+  const payload = {
+    signal_id: id,
+    action: "BUY",
+    symbol: String(p.symbol || "").toUpperCase(),
+    quote_amount_usdt: Number(p.confirmedQuoteUSDT || p.recommendedUSDT),
+    take_profit_price: Number(p.target),
+    stop_loss_price: Number(p.stop),
+    confirmed: true,
+    dry_run: false,
+    timestamp: Math.floor(Date.now() / 1000),
+  };
+  const raw = JSON.stringify(payload);
+  const ts = String(Date.now());
+  const signature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${raw}`);
+  const r = await fetch(MAKE_RELAY_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-make-relay-timestamp": ts,
+      "x-make-relay-signature": signature,
+      "cache-control": "no-store",
+    },
+    body: raw,
+  });
+  const text = await r.text();
+  let row = {};
+  try { row = JSON.parse(text || "{}"); } catch { row = { ok: false, status: `NON_JSON_${r.status}` }; }
+  if (!r.ok || row.ok !== true) throw new Error(String(row.status || `MAKE_HTTP_${r.status}`));
+  return row;
+}
+
+async function handleTelegramConfirmViaMake(request, env) {
+  const u = await request.json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q) return null;
+  if (String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
+  const [action, id] = String(q.data || "").split(":");
+  if (action !== "CONFIRM") return null;
+
+  const p = await getState(env, `prepared:${id}`);
+  if (!p || Date.now() > Number(p.prepareExpiresAt || 0)) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Expired", show_alert: true });
+    return new Response("ok");
+  }
+  const claimed = await claimState(env, `execution-lock:${id}`, { claimedAt: Date.now(), symbol: p.symbol, route: MAKE_ROUTE }, SIGNAL_TTL_SEC);
+  if (!claimed) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Already confirmed — duplicate blocked", show_alert: true });
+    return new Response("ok");
+  }
+
+  await telegramApi(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Executing confirmed Spot BUY via Make…" });
+  try {
+    const row = await executeViaMakeRelay(env, id, p);
+    await putState(env, `execution-result:${id}`, { ok: true, at: Date.now(), route: MAKE_ROUTE, result: row }, 86400);
+    await putState(env, `prepared:${id}`, null, 1);
+    await telegramApi(env, "sendMessage", {
+      chat_id: String(env.TELEGRAM_CHAT_ID),
+      text: `✅ BUY + OCO تم — ${p.symbol}\n💵 ${fmt(row.quote_spent || p.confirmedQuoteUSDT || p.recommendedUSDT)} USDT\n📦 Qty ${fmt(row.executed_qty)}\n🛡️ TP/SL protected\nOrder ${row.order_id || "—"}`,
+    });
+  } catch (e) {
+    await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), route: MAKE_ROUTE, error: String(e?.message || e) }, 86400);
+    await telegramApi(env, "sendMessage", {
+      chat_id: String(env.TELEGRAM_CHAT_ID),
+      text: `⚠️ EXECUTION STATUS UNCERTAIN — ${p.symbol}\n${String(e?.message || e).slice(0, 180)}\nراجعي Binance Spot + Open Orders فورًا قبل أي إعادة محاولة.`,
+    });
+  }
+  return new Response("ok");
 }
 
 async function demoAccountViaVercel(env) {
@@ -186,6 +359,16 @@ export default {
     const url = new URL(request.url);
     const c = mode(env);
 
+    if (url.pathname === "/fast-signal-ingest" && request.method === "POST") {
+      return handleFastSignalIngestMake(request, env);
+    }
+
+    if (url.pathname === "/telegram-webhook" && request.method === "POST") {
+      const handled = await handleTelegramConfirmViaMake(request.clone(), env);
+      if (handled) return handled;
+      return stableWorker.fetch(request, env, ctx);
+    }
+
     if (url.pathname === "/telegram-webhook-check" && request.method === "POST") {
       try {
         return Response.json(await ensureTelegramWebhook(env));
@@ -197,6 +380,20 @@ export default {
           noSecretValuesExposed: true,
         }, { status: 502 });
       }
+    }
+
+    if (url.pathname === "/make-runtime-check") {
+      return Response.json({
+        ok: true,
+        executionRoute: MAKE_ROUTE,
+        fastSignalIngest: true,
+        oneTapConfirm: true,
+        userConfirmationRequired: true,
+        atomicConfirmClaim: true,
+        autoBuy: false,
+        telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
+        noSecretValuesExposed: true,
+      });
     }
 
     if (c.credentialMode === "DEMO" && url.pathname === "/runtime-check") {
