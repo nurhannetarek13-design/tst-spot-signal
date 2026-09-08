@@ -54,7 +54,7 @@ def tg_api(method: str, payload: dict) -> dict:
         payload['chat_id'] = cid
     url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}'
     body = json.dumps(payload).encode()
-    req = Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'tst-signal-bridge/4.0'})
+    req = Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'tst-signal-bridge/4.1'})
     try:
         with urlopen(req, timeout=25) as r:
             return json.loads(r.read().decode())
@@ -144,7 +144,7 @@ def send_prealert(pair: str, last: float, change_24h: float, volume_24h: float, 
         f'Pair: {pair}\nPrice: {last:.8g}\n24h change: {change_24h:+.2f}%\n'
         f'24h volume: {volume_24h/1_000_000:.1f}M USDT\n1h range: {range_1h*100:.2f}%\n'
         f'15m momentum: {momentum_15m*100:+.2f}%\nVolume expansion: {volume_ratio:.2f}x\n\n'
-        'دي مراقبة مبكرة فقط — مفيش BUY لسه. BUY مش هيظهر إلا لو NFI أكد الدخول.'
+        'دي مراقبة مبكرة فقط — مفيش BUY لسه.'
     )
     tg_api('sendMessage', {
         'text': text,
@@ -157,44 +157,64 @@ def send_prealert(pair: str, last: float, change_24h: float, volume_24h: float, 
 def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: float, tag: str = '') -> str:
     try:
         balance = get_free_usdt_balance()
-    except Exception as exc:
-        print(f'[balance] read failed: {type(exc).__name__}: {exc}')
+    except Exception:
         balance = None
     recommended, risk_usdt, sizing_note = recommend_stake(balance, stake_usdt, entry, sl)
     signal_id = uuid.uuid4().hex[:12]
     now = time.time()
     sig = Signal(signal_id, pair, recommended, entry, tp, sl, now, now + 15 * 60, tag, balance, risk_usdt, sizing_note)
     save_signal(sig)
-    symbol = pair.replace('/', '')
-    balance_line = f'Free USDT: {balance:.2f}\n' if balance is not None else 'Free USDT: unavailable (fallback sizing)\n'
+    balance_line = f'Free USDT: {balance:.2f}\n' if balance is not None else ''
     risk_line = f'Estimated risk at SL: {risk_usdt:.2f} USDT\n' if risk_usdt is not None else ''
     text = (
-        '🚨 NFI CONFIRMED BUY — Spot\n'
-        f'Pair: {pair}\nEntry ≈ {entry:.8g}\n{balance_line}✅ Recommended amount: {recommended:.2f} USDT\n{risk_line}'
-        f'TP: {tp:.8g} (+{((tp/entry)-1)*100:.2f}%)\nSL: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
-        f'Window: 15 min\nExpected hold: 30–60 min\nStrategy: {tag or "NFIProtectedX7"}\nSizing: {sizing_note}\n\n'
-        'البوت لا يشتري تلقائيًا. اضغطي BUY لفتح صفحة الصفقة جاهزة بكل البيانات.'
+        '🚨 CONFIRMED BUY — Spot\n'
+        f'Pair: {pair}\nEntry ≈ {entry:.8g}\n{balance_line}✅ Amount: {recommended:.2f} USDT\n{risk_line}'
+        f'TP: {tp:.8g} (+{((tp/entry)-1)*100:.2f}%)\nSL Trigger: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
+        f'Expected hold: 30–60 min\nStrategy: {tag or "NFIProtectedX7"}\n\n'
+        'اضغطي PREPARE ORDER — هتلاقي كل خانات Binance جاهزة للنسخ قبل فتح Binance.'
     )
-    buttons = []
-    if PUBLIC_BASE_URL:
-        buttons.append({'text': '✅ BUY', 'url': f'{PUBLIC_BASE_URL}/buy?id={signal_id}'})
-    buttons.append({'text': '📈 Binance', 'url': f'https://www.binance.com/en/trade/{symbol}?type=spot'})
-    tg_api('sendMessage', {'text': text, 'reply_markup': {'inline_keyboard': [buttons]}, 'disable_web_page_preview': True})
+    if not PUBLIC_BASE_URL:
+        raise RuntimeError('SIGNAL_PUBLIC_BASE_URL is not configured')
+    buttons = [[{'text': '✅ PREPARE ORDER', 'url': f'{PUBLIC_BASE_URL}/buy?id={signal_id}'}]]
+    tg_api('sendMessage', {'text': text, 'reply_markup': {'inline_keyboard': buttons}, 'disable_web_page_preview': True})
     print(f'[telegram-buy] sent for {pair} id={signal_id}')
     return signal_id
 
 
 def order_preview(sig: Signal) -> str:
-    pair = html.escape(sig.pair); symbol = html.escape(sig.pair.replace('/', '')); strategy = html.escape(sig.tag or 'NFIProtectedX7')
-    entry, tp, sl = f'{sig.entry:.8g}', f'{sig.tp:.8g}', f'{sig.sl:.8g}'; stake = f'{sig.stake_usdt:.2f}'
-    qty = sig.stake_usdt / sig.entry if sig.entry > 0 else 0; qty_text = f'{qty:.8g}'
-    profit_usdt = qty * max(sig.tp - sig.entry, 0); loss_usdt = qty * max(sig.entry - sig.sl, 0)
-    reward_pct = ((sig.tp / sig.entry) - 1) * 100 if sig.entry else 0; risk_pct = (1 - (sig.sl / sig.entry)) * 100 if sig.entry else 0
+    pair = html.escape(sig.pair)
+    symbol = html.escape(sig.pair.replace('/', ''))
+    strategy = html.escape(sig.tag or 'NFIProtectedX7')
+    entry = f'{sig.entry:.8g}'
+    tp = f'{sig.tp:.8g}'
+    sl_trigger_value = sig.sl
+    sl_limit_value = sig.sl * 0.9985
+    sl_trigger = f'{sl_trigger_value:.8g}'
+    sl_limit = f'{sl_limit_value:.8g}'
+    stake = f'{sig.stake_usdt:.2f}'
+    qty = sig.stake_usdt / sig.entry if sig.entry > 0 else 0
+    qty_text = f'{qty:.8g}'
+    profit_usdt = qty * max(sig.tp - sig.entry, 0)
+    loss_usdt = qty * max(sig.entry - sl_limit_value, 0)
+    reward_pct = ((sig.tp / sig.entry) - 1) * 100 if sig.entry else 0
+    trigger_risk_pct = (1 - (sl_trigger_value / sig.entry)) * 100 if sig.entry else 0
+    limit_risk_pct = (1 - (sl_limit_value / sig.entry)) * 100 if sig.entry else 0
     seconds = max(0, int(sig.expires_at - time.time()))
-    balance_row = '' if sig.balance_usdt is None else f'<div class="row"><span class="label">Free USDT balance</span><span class="value">{sig.balance_usdt:.2f} USDT</span></div>'
-    risk_row = '' if sig.risk_usdt is None else f'<div class="row"><span class="label">Estimated risk at SL</span><span class="value red">-{sig.risk_usdt:.4f} USDT</span></div>'
     note = html.escape(sig.sizing_note or '')
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{pair} Order Preview</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:20px}}.card{{max-width:520px;margin:20px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:22px}}h1{{font-size:24px;margin:0 0 6px}}.sub{{color:#848e9c;margin-bottom:20px}}.row{{display:flex;justify-content:space-between;gap:20px;padding:12px 0;border-bottom:1px solid #2b3139}}.label{{color:#848e9c}}.value{{font-weight:700;text-align:right}}.green{{color:#0ecb81}}.red{{color:#f6465d}}.note{{font-size:13px;color:#848e9c;line-height:1.5;margin:18px 0}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:800;padding:15px;border-radius:10px;margin-top:16px}}.badge{{display:inline-block;padding:5px 9px;background:#2b3139;border-radius:8px;font-size:12px;margin-bottom:12px}}</style></head><body><div class="card"><div class="badge">SPOT · MANUAL CONFIRMATION</div><h1>{pair}</h1><div class="sub">{strategy}</div>{balance_row}<div class="row"><span class="label">Recommended amount</span><span class="value">{stake} USDT</span></div><div class="row"><span class="label">Estimated quantity</span><span class="value">{qty_text}</span></div><div class="row"><span class="label">Entry</span><span class="value">{entry}</span></div><div class="row"><span class="label">Take Profit</span><span class="value green">{tp} (+{reward_pct:.2f}%)</span></div><div class="row"><span class="label">Stop Loss</span><span class="value red">{sl} (-{risk_pct:.2f}%)</span></div><div class="row"><span class="label">Estimated TP profit</span><span class="value green">+{profit_usdt:.4f} USDT</span></div><div class="row"><span class="label">Estimated SL loss</span><span class="value red">-{loss_usdt:.4f} USDT</span></div>{risk_row}<div class="row"><span class="label">Signal expires in</span><span class="value">{seconds // 60}:{seconds % 60:02d}</span></div><p class="note">{note}</p><p class="note">كل بيانات الصفقة معروضة هنا تلقائيًا من الإشارة. الصفحة لا تنفذ أي شراء ولا تحتاج كتابة الأرقام يدويًا.</p><a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a></div></body></html>'''
+    rows = [
+        ('Price', entry, ''),
+        ('Total', stake, ' USDT'),
+        ('Amount', qty_text, f' {html.escape(sig.pair.split("/")[0])}'),
+        ('TP Limit', tp, f'  (+{reward_pct:.2f}%)'),
+        ('SL Trigger', sl_trigger, f'  (-{trigger_risk_pct:.2f}%)'),
+        ('SL Price', sl_limit, f'  (-{limit_risk_pct:.2f}%)'),
+    ]
+    row_html = ''.join(
+        f'<div class="field"><div><div class="label">{label}</div><div class="val">{value}<span>{suffix}</span></div></div>'
+        f'<button type="button" onclick="copyVal(this, \'{value}\')">COPY</button></div>'
+        for label, value, suffix in rows
+    )
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{pair} Order Prep</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:16px}}.card{{max-width:520px;margin:10px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:20px}}h1{{font-size:25px;margin:5px 0}}.sub{{color:#848e9c;margin-bottom:18px;font-size:13px;overflow-wrap:anywhere}}.badge{{display:inline-block;padding:6px 10px;background:#2b3139;border-radius:8px;font-size:12px}}.field{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2b3139}}.label{{font-size:13px;color:#848e9c;margin-bottom:4px}}.val{{font-size:18px;font-weight:800}}.val span{{font-size:12px;font-weight:500;color:#848e9c}}button{{border:0;background:#2b3139;color:#fcd535;padding:9px 12px;border-radius:8px;font-weight:800}}button.done{{background:#0ecb81;color:#0b0e11}}.tip{{background:#202630;padding:12px;border-radius:10px;font-size:13px;line-height:1.5;margin:16px 0}}.note{{font-size:12px;color:#848e9c;line-height:1.5}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:900;padding:15px;border-radius:10px;margin-top:16px}}.expires{{font-size:13px;color:#848e9c;text-align:center;margin-top:12px}}</style><script>async function copyVal(btn,v){{try{{await navigator.clipboard.writeText(v);btn.textContent='COPIED';btn.classList.add('done');setTimeout(()=>{{btn.textContent='COPY';btn.classList.remove('done')}},1200)}}catch(e){{window.prompt('Copy this value:',v)}}}}</script></head><body><div class="card"><div class="badge">BINANCE SPOT · ORDER PREP</div><h1>{pair}</h1><div class="sub">{strategy}</div>{row_html}<div class="tip"><b>في Binance:</b><br>Price ← Price<br>Total ← Total<br>TP Limit ← TP Limit<br>SL Trigger ← SL Trigger<br>SL Price ← SL Price<br><br>SL Price متحطوط أقل من Trigger بحوالي 0.15% عشان يزيد احتمال تنفيذ وقف الخسارة بعد التفعيل.</div><div class="note">Estimated profit at TP: +{profit_usdt:.4f} USDT · Estimated loss if SL Limit fills: -{loss_usdt:.4f} USDT.<br>{note}</div><a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a><div class="expires">Signal expires in {seconds // 60}:{seconds % 60:02d}</div></div></body></html>'''
 
 
 def resolve_chat_loop() -> None:
@@ -215,7 +235,7 @@ def resolve_chat_loop() -> None:
                 CHAT_ID_FILE.write_text(found, encoding='utf-8')
                 print('[telegram-resolve] private chat connected successfully')
                 try:
-                    tg_api('sendMessage', {'text': '✅ Telegram connected to TST Signal Bot\nPRE-ALERT و BUY جاهزين.'})
+                    tg_api('sendMessage', {'text': '✅ Telegram connected to TST Signal Bot'})
                 except Exception as exc:
                     print(f'[telegram-resolve] confirmation send failed: {exc}')
                 return
@@ -235,8 +255,10 @@ def watch_new_listings() -> None:
                 known = current
             else:
                 for sym in sorted(current - known):
-                    s = markets[sym]; pair = f"{s.get('baseAsset')}/USDT"; status = s.get('status', 'UNKNOWN')
-                    tg_api('sendMessage', {'text': f'🆕 NEW LISTING WATCH\nPair: {pair}\nStatus: {status}\nالبوت ضافها للسكان تلقائيًا. BUY لن يظهر إلا بعد بيانات كفاية وNFI confirmation.', 'reply_markup': {'inline_keyboard': [[{'text': '📈 Open Binance', 'url': f'https://www.binance.com/en/trade/{sym}?type=spot'}]]}, 'disable_web_page_preview': True})
+                    s = markets[sym]
+                    pair = f"{s.get('baseAsset')}/USDT"
+                    status = s.get('status', 'UNKNOWN')
+                    tg_api('sendMessage', {'text': f'🆕 NEW LISTING WATCH\nPair: {pair}\nStatus: {status}\nالبوت ضافها للسكان تلقائيًا.', 'disable_web_page_preview': True})
                     print(f'[new-listing-watch] sent {pair}')
                 known = current
         except Exception as e:
@@ -265,7 +287,7 @@ def run_http():
 
 def announce_online() -> None:
     try:
-        tg_api('sendMessage', {'text': '✅ TST Signal Bot ONLINE\nLive Binance data · Signal-only · No auto-buy\n👀 PRE-ALERT = setup forming\n🚨 BUY = NFI confirmed', 'disable_web_page_preview': True})
+        tg_api('sendMessage', {'text': '✅ TST Signal Bot ONLINE\nLive Binance data · Signal-only · No auto-buy\n🚨 BUY → PREPARE ORDER → copy Price/TP/SL → Binance', 'disable_web_page_preview': True})
         print('[telegram] ONLINE message sent successfully')
     except Exception as exc:
         print(f'[telegram] ONLINE pending until private /start: {type(exc).__name__}: {exc}')
