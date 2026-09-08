@@ -81,7 +81,6 @@ fi
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 
-# Keep a local Freqtrade-compatible pairlist synchronized from Vercel every minute.
 SCANNER_URL="$SCANNER_URL" PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
 import json, os, re, time
 from pathlib import Path
@@ -92,7 +91,6 @@ pairlist_file = Path(os.environ['PAIRLIST_FILE'])
 token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
 known = None
-
 EXCLUDE = {'USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','AEURUSDT','BUSDUSDT'}
 
 def get_scan():
@@ -146,7 +144,6 @@ while True:
 PY
 WATCHER_PID=$!
 
-# Wait briefly for the first local pairlist snapshot before starting Freqtrade.
 for _ in $(seq 1 20); do
   [[ -s "$PAIRLIST_FILE" ]] && break
   sleep 1
@@ -156,7 +153,48 @@ if [[ ! -s "$PAIRLIST_FILE" ]]; then
   exit 4
 fi
 
-trap 'kill "$BRIDGE_PID" "$WATCHER_PID" 2>/dev/null || true' EXIT
+PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+pairlist_file = Path(os.environ['PAIRLIST_FILE'])
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path != '/pairs':
+            self.send_response(404); self.end_headers(); return
+        try:
+            payload = pairlist_file.read_bytes()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except Exception as e:
+            body = str(e).encode()
+            self.send_response(503)
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+    def log_message(self, format, *args):
+        pass
+
+server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
+print('[pairlist-http] serving http://127.0.0.1:8765/pairs')
+server.serve_forever()
+PY
+PAIRLIST_HTTP_PID=$!
+
+for _ in $(seq 1 10); do
+  python - <<'PY' && break || true
+from urllib.request import urlopen
+with urlopen('http://127.0.0.1:8765/pairs', timeout=2) as r:
+    assert r.status == 200
+PY
+  sleep 1
+done
+
+trap 'kill "$BRIDGE_PID" "$WATCHER_PID" "$PAIRLIST_HTTP_PID" 2>/dev/null || true' EXIT
 
 exec freqtrade trade \
   --logfile "$USER_DATA/logs/freqtrade.log" \
