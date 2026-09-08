@@ -1,13 +1,13 @@
 FROM freqtradeorg/freqtrade:stable
 
-# Explicit Railway Docker runtime for NFI + Fast Entry Engine + one-tap executor links.
-# Trigger start-command preflight deployment.
+# Railway runtime: NFI + Fast Entry + one-tap signer + front proxy.
 USER root
 WORKDIR /freqtrade
 
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY one_tap_bridge.py /freqtrade/one_tap_bridge.py
-COPY binance_private_preflight.py /freqtrade/binance_private_preflight.py
+COPY order_signer.py /freqtrade/order_signer.py
+COPY front_proxy.py /freqtrade/front_proxy.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
 COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
@@ -17,12 +17,13 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && sed -i '/from telegram_signal_bridge import send_prealert/a send_prealert = lambda **kwargs: None' /freqtrade/run_ready_bot.sh \
     && sed -i "s/if python - <<'PY'/if python - 2>\/dev\/null <<'PY'/" /freqtrade/run_ready_bot.sh \
     && sed -i 's/import telegram_signal_bridge as bridge/import one_tap_bridge as bridge/' /freqtrade/fast_entry_engine.py \
-    && sed -i 's|https://www.binance.com/en/trade/{symbol}?type=spot|https://www.binance.com/en/trade/{base_asset}_USDT?type=spot|g' /freqtrade/telegram_signal_bridge.py \
-    && sed -i 's|OPEN {pair} ON BINANCE|OPEN {pair} SPOT ON BINANCE|g' /freqtrade/telegram_signal_bridge.py \
+    && sed -i 's|python -u "$BRIDGE_FILE" \&|BRIDGE_PORT=8082 PORT=8082 python -u "$BRIDGE_FILE" \&|' /freqtrade/run_ready_bot.sh \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
 USER ftuser
 ENV PYTHONUNBUFFERED=1
+ENV SIGNER_PORT=8081
+ENV BRIDGE_PORT=8082
 EXPOSE 8080
-CMD ["/bin/bash", "-lc", "python -u /freqtrade/binance_private_preflight.py || true; exec /bin/bash /freqtrade/entrypoint.sh"]
+CMD ["/bin/bash", "-lc", "python -u /freqtrade/order_signer.py & python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
