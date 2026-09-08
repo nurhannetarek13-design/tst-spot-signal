@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -11,6 +13,7 @@ from urllib.request import Request, urlopen
 import telegram_signal_bridge as bridge
 
 SCANNER_URL = os.getenv('VERCEL_SCANNER_URL', 'https://tst-spot-signal.vercel.app/api/market-scanner')
+FAST_INGEST_URL = os.getenv('FAST_INGEST_URL', 'https://tst-spot-signal.nurhanne-tarek13.workers.dev/fast-signal-ingest')
 BINANCE_BASES = ['https://data-api.binance.vision/api/v3', 'https://api.binance.com/api/v3']
 
 SCAN_INTERVAL_SEC = int(os.getenv('FAST_SCAN_INTERVAL_SEC', '60'))
@@ -25,6 +28,7 @@ last_signal_by_pair: dict[str, float] = {}
 last_global_signal = 0.0
 signal_day = ''
 signals_today = 0
+execution_ready = False
 
 EXCLUDE = {
     'USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'DAIUSDT',
@@ -69,7 +73,6 @@ def validate_and_resolve_telegram_chat() -> bool:
 
     for cid in candidates:
         try:
-            # Silent validation: no user-visible message.
             bridge.tg_api('sendChatAction', {'chat_id': cid, 'action': 'typing'})
             bridge.CHAT_ID_FILE.write_text(cid, encoding='utf-8')
             print('[telegram-chat] VALID private chat resolved')
@@ -86,8 +89,7 @@ def validate_and_resolve_telegram_chat() -> bool:
 
 
 # Railway's current region receives HTTP 451 from Binance private /account.
-# Trading remains manual, so use deterministic fallback sizing instead of
-# repeatedly logging a blocked private-balance request.
+# Private execution is therefore transported through the signed Cloudflare/Vercel path.
 bridge.get_free_usdt_balance = lambda: None
 
 
@@ -106,6 +108,67 @@ def api(path: str, params: dict):
         except Exception as exc:
             last_error = exc
     raise RuntimeError(f'Binance API unavailable: {last_error}')
+
+
+def fast_ingest(payload: dict, timeout: int = 25) -> dict:
+    token = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
+    if not token:
+        raise RuntimeError('TELEGRAM_BOT_TOKEN missing for signed ingest')
+    raw = json.dumps(payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    ts = str(int(time.time() * 1000))
+    signature = hmac.new(token.encode('utf-8'), ts.encode('utf-8') + b'.' + raw, hashlib.sha256).hexdigest()
+    req = Request(
+        FAST_INGEST_URL,
+        data=raw,
+        method='POST',
+        headers={
+            'User-Agent': 'tst-fast-entry/2.0',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Fast-Timestamp': ts,
+            'X-Fast-Signature': signature,
+            'Cache-Control': 'no-store',
+        },
+    )
+    try:
+        with urlopen(req, timeout=timeout) as r:
+            row = json.loads(r.read() or b'{}')
+    except Exception as exc:
+        detail = ''
+        try:
+            detail = exc.read().decode('utf-8', errors='replace')[:500]
+        except Exception:
+            pass
+        raise RuntimeError(f'fast ingest HTTP failed: {exc}{" | " + detail if detail else ""}') from exc
+    if not row.get('ok'):
+        raise RuntimeError(f"fast ingest rejected: {row.get('status') or row}")
+    return row
+
+
+def execution_preflight() -> bool:
+    global execution_ready
+    probe = {
+        'id': f'preflight-{int(time.time())}',
+        'symbol': 'BTCUSDT',
+        'entry': 100.0,
+        'stop': 99.0,
+        'target': 101.5,
+        'stakeUSDT': 5.5,
+        'score': 100,
+        'strategy': 'FAST_EXECUTION_PREFLIGHT',
+        'dryRun': True,
+    }
+    try:
+        row = fast_ingest(probe, timeout=30)
+        execution_ready = row.get('status') == 'FAST_SIGNAL_DRYRUN_OK' and row.get('userConfirmationRequired') is True and row.get('autoBuy') is False
+        if execution_ready:
+            print(f"[fast-ingest-preflight] OK canTrade={row.get('canTrade')} credentialMode={row.get('credentialMode')} recommended={row.get('recommendedUSDT')}")
+        else:
+            print(f'[fast-ingest-preflight] FAIL unexpected response={row}')
+    except Exception as exc:
+        execution_ready = False
+        print(f'[fast-ingest-preflight] FAIL {type(exc).__name__}: {exc}')
+    return execution_ready
 
 
 def ema(values: list[float], period: int) -> float:
@@ -287,9 +350,12 @@ def candidate_symbols(scan: dict) -> list[tuple[str, float, float]]:
 
 
 def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
-    global last_global_signal, signals_today
+    global last_global_signal, signals_today, execution_ready
     reset_day_counter()
     now = time.time()
+    if not execution_ready:
+        print(f'[fast-engine] {symbol} blocked: one-tap execution preflight is not ready')
+        return False
     if signals_today >= MAX_SIGNALS_PER_DAY:
         return False
     if now - last_global_signal < GLOBAL_COOLDOWN_SEC:
@@ -318,27 +384,45 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
         f"volx={m['volume_ratio']:.2f}|taker={m['taker_buy_ratio']*100:.1f}%|"
         f"rsi={m['rsi']:.1f}|spread={m['spread_pct']:.3f}%"
     )
-    bridge.send_opportunity(pair=pair, stake_usdt=5.5, entry=entry, tp=tp, sl=sl, tag=tag)
+    payload = {
+        'id': f'{symbol}-{int(now)}',
+        'symbol': symbol,
+        'entry': entry,
+        'stop': sl,
+        'target': tp,
+        'stakeUSDT': 5.5,
+        'score': round(score),
+        'strategy': tag,
+        'dryRun': False,
+    }
+    row = fast_ingest(payload, timeout=30)
+    if row.get('status') != 'FAST_SIGNAL_READY' or row.get('userConfirmationRequired') is not True or row.get('autoBuy') is not False:
+        raise RuntimeError(f'unexpected one-tap ingest response: {row}')
     last_signal_by_pair[symbol] = now
     last_global_signal = now
     signals_today += 1
-    print(f'[fast-buy] sent {pair} score={score:.0f} reasons={",".join(reasons)}')
+    print(f'[fast-buy] one-tap ready {pair} score={score:.0f} amount={row.get("recommendedUSDT")} reasons={",".join(reasons)}')
     return True
 
 
 def main() -> None:
     telegram_ok = validate_and_resolve_telegram_chat()
+    execution_preflight()
     print(
         f'[fast-engine] ONLINE min_score={MIN_SCORE:.0f} max/day={MAX_SIGNALS_PER_DAY} '
         f'pair_cd={PAIR_COOLDOWN_SEC//60}m global_cd={GLOBAL_COOLDOWN_SEC//60}m '
-        f'telegram={"OK" if telegram_ok else "WAITING"}'
+        f'telegram={"OK" if telegram_ok else "WAITING"} execution={"OK" if execution_ready else "BLOCKED"}'
     )
     last_chat_retry = 0.0
+    last_execution_retry = 0.0
     while True:
         try:
             if not telegram_ok and time.time() - last_chat_retry >= 60:
                 telegram_ok = validate_and_resolve_telegram_chat()
                 last_chat_retry = time.time()
+            if not execution_ready and time.time() - last_execution_retry >= 60:
+                execution_preflight()
+                last_execution_retry = time.time()
             scan = get_json(SCANNER_URL, timeout=25)
             ranked = []
             for symbol, change, volume in candidate_symbols(scan):
@@ -355,12 +439,15 @@ def main() -> None:
                 if not telegram_ok:
                     print(f'[fast-engine] {symbol} score={score:.0f} ready but Telegram chat is unresolved')
                     break
+                if not execution_ready:
+                    print(f'[fast-engine] {symbol} score={score:.0f} ready but one-tap execution is blocked')
+                    break
                 try:
                     if maybe_signal(symbol, change, volume):
                         break
                 except Exception as exc:
                     print(f'[fast-engine] {symbol} signal failed: {type(exc).__name__}: {exc}')
-                    telegram_ok = False
+                    execution_ready = False
         except Exception as exc:
             print(f'[fast-engine] loop warning: {type(exc).__name__}: {exc}')
         time.sleep(SCAN_INTERVAL_SEC)
