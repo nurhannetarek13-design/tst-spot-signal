@@ -24,7 +24,7 @@ import io, os, shutil, tarfile
 
 nfi_dir = Path("${NFI_DIR}")
 archive_url = "${NFI_ARCHIVE}"
-req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/2.0"})
+req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.0"})
 with urlopen(req, timeout=120) as r:
     data = r.read()
 if len(data) < 1_000_000:
@@ -54,7 +54,7 @@ shutil.rmtree(tmp, ignore_errors=True)
 print(f"[ready-bot] NFI package ready: {nfi_dir}")
 
 def fetch(url: str, out: str, min_size: int, needle: bytes):
-    req = Request(url, headers={"User-Agent": "tst-ready-bot/2.0"})
+    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.0"})
     with urlopen(req, timeout=60) as r:
         payload = r.read()
     if len(payload) < min_size or needle not in payload:
@@ -71,33 +71,49 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 2
 fi
 
-export PYTHONPATH="$NFI_DIR:${PYTHONPATH:-}"
+export PYTHONPATH="/freqtrade:$NFI_DIR:${PYTHONPATH:-}"
 
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   echo "[ready-bot] TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required" >&2
   exit 3
 fi
 
-# Canonical Telegram + BUY preview bridge. It owns all Telegram messages,
-# including new-listing notifications, so the scanner never sends duplicates.
+# Canonical Telegram + BUY preview bridge. It owns all Telegram messages.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 
-# Keep a local Freqtrade-compatible pairlist synchronized from Vercel every minute.
+# Lightweight Stage-1 scanner. Vercel supplies the liquid universe/movers;
+# this process samples short 5m klines only for the top movers and sends a
+# PRE-ALERT. No BUY is exposed until NFI confirms the entry in Stage 2.
 SCANNER_URL="$SCANNER_URL" PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
-import json, os, re, time
+import json, os, re, sys, time
 from pathlib import Path
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+sys.path.insert(0, '/freqtrade')
+from telegram_signal_bridge import send_prealert
 
 url = os.environ['SCANNER_URL']
 pairlist_file = Path(os.environ['PAIRLIST_FILE'])
-known = None
+known_universe = None
+last_prealert = {}
 
 EXCLUDE = {'USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','AEURUSDT','BUSDUSDT'}
+KLINE_BASES = ['https://data-api.binance.vision/api/v3', 'https://api.binance.com/api/v3']
+PREALERT_COOLDOWN = 20 * 60
+MIN_QUOTE_VOLUME_24H = 5_000_000.0
+MIN_CHANGE_24H = 1.0
+MAX_CHANGE_24H = 30.0
+MIN_1H_RANGE = 0.012
+MIN_15M_MOMENTUM = 0.001
+MIN_VOLUME_RATIO = 1.15
+
 
 def get_scan():
-    with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/2.0','Accept':'application/json'}), timeout=25) as r:
+    with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/3.0','Accept':'application/json'}), timeout=25) as r:
         return json.loads(r.read())
+
 
 def to_pair(symbol):
     if not symbol.endswith('USDT') or symbol in EXCLUDE:
@@ -106,6 +122,39 @@ def to_pair(symbol):
     if not base or re.search(r'(UP|DOWN|BULL|BEAR)$', base):
         return None
     return f'{base}/USDT'
+
+
+def get_klines(symbol):
+    query = urlencode({'symbol': symbol, 'interval': '5m', 'limit': 13})
+    last_error = None
+    for base in KLINE_BASES:
+        try:
+            req = Request(f'{base}/klines?{query}', headers={'User-Agent':'tst-fast-prealert/1.0','Accept':'application/json'})
+            with urlopen(req, timeout=12) as r:
+                data = json.loads(r.read())
+            if isinstance(data, list) and len(data) >= 13:
+                return data
+        except Exception as exc:
+            last_error = exc
+    raise RuntimeError(f'klines unavailable: {last_error}')
+
+
+def fast_metrics(symbol):
+    k = get_klines(symbol)
+    highs = [float(x[2]) for x in k]
+    lows = [float(x[3]) for x in k]
+    closes = [float(x[4]) for x in k]
+    quote_volumes = [float(x[7]) for x in k]
+    last = closes[-1]
+    if last <= 0:
+        return None
+    range_1h = (max(highs[-12:]) - min(lows[-12:])) / last
+    momentum_15m = (last / closes[-4]) - 1.0 if closes[-4] > 0 else -1.0
+    recent = sum(quote_volumes[-3:]) / 3.0
+    prior = sum(quote_volumes[-12:-3]) / 9.0
+    volume_ratio = recent / prior if prior > 0 else 0.0
+    return last, range_1h, momentum_15m, volume_ratio
+
 
 while True:
     try:
@@ -117,17 +166,61 @@ while True:
             tmp.write_text(json.dumps({'pairs': pairs, 'refresh_period': 60}))
             tmp.replace(pairlist_file)
             print(f'[vercel-pairlist] wrote {len(pairs)} pairs to {pairlist_file}')
+
         all_symbols = set(liquid_symbols) | {x.get('symbol') for x in (data.get('movers') or []) if x.get('symbol')}
         if all_symbols:
-            if known is None:
-                known = all_symbols
+            if known_universe is None:
+                known_universe = all_symbols
             else:
-                for sym in sorted(all_symbols - known):
-                    print(f'[new-listing] detected {sym}; canonical Telegram bridge handles notifications')
-                known = all_symbols
+                changed = sorted(all_symbols - known_universe)
+                for sym in changed:
+                    print(f'[universe-change] {sym} entered liquid/mover universe')
+                known_universe = all_symbols
+
         movers = data.get('movers') or []
         if movers:
             print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('change',0)):+.1f}%" for x in movers[:8]))
+
+        now = time.time()
+        for m in movers[:12]:
+            symbol = str(m.get('symbol') or '')
+            pair = to_pair(symbol)
+            if not pair:
+                continue
+            change = float(m.get('change') or 0.0)
+            volume = float(m.get('volume') or 0.0)
+            if volume < MIN_QUOTE_VOLUME_24H or change < MIN_CHANGE_24H or change > MAX_CHANGE_24H:
+                continue
+            if now - last_prealert.get(symbol, 0.0) < PREALERT_COOLDOWN:
+                continue
+            try:
+                metrics = fast_metrics(symbol)
+                if not metrics:
+                    continue
+                last, range_1h, momentum_15m, volume_ratio = metrics
+                setup_ok = (
+                    range_1h >= MIN_1H_RANGE
+                    and momentum_15m >= MIN_15M_MOMENTUM
+                    and volume_ratio >= MIN_VOLUME_RATIO
+                )
+                print(
+                    f'[setup-gate] {symbol} range1h={range_1h*100:.2f}% '
+                    f'mom15m={momentum_15m*100:+.2f}% volx={volume_ratio:.2f} ok={setup_ok}'
+                )
+                if setup_ok:
+                    send_prealert(
+                        pair=pair,
+                        last=last,
+                        change_24h=change,
+                        volume_24h=volume,
+                        range_1h=range_1h,
+                        momentum_15m=momentum_15m,
+                        volume_ratio=volume_ratio,
+                    )
+                    last_prealert[symbol] = now
+            except Exception as exc:
+                print(f'[setup-gate] {symbol} warning: {type(exc).__name__}: {exc}')
+
     except Exception as e:
         print(f'[vercel-scan] warning: {type(e).__name__}: {e}')
     time.sleep(60)
