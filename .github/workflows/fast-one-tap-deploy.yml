@@ -36,6 +36,7 @@ jobs:
           node --check src/buy-gateway-canonical.js
           grep -q '/fast-signal-ingest' src/buy-gateway-stable.js
           grep -q 'FAST_SIGNAL_READY' src/buy-gateway-stable.js
+          grep -q 'FAST_SIGNAL_DRYRUN_OK' src/buy-gateway-stable.js
           grep -q 'fastSignalIngest: true' src/buy-gateway-stable.js
           grep -q 'CONFIRM:${id}' src/buy-gateway-stable.js
           grep -q 'claimState' src/buy-gateway-stable.js
@@ -47,7 +48,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add src/buy-gateway-stable.js
-            git commit -m "Enable Fast Engine one-tap confirm ingest [skip ci]"
+            git commit -m "Enable Fast Engine safe one-tap ingest [skip ci]"
             git push origin HEAD:main
           fi
 
@@ -106,4 +107,46 @@ jobs:
           b=r.get('balance') or {}
           checks=[r.get('ok') is True,b.get('ok') is True,b.get('canTrade') is True,b.get('credentialMode') == 'LIVE']
           sys.exit(0 if all(checks) else 1)
+          PY
+
+      - name: Verify exact signed Fast ingest in no-order dry-run
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${TELEGRAM_BOT_TOKEN:-}"
+          python - <<'PY'
+          import hashlib,hmac,json,os,time,urllib.request
+          url=os.environ['WORKER_URL']+'/fast-signal-ingest'
+          ts=str(int(time.time()*1000))
+          body=json.dumps({
+            'id':'ci-dryrun-'+ts,
+            'symbol':'BTCUSDT',
+            'entry':100.0,
+            'stop':99.0,
+            'target':101.0,
+            'stakeUSDT':5.0,
+            'strategy':'CI_DRYRUN',
+            'score':99,
+            'dryRun':True,
+          },separators=(',',':'))
+          sig=hmac.new(os.environ['TELEGRAM_BOT_TOKEN'].encode(),f'{ts}.{body}'.encode(),hashlib.sha256).hexdigest()
+          req=urllib.request.Request(url,data=body.encode(),headers={
+            'content-type':'application/json',
+            'x-fast-timestamp':ts,
+            'x-fast-signature':sig,
+          },method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
+            out=json.loads(r.read())
+          safe={k:out.get(k) for k in ['ok','status','canTrade','credentialMode','autoBuy','userConfirmationRequired','recommendedUSDT']}
+          print(json.dumps(safe,sort_keys=True))
+          checks=[
+            out.get('ok') is True,
+            out.get('status')=='FAST_SIGNAL_DRYRUN_OK',
+            out.get('canTrade') is True,
+            out.get('credentialMode')=='LIVE',
+            out.get('autoBuy') is False,
+            out.get('userConfirmationRequired') is True,
+          ]
+          if not all(checks): raise SystemExit(1)
           PY
