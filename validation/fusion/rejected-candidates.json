@@ -150,6 +150,17 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-07T21:42:35.428273+00:00"
+    },
+    {
+      "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
+      "candidateFingerprint": "1240a5c4024ad81ee1e2",
+      "symbol": "UNIUSDT",
+      "family": "VOLATILITY_MOMENTUM",
+      "hardFailValidators": [
+        "vectorbt",
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-08T07:23:35.770892+00:00"
     }
   ],
   "ttlDays": 7,
