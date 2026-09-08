@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from telegram_signal_bridge import send_opportunity
+import telegram_signal_bridge as bridge
 
 SCANNER_URL = os.getenv('VERCEL_SCANNER_URL', 'https://tst-spot-signal.vercel.app/api/market-scanner')
 BINANCE_BASES = ['https://data-api.binance.vision/api/v3', 'https://api.binance.com/api/v3']
@@ -30,6 +30,65 @@ EXCLUDE = {
     'USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'DAIUSDT',
     'EURUSDT', 'AEURUSDT', 'BUSDUSDT', 'USD1USDT', 'RLUSDUSDT',
 }
+
+
+def validate_and_resolve_telegram_chat() -> bool:
+    """Resolve a real private human chat and reject the bot's own id."""
+    try:
+        me = bridge.tg_api('getMe', {})
+        bot_id = str((me.get('result') or {}).get('id') or '')
+    except Exception as exc:
+        print(f'[telegram-chat] getMe failed: {type(exc).__name__}: {exc}')
+        return False
+
+    candidates: list[str] = []
+    current = bridge.get_chat_id().strip()
+    if current and current != bot_id:
+        candidates.append(current)
+
+    try:
+        updates = bridge.tg_api('getUpdates', {'limit': 100, 'timeout': 0, 'allowed_updates': ['message']})
+        rows = []
+        for upd in updates.get('result') or []:
+            msg = upd.get('message') or {}
+            chat = msg.get('chat') or {}
+            sender = msg.get('from') or {}
+            cid = chat.get('id')
+            if cid is None or chat.get('type') != 'private' or sender.get('is_bot'):
+                continue
+            cid = str(cid)
+            if cid == bot_id:
+                continue
+            rows.append((int(upd.get('update_id') or 0), cid))
+        rows.sort(reverse=True)
+        for _, cid in rows:
+            if cid not in candidates:
+                candidates.append(cid)
+    except Exception as exc:
+        print(f'[telegram-chat] getUpdates warning: {type(exc).__name__}: {exc}')
+
+    for cid in candidates:
+        try:
+            # Silent validation: no user-visible message.
+            bridge.tg_api('sendChatAction', {'chat_id': cid, 'action': 'typing'})
+            bridge.CHAT_ID_FILE.write_text(cid, encoding='utf-8')
+            print('[telegram-chat] VALID private chat resolved')
+            return True
+        except Exception:
+            continue
+
+    try:
+        bridge.CHAT_ID_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+    print('[telegram-chat] NO_VALID_PRIVATE_CHAT')
+    return False
+
+
+# Railway's current region receives HTTP 451 from Binance private /account.
+# Trading remains manual, so use deterministic fallback sizing instead of
+# repeatedly logging a blocked private-balance request.
+bridge.get_free_usdt_balance = lambda: None
 
 
 def get_json(url: str, timeout: int = 15):
@@ -128,7 +187,6 @@ def market_metrics(symbol: str) -> dict:
     recent_taker = sum(taker_buy_base[-3:])
     taker_buy_ratio = recent_taker / recent_base if recent_base > 0 else 0.0
 
-    # ATR-like movement capacity on 5m candles.
     trs = []
     for i in range(-14, 0):
         prev = closes[i - 1]
@@ -143,8 +201,6 @@ def market_metrics(symbol: str) -> dict:
     spread_pct = ((ask - bid) / mid * 100.0) if mid > 0 and ask >= bid > 0 else 999.0
 
     distance_ema9 = (last / ema9 - 1.0) if ema9 > 0 else 9.0
-
-    # Avoid buying a large upper-wick exhaustion candle.
     body = abs(closes[-1] - opens[-1])
     upper_wick = highs[-1] - max(opens[-1], closes[-1])
     wick_ratio = upper_wick / max(body, last * 0.0001)
@@ -196,7 +252,6 @@ def score_setup(m: dict) -> tuple[float, list[str]]:
     if 0.0 <= m['distance_ema9'] <= 0.010:
         score += 4; reasons.append('not-chasing')
 
-    # Hard penalties for obvious chase / exhaustion conditions.
     if m['mom15'] > 0.025:
         score -= 18
     if m['distance_ema9'] > 0.018:
@@ -252,7 +307,6 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
     if score < MIN_SCORE:
         return False
 
-    # Dynamic targets sized for a 30-60m spot trade. Keep reward/risk > ~1.35.
     tp_pct = clamp(max(0.009, m['atr_pct'] * 4.0), 0.009, 0.015)
     sl_pct = clamp(tp_pct / 1.45, 0.006, 0.010)
     entry = m['last']
@@ -264,7 +318,7 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
         f"volx={m['volume_ratio']:.2f}|taker={m['taker_buy_ratio']*100:.1f}%|"
         f"rsi={m['rsi']:.1f}|spread={m['spread_pct']:.3f}%"
     )
-    send_opportunity(pair=pair, stake_usdt=5.5, entry=entry, tp=tp, sl=sl, tag=tag)
+    bridge.send_opportunity(pair=pair, stake_usdt=5.5, entry=entry, tp=tp, sl=sl, tag=tag)
     last_signal_by_pair[symbol] = now
     last_global_signal = now
     signals_today += 1
@@ -273,12 +327,18 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
 
 
 def main() -> None:
+    telegram_ok = validate_and_resolve_telegram_chat()
     print(
         f'[fast-engine] ONLINE min_score={MIN_SCORE:.0f} max/day={MAX_SIGNALS_PER_DAY} '
-        f'pair_cd={PAIR_COOLDOWN_SEC//60}m global_cd={GLOBAL_COOLDOWN_SEC//60}m'
+        f'pair_cd={PAIR_COOLDOWN_SEC//60}m global_cd={GLOBAL_COOLDOWN_SEC//60}m '
+        f'telegram={"OK" if telegram_ok else "WAITING"}'
     )
+    last_chat_retry = 0.0
     while True:
         try:
+            if not telegram_ok and time.time() - last_chat_retry >= 60:
+                telegram_ok = validate_and_resolve_telegram_chat()
+                last_chat_retry = time.time()
             scan = get_json(SCANNER_URL, timeout=25)
             ranked = []
             for symbol, change, volume in candidate_symbols(scan):
@@ -292,11 +352,15 @@ def main() -> None:
             for score, symbol, change, volume, _ in ranked[:12]:
                 if score < MIN_SCORE:
                     break
+                if not telegram_ok:
+                    print(f'[fast-engine] {symbol} score={score:.0f} ready but Telegram chat is unresolved')
+                    break
                 try:
                     if maybe_signal(symbol, change, volume):
                         break
                 except Exception as exc:
                     print(f'[fast-engine] {symbol} signal failed: {type(exc).__name__}: {exc}')
+                    telegram_ok = False
         except Exception as exc:
             print(f'[fast-engine] loop warning: {type(exc).__name__}: {exc}')
         time.sleep(SCAN_INTERVAL_SEC)
