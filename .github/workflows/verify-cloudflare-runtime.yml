@@ -10,149 +10,106 @@ on:
 permissions:
   contents: read
 
+env:
+  WORKER_URL: https://tst-spot-signal.nurhanne-tarek13.workers.dev
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify stable Worker runtime route
+      - name: Verify Make production runtime guards
         shell: bash
         run: |
           set -euo pipefail
-          matched=0
-          for attempt in $(seq 1 24); do
-            echo "runtime POST attempt ${attempt}/24"
+          passed=0
+          for attempt in $(seq 1 12); do
             curl --silent --show-error --max-time 20 \
-              -X POST \
               -H 'cache-control: no-store, no-cache, max-age=0' \
-              -H 'pragma: no-cache' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
+              "$WORKER_URL/make-runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
               -o /tmp/runtime.json || true
             cat /tmp/runtime.json 2>/dev/null || true
             echo
             if python - <<'PY'
           import json,sys
-          try:
-              row=json.load(open('/tmp/runtime.json'))
-          except Exception:
-              sys.exit(1)
-          checks = [
+          try: row=json.load(open('/tmp/runtime.json'))
+          except Exception: sys.exit(1)
+          checks=[
               row.get('ok') is True,
-              row.get('telegramConfigured') is True,
-              row.get('hasApiKey') is True,
-              row.get('hasApiSecret') is True,
-              row.get('noSecretValuesExposed') is True,
+              row.get('credentialMode') == 'MAKE_VERIFIED',
+              row.get('executionRoute') == 'CLOUDFLARE_SIGNED_RAILWAY_MAKE_BINANCE',
+              row.get('twoStepBuyOco') is True,
+              row.get('actualFillProtection') is True,
               row.get('atomicConfirmClaim') is True,
+              row.get('userConfirmationRequired') is True,
               row.get('autoBuy') is False,
-              row.get('executionRoute') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY',
+              row.get('telegramConfigured') is True,
+              row.get('noSecretValuesExposed') is True,
           ]
           sys.exit(0 if all(checks) else 1)
           PY
-            then
-              matched=1
-              break
-            fi
-            sleep 4
-          done
-          if [ "$matched" != "1" ]; then
-            echo "Stable Worker never exposed the expected Railway testnet route"
-            exit 1
-          fi
-
-      - name: Wake Railway read-only relay
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 10); do
-            echo "Railway health attempt ${attempt}/10"
-            if curl --fail --silent --show-error --max-time 20 \
-              -H 'cache-control: no-store' \
-              "https://liquidation-collector-production.up.railway.app/health?nonce=$(date +%s%N)" \
-              -o /tmp/railway-health.json; then
-              cat /tmp/railway-health.json
-              echo
-              python - <<'PY'
-          import json
-          row=json.load(open('/tmp/railway-health.json'))
-          assert row.get('ok') is True
-          assert row.get('mode') == 'READ_ONLY_TESTNET_ACCOUNT'
-          PY
-              break
-            fi
+            then passed=1; break; fi
             sleep 3
           done
+          test "$passed" = "1"
 
-      - name: Verify read-only Binance demo balance path
+      - name: Verify Telegram webhook ownership
         shell: bash
         run: |
           set -euo pipefail
-          passed=0
-          seen_new_route=0
-          for attempt in $(seq 1 24); do
-            echo "balance POST attempt ${attempt}/24"
-            curl --silent --show-error --max-time 25 \
-              -X POST \
-              -H 'cache-control: no-store, no-cache, max-age=0' \
-              -H 'pragma: no-cache' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/balance-refresh?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
-              -o /tmp/balance.json || true
-            cat /tmp/balance.json 2>/dev/null || true
-            echo
-            route="$(python - <<'PY'
+          curl --fail --silent --show-error --max-time 20 \
+            -X POST -H 'cache-control: no-store' \
+            "$WORKER_URL/telegram-webhook-check?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
+            -o /tmp/webhook.json
+          cat /tmp/webhook.json
+          echo
+          python - <<'PY'
           import json
-          try:
-              row=json.load(open('/tmp/balance.json'))
-              print(row.get('executionRoute') or '')
-          except Exception:
-              print('')
+          row=json.load(open('/tmp/webhook.json'))
+          assert row.get('ok') is True
+          assert row.get('status') == 'TELEGRAM_WEBHOOK_OK'
+          assert row.get('urlMatches') is True
+          assert row.get('callbackQueryAllowed') is True
+          assert row.get('noSecretValuesExposed') is True
           PY
-          )"
-            if [ "$route" != "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY" ]; then
-              sleep 4
-              continue
-            fi
-            seen_new_route=1
-            if python - <<'PY'
-          import json,sys
-          row=json.load(open('/tmp/balance.json'))
-          if row.get('ok') is not True or row.get('autoBuy') is not False:
-              sys.exit(1)
-          bal=row.get('balance') or {}
-          checks = [
-              bal.get('ok') is True,
-              bal.get('status') == 'ACCOUNT_BALANCE_OK',
-              bal.get('source') == 'CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY',
-              bal.get('network') == 'testnet',
-              bal.get('credentialMode') == 'DEMO',
-              isinstance((bal.get('usdt') or {}).get('free'), (int,float)),
-          ]
-          sys.exit(0 if all(checks) else 1)
-          PY
-            then
-              passed=1
-              break
-            fi
-            sleep 4
-          done
-          if [ "$seen_new_route" != "1" ]; then
-            echo "Balance endpoint never reached the new Worker route"
-            exit 1
-          fi
-          if [ "$passed" != "1" ]; then
-            echo "Railway route is active, but Binance account read still failed. Final safe response:"
-            cat /tmp/balance.json 2>/dev/null || true
-            exit 1
-          fi
 
-      - name: Verify scanner remains non-executing
-        if: always()
+      - name: Verify signed Fast ingest dry-run
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 60 \
-            -X POST \
-            -H 'cache-control: no-store, no-cache, max-age=0' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
+          test -n "${TELEGRAM_BOT_TOKEN:-}"
+          python - <<'PY'
+          import hashlib,hmac,json,os,time,urllib.request
+          ts=str(int(time.time()*1000))
+          body=json.dumps({
+            'id':'runtime-dryrun-'+ts,
+            'symbol':'BTCUSDT','entry':100.0,'stop':99.0,'target':101.0,
+            'stakeUSDT':5.5,'strategy':'RUNTIME_DRYRUN','score':99,'dryRun':True,
+          },separators=(',',':'))
+          sig=hmac.new(os.environ['TELEGRAM_BOT_TOKEN'].encode(),f'{ts}.{body}'.encode(),hashlib.sha256).hexdigest()
+          req=urllib.request.Request(
+            os.environ['WORKER_URL']+'/fast-signal-ingest',data=body.encode(),method='POST',
+            headers={'content-type':'application/json','x-fast-timestamp':ts,'x-fast-signature':sig,'cache-control':'no-store'})
+          with urllib.request.urlopen(req,timeout=20) as r:
+            out=json.loads(r.read())
+          print(json.dumps({k:out.get(k) for k in ['ok','status','canTrade','credentialMode','autoBuy','userConfirmationRequired','recommendedUSDT']},sort_keys=True))
+          assert out.get('ok') is True
+          assert out.get('status') == 'FAST_SIGNAL_DRYRUN_OK'
+          assert out.get('canTrade') is True
+          assert out.get('credentialMode') == 'MAKE_VERIFIED'
+          assert out.get('autoBuy') is False
+          assert out.get('userConfirmationRequired') is True
+          PY
+
+      - name: Verify scanner cannot auto-execute
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            -X POST -H 'cache-control: no-store' \
+            "$WORKER_URL/scanner-status?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
             -o /tmp/status.json
           cat /tmp/status.json
           echo
