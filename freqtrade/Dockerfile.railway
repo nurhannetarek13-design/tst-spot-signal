@@ -13,6 +13,8 @@ COPY user_data /freqtrade/user_data
 RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.sh \
     && sed -i '/from telegram_signal_bridge import send_prealert/a send_prealert = lambda **kwargs: None' /freqtrade/run_ready_bot.sh \
     && sed -i "s/if python - <<'PY'/if python - 2>\/dev\/null <<'PY'/" /freqtrade/run_ready_bot.sh \
+    && sed -i 's|https://www.binance.com/en/trade/{symbol}?type=spot|https://www.binance.com/en/trade/{base_asset}_USDT?type=spot|g' /freqtrade/telegram_signal_bridge.py \
+    && sed -i 's|OPEN {pair} ON BINANCE|OPEN {pair} SPOT ON BINANCE|g' /freqtrade/telegram_signal_bridge.py \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
