@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import html
@@ -8,11 +9,11 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 SIGNAL_DIR = Path('/freqtrade/user_data/signals')
@@ -52,9 +53,11 @@ def tg_api(method: str, payload: dict) -> dict:
         if not cid:
             raise RuntimeError('TELEGRAM_CHAT_ID is not configured')
         payload['chat_id'] = cid
-    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}'
-    body = json.dumps(payload).encode()
-    req = Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'tst-signal-bridge/4.1'})
+    req = Request(
+        f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}',
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json', 'User-Agent': 'tst-signal-bridge/5.0'},
+    )
     try:
         with urlopen(req, timeout=25) as r:
             return json.loads(r.read().decode())
@@ -67,7 +70,7 @@ def tg_api(method: str, payload: dict) -> dict:
 
 
 def binance_get(path: str) -> dict:
-    req = Request(BINANCE_PUBLIC + path, headers={'User-Agent': 'tst-new-listing-watch/2.0'})
+    req = Request(BINANCE_PUBLIC + path, headers={'User-Agent': 'tst-new-listing-watch/3.0'})
     with urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode())
 
@@ -124,7 +127,11 @@ class Signal:
 
 
 def save_signal(sig: Signal) -> None:
-    (SIGNAL_DIR / f'{sig.id}.json').write_text(json.dumps(asdict(sig)), encoding='utf-8')
+    # Local copy is only a convenience. Railway files are ephemeral.
+    try:
+        (SIGNAL_DIR / f'{sig.id}.json').write_text(json.dumps(asdict(sig)), encoding='utf-8')
+    except Exception:
+        pass
 
 
 def load_signal(signal_id: str) -> Signal | None:
@@ -137,21 +144,34 @@ def load_signal(signal_id: str) -> Signal | None:
         return None
 
 
-def send_prealert(pair: str, last: float, change_24h: float, volume_24h: float, range_1h: float, momentum_15m: float, volume_ratio: float) -> None:
-    symbol = pair.replace('/', '')
-    text = (
-        '👀 PRE-ALERT — Setup forming\n'
-        f'Pair: {pair}\nPrice: {last:.8g}\n24h change: {change_24h:+.2f}%\n'
-        f'24h volume: {volume_24h/1_000_000:.1f}M USDT\n1h range: {range_1h*100:.2f}%\n'
-        f'15m momentum: {momentum_15m*100:+.2f}%\nVolume expansion: {volume_ratio:.2f}x\n\n'
-        'دي مراقبة مبكرة فقط — مفيش BUY لسه.'
-    )
-    tg_api('sendMessage', {
-        'text': text,
-        'reply_markup': {'inline_keyboard': [[{'text': '📈 Watch on Binance', 'url': f'https://www.binance.com/en/trade/{symbol}?type=spot'}]]},
-        'disable_web_page_preview': True,
-    })
-    print(f'[telegram-prealert] sent for {pair}')
+def _signing_key() -> bytes:
+    seed = (TELEGRAM_TOKEN or 'tst-signal-only').encode()
+    return hashlib.sha256(b'tst-order-link-v1:' + seed).digest()
+
+
+def make_order_token(sig: Signal) -> str:
+    raw = json.dumps(asdict(sig), separators=(',', ':'), ensure_ascii=False).encode()
+    payload = base64.urlsafe_b64encode(raw).decode().rstrip('=')
+    mac = hmac.new(_signing_key(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+    return f'{payload}.{mac}'
+
+
+def signal_from_token(token: str) -> Signal | None:
+    try:
+        payload, mac = token.rsplit('.', 1)
+        expected = hmac.new(_signing_key(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+        if not hmac.compare_digest(mac, expected):
+            return None
+        padded = payload + '=' * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+        return Signal(**data)
+    except Exception:
+        return None
+
+
+def send_prealert(**_kwargs) -> None:
+    # Telegram pre-alerts are intentionally disabled.
+    return
 
 
 def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: float, tag: str = '') -> str:
@@ -164,20 +184,23 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
     now = time.time()
     sig = Signal(signal_id, pair, recommended, entry, tp, sl, now, now + 15 * 60, tag, balance, risk_usdt, sizing_note)
     save_signal(sig)
+    if not PUBLIC_BASE_URL:
+        raise RuntimeError('SIGNAL_PUBLIC_BASE_URL is not configured')
+    token = make_order_token(sig)
+    prep_url = f'{PUBLIC_BASE_URL}/buy?t={token}'
     balance_line = f'Free USDT: {balance:.2f}\n' if balance is not None else ''
     risk_line = f'Estimated risk at SL: {risk_usdt:.2f} USDT\n' if risk_usdt is not None else ''
     text = (
         '🚨 CONFIRMED BUY — Spot\n'
         f'Pair: {pair}\nEntry ≈ {entry:.8g}\n{balance_line}✅ Amount: {recommended:.2f} USDT\n{risk_line}'
-        f'TP: {tp:.8g} (+{((tp/entry)-1)*100:.2f}%)\nSL Trigger: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
+        f'TP: {tp:.8g} (+{((tp/entry)-1)*100:.2f}%)\n'
+        f'SL Trigger: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
         f'Expected hold: 30–60 min\nStrategy: {tag or "NFIProtectedX7"}\n\n'
-        'اضغطي PREPARE ORDER — هتلاقي كل خانات Binance جاهزة للنسخ قبل فتح Binance.'
+        'اضغطي PREPARE ORDER — كل خانات Binance هتكون جاهزة للنسخ.'
     )
-    if not PUBLIC_BASE_URL:
-        raise RuntimeError('SIGNAL_PUBLIC_BASE_URL is not configured')
-    buttons = [[{'text': '✅ PREPARE ORDER', 'url': f'{PUBLIC_BASE_URL}/buy?id={signal_id}'}]]
+    buttons = [[{'text': '✅ PREPARE ORDER', 'url': prep_url}]]
     tg_api('sendMessage', {'text': text, 'reply_markup': {'inline_keyboard': buttons}, 'disable_web_page_preview': True})
-    print(f'[telegram-buy] sent for {pair} id={signal_id}')
+    print(f'[telegram-buy] sent for {pair} id={signal_id} stateless_link=yes')
     return signal_id
 
 
@@ -201,20 +224,21 @@ def order_preview(sig: Signal) -> str:
     limit_risk_pct = (1 - (sl_limit_value / sig.entry)) * 100 if sig.entry else 0
     seconds = max(0, int(sig.expires_at - time.time()))
     note = html.escape(sig.sizing_note or '')
+    base_asset = html.escape(sig.pair.split('/')[0])
     rows = [
         ('Price', entry, ''),
         ('Total', stake, ' USDT'),
-        ('Amount', qty_text, f' {html.escape(sig.pair.split("/")[0])}'),
-        ('TP Limit', tp, f'  (+{reward_pct:.2f}%)'),
-        ('SL Trigger', sl_trigger, f'  (-{trigger_risk_pct:.2f}%)'),
-        ('SL Price', sl_limit, f'  (-{limit_risk_pct:.2f}%)'),
+        ('Amount', qty_text, f' {base_asset}'),
+        ('TP Limit', tp, f' (+{reward_pct:.2f}%)'),
+        ('SL Trigger', sl_trigger, f' (-{trigger_risk_pct:.2f}%)'),
+        ('SL Price', sl_limit, f' (-{limit_risk_pct:.2f}%)'),
     ]
     row_html = ''.join(
         f'<div class="field"><div><div class="label">{label}</div><div class="val">{value}<span>{suffix}</span></div></div>'
         f'<button type="button" onclick="copyVal(this, \'{value}\')">COPY</button></div>'
         for label, value, suffix in rows
     )
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{pair} Order Prep</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:16px}}.card{{max-width:520px;margin:10px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:20px}}h1{{font-size:25px;margin:5px 0}}.sub{{color:#848e9c;margin-bottom:18px;font-size:13px;overflow-wrap:anywhere}}.badge{{display:inline-block;padding:6px 10px;background:#2b3139;border-radius:8px;font-size:12px}}.field{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2b3139}}.label{{font-size:13px;color:#848e9c;margin-bottom:4px}}.val{{font-size:18px;font-weight:800}}.val span{{font-size:12px;font-weight:500;color:#848e9c}}button{{border:0;background:#2b3139;color:#fcd535;padding:9px 12px;border-radius:8px;font-weight:800}}button.done{{background:#0ecb81;color:#0b0e11}}.tip{{background:#202630;padding:12px;border-radius:10px;font-size:13px;line-height:1.5;margin:16px 0}}.note{{font-size:12px;color:#848e9c;line-height:1.5}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:900;padding:15px;border-radius:10px;margin-top:16px}}.expires{{font-size:13px;color:#848e9c;text-align:center;margin-top:12px}}</style><script>async function copyVal(btn,v){{try{{await navigator.clipboard.writeText(v);btn.textContent='COPIED';btn.classList.add('done');setTimeout(()=>{{btn.textContent='COPY';btn.classList.remove('done')}},1200)}}catch(e){{window.prompt('Copy this value:',v)}}}}</script></head><body><div class="card"><div class="badge">BINANCE SPOT · ORDER PREP</div><h1>{pair}</h1><div class="sub">{strategy}</div>{row_html}<div class="tip"><b>في Binance:</b><br>Price ← Price<br>Total ← Total<br>TP Limit ← TP Limit<br>SL Trigger ← SL Trigger<br>SL Price ← SL Price<br><br>SL Price متحطوط أقل من Trigger بحوالي 0.15% عشان يزيد احتمال تنفيذ وقف الخسارة بعد التفعيل.</div><div class="note">Estimated profit at TP: +{profit_usdt:.4f} USDT · Estimated loss if SL Limit fills: -{loss_usdt:.4f} USDT.<br>{note}</div><a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a><div class="expires">Signal expires in {seconds // 60}:{seconds % 60:02d}</div></div></body></html>'''
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{pair} Order Prep</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#0b0e11;color:#eaecef;font-family:Arial,sans-serif;padding:16px}}.card{{max-width:520px;margin:10px auto;background:#181a20;border:1px solid #2b3139;border-radius:18px;padding:20px}}h1{{font-size:25px;margin:5px 0}}.sub{{color:#848e9c;margin-bottom:18px;font-size:13px;overflow-wrap:anywhere}}.badge{{display:inline-block;padding:6px 10px;background:#2b3139;border-radius:8px;font-size:12px}}.field{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #2b3139}}.label{{font-size:13px;color:#848e9c;margin-bottom:4px}}.val{{font-size:18px;font-weight:800}}.val span{{font-size:12px;font-weight:500;color:#848e9c}}button{{border:0;background:#2b3139;color:#fcd535;padding:9px 12px;border-radius:8px;font-weight:800}}button.done{{background:#0ecb81;color:#0b0e11}}.tip{{background:#202630;padding:12px;border-radius:10px;font-size:13px;line-height:1.5;margin:16px 0}}.note{{font-size:12px;color:#848e9c;line-height:1.5}}a.btn{{display:block;text-align:center;text-decoration:none;background:#fcd535;color:#181a20;font-weight:900;padding:15px;border-radius:10px;margin-top:16px}}.expires{{font-size:13px;color:#848e9c;text-align:center;margin-top:12px}}</style><script>async function copyVal(btn,v){{try{{await navigator.clipboard.writeText(v);btn.textContent='COPIED';btn.classList.add('done');setTimeout(()=>{{btn.textContent='COPY';btn.classList.remove('done')}},1200)}}catch(e){{window.prompt('Copy this value:',v)}}}}</script></head><body><div class="card"><div class="badge">BINANCE SPOT · ORDER PREP</div><h1>{pair}</h1><div class="sub">{strategy}</div>{row_html}<div class="tip"><b>في Binance:</b><br>Price ← Price<br>Total ← Total<br>TP Limit ← TP Limit<br>SL Trigger ← SL Trigger<br>SL Price ← SL Price<br><br>SL Price أقل من Trigger بحوالي 0.15% لزيادة احتمال تنفيذ وقف الخسارة بعد التفعيل.</div><div class="note">Estimated profit at TP: +{profit_usdt:.4f} USDT · Estimated loss if SL Limit fills: -{loss_usdt:.4f} USDT.<br>{note}</div><a class="btn" href="https://www.binance.com/en/trade/{symbol}?type=spot">OPEN {pair} ON BINANCE</a><div class="expires">Signal expires in {seconds // 60}:{seconds % 60:02d}</div></div></body></html>'''
 
 
 def resolve_chat_loop() -> None:
@@ -225,19 +249,17 @@ def resolve_chat_loop() -> None:
             current = get_chat_id()
             if current and current != bot_id:
                 return
-            updates = tg_api('getUpdates', {'limit':100, 'timeout':20, 'allowed_updates':['message']})
+            updates = tg_api('getUpdates', {'limit': 100, 'timeout': 20, 'allowed_updates': ['message']})
             found = None
             for upd in updates.get('result') or []:
-                msg = upd.get('message') or {}; chat = msg.get('chat') or {}; sender = msg.get('from') or {}
+                msg = upd.get('message') or {}
+                chat = msg.get('chat') or {}
+                sender = msg.get('from') or {}
                 if chat.get('type') == 'private' and chat.get('id') is not None and not sender.get('is_bot'):
                     found = str(chat['id'])
             if found:
                 CHAT_ID_FILE.write_text(found, encoding='utf-8')
                 print('[telegram-resolve] private chat connected successfully')
-                try:
-                    tg_api('sendMessage', {'text': '✅ Telegram connected to TST Signal Bot'})
-                except Exception as exc:
-                    print(f'[telegram-resolve] confirmation send failed: {exc}')
                 return
         except Exception as exc:
             print(f'[telegram-resolve] waiting for private /start: {type(exc).__name__}: {exc}')
@@ -261,28 +283,47 @@ def watch_new_listings() -> None:
                     tg_api('sendMessage', {'text': f'🆕 NEW LISTING WATCH\nPair: {pair}\nStatus: {status}\nالبوت ضافها للسكان تلقائيًا.', 'disable_web_page_preview': True})
                     print(f'[new-listing-watch] sent {pair}')
                 known = current
-        except Exception as e:
-            print(f'[new-listing-watch] warning: {type(e).__name__}: {e}')
+        except Exception as exc:
+            print(f'[new-listing-watch] warning: {type(exc).__name__}: {exc}')
         time.sleep(60)
 
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, text: str, content_type: str = 'text/plain; charset=utf-8'):
-        body = text.encode(); self.send_response(status); self.send_header('Content-Type', content_type); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+        body = text.encode()
+        self.send_response(status)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
-        from urllib.parse import urlparse, parse_qs
         parsed = urlparse(self.path)
-        if parsed.path == '/health': return self._send(200, 'ok')
-        if parsed.path != '/buy': return self._send(404, 'not found')
-        sid = parse_qs(parsed.query).get('id', [''])[0]; sig = load_signal(sid)
-        if not sig: return self._send(404, 'signal not found')
-        if time.time() > sig.expires_at: return self._send(410, 'signal expired')
+        if parsed.path == '/health':
+            return self._send(200, 'ok')
+        if parsed.path != '/buy':
+            return self._send(404, 'not found')
+        qs = parse_qs(parsed.query)
+        token = qs.get('t', [''])[0]
+        sig = signal_from_token(token) if token else None
+        if sig is None:
+            # Backward compatibility for links created before stateless tokens.
+            sid = qs.get('id', [''])[0]
+            sig = load_signal(sid) if sid else None
+        if not sig:
+            return self._send(404, 'signal not found — old Railway signal file is no longer available')
+        if time.time() > sig.expires_at:
+            return self._send(410, 'signal expired')
         return self._send(200, order_preview(sig), 'text/html; charset=utf-8')
-    def log_message(self, *_args): return
+
+    def log_message(self, *_args):
+        return
 
 
-def run_http():
-    port = int(os.getenv('PORT', '8080')); HTTPServer(('0.0.0.0', port), Handler).serve_forever()
+def run_http() -> None:
+    port = int(os.getenv('PORT', '8080'))
+    HTTPServer(('0.0.0.0', port), Handler).serve_forever()
 
 
 def announce_online() -> None:
