@@ -6,6 +6,7 @@ import json
 import math
 import os
 import time
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -37,6 +38,19 @@ def _signed_account_query(secret: str) -> str:
     return f'{query}&signature={signature}'
 
 
+def _safe_http_error(exc: HTTPError) -> str:
+    try:
+        raw = exc.read().decode('utf-8', errors='replace')[:800]
+        row = json.loads(raw or '{}')
+        code = row.get('code')
+        msg = str(row.get('msg') or row.get('status') or '').replace('\n', ' ')[:220]
+        if code is not None or msg:
+            return f'HTTP_{exc.code}:code={code}:msg={msg}'
+        return f'HTTP_{exc.code}'
+    except Exception:
+        return f'HTTP_{getattr(exc, "code", "ERR")}'
+
+
 def _relay_free_usdt(key: str, secret: str) -> float:
     caller_secret = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
     if not caller_secret:
@@ -51,15 +65,18 @@ def _relay_free_usdt(key: str, secret: str) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/3.0',
+            'User-Agent': 'tst-dynamic-sizing/4.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
     )
-    with urlopen(req, timeout=15) as r:
-        data = json.loads(r.read().decode())
+    try:
+        with urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+    except HTTPError as exc:
+        raise RuntimeError(f'SIZING_RELAY_HTTP:{_safe_http_error(exc)}') from exc
     if data.get('ok') is not True or data.get('status') != 'ACCOUNT_READ_OK':
-        raise RuntimeError(f'SIZING_RELAY_REJECTED:{data.get("status") or data}')
+        raise RuntimeError(f'SIZING_RELAY_REJECTED:{str(data.get("status") or "UNKNOWN")[:120]}')
     return max(0.0, float(((data.get('usdt') or {}).get('free')) or 0.0))
 
 
@@ -69,15 +86,15 @@ def free_usdt() -> float:
     if not key or not secret:
         raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
 
-    # Prefer direct Binance access. Railway can receive HTTP 451 depending on its
-    # egress region, so the fallback is a strictly read-only authenticated
-    # Cloudflare relay. It exposes only /api/v3/account and never order routes.
+    # Prefer direct Binance access. If infrastructure routing blocks direct access,
+    # the fallback is a strictly read-only authenticated Cloudflare relay. Neither
+    # path exposes order endpoints. Never log API keys, secrets, queries or signatures.
     last_error = 'unavailable'
     for base in API_BASES:
         query = _signed_account_query(secret)
         req = Request(
             f'{base}/api/v3/account?{query}',
-            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/3.0'},
+            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/4.0'},
         )
         try:
             with urlopen(req, timeout=8) as r:
@@ -86,20 +103,26 @@ def free_usdt() -> float:
                 if balance.get('asset') == 'USDT':
                     return max(0.0, float(balance.get('free') or 0.0))
             return 0.0
+        except HTTPError as exc:
+            last_error = _safe_http_error(exc)
+            # Credential/signature/IP errors will be identical on alternate Binance hosts.
+            # Stop retrying those hosts so startup fails fast with the real Binance code.
+            if any(marker in last_error for marker in ('code=-1022', 'code=-2014', 'code=-2015', 'code=-1021')):
+                break
         except Exception as exc:
-            last_error = f'{type(exc).__name__}:{exc}'
+            last_error = f'{type(exc).__name__}:{str(exc)[:180]}'
 
     try:
         return _relay_free_usdt(key, secret)
     except Exception as exc:
-        raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{last_error}; relay={type(exc).__name__}:{exc}') from exc
+        raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:direct={last_error}; relay={type(exc).__name__}:{str(exc)[:260]}') from exc
 
 
 def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
     """Return (stake_usdt, free_usdt).
 
-    Position size is capped by available balance, configured max stake fraction,
-    per-trade risk budget and the hard 10 USDT execution ceiling.
+    Live size uses verified free USDT, stop distance, risk budget, balance fraction
+    and a hard 10 USDT ceiling. If balance cannot be verified, callers fail closed.
     """
     free = free_usdt()
     min_stake = max(5.0, _env_float('MIN_STAKE_USDT', 5.0))
