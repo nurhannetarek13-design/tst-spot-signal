@@ -8,6 +8,10 @@ if 'import dynamic_sizing\n' not in s:
     if import_marker not in s:
         raise SystemExit('dynamic sizing patch failed: import marker missing')
     s = s.replace(import_marker, import_marker + 'import dynamic_sizing\n', 1)
+if 'import entry_quality\n' not in s:
+    if import_marker not in s:
+        raise SystemExit('entry quality patch failed: import marker missing')
+    s = s.replace(import_marker, import_marker + 'import entry_quality\n', 1)
 
 preflight_marker = "        execution_ready = row.get('status') == 'FAST_SIGNAL_DRYRUN_OK' and row.get('userConfirmationRequired') is True and row.get('autoBuy') is False\n"
 preflight_replacement = preflight_marker + "        if execution_ready:\n            dynamic_sizing.free_usdt()\n            print('[dynamic-sizing] balance read OK')\n"
@@ -15,6 +19,25 @@ if "[dynamic-sizing] balance read OK" not in s:
     if preflight_marker not in s:
         raise SystemExit('dynamic sizing patch failed: preflight marker missing')
     s = s.replace(preflight_marker, preflight_replacement, 1)
+
+quality_marker = "    m = market_metrics(symbol)\n    score, reasons = score_setup(m)\n"
+quality_insert = quality_marker + (
+    "    quality_ok, quality_reason, quality_ctx = entry_quality.validate_entry(symbol, m)\n"
+    "    if not quality_ok:\n"
+    "        move2h = float(quality_ctx.get('move_from_2h_low') or 0.0)\n"
+    "        print(f'[quality-gate] {symbol} BLOCKED reason={quality_reason} volx={m[\"volume_ratio\"]:.2f} '
+"
+    "              f'taker={m[\"taker_buy_ratio\"]*100:.1f}% dist={m[\"distance_to_breakout\"]*100:.2f}% move2h={move2h*100:.2f}%')\n"
+    "        return False\n"
+    "    btc = quality_ctx.get('btc') or {}\n"
+    "    print(f'[quality-gate] {symbol} PASS move2h={quality_ctx.get(\"move_from_2h_low\", 0.0)*100:.2f}% '
+"
+    "          f'btc15={btc.get(\"mom15\", 0.0)*100:+.2f}% btc1h={btc.get(\"mom1h\", 0.0)*100:+.2f}%')\n"
+)
+if '[quality-gate] {symbol} BLOCKED' not in s:
+    if quality_marker not in s:
+        raise SystemExit('entry quality patch failed: maybe_signal marker missing')
+    s = s.replace(quality_marker, quality_insert, 1)
 
 payload_marker = "    payload = {\n        'id': f'{symbol}-{int(now)}',"
 insert = (
@@ -41,4 +64,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[dynamic-sizing-patch] OK preflight stake remains fixed; live stake is balance+score+risk aware')
+print('[live-safety-patch] OK quality gates + balance/score/risk sizing enabled')
