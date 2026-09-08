@@ -1,8 +1,49 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "source": "VECTORBT",
+  "sourceGeneratedAt": "2026-09-08T06:22:38.572094+00:00",
+  "symbol": "UNIUSDT",
+  "family": "VOLATILITY_MOMENTUM",
+  "timeframe": "15m",
+  "params": {
+    "lookback": 20,
+    "relvol": 1.8,
+    "rsi_min": 57,
+    "sl": 0.018,
+    "tp": 0.06
+  },
+  "sourceMetrics": {
+    "base": {
+      "trades": 34,
+      "wins": 9,
+      "winRate": 0.2647058823529412,
+      "netPnlUSDT": 1.0697313594395814,
+      "expectancyUSDT": 0.03146268704234063,
+      "profitFactor": 1.6948151774209568,
+      "maxDrawdownUSDT": 0.39982160373186604
+    },
+    "stress2x": {
+      "trades": 34,
+      "wins": 9,
+      "winRate": 0.2647058823529412,
+      "netPnlUSDT": 0.6942861829036061,
+      "expectancyUSDT": 0.02042018185010606,
+      "profitFactor": 1.382880088744986,
+      "maxDrawdownUSDT": 0.4825584871862032
+    }
+  },
+  "liquidity": {
+    "quoteVolume24h": 52220139.32545,
+    "priceUSDT": null
+  },
+  "rankKey": [
+    0,
+    0.02042018185010606,
+    1.382880088744986,
+    34
+  ],
+  "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
+  "candidateFingerprint": "1240a5c4024ad81ee1e2",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -105,9 +146,55 @@
       ],
       "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
       "candidateFingerprint": "5a8be2536ed727aaa38e"
+    },
+    {
+      "source": "VECTORBT",
+      "sourceGeneratedAt": "2026-09-08T06:22:38.572094+00:00",
+      "symbol": "UNIUSDT",
+      "family": "VOLATILITY_MOMENTUM",
+      "timeframe": "15m",
+      "params": {
+        "lookback": 20,
+        "relvol": 1.8,
+        "rsi_min": 57,
+        "sl": 0.018,
+        "tp": 0.06
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 34,
+          "wins": 9,
+          "winRate": 0.2647058823529412,
+          "netPnlUSDT": 1.0697313594395814,
+          "expectancyUSDT": 0.03146268704234063,
+          "profitFactor": 1.6948151774209568,
+          "maxDrawdownUSDT": 0.39982160373186604
+        },
+        "stress2x": {
+          "trades": 34,
+          "wins": 9,
+          "winRate": 0.2647058823529412,
+          "netPnlUSDT": 0.6942861829036061,
+          "expectancyUSDT": 0.02042018185010606,
+          "profitFactor": 1.382880088744986,
+          "maxDrawdownUSDT": 0.4825584871862032
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 52220139.32545,
+        "priceUSDT": null
+      },
+      "rankKey": [
+        0,
+        0.02042018185010606,
+        1.382880088744986,
+        34
+      ],
+      "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
+      "candidateFingerprint": "1240a5c4024ad81ee1e2"
     }
   ],
-  "poolSize": 2,
+  "poolSize": 3,
   "recentRejectedFingerprints": [
     "16a891b75d998d5f2638",
     "1b7dc1733caf8b96d86e",
@@ -124,7 +211,7 @@
     "cba53276448a08d4eebc",
     "db0561831b32d3a2c528"
   ],
-  "authorization": "RESEARCH_ONLY",
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -133,5 +220,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-07T22:01:24.508508+00:00"
+  "generatedAt": "2026-09-08T06:22:39.752457+00:00"
 }
