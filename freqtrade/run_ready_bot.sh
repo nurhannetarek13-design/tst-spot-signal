@@ -78,9 +78,12 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 3
 fi
 
+# Canonical Telegram + BUY preview bridge. It owns all Telegram messages,
+# including new-listing notifications, so the scanner never sends duplicates.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 
+# Keep a local Freqtrade-compatible pairlist synchronized from Vercel every minute.
 SCANNER_URL="$SCANNER_URL" PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
 import json, os, re, time
 from pathlib import Path
@@ -88,9 +91,8 @@ from urllib.request import Request, urlopen
 
 url = os.environ['SCANNER_URL']
 pairlist_file = Path(os.environ['PAIRLIST_FILE'])
-token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
 known = None
+
 EXCLUDE = {'USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','AEURUSDT','BUSDUSDT'}
 
 def get_scan():
@@ -104,14 +106,6 @@ def to_pair(symbol):
     if not base or re.search(r'(UP|DOWN|BULL|BEAR)$', base):
         return None
     return f'{base}/USDT'
-
-def telegram(text):
-    if not token or not chat_id:
-        return
-    payload = json.dumps({'chat_id':chat_id,'text':text,'disable_web_page_preview':True}).encode()
-    req = Request(f'https://api.telegram.org/bot{token}/sendMessage', data=payload, headers={'Content-Type':'application/json'})
-    with urlopen(req, timeout=12) as r:
-        r.read()
 
 while True:
     try:
@@ -129,11 +123,7 @@ while True:
                 known = all_symbols
             else:
                 for sym in sorted(all_symbols - known):
-                    print(f'[new-listing] {sym}')
-                    try:
-                        telegram(f'🆕 NEW LISTING WATCH\n{sym}\nدخل السكان العام تلقائيًا. مفيش BUY إلا لو شروط الاستراتيجية اتأكدت.')
-                    except Exception as e:
-                        print(f'[new-listing] telegram warning: {type(e).__name__}: {e}')
+                    print(f'[new-listing] detected {sym}; canonical Telegram bridge handles notifications')
                 known = all_symbols
         movers = data.get('movers') or []
         if movers:
@@ -153,44 +143,43 @@ if [[ ! -s "$PAIRLIST_FILE" ]]; then
   exit 4
 fi
 
-PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
-import os
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+python -u - <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-pairlist_file = Path(os.environ['PAIRLIST_FILE'])
-class Handler(BaseHTTPRequestHandler):
+pairlist = Path('/freqtrade/user_data/vercel_pairlist.json')
+
+class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != '/pairs':
             self.send_response(404); self.end_headers(); return
         try:
-            payload = pairlist_file.read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
-        except Exception as e:
-            body = str(e).encode()
-            self.send_response(503)
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-    def log_message(self, format, *args):
+            body = pairlist.read_bytes()
+        except FileNotFoundError:
+            self.send_response(503); self.end_headers(); return
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *_):
         pass
 
-server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
 print('[pairlist-http] serving http://127.0.0.1:8765/pairs')
-server.serve_forever()
+HTTPServer(('127.0.0.1', 8765), H).serve_forever()
 PY
 PAIRLIST_HTTP_PID=$!
 
-for _ in $(seq 1 10); do
-  python - <<'PY' && break || true
+for _ in $(seq 1 20); do
+  if python - <<'PY'
 from urllib.request import urlopen
 with urlopen('http://127.0.0.1:8765/pairs', timeout=2) as r:
-    assert r.status == 200
+    raise SystemExit(0 if r.status == 200 else 1)
 PY
+  then
+    break
+  fi
   sleep 1
 done
 
