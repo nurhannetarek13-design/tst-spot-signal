@@ -9,6 +9,7 @@ on:
       - "src/buy-gateway-stable.js"
       - "src/buy-gateway-canonical.js"
       - "src/buy-gateway-time-monitor.js"
+      - "src/buy-gateway-auth-wrapper.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -30,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Validate canonical Worker + timed monitor wrapper
+      - name: Validate canonical Worker + monitor + auth wrapper
         shell: bash
         run: |
           set -euo pipefail
@@ -38,7 +39,8 @@ jobs:
           node --check src/buy-gateway-stable.js
           node --check src/buy-gateway-canonical.js
           node --check src/buy-gateway-time-monitor.js
-          grep -q '"main": "src/buy-gateway-time-monitor.js"' wrangler.jsonc
+          node --check src/buy-gateway-auth-wrapper.js
+          grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'LIQUIDITY_CRASH_EXHAUSTION' src/edge-worker.js
           grep -q 'STOP_HUNT_REVERSAL' src/edge-worker.js
           grep -q 'await scan(env,false)' src/edge-worker.js
@@ -52,6 +54,8 @@ jobs:
           grep -q 'REVIEW_45_MS' src/buy-gateway-time-monitor.js
           grep -q 'REVIEW_75_MS' src/buy-gateway-time-monitor.js
           grep -q 'HOLD30:' src/buy-gateway-time-monitor.js
+          grep -q 'x-fast-ecdsa' src/buy-gateway-auth-wrapper.js
+          grep -q 'ECDSA' src/buy-gateway-auth-wrapper.js
           if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
             echo "Legacy periodic digest still exists"
             exit 1
