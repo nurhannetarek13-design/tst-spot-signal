@@ -13,8 +13,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
-SIGNER_PORT=int(os.getenv('SIGNER_PORT','8081'))
-EXECUTOR_PORT=int(os.getenv('EXECUTOR_PORT','8083'))
 MAKE_BUY_WEBHOOK_URL=(os.getenv('MAKE_ONE_TAP_WEBHOOK_URL') or '').strip()
 MAKE_OCO_WEBHOOK_URL=(os.getenv('MAKE_ONE_TAP_OCO_WEBHOOK_URL') or '').strip()
 TELEGRAM_BOT_TOKEN=(os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
@@ -90,12 +88,7 @@ class H(BaseHTTPRequestHandler):
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(
-            target_url,
-            data=raw,
-            method='POST',
-            headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/2.0'},
-        )
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/3.0'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -113,34 +106,18 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def proxy(self):
+        if self.path=='/health' or self.path.startswith('/health?'):
+            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL)})
         if self.path.startswith('/make-exec-relay'):
             return self.make_exec_relay()
-        # Legacy public execution/signing routes are intentionally disabled.
-        # The only production execution route is Telegram CONFIRM -> Cloudflare -> signed relay -> Make.
         if self.path.startswith('/execute') or self.path.startswith('/signer/'):
-            return self.send_json(410,{
-                'ok':False,
-                'status':'LEGACY_DIRECT_EXECUTION_DISABLED',
-                'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY',
-            })
-        port=BRIDGE_PORT; path=self.path
-        length=int(self.headers.get('Content-Length') or 0)
-        body=self.rfile.read(length) if length else None
-        headers={k:v for k,v in self.headers.items() if k.lower() not in {'host','content-length','connection'}}
-        try:
-            c=http.client.HTTPConnection('127.0.0.1',port,timeout=45)
-            c.request(self.command,path,body=body,headers=headers)
-            r=c.getresponse(); data=r.read()
-            self.send_response(r.status)
-            for k,v in r.getheaders():
-                if k.lower() not in {'connection','transfer-encoding','content-length'}: self.send_header(k,v)
-            self.send_header('Content-Length',str(len(data))); self.send_header('Connection','close'); self.end_headers(); self.wfile.write(data); c.close()
-        except Exception as e:
-            data=f'upstream unavailable: {type(e).__name__}'.encode(); self.send_response(503); self.send_header('Content-Type','text/plain'); self.send_header('Content-Length',str(len(data))); self.send_header('Connection','close'); self.end_headers(); self.wfile.write(data)
+            return self.send_json(410,{'ok':False,'status':'LEGACY_DIRECT_EXECUTION_DISABLED','executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY'})
+        return self.send_json(404,{'ok':False,'status':'NOT_FOUND'})
+
     do_GET=proxy
     do_POST=proxy
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE external={PORT} bridge={BRIDGE_PORT} signer={SIGNER_PORT} executor={EXECUTOR_PORT} make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)}', flush=True)
+    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)}', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
