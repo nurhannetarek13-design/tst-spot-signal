@@ -6,6 +6,8 @@ FROM freqtradeorg/freqtrade:stable
 USER root
 WORKDIR /freqtrade
 
+RUN pip install --no-cache-dir cryptography
+
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY front_proxy.py /freqtrade/front_proxy.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
