@@ -13,6 +13,21 @@ if 'import entry_quality\n' not in s:
         raise SystemExit('entry quality patch failed: import marker missing')
     s = s.replace(import_marker, import_marker + 'import entry_quality\n', 1)
 
+# Validate the maximum live stake in the non-trading dry-run preflight so
+# execution-layer stake limits cannot drift away from dynamic sizing again.
+preflight_probe_old = (
+    "        'stakeUSDT': 5.5,\n"
+    "        'score': 100,\n"
+    "        'strategy': 'FAST_EXECUTION_PREFLIGHT',\n"
+)
+preflight_probe_new = (
+    "        'stakeUSDT': 10.0,\n"
+    "        'score': 100,\n"
+    "        'strategy': 'FAST_EXECUTION_PREFLIGHT',\n"
+)
+if preflight_probe_old in s:
+    s = s.replace(preflight_probe_old, preflight_probe_new, 1)
+
 preflight_marker = "        execution_ready = row.get('status') == 'FAST_SIGNAL_DRYRUN_OK' and row.get('userConfirmationRequired') is True and row.get('autoBuy') is False\n"
 preflight_extra = (
     "        if execution_ready:\n"
@@ -24,7 +39,6 @@ preflight_extra = (
 if '[entry-quality-preflight] OK' not in s:
     if preflight_marker not in s:
         raise SystemExit('quality preflight patch failed: preflight marker missing')
-    # Remove the older dynamic-sizing-only injected block if present, then install the combined block.
     old_extra = "        if execution_ready:\n            dynamic_sizing.free_usdt()\n            print('[dynamic-sizing] balance read OK')\n"
     if old_extra in s:
         s = s.replace(old_extra, '', 1)
@@ -88,4 +102,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[live-safety-patch] OK quality preflight + hard gates + filtered ranking + adaptive sizing enabled')
+print('[live-safety-patch] OK cap-dryrun + quality preflight + hard gates + filtered ranking + adaptive sizing enabled')
