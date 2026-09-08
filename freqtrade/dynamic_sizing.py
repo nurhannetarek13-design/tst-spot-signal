@@ -130,7 +130,7 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/8.0',
+            'User-Agent': 'tst-dynamic-sizing/9.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -156,15 +156,12 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
             query = _signed_account_query(secret_bytes)
             req = Request(
                 f'{base}/api/v3/account?{query}',
-                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/8.0'},
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/9.0'},
             )
             try:
                 with urlopen(req, timeout=8) as r:
                     data = json.loads(r.read().decode())
-                print(
-                    f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}',
-                    flush=True,
-                )
+                print(f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}', flush=True)
                 return _extract_free_usdt(data)
             except HTTPError as exc:
                 last_error = _safe_http_error(exc)
@@ -176,10 +173,7 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
 
         try:
             free = _relay_free_usdt(key, secret_bytes)
-            print(
-                f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}:relay',
-                flush=True,
-            )
+            print(f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}:relay', flush=True)
             return free
         except Exception as exc:
             errors.append(f'{pair_label}/{secret_label}:relay:{type(exc).__name__}:{str(exc)[:150]}')
@@ -187,8 +181,6 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
 
 
 def free_usdt() -> float:
-    # Dynamic sizing is intentionally isolated from the trading credentials.
-    # Never fall back to BINANCE_API_KEY / BINANCE_API_SECRET here.
     key = _clean_credential(os.getenv('BINANCE_READ_API_KEY') or '')
     secret = _clean_credential(os.getenv('BINANCE_READ_API_SECRET') or '')
     if not key or not secret:
@@ -203,19 +195,32 @@ def free_usdt() -> float:
     raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{safe_diag}')
 
 
-def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
+def _score_fraction(score: float, hard_cap: float) -> float:
+    """Capital fraction rises gradually with signal quality; never exceeds 30% by default."""
+    s = min(100.0, max(82.0, float(score)))
+    quality = (s - 82.0) / 18.0
+    adaptive = 0.12 + (0.18 * quality)  # 12% at 82 -> 30% at 100
+    return min(adaptive, hard_cap, 0.30)
+
+
+def recommended_stake(stop_pct: float, score: float = 82.0) -> tuple[float | None, float]:
     free = free_usdt()
     min_stake = max(5.0, _env_float('MIN_STAKE_USDT', 5.0))
-    max_stake_fraction = min(max(_env_float('MAX_STAKE_FRACTION', 0.50), 0.01), 0.95)
+    hard_fraction_cap = min(max(_env_float('MAX_STAKE_FRACTION', 0.50), 0.01), 0.95)
     risk_fraction = min(max(_env_float('RISK_FRACTION_OF_BALANCE', 0.02), 0.001), 0.20)
     max_risk = max(0.01, _env_float('MAX_RISK_PER_TRADE_USDT', 0.50))
+    daily_loss_limit = max(0.01, _env_float('DAILY_LOSS_LIMIT_USDT', 2.0))
 
     stop = max(float(stop_pct), 0.001)
-    risk_budget = min(max_risk, free * risk_fraction)
+    capital_fraction = _score_fraction(score, hard_fraction_cap)
+
+    # Risk gate: a single trade cannot consume more than one third of the daily loss budget.
+    risk_budget = min(max_risk, free * risk_fraction, daily_loss_limit / 3.0)
     by_risk = risk_budget / stop
-    by_balance = free * max_stake_fraction
-    available = max(0.0, free - 0.10)
-    raw = min(10.0, available, by_balance, by_risk)
+    by_quality = free * capital_fraction
+    available = max(0.0, free - max(0.10, free * 0.05))  # keep at least 5% free
+
+    raw = min(available, by_quality, by_risk)
     stake = math.floor(raw * 100.0) / 100.0
 
     if stake < min_stake or free < min_stake:
