@@ -29,7 +29,7 @@
       "urls": {"api": {"public": "https://data-api.binance.vision/api/v3", "private": "https://api.binance.com/api", "sapi": "https://api.binance.com/sapi"}},
       "options": {"defaultType": "spot", "fetchMarkets": ["spot"]}
     },
-    "pair_whitelist": [".*/USDT"],
+    "pair_whitelist": [],
     "pair_blacklist": [
       ".*(UP|DOWN|BULL|BEAR)/USDT",
       "USDC/USDT","FDUSD/USDT","TUSD/USDT","USDP/USDT","DAI/USDT","EUR/USDT"
@@ -39,7 +39,7 @@
     {
       "method": "RemotePairList",
       "mode": "whitelist",
-      "processing_mode": "generator",
+      "processing_mode": "append",
       "pairlist_url": "https://tst-spot-signal.vercel.app/api/market-scan?format=freqtrade",
       "number_assets": 120,
       "refresh_period": 60,
