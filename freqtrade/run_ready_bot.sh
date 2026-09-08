@@ -7,11 +7,12 @@ NFI_DIR="$USER_DATA/nfi-pinned"
 PROTECTED_FILE="$STRATEGY_DIR/NFIProtectedX7.py"
 BRIDGE_FILE="/freqtrade/telegram_signal_bridge.py"
 CONFIG_FILE="$USER_DATA/config_nfi_dryrun.json"
+PAIRLIST_FILE="$USER_DATA/vercel_pairlist.json"
 NFI_COMMIT="da50440bd5f8a829af9dc768822fa31cfe4b7867"
 NFI_ARCHIVE="https://github.com/iterativv/NostalgiaForInfinity/archive/${NFI_COMMIT}.tar.gz"
 PROTECTED_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/user_data/strategies/NFIProtectedX7.py"
 BRIDGE_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/telegram_signal_bridge.py"
-SCANNER_URL="${VERCEL_SCANNER_URL:-https://tst-spot-signal.vercel.app/api/market-scan}"
+SCANNER_URL="${VERCEL_SCANNER_URL:-https://tst-spot-signal.vercel.app/api/market-scanner}"
 
 mkdir -p "$STRATEGY_DIR" "$USER_DATA/logs" "$USER_DATA/signals"
 
@@ -77,64 +78,84 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 3
 fi
 
-# Signal bridge. Freqtrade remains dry-run / manual-confirmation only.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 
-# Lightweight watcher: heavy all-market scan executes on Vercel. This process
-# only fetches the compact result, remembers symbols, and alerts on new listings.
-SCANNER_URL="$SCANNER_URL" python -u - <<'PY' &
-import json, os, time
+# Keep a local Freqtrade-compatible pairlist synchronized from Vercel every minute.
+SCANNER_URL="$SCANNER_URL" PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
+import json, os, re, time
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 url = os.environ['SCANNER_URL']
+pairlist_file = Path(os.environ['PAIRLIST_FILE'])
 token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
-trigger_secret = os.environ.get('SCANNER_TRIGGER_SECRET', '')
 known = None
 
+EXCLUDE = {'USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','AEURUSDT','BUSDUSDT'}
+
 def get_scan():
-    headers = {'User-Agent': 'tst-vercel-trigger/1.0', 'Accept': 'application/json'}
-    if trigger_secret:
-        headers['Authorization'] = f'Bearer {trigger_secret}'
-    with urlopen(Request(url, headers=headers), timeout=25) as r:
+    with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/2.0','Accept':'application/json'}), timeout=25) as r:
         return json.loads(r.read())
+
+def to_pair(symbol):
+    if not symbol.endswith('USDT') or symbol in EXCLUDE:
+        return None
+    base = symbol[:-4]
+    if not base or re.search(r'(UP|DOWN|BULL|BEAR)$', base):
+        return None
+    return f'{base}/USDT'
 
 def telegram(text):
     if not token or not chat_id:
         return
-    payload = json.dumps({'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}).encode()
-    endpoint = f'https://api.telegram.org/bot{token}/sendMessage'
-    req = Request(endpoint, data=payload, headers={'Content-Type': 'application/json'})
+    payload = json.dumps({'chat_id':chat_id,'text':text,'disable_web_page_preview':True}).encode()
+    req = Request(f'https://api.telegram.org/bot{token}/sendMessage', data=payload, headers={'Content-Type':'application/json'})
     with urlopen(req, timeout=12) as r:
         r.read()
 
 while True:
     try:
         data = get_scan()
-        symbols = set(data.get('symbols') or [])
-        if symbols:
+        liquid_symbols = data.get('liquid') or []
+        pairs = [p for p in (to_pair(s) for s in liquid_symbols) if p][:120]
+        if pairs:
+            tmp = pairlist_file.with_suffix('.tmp')
+            tmp.write_text(json.dumps({'pairs': pairs, 'refresh_period': 60}))
+            tmp.replace(pairlist_file)
+            print(f'[vercel-pairlist] wrote {len(pairs)} pairs to {pairlist_file}')
+        all_symbols = set(liquid_symbols) | {x.get('symbol') for x in (data.get('movers') or []) if x.get('symbol')}
+        if all_symbols:
             if known is None:
-                known = symbols
-                print(f"[vercel-scan] tracking {len(symbols)} Spot/USDT markets remotely")
+                known = all_symbols
             else:
-                added = sorted(symbols - known)
-                if added:
-                    for sym in added:
-                        print(f"[new-listing] {sym}")
-                        try:
-                            telegram(f"🆕 NEW LISTING WATCH\n{sym}\nدخل السكان العام تلقائيًا. مفيش BUY إلا لو شروط الاستراتيجية اتأكدت.")
-                        except Exception as e:
-                            print(f"[new-listing] telegram warning: {type(e).__name__}: {e}")
-                known = symbols
-        top = data.get('liquidMovers') or []
-        if top:
-            print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('changePct',0)):+.1f}%" for x in top[:8]))
+                for sym in sorted(all_symbols - known):
+                    print(f'[new-listing] {sym}')
+                    try:
+                        telegram(f'🆕 NEW LISTING WATCH\n{sym}\nدخل السكان العام تلقائيًا. مفيش BUY إلا لو شروط الاستراتيجية اتأكدت.')
+                    except Exception as e:
+                        print(f'[new-listing] telegram warning: {type(e).__name__}: {e}')
+                known = all_symbols
+        movers = data.get('movers') or []
+        if movers:
+            print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('change',0)):+.1f}%" for x in movers[:8]))
     except Exception as e:
-        print(f"[vercel-scan] warning: {type(e).__name__}: {e}")
+        print(f'[vercel-scan] warning: {type(e).__name__}: {e}')
     time.sleep(60)
 PY
 WATCHER_PID=$!
+
+# Wait briefly for the first local pairlist snapshot before starting Freqtrade.
+for _ in $(seq 1 20); do
+  [[ -s "$PAIRLIST_FILE" ]] && break
+  sleep 1
+done
+if [[ ! -s "$PAIRLIST_FILE" ]]; then
+  echo "[ready-bot] local pairlist was not created" >&2
+  exit 4
+fi
+
 trap 'kill "$BRIDGE_PID" "$WATCHER_PID" 2>/dev/null || true' EXIT
 
 exec freqtrade trade \
