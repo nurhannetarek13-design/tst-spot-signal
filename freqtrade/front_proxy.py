@@ -115,12 +115,15 @@ class H(BaseHTTPRequestHandler):
     def proxy(self):
         if self.path.startswith('/make-exec-relay'):
             return self.make_exec_relay()
-        if self.path.startswith('/signer/'):
-            port=SIGNER_PORT; path=self.path[len('/signer'):]
-        elif self.path.startswith('/execute'):
-            port=EXECUTOR_PORT; path=self.path[len('/execute'):] or '/'
-        else:
-            port=BRIDGE_PORT; path=self.path
+        # Legacy public execution/signing routes are intentionally disabled.
+        # The only production execution route is Telegram CONFIRM -> Cloudflare -> signed relay -> Make.
+        if self.path.startswith('/execute') or self.path.startswith('/signer/'):
+            return self.send_json(410,{
+                'ok':False,
+                'status':'LEGACY_DIRECT_EXECUTION_DISABLED',
+                'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY',
+            })
+        port=BRIDGE_PORT; path=self.path
         length=int(self.headers.get('Content-Length') or 0)
         body=self.rfile.read(length) if length else None
         headers={k:v for k,v in self.headers.items() if k.lower() not in {'host','content-length','connection'}}
