@@ -37,7 +37,6 @@ EXCLUDE = {
 
 
 def validate_and_resolve_telegram_chat() -> bool:
-    """Resolve a real private human chat and reject the bot's own id."""
     try:
         me = bridge.tg_api('getMe', {})
         bot_id = str((me.get('result') or {}).get('id') or '')
@@ -88,8 +87,6 @@ def validate_and_resolve_telegram_chat() -> bool:
     return False
 
 
-# Railway's current region receives HTTP 451 from Binance private /account.
-# Private execution is therefore transported through the signed Cloudflare/Vercel path.
 bridge.get_free_usdt_balance = lambda: None
 
 
@@ -289,7 +286,6 @@ def market_metrics(symbol: str) -> dict:
 def score_setup(m: dict) -> tuple[float, list[str]]:
     score = 0.0
     reasons = []
-
     if m['ema9'] > m['ema21'] and m['last'] > m['ema9']:
         score += 18; reasons.append('trend')
     if 0.0010 <= m['mom15'] <= 0.018:
@@ -314,7 +310,6 @@ def score_setup(m: dict) -> tuple[float, list[str]]:
         score += 5; reasons.append('spread')
     if 0.0 <= m['distance_ema9'] <= 0.010:
         score += 4; reasons.append('not-chasing')
-
     if m['mom15'] > 0.025:
         score -= 18
     if m['distance_ema9'] > 0.018:
@@ -325,7 +320,6 @@ def score_setup(m: dict) -> tuple[float, list[str]]:
         score -= 8
     if m['spread_pct'] > MAX_SPREAD_PCT:
         score -= 25
-
     return max(0.0, min(100.0, score)), reasons
 
 
@@ -365,11 +359,7 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
 
     m = market_metrics(symbol)
     score, reasons = score_setup(m)
-    print(
-        f"[fast-score] {symbol} score={score:.0f} spread={m['spread_pct']:.3f}% "
-        f"mom15={m['mom15']*100:+.2f}% volx={m['volume_ratio']:.2f} "
-        f"taker={m['taker_buy_ratio']*100:.1f}% rsi={m['rsi']:.1f}"
-    )
+    print(f"[fast-score] {symbol} score={score:.0f} spread={m['spread_pct']:.3f}% mom15={m['mom15']*100:+.2f}% volx={m['volume_ratio']:.2f} taker={m['taker_buy_ratio']*100:.1f}% rsi={m['rsi']:.1f}")
     if score < MIN_SCORE:
         return False
 
@@ -379,22 +369,8 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
     tp = entry * (1.0 + tp_pct)
     sl = entry * (1.0 - sl_pct)
     pair = f'{symbol[:-4]}/USDT'
-    tag = (
-        f"FAST30_60|score={score:.0f}|mom15={m['mom15']*100:.2f}%|"
-        f"volx={m['volume_ratio']:.2f}|taker={m['taker_buy_ratio']*100:.1f}%|"
-        f"rsi={m['rsi']:.1f}|spread={m['spread_pct']:.3f}%"
-    )
-    payload = {
-        'id': f'{symbol}-{int(now)}',
-        'symbol': symbol,
-        'entry': entry,
-        'stop': sl,
-        'target': tp,
-        'stakeUSDT': 5.5,
-        'score': round(score),
-        'strategy': tag,
-        'dryRun': False,
-    }
+    tag = f"FAST30_60|score={score:.0f}|mom15={m['mom15']*100:.2f}%|volx={m['volume_ratio']:.2f}|taker={m['taker_buy_ratio']*100:.1f}%|rsi={m['rsi']:.1f}|spread={m['spread_pct']:.3f}%"
+    payload = {'id': f'{symbol}-{int(now)}','symbol': symbol,'entry': entry,'stop': sl,'target': tp,'stakeUSDT': 5.5,'score': round(score),'strategy': tag,'dryRun': False}
     row = fast_ingest(payload, timeout=30)
     if row.get('status') != 'FAST_SIGNAL_READY' or row.get('userConfirmationRequired') is not True or row.get('autoBuy') is not False:
         raise RuntimeError(f'unexpected one-tap ingest response: {row}')
@@ -406,13 +382,10 @@ def maybe_signal(symbol: str, change24: float, volume24: float) -> bool:
 
 
 def main() -> None:
+    global execution_ready
     telegram_ok = validate_and_resolve_telegram_chat()
     execution_preflight()
-    print(
-        f'[fast-engine] ONLINE min_score={MIN_SCORE:.0f} max/day={MAX_SIGNALS_PER_DAY} '
-        f'pair_cd={PAIR_COOLDOWN_SEC//60}m global_cd={GLOBAL_COOLDOWN_SEC//60}m '
-        f'telegram={"OK" if telegram_ok else "WAITING"} execution={"OK" if execution_ready else "BLOCKED"}'
-    )
+    print(f'[fast-engine] ONLINE min_score={MIN_SCORE:.0f} max/day={MAX_SIGNALS_PER_DAY} pair_cd={PAIR_COOLDOWN_SEC//60}m global_cd={GLOBAL_COOLDOWN_SEC//60}m telegram={"OK" if telegram_ok else "WAITING"} execution={"OK" if execution_ready else "BLOCKED"}')
     last_chat_retry = 0.0
     last_execution_retry = 0.0
     while True:
