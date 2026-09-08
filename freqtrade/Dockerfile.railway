@@ -1,14 +1,13 @@
 FROM freqtradeorg/freqtrade:stable
 
-# Railway runtime: NFI + Fast Entry + signer + one-tap executor + front proxy.
-# Deploy trigger: signed Fast ingest preflight with normal /health check.
+# Railway runtime: NFI + Fast Entry + signed Make relay + front proxy.
+# Telegram callback ownership is Cloudflare-only. Legacy Railway polling/executor/signer
+# services are intentionally not started to avoid webhook conflicts and bypass routes.
 USER root
 WORKDIR /freqtrade
 
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY one_tap_bridge.py /freqtrade/one_tap_bridge.py
-COPY order_signer.py /freqtrade/order_signer.py
-COPY railway_executor.py /freqtrade/railway_executor.py
 COPY front_proxy.py /freqtrade/front_proxy.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
 COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
@@ -19,14 +18,12 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && sed -i '/from telegram_signal_bridge import send_prealert/a send_prealert = lambda **kwargs: None' /freqtrade/run_ready_bot.sh \
     && sed -i "s/if python - <<'PY'/if python - 2>\/dev\/null <<'PY'/" /freqtrade/run_ready_bot.sh \
     && sed -i 's/import telegram_signal_bridge as bridge/import one_tap_bridge as bridge/' /freqtrade/fast_entry_engine.py \
-    && sed -i 's|python -u "$BRIDGE_FILE" \&|BRIDGE_PORT=8082 PORT=8082 python -u "$BRIDGE_FILE" \&|' /freqtrade/run_ready_bot.sh \
+    && sed -i 's|python -u "$BRIDGE_FILE" \&|true # Cloudflare owns Telegram webhook; do not start Railway Telegram bridge|' /freqtrade/run_ready_bot.sh \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
 USER ftuser
 ENV PYTHONUNBUFFERED=1
-ENV SIGNER_PORT=8081
 ENV BRIDGE_PORT=8082
-ENV EXECUTOR_PORT=8083
 EXPOSE 8080
-CMD ["/bin/bash", "-lc", "python -u /freqtrade/order_signer.py & python -u /freqtrade/railway_executor.py & python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
+CMD ["/bin/bash", "-lc", "python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
