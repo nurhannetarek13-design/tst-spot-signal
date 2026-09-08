@@ -11,6 +11,7 @@ import uuid
 from dataclasses import dataclass, asdict
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -34,15 +35,24 @@ MIN_STAKE_USDT = float(os.getenv('MIN_STAKE_USDT', '5.5'))
 def tg_api(method: str, payload: dict) -> dict:
     if not TELEGRAM_TOKEN:
         raise RuntimeError('TELEGRAM_BOT_TOKEN is not configured')
+    if not TELEGRAM_CHAT_ID and method == 'sendMessage':
+        raise RuntimeError('TELEGRAM_CHAT_ID is not configured')
     url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}'
     body = json.dumps(payload).encode()
-    req = Request(url, data=body, headers={'Content-Type': 'application/json'})
-    with urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
+    req = Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'tst-signal-bridge/3.0'})
+    try:
+        with urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode())
+    except HTTPError as exc:
+        try:
+            detail = exc.read().decode(errors='replace')[:500]
+        except Exception:
+            detail = ''
+        raise RuntimeError(f'Telegram HTTP {exc.code}: {detail}') from exc
 
 
 def binance_get(path: str) -> dict:
-    req = Request(BINANCE_PUBLIC + path, headers={'User-Agent': 'tst-new-listing-watch/1.0'})
+    req = Request(BINANCE_PUBLIC + path, headers={'User-Agent': 'tst-new-listing-watch/2.0'})
     with urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode())
 
@@ -121,6 +131,39 @@ def load_signal(signal_id: str) -> Signal | None:
         return None
 
 
+def send_prealert(
+    pair: str,
+    last: float,
+    change_24h: float,
+    volume_24h: float,
+    range_1h: float,
+    momentum_15m: float,
+    volume_ratio: float,
+) -> None:
+    symbol = pair.replace('/', '')
+    text = (
+        '👀 PRE-ALERT — Setup forming\n'
+        f'Pair: {pair}\n'
+        f'Price: {last:.8g}\n'
+        f'24h change: {change_24h:+.2f}%\n'
+        f'24h volume: {volume_24h/1_000_000:.1f}M USDT\n'
+        f'1h range: {range_1h*100:.2f}%\n'
+        f'15m momentum: {momentum_15m*100:+.2f}%\n'
+        f'Volume expansion: {volume_ratio:.2f}x\n\n'
+        'دي مراقبة مبكرة فقط — مفيش BUY لسه. BUY مش هيظهر إلا لو NFI أكد الدخول.'
+    )
+    tg_api('sendMessage', {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': text,
+        'reply_markup': {'inline_keyboard': [[{
+            'text': '📈 Watch on Binance',
+            'url': f'https://www.binance.com/en/trade/{symbol}?type=spot',
+        }]]},
+        'disable_web_page_preview': True,
+    })
+    print(f'[telegram-prealert] sent for {pair}')
+
+
 def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: float, tag: str = '') -> str:
     try:
         balance = get_free_usdt_balance()
@@ -135,22 +178,21 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
     save_signal(sig)
     symbol = pair.replace('/', '')
     balance_line = f'Free USDT: {balance:.2f}\n' if balance is not None else 'Free USDT: unavailable (fallback sizing)\n'
+    risk_line = f'Estimated risk at SL: {risk_usdt:.2f} USDT\n' if risk_usdt is not None else ''
     text = (
-        f'🚨 فرصة Spot\n'
+        '🚨 NFI CONFIRMED BUY — Spot\n'
         f'Pair: {pair}\n'
         f'Entry ≈ {entry:.8g}\n'
         f'{balance_line}'
         f'✅ Recommended amount: {recommended:.2f} USDT\n'
-        f'Estimated risk at SL: {risk_usdt:.2f} USDT\n' if risk_usdt is not None else ''
-    )
-    text += (
-        f'TP: {tp:.8g}\n'
-        f'SL: {sl:.8g}\n'
-        f'Window: 15 min\n'
-        f'Expected hold: 30–60 min\n'
+        f'{risk_line}'
+        f'TP: {tp:.8g} (+{((tp/entry)-1)*100:.2f}%)\n'
+        f'SL: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
+        'Window: 15 min\n'
+        'Expected hold: 30–60 min\n'
         f'Strategy: {tag or "NFIProtectedX7"}\n'
         f'Sizing: {sizing_note}\n\n'
-        f'البوت لا يشتري تلقائيًا. اضغطي BUY لفتح صفحة الصفقة جاهزة بكل البيانات.'
+        'البوت لا يشتري تلقائيًا. اضغطي BUY لفتح صفحة الصفقة جاهزة بكل البيانات.'
     )
     buttons = []
     if PUBLIC_BASE_URL:
@@ -162,6 +204,7 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
         'reply_markup': {'inline_keyboard': [buttons]},
         'disable_web_page_preview': True,
     })
+    print(f'[telegram-buy] sent for {pair} id={signal_id}')
     return signal_id
 
 
@@ -202,10 +245,10 @@ def watch_new_listings() -> None:
                     pair = f"{s.get('baseAsset')}/USDT"
                     status = s.get('status', 'UNKNOWN')
                     text = (
-                        f'🆕 NEW LISTING WATCH\n'
+                        '🆕 NEW LISTING WATCH\n'
                         f'Pair: {pair}\n'
                         f'Status: {status}\n'
-                        f'البوت ضافها للسكان تلقائيًا. الإشارة لن تتبعت غير بعد ما يبقى فيه بيانات كفاية وNFI يوافق على الدخول.'
+                        'البوت ضافها للسكان تلقائيًا. الإشارة لن تتبعت غير بعد ما يبقى فيه بيانات كفاية وNFI يوافق على الدخول.'
                     )
                     tg_api('sendMessage', {
                         'chat_id': TELEGRAM_CHAT_ID,
@@ -216,6 +259,7 @@ def watch_new_listings() -> None:
                         }]]},
                         'disable_web_page_preview': True,
                     })
+                    print(f'[new-listing-watch] sent {pair}')
                 known = current
         except Exception as e:
             print(f'[new-listing-watch] warning: {type(e).__name__}: {e}')
@@ -256,6 +300,24 @@ def run_http():
     HTTPServer(('0.0.0.0', port), Handler).serve_forever()
 
 
+def announce_online() -> None:
+    try:
+        tg_api('sendMessage', {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': (
+                '✅ TST Signal Bot ONLINE\n'
+                'Live Binance market data · Signal-only · No auto-buy\n'
+                '👀 PRE-ALERT = setup forming\n'
+                '🚨 BUY = NFI confirmed'
+            ),
+            'disable_web_page_preview': True,
+        })
+        print('[telegram] ONLINE message sent successfully')
+    except Exception as exc:
+        print(f'[telegram] ONLINE message FAILED: {type(exc).__name__}: {exc}')
+
+
 if __name__ == '__main__':
+    announce_online()
     threading.Thread(target=watch_new_listings, daemon=True).start()
     threading.Thread(target=run_http, daemon=False).start()
