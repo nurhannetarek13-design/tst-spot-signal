@@ -121,6 +121,9 @@ async function handleFastSignalIngest(request, env) {
   const free=Number(b.usdt?.free||0);
   const rec=dynamicQuote(free,entry,stop,requested);
   if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
+  if (body.dryRun === true) {
+    return Response.json({ok:true,status:"FAST_SIGNAL_DRYRUN_OK",canTrade:true,credentialMode:"LIVE",autoBuy:false,userConfirmationRequired:true,recommendedUSDT:rec});
+  }
   const rawId=String(body.id||`${symbol}-${Date.now()}`);
   const id=rawId.replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || compactId({symbol,entry,createdAt:Date.now()});
   const now=Date.now();
