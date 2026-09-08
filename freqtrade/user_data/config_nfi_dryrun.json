@@ -40,11 +40,11 @@
       "method": "RemotePairList",
       "mode": "whitelist",
       "processing_mode": "append",
-      "pairlist_url": "file:///freqtrade/user_data/vercel_pairlist.json",
+      "pairlist_url": "http://127.0.0.1:8765/pairs",
       "number_assets": 120,
       "refresh_period": 60,
       "keep_pairlist_on_failure": true,
-      "read_timeout": 20
+      "read_timeout": 10
     }
   ],
   "entry_pricing": {"price_side": "other", "use_order_book": false},
