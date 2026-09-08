@@ -7,23 +7,32 @@ from NostalgiaForInfinityX7 import NostalgiaForInfinityX7
 
 
 class NFIProtectedX7(NostalgiaForInfinityX7):
-    """NFI X7 signal-only scanner with fast-trade and hard-risk filters."""
+    """NFI X7 final-confirmation layer for 30–60 minute signal-only trades.
 
-    stoploss = -0.08
+    Stage 1 PRE-ALERT is produced by the lightweight market watcher.
+    Stage 2 BUY is emitted here only after a real NFI entry is present and
+    the market still has enough short-term movement for a fast trade.
+    """
+
+    # The bot never auto-buys, but this value is also used to build the manual
+    # BUY preview. -8% was inappropriate for a 30–60m target, so fast-trade
+    # risk is capped near the size of the intended move.
+    stoploss = -0.012
     position_adjustment_enable = False
     max_entry_position_adjustment = 0
 
     DAILY_LOSS_LIMIT_USDT = 2.0
     MAX_HOLD_MINUTES = 60
     FAST_TP = 0.015
+    FAST_SL = 0.012
     SOFT_PROFIT = 0.004
     SOFT_PROFIT_AFTER_MINUTES = 30
     ALERT_COOLDOWN_MINUTES = 15
 
-    # A BUY alert is allowed only when recent realized movement shows enough
-    # capacity to plausibly cover the requested 1.5% target within ~1 hour.
-    MIN_1H_RANGE = 0.018
-    MIN_15M_MOMENTUM = 0.0015
+    # NFI itself is the high-quality confirmation. These are now an anti-dead
+    # market gate rather than a second ultra-strict strategy stacked on top.
+    MIN_1H_RANGE = 0.012       # 1.2% demonstrated movement capacity
+    MIN_15M_MOMENTUM = 0.0005 # +0.05% positive short momentum
 
     _last_alert_by_pair: dict[str, datetime] = {}
 
@@ -40,28 +49,24 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
             return True
         return (current_time - prev).total_seconds() >= self.ALERT_COOLDOWN_MINUTES * 60
 
-    def _fast_trade_ok(self, pair: str) -> bool:
-        """Require enough recent movement and positive short momentum.
-
-        Runtime timeframe is 5m, so 12 candles ~= 1h and 3 candles ~= 15m.
-        This does not guarantee the target; it rejects setups where the recent
-        market has not even demonstrated enough movement capacity.
-        """
+    def _fast_trade_metrics(self, pair: str) -> tuple[bool, float, float]:
+        """Return (allowed, 1h range, 15m momentum) from analyzed 5m data."""
         try:
             dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
             if dataframe is None or len(dataframe) < 13:
-                return False
+                return False, 0.0, 0.0
             d = dataframe.iloc[-12:]
             last = float(d['close'].iloc[-1])
             if last <= 0:
-                return False
+                return False, 0.0, 0.0
             one_hour_range = (float(d['high'].max()) - float(d['low'].min())) / last
             close_15m_ago = float(dataframe['close'].iloc[-4])
             momentum_15m = (last / close_15m_ago) - 1.0 if close_15m_ago > 0 else -1.0
-            return one_hour_range >= self.MIN_1H_RANGE and momentum_15m >= self.MIN_15M_MOMENTUM
+            allowed = one_hour_range >= self.MIN_1H_RANGE and momentum_15m >= self.MIN_15M_MOMENTUM
+            return allowed, one_hour_range, momentum_15m
         except Exception as exc:
-            print(f'[fast-filter] failed for {pair}: {exc}')
-            return False
+            print(f'[fast-filter] failed for {pair}: {type(exc).__name__}: {exc}')
+            return False, 0.0, 0.0
 
     def confirm_trade_entry(
         self,
@@ -76,22 +81,32 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
         **kwargs,
     ) -> bool:
         if self._realized_pnl_today(current_time) <= -self.DAILY_LOSS_LIMIT_USDT:
+            print(f'[buy-gate] {pair} blocked: daily loss cap reached')
             return False
 
-        parent_ok = bool(
-            super().confirm_trade_entry(
-                pair=pair,
-                order_type=order_type,
-                amount=amount,
-                rate=rate,
-                time_in_force=time_in_force,
-                current_time=current_time,
-                entry_tag=entry_tag,
-                side=side,
-                **kwargs,
-            )
+        parent_result = super().confirm_trade_entry(
+            pair=pair,
+            order_type=order_type,
+            amount=amount,
+            rate=rate,
+            time_in_force=time_in_force,
+            current_time=current_time,
+            entry_tag=entry_tag,
+            side=side,
+            **kwargs,
         )
-        if not parent_ok or not self._fast_trade_ok(pair):
+        # IStrategy implementations may return None when they do not veto.
+        parent_ok = parent_result is not False
+        if not parent_ok:
+            print(f'[buy-gate] {pair} blocked by NFI confirm_trade_entry')
+            return False
+
+        fast_ok, one_hour_range, momentum_15m = self._fast_trade_metrics(pair)
+        print(
+            f'[nfi-entry] {pair} range1h={one_hour_range*100:.2f}% '
+            f'mom15m={momentum_15m*100:+.2f}% fast_ok={fast_ok}'
+        )
+        if not fast_ok:
             return False
 
         if self._alert_allowed(pair, current_time):
@@ -99,20 +114,21 @@ class NFIProtectedX7(NostalgiaForInfinityX7):
                 from telegram_signal_bridge import send_opportunity
                 stake_usdt = float(amount) * float(rate)
                 tp = float(rate) * (1.0 + self.FAST_TP)
-                sl = float(rate) * (1.0 + self.stoploss)
+                sl = float(rate) * (1.0 - self.FAST_SL)
                 send_opportunity(
                     pair=pair,
                     stake_usdt=stake_usdt,
                     entry=float(rate),
                     tp=tp,
                     sl=sl,
-                    tag=(entry_tag or 'NFIProtectedX7') + '|FAST<=60M',
+                    tag=(entry_tag or 'NFIProtectedX7') + '|NFI_CONFIRMED|FAST<=60M',
                 )
                 self._last_alert_by_pair[pair] = current_time
+                print(f'[telegram-signal] BUY sent for {pair}')
             except Exception as exc:
-                print(f'[telegram-signal] failed for {pair}: {exc}')
+                print(f'[telegram-signal] failed for {pair}: {type(exc).__name__}: {exc}')
 
-        # Never auto-place the trade.
+        # Signal-only: never allow Freqtrade to place a real or simulated entry.
         return False
 
     def custom_exit(
