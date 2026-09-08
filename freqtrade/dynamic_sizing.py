@@ -17,6 +17,10 @@ API_BASES = [
     'https://api3.binance.com',
     'https://api4.binance.com',
 ]
+ACCOUNT_READ_RELAY = os.getenv(
+    'BINANCE_ACCOUNT_READ_RELAY_URL',
+    'https://tst-spot-signal.vercel.app/api/binance-account-read-relay',
+)
 
 
 def _env_float(name: str, default: float) -> float:
@@ -26,23 +30,57 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _signed_account_query(secret: str) -> str:
+    params = {'recvWindow': 5000, 'timestamp': int(time.time() * 1000)}
+    query = urlencode(params)
+    signature = hmac.new(secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+    return f'{query}&signature={signature}'
+
+
+def _relay_free_usdt(key: str, secret: str) -> float:
+    caller_secret = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
+    if not caller_secret:
+        raise RuntimeError('SIZING_RELAY_AUTH_MISSING')
+    body = json.dumps({'apiKey': key, 'query': _signed_account_query(secret)}, separators=(',', ':')).encode()
+    ts = str(int(time.time() * 1000))
+    caller_sig = hmac.new(caller_secret.encode(), ts.encode() + b'.' + body, hashlib.sha256).hexdigest()
+    req = Request(
+        ACCOUNT_READ_RELAY,
+        data=body,
+        method='POST',
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'tst-dynamic-sizing/2.0',
+            'X-Sizing-Timestamp': ts,
+            'X-Sizing-Signature': caller_sig,
+        },
+    )
+    with urlopen(req, timeout=15) as r:
+        data = json.loads(r.read().decode())
+    if data.get('ok') is not True or data.get('status') != 'ACCOUNT_READ_OK':
+        raise RuntimeError(f'SIZING_RELAY_REJECTED:{data.get("status") or data}')
+    return max(0.0, float(((data.get('usdt') or {}).get('free')) or 0.0))
+
+
 def free_usdt() -> float:
     key = (os.getenv('BINANCE_API_KEY') or '').strip()
     secret = (os.getenv('BINANCE_API_SECRET') or '').strip()
     if not key or not secret:
         raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
 
+    # Direct account access is preferred. Railway can receive Binance HTTP 451
+    # depending on egress region, so a strictly read-only authenticated Vercel
+    # relay is the fallback. The relay never accepts order routes.
     last_error = 'unavailable'
     for base in API_BASES:
-        params = {'recvWindow': 5000, 'timestamp': int(time.time() * 1000)}
-        query = urlencode(params)
-        signature = hmac.new(secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+        query = _signed_account_query(secret)
         req = Request(
-            f'{base}/api/v3/account?{query}&signature={signature}',
-            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/1.0'},
+            f'{base}/api/v3/account?{query}',
+            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/2.0'},
         )
         try:
-            with urlopen(req, timeout=10) as r:
+            with urlopen(req, timeout=8) as r:
                 data = json.loads(r.read().decode())
             for balance in data.get('balances') or []:
                 if balance.get('asset') == 'USDT':
@@ -50,7 +88,11 @@ def free_usdt() -> float:
             return 0.0
         except Exception as exc:
             last_error = f'{type(exc).__name__}:{exc}'
-    raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{last_error}')
+
+    try:
+        return _relay_free_usdt(key, secret)
+    except Exception as exc:
+        raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{last_error}; relay={type(exc).__name__}:{exc}') from exc
 
 
 def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
