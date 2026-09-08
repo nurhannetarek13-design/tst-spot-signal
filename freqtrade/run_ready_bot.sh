@@ -24,7 +24,7 @@ import io, os, shutil, tarfile
 
 nfi_dir = Path("${NFI_DIR}")
 archive_url = "${NFI_ARCHIVE}"
-req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.1"})
+req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.2"})
 with urlopen(req, timeout=120) as r:
     data = r.read()
 if len(data) < 1_000_000:
@@ -54,7 +54,7 @@ shutil.rmtree(tmp, ignore_errors=True)
 print(f"[ready-bot] NFI package ready: {nfi_dir}")
 
 def fetch(url: str, out: str, min_size: int, needle: bytes):
-    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.1"})
+    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.2"})
     with urlopen(req, timeout=60) as r:
         payload = r.read()
     if len(payload) < min_size or needle not in payload:
@@ -78,12 +78,12 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 3
 fi
 
-# Repair a common setup mistake: TELEGRAM_CHAT_ID accidentally set to the
-# bot's own id. Telegram keeps recent updates, so prefer the latest real
-# private user chat when available. The resolved value is inherited by all
-# child processes in this container.
+# Reclaim Telegram updates from an obsolete webhook without dropping pending
+# messages, then prefer the latest real private user chat over a mistakenly
+# configured bot id. This resolved id is inherited by every child process.
 RESOLVED_CHAT_ID="$(python - <<'PY'
-import json, os, sys
+import json, os, sys, time
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 token = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
@@ -93,15 +93,38 @@ def api(method, payload):
     req = Request(
         f'https://api.telegram.org/bot{token}/{method}',
         data=json.dumps(payload).encode(),
-        headers={'Content-Type':'application/json','User-Agent':'tst-chat-resolver/1.0'},
+        headers={'Content-Type':'application/json','User-Agent':'tst-chat-resolver/2.0'},
     )
-    with urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode())
+    except HTTPError as exc:
+        detail = exc.read().decode(errors='replace')[:600]
+        raise RuntimeError(f'HTTP {exc.code}: {detail}') from exc
 
 try:
     me = api('getMe', {})
     bot_id = str((me.get('result') or {}).get('id') or '')
-    updates = api('getUpdates', {'limit':100, 'timeout':0, 'allowed_updates':['message']})
+
+    hook = api('getWebhookInfo', {})
+    hook_url = str((hook.get('result') or {}).get('url') or '')
+    if hook_url:
+        print('[telegram-resolve] active webhook found; reclaiming updates without dropping pending messages', file=sys.stderr)
+        api('deleteWebhook', {'drop_pending_updates': False})
+        time.sleep(1.0)
+
+    updates = None
+    last_exc = None
+    for _ in range(4):
+        try:
+            updates = api('getUpdates', {'limit':100, 'timeout':0, 'allowed_updates':['message']})
+            break
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(1.0)
+    if updates is None:
+        raise last_exc or RuntimeError('getUpdates unavailable')
+
     candidates = []
     for upd in updates.get('result') or []:
         msg = upd.get('message') or {}
@@ -112,11 +135,12 @@ try:
             continue
         candidates.append((int(upd.get('update_id') or 0), str(cid)))
     candidates.sort()
+
     resolved = candidates[-1][1] if candidates else configured
     if resolved and resolved != configured:
         print(f'[telegram-resolve] RESOLVED_CHAT_ID={resolved}', file=sys.stderr)
     elif configured == bot_id:
-        print('[telegram-resolve] configured chat id is bot id and no recent private user update was found', file=sys.stderr)
+        print('[telegram-resolve] configured chat id is still the bot id; no pending private message available', file=sys.stderr)
     print(resolved)
 except Exception as exc:
     print(f'[telegram-resolve] warning: {type(exc).__name__}: {exc}', file=sys.stderr)
@@ -127,13 +151,9 @@ if [[ -n "$RESOLVED_CHAT_ID" ]]; then
   export TELEGRAM_CHAT_ID="$RESOLVED_CHAT_ID"
 fi
 
-# Canonical Telegram + BUY preview bridge. It owns all Telegram messages.
 python -u "$BRIDGE_FILE" &
 BRIDGE_PID=$!
 
-# Lightweight Stage-1 scanner. Vercel supplies the liquid universe/movers;
-# this process samples short 5m klines only for the top movers and sends a
-# PRE-ALERT. No BUY is exposed until NFI confirms the entry in Stage 2.
 SCANNER_URL="$SCANNER_URL" PAIRLIST_FILE="$PAIRLIST_FILE" python -u - <<'PY' &
 import json, os, re, sys, time
 from pathlib import Path
@@ -221,8 +241,7 @@ while True:
             if known_universe is None:
                 known_universe = all_symbols
             else:
-                changed = sorted(all_symbols - known_universe)
-                for sym in changed:
+                for sym in sorted(all_symbols - known_universe):
                     print(f'[universe-change] {sym} entered liquid/mover universe')
                 known_universe = all_symbols
 
