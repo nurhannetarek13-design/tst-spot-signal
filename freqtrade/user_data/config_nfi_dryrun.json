@@ -39,7 +39,7 @@
     {
       "method": "RemotePairList",
       "mode": "whitelist",
-      "processing_mode": "filter",
+      "processing_mode": "generator",
       "pairlist_url": "https://tst-spot-signal.vercel.app/api/market-scan?format=freqtrade",
       "number_assets": 120,
       "refresh_period": 60,
