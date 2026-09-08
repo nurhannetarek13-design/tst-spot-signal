@@ -3,6 +3,7 @@ FROM freqtradeorg/freqtrade:stable
 USER root
 WORKDIR /freqtrade
 
+# Runtime is intentionally kept lean: full-market scan happens outside heavy NFI evaluation.
 COPY user_data/config_nfi_dryrun.json /freqtrade/user_data/config_nfi_dryrun.json
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
 RUN chmod +x /freqtrade/run_ready_bot.sh \
