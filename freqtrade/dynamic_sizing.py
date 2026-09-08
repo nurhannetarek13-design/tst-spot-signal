@@ -36,12 +36,12 @@ def _clean_credential(value: str) -> str:
     v = (value or '').replace('\r', '').replace('\n', '').strip()
     if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
         v = v[1:-1].strip()
-    # Recover accidental NAME=value pastes without logging the value.
     if '=' in v:
         prefix, rest = v.split('=', 1)
         if prefix.strip().upper() in {
-            'BINANCE_API_KEY', 'BINANCE_API_SECRET', 'API_KEY', 'API_SECRET',
-            'KEY', 'SECRET',
+            'BINANCE_API_KEY', 'BINANCE_API_SECRET',
+            'BINANCE_READ_API_KEY', 'BINANCE_READ_API_SECRET',
+            'API_KEY', 'API_SECRET', 'KEY', 'SECRET',
         }:
             v = rest.strip().strip('"').strip("'").strip()
     return v
@@ -130,7 +130,7 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/7.0',
+            'User-Agent': 'tst-dynamic-sizing/8.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -156,7 +156,7 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
             query = _signed_account_query(secret_bytes)
             req = Request(
                 f'{base}/api/v3/account?{query}',
-                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/7.0'},
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/8.0'},
             )
             try:
                 with urlopen(req, timeout=8) as r:
@@ -187,24 +187,19 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
 
 
 def free_usdt() -> float:
-    raw_key = os.getenv('BINANCE_API_KEY') or ''
-    raw_secret = os.getenv('BINANCE_API_SECRET') or ''
-    key = _clean_credential(raw_key)
-    secret = _clean_credential(raw_secret)
+    # Dynamic sizing is intentionally isolated from the trading credentials.
+    # Never fall back to BINANCE_API_KEY / BINANCE_API_SECRET here.
+    key = _clean_credential(os.getenv('BINANCE_READ_API_KEY') or '')
+    secret = _clean_credential(os.getenv('BINANCE_READ_API_SECRET') or '')
     if not key or not secret:
-        raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
+        raise RuntimeError('BINANCE_READ_CREDENTIALS_MISSING_FOR_SIZING')
 
     errors: list[str] = []
-    value = _try_pair('normal', key, secret, errors)
+    value = _try_pair('read-only', key, secret, errors)
     if value is not None:
         return value
 
-    # Safe read-only recovery for accidentally swapped Railway variables.
-    value = _try_pair('swapped', secret, key, errors)
-    if value is not None:
-        return value
-
-    safe_diag = '; '.join(errors[:12])
+    safe_diag = '; '.join(errors[:8])
     raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{safe_diag}')
 
 
