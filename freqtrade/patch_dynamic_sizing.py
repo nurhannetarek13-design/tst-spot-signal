@@ -18,11 +18,11 @@ if "[dynamic-sizing] balance read OK" not in s:
 
 payload_marker = "    payload = {\n        'id': f'{symbol}-{int(now)}',"
 insert = (
-    "    stake_usdt, free_usdt = dynamic_sizing.recommended_stake(sl_pct)\n"
+    "    stake_usdt, free_usdt = dynamic_sizing.recommended_stake(sl_pct, score)\n"
     "    if stake_usdt is None:\n"
-    "        print(f'[sizing] {symbol} blocked: free_usdt={free_usdt:.2f} below dynamic minimum/risk allowance')\n"
+    "        print(f'[sizing] {symbol} blocked: free_usdt={free_usdt:.2f} below adaptive minimum/risk allowance')\n"
     "        return False\n"
-    "    print(f'[sizing] {symbol} free_usdt={free_usdt:.2f} stake_usdt={stake_usdt:.2f} sl_pct={sl_pct*100:.2f}%')\n\n"
+    "    print(f'[sizing] {symbol} free_usdt={free_usdt:.2f} score={score:.0f} stake_usdt={stake_usdt:.2f} sl_pct={sl_pct*100:.2f}%')\n\n"
     + payload_marker
 )
 if '[sizing] {symbol} free_usdt=' not in s:
@@ -41,4 +41,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[dynamic-sizing-patch] OK preflight stake remains fixed; live stake is balance/risk aware')
+print('[dynamic-sizing-patch] OK preflight stake remains fixed; live stake is balance+score+risk aware')
