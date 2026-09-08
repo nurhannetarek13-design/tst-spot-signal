@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -7,7 +8,7 @@ import math
 import os
 import time
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 from urllib.request import Request, urlopen
 
 API_BASES = [
@@ -44,11 +45,49 @@ def _validate_hmac_secret(secret: str) -> None:
         raise RuntimeError('BINANCE_SECRET_IS_ASYMMETRIC_KEY_NOT_HMAC')
 
 
-def _signed_account_query(secret: str) -> str:
-    _validate_hmac_secret(secret)
+def _secret_candidates(secret: str):
+    """Yield safe HMAC-secret interpretations without ever logging secret values."""
+    seen: set[bytes] = set()
+
+    def add(label: str, raw: bytes):
+        if not raw or raw in seen:
+            return
+        seen.add(raw)
+        yield label, raw
+
+    raw_text = _clean_credential(secret)
+    _validate_hmac_secret(raw_text)
+    yield from add('raw', raw_text.encode('utf-8'))
+
+    decoded_url = unquote(raw_text)
+    if decoded_url != raw_text:
+        yield from add('url', decoded_url.encode('utf-8'))
+
+    # Some secrets get stored base64-encoded by deployment tooling. Only accept
+    # decodes that are plausible non-empty key material.
+    for label, text in [('b64', raw_text), ('b64url', raw_text)]:
+        try:
+            pad = '=' * ((4 - len(text) % 4) % 4)
+            fn = base64.urlsafe_b64decode if label == 'b64url' else base64.b64decode
+            decoded = fn((text + pad).encode('ascii'))
+            if 16 <= len(decoded) <= 256:
+                yield from add(label, decoded)
+        except Exception:
+            pass
+
+    try:
+        if len(raw_text) % 2 == 0 and all(c in '0123456789abcdefABCDEF' for c in raw_text):
+            decoded = bytes.fromhex(raw_text)
+            if 16 <= len(decoded) <= 256:
+                yield from add('hex', decoded)
+    except Exception:
+        pass
+
+
+def _signed_account_query(secret_bytes: bytes) -> str:
     params = [('recvWindow', '5000'), ('timestamp', str(int(time.time() * 1000)))]
     query = urlencode(params)
-    signature = hmac.new(secret.encode('utf-8'), query.encode('utf-8'), hashlib.sha256).hexdigest()
+    signature = hmac.new(secret_bytes, query.encode('utf-8'), hashlib.sha256).hexdigest()
     return f'{query}&signature={signature}'
 
 
@@ -65,11 +104,18 @@ def _safe_http_error(exc: HTTPError) -> str:
         return f'HTTP_{getattr(exc, "code", "ERR")}'
 
 
-def _relay_free_usdt(key: str, secret: str) -> float:
+def _extract_free_usdt(data: dict) -> float:
+    for balance in data.get('balances') or []:
+        if balance.get('asset') == 'USDT':
+            return max(0.0, float(balance.get('free') or 0.0))
+    return 0.0
+
+
+def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
     caller_secret = _clean_credential(os.getenv('TELEGRAM_BOT_TOKEN') or '')
     if not caller_secret:
         raise RuntimeError('SIZING_RELAY_AUTH_MISSING')
-    body = json.dumps({'apiKey': key, 'query': _signed_account_query(secret)}, separators=(',', ':')).encode()
+    body = json.dumps({'apiKey': key, 'query': _signed_account_query(secret_bytes)}, separators=(',', ':')).encode()
     ts = str(int(time.time() * 1000))
     caller_sig = hmac.new(caller_secret.encode(), ts.encode() + b'.' + body, hashlib.sha256).hexdigest()
     req = Request(
@@ -79,7 +125,7 @@ def _relay_free_usdt(key: str, secret: str) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/5.0',
+            'User-Agent': 'tst-dynamic-sizing/6.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -96,36 +142,43 @@ def _relay_free_usdt(key: str, secret: str) -> float:
 
 def free_usdt() -> float:
     key = _clean_credential(os.getenv('BINANCE_API_KEY') or '')
-    secret = _clean_credential(os.getenv('BINANCE_API_SECRET') or '')
-    if not key or not secret:
+    secret = os.getenv('BINANCE_API_SECRET') or ''
+    if not key or not _clean_credential(secret):
         raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
-    _validate_hmac_secret(secret)
 
-    last_error = 'unavailable'
-    for base in API_BASES:
-        query = _signed_account_query(secret)
-        req = Request(
-            f'{base}/api/v3/account?{query}',
-            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/5.0'},
-        )
+    errors: list[str] = []
+    for label, secret_bytes in _secret_candidates(secret):
+        last_error = 'unavailable'
+        for base in API_BASES:
+            query = _signed_account_query(secret_bytes)
+            req = Request(
+                f'{base}/api/v3/account?{query}',
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/6.0'},
+            )
+            try:
+                with urlopen(req, timeout=8) as r:
+                    data = json.loads(r.read().decode())
+                print(f'[dynamic-sizing] BALANCE_READ_OK secret_mode={label}', flush=True)
+                return _extract_free_usdt(data)
+            except HTTPError as exc:
+                last_error = _safe_http_error(exc)
+                if any(marker in last_error for marker in ('code=-2014', 'code=-2015', 'code=-1021')):
+                    break
+                if 'code=-1022' in last_error:
+                    break
+            except Exception as exc:
+                last_error = f'{type(exc).__name__}:{str(exc)[:180]}'
+        errors.append(f'{label}:{last_error}')
+
         try:
-            with urlopen(req, timeout=8) as r:
-                data = json.loads(r.read().decode())
-            for balance in data.get('balances') or []:
-                if balance.get('asset') == 'USDT':
-                    return max(0.0, float(balance.get('free') or 0.0))
-            return 0.0
-        except HTTPError as exc:
-            last_error = _safe_http_error(exc)
-            if any(marker in last_error for marker in ('code=-1022', 'code=-2014', 'code=-2015', 'code=-1021')):
-                break
+            free = _relay_free_usdt(key, secret_bytes)
+            print(f'[dynamic-sizing] BALANCE_READ_OK secret_mode={label}:relay', flush=True)
+            return free
         except Exception as exc:
-            last_error = f'{type(exc).__name__}:{str(exc)[:180]}'
+            errors.append(f'{label}:relay:{type(exc).__name__}:{str(exc)[:160]}')
 
-    try:
-        return _relay_free_usdt(key, secret)
-    except Exception as exc:
-        raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:direct={last_error}; relay={type(exc).__name__}:{str(exc)[:260]}') from exc
+    safe_diag = '; '.join(errors[:8])
+    raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{safe_diag}')
 
 
 def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
