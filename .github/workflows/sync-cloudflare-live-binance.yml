@@ -1,0 +1,94 @@
+name: Sync Cloudflare Live Binance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-cloudflare-live-binance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Wrangler
+        run: npm install
+
+      - name: Check required secret presence safely
+        id: presence
+        env:
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in BINANCE_API_KEY BINANCE_API_SECRET CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "${name}=MISSING"
+              missing=1
+            else
+              echo "${name}=PRESENT"
+            fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Put live Binance API key into Worker secret store
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+        shell: bash
+        run: printf '%s' "$BINANCE_API_KEY" | npx wrangler secret put BINANCE_API_KEY
+
+      - name: Put live Binance API secret into Worker secret store
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+        shell: bash
+        run: printf '%s' "$BINANCE_API_SECRET" | npx wrangler secret put BINANCE_API_SECRET
+
+      - name: Verify Worker switched to LIVE without trading
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            curl --silent --show-error --max-time 20 \
+              -H 'cache-control: no-store' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?nonce=$(date +%s%N)" \
+              -o /tmp/runtime.json || true
+            if python - <<'PY'
+          import json,sys
+          try:
+              r=json.load(open('/tmp/runtime.json'))
+          except Exception:
+              sys.exit(1)
+          ok=(r.get('ok') is True and r.get('credentialMode')=='LIVE' and r.get('autoBuy') is False and r.get('oneTapConfirm') is True and r.get('fastSignalIngest') is True)
+          sys.exit(0 if ok else 1)
+          PY
+            then
+              echo "WORKER_LIVE_MODE_OK"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "WORKER_DID_NOT_SWITCH_TO_LIVE"
+          cat /tmp/runtime.json 2>/dev/null || true
+          exit 1
