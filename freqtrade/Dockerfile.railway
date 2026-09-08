@@ -1,6 +1,6 @@
 FROM freqtradeorg/freqtrade:stable
 
-# Explicit Railway Docker runtime for NFI + Fast Entry Engine.
+# Explicit Railway Docker runtime for NFI + Fast Entry Engine + order-prep UI.
 USER root
 WORKDIR /freqtrade
 
