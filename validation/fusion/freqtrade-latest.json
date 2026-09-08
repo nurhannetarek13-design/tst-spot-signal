@@ -8,6 +8,6 @@
   "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-08T00:49:56.025687+00:00",
+  "generatedAt": "2026-09-08T00:50:49.792209+00:00",
   "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
 }
