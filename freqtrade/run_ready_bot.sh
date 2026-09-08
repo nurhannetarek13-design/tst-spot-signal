@@ -24,7 +24,7 @@ import io, os, shutil, tarfile
 
 nfi_dir = Path("${NFI_DIR}")
 archive_url = "${NFI_ARCHIVE}"
-req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.0"})
+req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.1"})
 with urlopen(req, timeout=120) as r:
     data = r.read()
 if len(data) < 1_000_000:
@@ -54,7 +54,7 @@ shutil.rmtree(tmp, ignore_errors=True)
 print(f"[ready-bot] NFI package ready: {nfi_dir}")
 
 def fetch(url: str, out: str, min_size: int, needle: bytes):
-    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.0"})
+    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.1"})
     with urlopen(req, timeout=60) as r:
         payload = r.read()
     if len(payload) < min_size or needle not in payload:
@@ -76,6 +76,55 @@ export PYTHONPATH="/freqtrade:$NFI_DIR:${PYTHONPATH:-}"
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   echo "[ready-bot] TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required" >&2
   exit 3
+fi
+
+# Repair a common setup mistake: TELEGRAM_CHAT_ID accidentally set to the
+# bot's own id. Telegram keeps recent updates, so prefer the latest real
+# private user chat when available. The resolved value is inherited by all
+# child processes in this container.
+RESOLVED_CHAT_ID="$(python - <<'PY'
+import json, os, sys
+from urllib.request import Request, urlopen
+
+token = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
+configured = os.environ.get('TELEGRAM_CHAT_ID', '').strip()
+
+def api(method, payload):
+    req = Request(
+        f'https://api.telegram.org/bot{token}/{method}',
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type':'application/json','User-Agent':'tst-chat-resolver/1.0'},
+    )
+    with urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    me = api('getMe', {})
+    bot_id = str((me.get('result') or {}).get('id') or '')
+    updates = api('getUpdates', {'limit':100, 'timeout':0, 'allowed_updates':['message']})
+    candidates = []
+    for upd in updates.get('result') or []:
+        msg = upd.get('message') or {}
+        chat = msg.get('chat') or {}
+        sender = msg.get('from') or {}
+        cid = chat.get('id')
+        if cid is None or chat.get('type') != 'private' or sender.get('is_bot'):
+            continue
+        candidates.append((int(upd.get('update_id') or 0), str(cid)))
+    candidates.sort()
+    resolved = candidates[-1][1] if candidates else configured
+    if resolved and resolved != configured:
+        print(f'[telegram-resolve] RESOLVED_CHAT_ID={resolved}', file=sys.stderr)
+    elif configured == bot_id:
+        print('[telegram-resolve] configured chat id is bot id and no recent private user update was found', file=sys.stderr)
+    print(resolved)
+except Exception as exc:
+    print(f'[telegram-resolve] warning: {type(exc).__name__}: {exc}', file=sys.stderr)
+    print(configured)
+PY
+)"
+if [[ -n "$RESOLVED_CHAT_ID" ]]; then
+  export TELEGRAM_CHAT_ID="$RESOLVED_CHAT_ID"
 fi
 
 # Canonical Telegram + BUY preview bridge. It owns all Telegram messages.
