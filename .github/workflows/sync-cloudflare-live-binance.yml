@@ -15,61 +15,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install Wrangler
-        run: npm install
-
-      - name: Check required secret presence safely
-        id: presence
+      - name: Check Cloudflare credential presence safely
         env:
-          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
-          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          missing=0
-          for name in BINANCE_API_KEY BINANCE_API_SECRET CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
-            if [ -z "${!name:-}" ]; then
-              echo "${name}=MISSING"
-              missing=1
-            else
-              echo "${name}=PRESENT"
-            fi
-          done
-          if [ "$missing" = "1" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            exit 2
-          fi
-          echo "ready=true" >> "$GITHUB_OUTPUT"
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN=MISSING'; exit 2; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'CLOUDFLARE_ACCOUNT_ID=MISSING'; exit 2; }
+          echo 'CLOUDFLARE_API_TOKEN=PRESENT'
+          echo 'CLOUDFLARE_ACCOUNT_ID=PRESENT'
 
-      - name: Put live Binance API key into Worker secret store
+      - name: Sync Railway live Binance credentials into Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
         shell: bash
-        run: printf '%s' "$BINANCE_API_KEY" | npx wrangler secret put BINANCE_API_KEY
-
-      - name: Put live Binance API secret into Worker secret store
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
-        shell: bash
-        run: printf '%s' "$BINANCE_API_SECRET" | npx wrangler secret put BINANCE_API_SECRET
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          with open('/tmp/sync.json','w') as f:
+              json.dump({'accountId':os.environ['CLOUDFLARE_ACCOUNT_ID'],'apiToken':os.environ['CLOUDFLARE_API_TOKEN']},f,separators=(',',':'))
+          PY
+          curl --fail --silent --show-error --max-time 45 \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data-binary @/tmp/sync.json \
+            'https://freqtrade-production-43ed.up.railway.app/admin/sync-cloudflare-binance' \
+            -o /tmp/sync-result.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/sync-result.json'))
+          assert r.get('ok') is True, r
+          assert r.get('status') == 'CLOUDFLARE_BINANCE_SECRETS_SYNCED', r
+          assert r.get('valuesExposed') is False, r
+          print('CLOUDFLARE_BINANCE_SECRETS_SYNCED')
+          PY
+          rm -f /tmp/sync.json /tmp/sync-result.json
 
       - name: Verify Worker switched to LIVE without trading
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 12); do
+          for attempt in $(seq 1 20); do
             curl --silent --show-error --max-time 20 \
               -H 'cache-control: no-store' \
               "https://tst-spot-signal.nurhanne-tarek13.workers.dev/runtime-check?nonce=$(date +%s%N)" \
@@ -80,15 +70,45 @@ jobs:
               r=json.load(open('/tmp/runtime.json'))
           except Exception:
               sys.exit(1)
-          ok=(r.get('ok') is True and r.get('credentialMode')=='LIVE' and r.get('autoBuy') is False and r.get('oneTapConfirm') is True and r.get('fastSignalIngest') is True)
+          ok=(
+              r.get('ok') is True and
+              r.get('credentialMode')=='LIVE' and
+              r.get('autoBuy') is False and
+              r.get('oneTapConfirm') is True and
+              r.get('fastSignalIngest') is True and
+              r.get('atomicConfirmClaim') is True
+          )
           sys.exit(0 if ok else 1)
           PY
             then
-              echo "WORKER_LIVE_MODE_OK"
+              echo 'WORKER_LIVE_MODE_OK'
               exit 0
             fi
             sleep 3
           done
-          echo "WORKER_DID_NOT_SWITCH_TO_LIVE"
+          echo 'WORKER_DID_NOT_SWITCH_TO_LIVE'
           cat /tmp/runtime.json 2>/dev/null || true
           exit 1
+
+      - name: Verify signed Fast dry-run preflight only
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            echo 'TELEGRAM_BOT_TOKEN_NOT_IN_GITHUB; Railway will perform the signed dry-run.'
+            exit 0
+          fi
+          python - <<'PY'
+          import hashlib,hmac,json,os,time,urllib.request
+          body={'id':'github-dryrun-'+str(int(time.time())),'symbol':'BTCUSDT','entry':100,'stop':99,'target':101.5,'stakeUSDT':5.5,'score':100,'strategy':'GITHUB_FAST_PREFLIGHT','dryRun':True}
+          raw=json.dumps(body,separators=(',',':')).encode()
+          ts=str(int(time.time()*1000))
+          sig=hmac.new(os.environ['TELEGRAM_BOT_TOKEN'].encode(),ts.encode()+b'.'+raw,hashlib.sha256).hexdigest()
+          req=urllib.request.Request('https://tst-spot-signal.nurhanne-tarek13.workers.dev/fast-signal-ingest',data=raw,method='POST',headers={'content-type':'application/json','x-fast-timestamp':ts,'x-fast-signature':sig})
+          with urllib.request.urlopen(req,timeout=30) as r: row=json.loads(r.read())
+          assert row.get('ok') is True and row.get('status')=='FAST_SIGNAL_DRYRUN_OK', row
+          assert row.get('autoBuy') is False and row.get('userConfirmationRequired') is True, row
+          print('FAST_SIGNAL_DRYRUN_OK')
+          PY
