@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/verify-cloudflare-runtime.yml"
+      - "src/buy-gateway-auth-wrapper.js"
+      - "wrangler.jsonc"
 
 permissions:
   contents: read
@@ -28,8 +30,6 @@ jobs:
               -H 'cache-control: no-store, no-cache, max-age=0' \
               "$WORKER_URL/make-runtime-check?verify=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
               -o /tmp/runtime.json || true
-            cat /tmp/runtime.json 2>/dev/null || true
-            echo
             if python - <<'PY'
           import json,sys
           try: row=json.load(open('/tmp/runtime.json'))
@@ -51,6 +51,7 @@ jobs:
             then passed=1; break; fi
             sleep 3
           done
+          cat /tmp/runtime.json
           test "$passed" = "1"
 
       - name: Verify Telegram webhook ownership
@@ -62,7 +63,6 @@ jobs:
             "$WORKER_URL/telegram-webhook-check?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
             -o /tmp/webhook.json
           cat /tmp/webhook.json
-          echo
           python - <<'PY'
           import json
           row=json.load(open('/tmp/webhook.json'))
@@ -73,34 +73,26 @@ jobs:
           assert row.get('noSecretValuesExposed') is True
           PY
 
-      - name: Verify signed Fast ingest dry-run
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      - name: Verify Fast ingest rejects invalid ECDSA identity
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${TELEGRAM_BOT_TOKEN:-}"
+          ts=$(date +%s%3N)
+          body='{"id":"invalid-auth-test","symbol":"BTCUSDT","entry":100,"stop":99,"target":101,"stakeUSDT":5.5,"score":99,"dryRun":true}'
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/auth.json -w '%{http_code}' \
+            -X POST "$WORKER_URL/fast-signal-ingest" \
+            -H 'content-type: application/json' \
+            -H "x-fast-timestamp: $ts" \
+            -H 'x-fast-ecdsa: invalid' \
+            --data "$body")
+          cat /tmp/auth.json
+          test "$code" = "401"
           python - <<'PY'
-          import hashlib,hmac,json,os,time,urllib.request
-          ts=str(int(time.time()*1000))
-          body=json.dumps({
-            'id':'runtime-dryrun-'+ts,
-            'symbol':'BTCUSDT','entry':100.0,'stop':99.0,'target':101.0,
-            'stakeUSDT':5.5,'strategy':'RUNTIME_DRYRUN','score':99,'dryRun':True,
-          },separators=(',',':'))
-          sig=hmac.new(os.environ['TELEGRAM_BOT_TOKEN'].encode(),f'{ts}.{body}'.encode(),hashlib.sha256).hexdigest()
-          req=urllib.request.Request(
-            os.environ['WORKER_URL']+'/fast-signal-ingest',data=body.encode(),method='POST',
-            headers={'content-type':'application/json','x-fast-timestamp':ts,'x-fast-signature':sig,'cache-control':'no-store'})
-          with urllib.request.urlopen(req,timeout=20) as r:
-            out=json.loads(r.read())
-          print(json.dumps({k:out.get(k) for k in ['ok','status','canTrade','credentialMode','autoBuy','userConfirmationRequired','recommendedUSDT']},sort_keys=True))
-          assert out.get('ok') is True
-          assert out.get('status') == 'FAST_SIGNAL_DRYRUN_OK'
-          assert out.get('canTrade') is True
-          assert out.get('credentialMode') == 'MAKE_VERIFIED'
-          assert out.get('autoBuy') is False
-          assert out.get('userConfirmationRequired') is True
+          import json
+          row=json.load(open('/tmp/auth.json'))
+          assert row.get('ok') is False
+          assert row.get('status') == 'BAD_FAST_INGEST_SIGNATURE'
+          assert row.get('autoBuy') is False
           PY
 
       - name: Verify scanner cannot auto-execute
@@ -112,7 +104,6 @@ jobs:
             "$WORKER_URL/scanner-status?verify=${GITHUB_SHA}&nonce=$(date +%s%N)" \
             -o /tmp/status.json
           cat /tmp/status.json
-          echo
           python - <<'PY'
           import json
           row=json.load(open('/tmp/status.json'))
