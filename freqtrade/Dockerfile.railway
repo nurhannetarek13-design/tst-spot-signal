@@ -1,12 +1,13 @@
 FROM freqtradeorg/freqtrade:stable
 
-# Railway runtime: NFI + Fast Entry + one-tap signer + front proxy.
+# Railway runtime: NFI + Fast Entry + signer + one-tap executor + front proxy.
 USER root
 WORKDIR /freqtrade
 
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY one_tap_bridge.py /freqtrade/one_tap_bridge.py
 COPY order_signer.py /freqtrade/order_signer.py
+COPY railway_executor.py /freqtrade/railway_executor.py
 COPY front_proxy.py /freqtrade/front_proxy.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
 COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
@@ -25,5 +26,6 @@ USER ftuser
 ENV PYTHONUNBUFFERED=1
 ENV SIGNER_PORT=8081
 ENV BRIDGE_PORT=8082
+ENV EXECUTOR_PORT=8083
 EXPOSE 8080
-CMD ["/bin/bash", "-lc", "python -u /freqtrade/order_signer.py & python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
+CMD ["/bin/bash", "-lc", "python -u /freqtrade/order_signer.py & python -u /freqtrade/railway_executor.py & python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
