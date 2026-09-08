@@ -6,18 +6,22 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
 SIGNER_PORT=int(os.getenv('SIGNER_PORT','8081'))
+EXECUTOR_PORT=int(os.getenv('EXECUTOR_PORT','8083'))
 
 class H(BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
     def proxy(self):
-        signer=self.path.startswith('/signer/')
-        port=SIGNER_PORT if signer else BRIDGE_PORT
-        path=self.path[len('/signer'):] if signer else self.path
+        if self.path.startswith('/signer/'):
+            port=SIGNER_PORT; path=self.path[len('/signer'):]
+        elif self.path.startswith('/execute'):
+            port=EXECUTOR_PORT; path=self.path[len('/execute'):] or '/'
+        else:
+            port=BRIDGE_PORT; path=self.path
         length=int(self.headers.get('Content-Length') or 0)
         body=self.rfile.read(length) if length else None
         headers={k:v for k,v in self.headers.items() if k.lower() not in {'host','content-length','connection'}}
         try:
-            c=http.client.HTTPConnection('127.0.0.1',port,timeout=30)
+            c=http.client.HTTPConnection('127.0.0.1',port,timeout=45)
             c.request(self.command,path,body=body,headers=headers)
             r=c.getresponse(); data=r.read()
             self.send_response(r.status)
@@ -31,5 +35,5 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE external={PORT} bridge={BRIDGE_PORT} signer={SIGNER_PORT}', flush=True)
+    print(f'[front-proxy] ONLINE external={PORT} bridge={BRIDGE_PORT} signer={SIGNER_PORT} executor={EXECUTOR_PORT}', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
