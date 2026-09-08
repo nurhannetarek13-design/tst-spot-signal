@@ -15,7 +15,8 @@ get_chat_id = legacy.get_chat_id
 tg_api = legacy.tg_api
 
 BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET', '').strip()
-EXECUTOR_URL = os.getenv('EXECUTOR_PUBLIC_URL', 'https://tst-spot-signal.vercel.app/api/executor').strip()
+PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN', '').strip()
+EXECUTOR_URL = os.getenv('EXECUTOR_PUBLIC_URL', f'https://{PUBLIC_DOMAIN}/execute' if PUBLIC_DOMAIN else '').strip()
 MANUAL_BASE_URL = os.getenv('SIGNAL_PUBLIC_BASE_URL', '').rstrip('/')
 
 
@@ -54,7 +55,6 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
     recommended, risk_usdt, sizing_note = legacy.recommend_stake(balance, stake_usdt, entry, sl)
     signal_id = uuid.uuid4().hex[:12]
 
-    # Keep the legacy manual order-prep link as an emergency fallback.
     manual_url = None
     try:
         now = time.time()
@@ -65,6 +65,8 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
     except Exception:
         manual_url = None
 
+    if not EXECUTOR_URL:
+        raise RuntimeError('EXECUTOR_PUBLIC_URL/RAILWAY_PUBLIC_DOMAIN missing')
     token = _executor_token(signal_id, pair, recommended, entry, tp, sl)
     confirm_url = f'{EXECUTOR_URL}?t={token}'
     risk_line = f'Estimated risk at SL: {risk_usdt:.2f} USDT\n' if risk_usdt is not None else ''
@@ -78,7 +80,7 @@ def send_opportunity(pair: str, stake_usdt: float, entry: float, tp: float, sl: 
         f'SL plan: {sl:.8g} (-{(1-(sl/entry))*100:.2f}%)\n'
         f'Expected hold: 30–60 min\n'
         f'Strategy: {tag or "FAST"}\n\n'
-        '⚡ اضغطي ONE-TAP CONFIRM، راجعي الصفقة، وبعدها CONFIRM BUY. الشراء الحقيقي لا يتم بمجرد فتح الرابط.'
+        '⚡ اضغطي ONE-TAP CONFIRM، راجعي الصفقة، وبعدها CONFIRM BUY. فتح الرابط وحده لا ينفذ شراء.'
     )
     rows = [[{'text': '⚡ ONE-TAP CONFIRM', 'url': confirm_url}]]
     if manual_url:
