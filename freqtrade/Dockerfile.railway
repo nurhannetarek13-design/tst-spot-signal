@@ -5,14 +5,16 @@ WORKDIR /freqtrade
 
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
+COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
+COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
-RUN chmod +x /freqtrade/run_ready_bot.sh \
+RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 32/' /freqtrade/run_ready_bot.sh \
+    && sed -i '/from telegram_signal_bridge import send_prealert/a send_prealert = lambda **kwargs: None' /freqtrade/run_ready_bot.sh \
+    && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
 USER ftuser
-
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
-
-CMD ["/freqtrade/run_ready_bot.sh"]
+CMD ["/bin/bash", "/freqtrade/entrypoint.sh"]
