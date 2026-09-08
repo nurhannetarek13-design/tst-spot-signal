@@ -9,8 +9,9 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "vectorbt:BASE_PF_LT_1_15",
+    "vectorbt:STRESS_PF_LT_1_0",
+    "vectorbt:STRESS_EXPECTANCY_NONPOSITIVE",
     "freqtrade:BASE_PF_LT_1_15",
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
@@ -44,8 +45,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
@@ -63,17 +62,17 @@
     "vectorbt": {
       "status": "FAIL",
       "pass": false,
-      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "46ad824ea85b257ae59f",
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 32,
+      "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
+      "candidateFingerprint": "1240a5c4024ad81ee1e2",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 90,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.9489566286060849,
-      "baseExpectancyUSDT": -0.005390489845774317,
-      "stressProfitFactor": 0.8098230182570298,
-      "stressExpectancyUSDT": -0.021907179144954443
+      "baseProfitFactor": 1.134428954558586,
+      "baseExpectancyUSDT": 0.01028876002305246,
+      "stressProfitFactor": 0.9286473473842423,
+      "stressExpectancyUSDT": -0.006251483482240068
     },
     "freqtrade": {
       "status": "FAIL",
@@ -136,6 +135,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-08T07:22:37.080095+00:00",
+  "generatedAt": "2026-09-08T07:23:24.171972+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
