@@ -85,6 +85,57 @@ async function hmacHex(secret, text) {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+
+async function handleFastSignalIngest(request, env) {
+  const c = creds(env);
+  if (c.credentialMode !== "LIVE") {
+    return Response.json({ ok:false, status:"LIVE_CREDENTIALS_REQUIRED", credentialMode:c.credentialMode, autoBuy:false }, {status:503});
+  }
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    return Response.json({ ok:false, status:"TELEGRAM_NOT_CONFIGURED", autoBuy:false }, {status:503});
+  }
+  const raw = await request.text();
+  const ts = String(request.headers.get("x-fast-timestamp") || "");
+  const supplied = String(request.headers.get("x-fast-signature") || "").toLowerCase();
+  const stamp = Number(ts);
+  if (!Number.isFinite(stamp) || Math.abs(Date.now() - stamp) > 60_000) {
+    return Response.json({ok:false,status:"STALE_INGEST"},{status:401});
+  }
+  const expected = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${raw}`);
+  if (!/^[a-f0-9]{64}$/.test(supplied) || supplied !== expected) {
+    return Response.json({ok:false,status:"BAD_INGEST_SIGNATURE"},{status:401});
+  }
+  let body={};
+  try { body=JSON.parse(raw || "{}"); } catch { return Response.json({ok:false,status:"BAD_JSON"},{status:400}); }
+  const symbol=String(body.symbol||"").toUpperCase();
+  const entry=Number(body.entry), stop=Number(body.stop), target=Number(body.target), requested=Number(body.stakeUSDT);
+  const score=Number(body.score);
+  if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) return Response.json({ok:false,status:"BAD_SYMBOL"},{status:400});
+  if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
+  if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
+
+  const b=await refreshBalance(env);
+  if (!b?.ok || b.credentialMode !== "LIVE" || !b.canTrade) {
+    return Response.json({ok:false,status:"ACCOUNT_PREFLIGHT_FAILED",autoBuy:false},{status:503});
+  }
+  const free=Number(b.usdt?.free||0);
+  const rec=dynamicQuote(free,entry,stop,requested);
+  if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
+  const rawId=String(body.id||`${symbol}-${Date.now()}`);
+  const id=rawId.replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || compactId({symbol,entry,createdAt:Date.now()});
+  const now=Date.now();
+  const signal={id,symbol,entry,stop,target,strategy:String(body.strategy||"FAST30_60").slice(0,100),score:Number.isFinite(score)?score:null,createdAt:now,expiresAt:now+SIGNAL_TTL_SEC*1000,recommendedUSDT:rec,confirmedQuoteUSDT:rec,prepareExpiresAt:now+PREPARE_TTL_SEC*1000};
+  await putState(env,`live-signal:${id}`,signal,SIGNAL_TTL_SEC);
+  await putState(env,`prepared:${id}`,signal,PREPARE_TTL_SEC);
+  await tg(env,"sendMessage",{
+    chat_id:String(env.TELEGRAM_CHAT_ID),
+    text:`🚨 CONFIRMED BUY — ${symbol} — SPOT\n💵 ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score)?score:"—"}/100\n\n⚡ ضغطة CONFIRM BUY تنفذ Market Buy حقيقي ثم تحط TP/SL تلقائيًا.`,
+    reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]}
+  });
+  await putState(env,`buy-prompt:${id}`,{sentAt:now,source:"FAST_INGEST"},SIGNAL_TTL_SEC);
+  return Response.json({ok:true,status:"FAST_SIGNAL_READY",id,symbol,recommendedUSDT:rec,canTrade:true,credentialMode:"LIVE",autoBuy:false,userConfirmationRequired:true});
+}
+
 async function tg(env, method, payload) {
   const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: "POST",
@@ -479,6 +530,7 @@ async function handleTelegramWebhook(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/fast-signal-ingest" && request.method === "POST") return handleFastSignalIngest(request, env);
     if (url.pathname === "/telegram-webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
 
     if (url.pathname === "/runtime-check") {
@@ -497,6 +549,8 @@ export default {
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         atomicConfirmClaim: true,
+        fastSignalIngest: true,
+        oneTapConfirm: true,
         demoExecutionDisabled: c.credentialMode === "DEMO",
         autoBuy: false,
         noSecretValuesExposed: true,
