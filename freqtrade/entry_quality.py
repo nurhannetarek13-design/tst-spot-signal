@@ -23,7 +23,7 @@ BTC_MAX_1H_DROP = float(os.getenv('FAST_BTC_MAX_1H_DROP', '0.012'))
 
 
 def _get_json(url: str, timeout: int = 10):
-    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.0', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.1', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -83,7 +83,6 @@ def _trend_snapshot(symbol: str) -> dict:
     rows1h = _closed_klines(symbol, '1h', 80)
 
     c15 = [float(row[4]) for row in rows15]
-    h15 = [float(row[2]) for row in rows15]
     l15 = [float(row[3]) for row in rows15]
     c1h = [float(row[4]) for row in rows1h]
 
@@ -138,6 +137,21 @@ def _btc_regime() -> dict:
         'ema20_1h': ema20_1h,
         'last15': c15[-1],
         'last1h': c1h[-1],
+    }
+
+
+def runtime_preflight() -> dict:
+    """Prove the higher-timeframe/BTC data path is live before signals are allowed."""
+    trend = _trend_snapshot('BTCUSDT')
+    btc = _btc_regime()
+    return {
+        'ok': True,
+        'btc_regime_ok': bool(btc['ok']),
+        'trend15_ok': bool(trend['trend15_ok']),
+        'trend1h_ok': bool(trend['trend1h_ok']),
+        'move_from_2h_low': float(trend['move_from_2h_low']),
+        'btc_mom15': float(btc['mom15']),
+        'btc_mom1h': float(btc['mom1h']),
     }
 
 
