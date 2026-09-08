@@ -4,8 +4,16 @@ import base64, hashlib, hmac, json, os, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlencode, urlparse, parse_qs
 
-API_KEY = os.getenv('BINANCE_API_KEY', '').strip()
-API_SECRET = os.getenv('BINANCE_API_SECRET', '').strip()
+
+def clean_env(name: str) -> str:
+    v = os.getenv(name, '').strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        v = v[1:-1].strip()
+    return v
+
+
+API_KEY = clean_env('BINANCE_API_KEY')
+API_SECRET = clean_env('BINANCE_API_SECRET')
 MAX_QUOTE = float(os.getenv('MAX_QUOTE_USDT', '10'))
 PORT = int(os.getenv('SIGNER_PORT', '8081'))
 
@@ -61,4 +69,7 @@ class H(BaseHTTPRequestHandler):
         except Exception as e: return self.out(400,{'ok':False,'error':str(e)[:300]})
     def log_message(self,*_): pass
 
-if __name__=='__main__': HTTPServer(('0.0.0.0',PORT),H).serve_forever()
+if __name__=='__main__':
+    kind = 'PEM' if 'BEGIN ' in API_SECRET else 'HMAC_TEXT'
+    print(f'[order-signer] ONLINE configured={bool(API_KEY and API_SECRET)} key_len={len(API_KEY)} secret_len={len(API_SECRET)} secret_kind={kind}', flush=True)
+    HTTPServer(('0.0.0.0',PORT),H).serve_forever()
