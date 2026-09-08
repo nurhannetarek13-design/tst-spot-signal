@@ -30,4 +30,6 @@ class H(BaseHTTPRequestHandler):
     do_POST=proxy
     def log_message(self,*_): pass
 
-if __name__=='__main__': ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
+if __name__=='__main__':
+    print(f'[front-proxy] ONLINE external={PORT} bridge={BRIDGE_PORT} signer={SIGNER_PORT}', flush=True)
+    ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
