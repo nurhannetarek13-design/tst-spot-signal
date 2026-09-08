@@ -21,6 +21,9 @@ jobs:
       - name: Validate config JSON
         run: python -m json.tool freqtrade/user_data/config.json > /dev/null
 
+      - name: Validate fast engine syntax
+        run: python -m py_compile freqtrade/fast_entry_engine.py
+
       - name: Pull Freqtrade stable
         run: docker pull freqtradeorg/freqtrade:stable
 
@@ -41,7 +44,9 @@ jobs:
             freqtradeorg/freqtrade:stable \
             show-config \
             --config /freqtrade/user_data/config.json \
-            --strategy AdaptiveRegimeStrategy \
-            --strategy-path /freqtrade/user_data/strategies \
             > /tmp/config.txt
           grep -q 'dry_run.*true' /tmp/config.txt || grep -q '"dry_run": true' /tmp/config.txt
+
+      - name: Assert no live trading in config
+        run: |
+          ! grep -Eq '"dry_run"[[:space:]]*:[[:space:]]*false' freqtrade/user_data/config.json
