@@ -1,7 +1,7 @@
 FROM freqtradeorg/freqtrade:stable
 
 # Railway runtime: NFI + Fast Entry + signer + one-tap executor + front proxy.
-# Deploy trigger: executor relay preflight healthcheck.
+# Deploy trigger: signed Fast ingest preflight with normal /health check.
 USER root
 WORKDIR /freqtrade
 
