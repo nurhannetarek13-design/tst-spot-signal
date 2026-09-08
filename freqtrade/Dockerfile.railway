@@ -1,7 +1,7 @@
 FROM freqtradeorg/freqtrade:stable
 
 # Railway runtime: NFI + Fast Entry + signer + one-tap executor + front proxy.
-# Deploy trigger: railway executor relay path enabled.
+# Deploy trigger: executor relay preflight healthcheck.
 USER root
 WORKDIR /freqtrade
 
