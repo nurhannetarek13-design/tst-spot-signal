@@ -3,6 +3,7 @@ export { SignalState };
 
 const REVIEW_45_MS = 45 * 60 * 1000;
 const REVIEW_75_MS = 75 * 60 * 1000;
+const DECISION_REPEAT_MS = 15 * 60 * 1000;
 const HOLD_EXTENSION_MS = 30 * 60 * 1000;
 const POSITION_TTL_SEC = 24 * 60 * 60;
 
@@ -55,7 +56,6 @@ async function writeOpenPositions(env, rows) {
   await putState(env, "timed-open-positions", rows.slice(-20));
 }
 async function registerConfirmedPosition(env, id) {
-  // canonical flow writes both prepared signal and execution-result.
   await new Promise((resolve) => setTimeout(resolve, 1200));
   const result = await getState(env, `execution-result:${id}`);
   if (!result?.ok || result?.status !== "BOUGHT_AND_PROTECTED") return;
@@ -63,15 +63,17 @@ async function registerConfirmedPosition(env, id) {
   if (!signal?.symbol) return;
   const rows = await readOpenPositions(env);
   if (rows.some((x) => x.id === id)) return;
+  const openedAt = Number(result.at || Date.now());
   rows.push({
     id,
     symbol: signal.symbol,
     referenceEntry: Number(signal.entry || 0),
     target: Number(signal.target || 0),
     stop: Number(signal.stop || 0),
-    openedAt: Number(result.at || Date.now()),
+    openedAt,
     review45Sent: false,
     review75Sent: false,
+    nextDecisionReminderAt: openedAt + REVIEW_75_MS,
     holdUntil: 0,
     closed: false,
   });
@@ -82,10 +84,10 @@ async function sendReview(env, p, current, stage) {
   const pnlPct = basis > 0 ? ((current / basis) - 1) * 100 : 0;
   const ageMin = Math.max(0, Math.round((Date.now() - Number(p.openedAt || Date.now())) / 60000));
   const status = pnlPct >= 0.35 ? "🟢 ماشية لصالحنا" : pnlPct <= -0.35 ? "🔴 ضعفت" : "🟡 شبه ثابتة";
-  const headline = stage === 45 ? "⏱ 45m POSITION REVIEW" : "⏰ 75m DECISION DEADLINE";
+  const headline = stage === 45 ? "⏱ 45m POSITION REVIEW" : "⏰ 75m+ DECISION DEADLINE";
   const action = stage === 45
-    ? "لسه مفيش خروج إجباري. راقبي الحركة؛ لو فضلت ضعيفة هيوصل قرار 75m."
-    : "الصفقة عدّت مدة FAST30_60. الأفضل اتخاذ قرار الآن بدل تجميد رأس المال.";
+    ? "دي مراجعة مبكرة. الـOCO شغال، ولو الصفقة فضلت مفتوحة هيوصل قرار عند 75 دقيقة."
+    : "الصفقة عدّت مدة PRE-MOMENTUM المستهدفة. خدي قرار EXIT أو HOLD؛ لو مفيش قرار هفكرك كل 15 دقيقة عشان ما تتسابش معلقة بالساعات.";
   const keyboard = stage === 75 ? {
     inline_keyboard: [
       [{ text: "📤 EXIT NOW — افتحي Binance", url: `https://www.binance.com/en/trade/${p.symbol.replace("USDT", "_USDT")}?type=spot` }],
@@ -109,7 +111,6 @@ async function reviewPositions(env) {
     const age = now - Number(p.openedAt || now);
     try {
       const current = await publicPrice(p.symbol);
-      // If public price has already crossed the original TP/SL, OCO should resolve it; stop reminders.
       if ((Number(p.target) > 0 && current >= Number(p.target)) || (Number(p.stop) > 0 && current <= Number(p.stop))) {
         p.closed = true; changed = true; continue;
       }
@@ -118,9 +119,12 @@ async function reviewPositions(env) {
         p.review45Sent = true; changed = true;
       }
       const effectiveDeadline = Math.max(Number(p.openedAt || now) + REVIEW_75_MS, Number(p.holdUntil || 0));
-      if (!p.review75Sent && now >= effectiveDeadline) {
+      const nextReminder = Math.max(effectiveDeadline, Number(p.nextDecisionReminderAt || effectiveDeadline));
+      if (now >= effectiveDeadline && now >= nextReminder) {
         await sendReview(env, p, current, 75);
-        p.review75Sent = true; changed = true;
+        p.review75Sent = true;
+        p.nextDecisionReminderAt = now + DECISION_REPEAT_MS;
+        changed = true;
       }
     } catch (e) {
       console.log(`[time-monitor] ${p.symbol} review failed: ${String(e?.message || e)}`);
@@ -142,6 +146,7 @@ async function handleHoldCallback(request, env) {
   }
   p.holdUntil = Date.now() + HOLD_EXTENSION_MS;
   p.review75Sent = false;
+  p.nextDecisionReminderAt = p.holdUntil;
   await writeOpenPositions(env, rows);
   await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Hold extended 30 minutes" });
   await tg(env, "sendMessage", { chat_id: String(env.TELEGRAM_CHAT_ID), text: `⏳ HOLD +30m — ${p.symbol}\nهراجعها تاني بعد 30 دقيقة. الـOCO يفضل شغال.` });
