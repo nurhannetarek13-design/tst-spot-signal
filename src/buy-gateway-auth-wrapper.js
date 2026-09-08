@@ -2,6 +2,14 @@ import worker, { SignalState } from "./buy-gateway-time-monitor.js";
 export { SignalState };
 
 const FAST_INGEST_PUBLIC_SPKI_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkUcYKimdOJky2cdmENTgw42L1xqZDCRf7dqbvndHYIowbKCMoNT2BL2e2Zi9uk2aMbFh2dos9x5OUaFPyMi2+g==";
+const BINANCE_API_BASES = [
+  "https://api.binance.com",
+  "https://api-gcp.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://api4.binance.com",
+];
 
 function b64ToBytes(s) {
   const bin = atob(s);
@@ -31,6 +39,14 @@ async function hmacHex(secret, text) {
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+function safeHexEqual(a, b) {
+  const aa = String(a || "").toLowerCase();
+  const bb = String(b || "").toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(aa) || !/^[a-f0-9]{64}$/.test(bb)) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa.charCodeAt(i) ^ bb.charCodeAt(i);
+  return diff === 0;
+}
 
 async function verifyRailwayFastIngest(request, env, ctx) {
   const raw = await request.text();
@@ -54,9 +70,6 @@ async function verifyRailwayFastIngest(request, env, ctx) {
     return Response.json({ ok: false, status: "TELEGRAM_TOKEN_MISSING", autoBuy: false }, { status: 503 });
   }
 
-  // The canonical worker still performs its original HMAC verification. Re-sign
-  // internally with the Worker's own Telegram secret only after Railway's ECDSA
-  // identity has been verified. This removes cross-service Telegram-token coupling.
   const headers = new Headers(request.headers);
   headers.set("x-fast-signature", await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${raw}`));
   headers.set("content-type", headers.get("content-type") || "application/json");
@@ -64,11 +77,73 @@ async function verifyRailwayFastIngest(request, env, ctx) {
   return worker.fetch(internalRequest, env, ctx);
 }
 
+async function readBinanceAccountRelay(request, env) {
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    return Response.json({ ok: false, status: "RELAY_AUTH_UNAVAILABLE" }, { status: 503 });
+  }
+  const raw = await request.text();
+  const ts = String(request.headers.get("x-sizing-timestamp") || "");
+  const supplied = String(request.headers.get("x-sizing-signature") || "");
+  if (!Number.isFinite(Number(ts)) || Math.abs(Date.now() - Number(ts)) > 60000) {
+    return Response.json({ ok: false, status: "STALE_ACCOUNT_READ" }, { status: 401 });
+  }
+  const expected = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${raw}`);
+  if (!safeHexEqual(supplied, expected)) {
+    return Response.json({ ok: false, status: "BAD_ACCOUNT_READ_SIGNATURE" }, { status: 401 });
+  }
+
+  let body;
+  try { body = JSON.parse(raw || "{}"); } catch { body = {}; }
+  const apiKey = String(body?.apiKey || "");
+  const query = String(body?.query || "");
+  if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey) || !query || query.length > 2000) {
+    return Response.json({ ok: false, status: "BAD_ACCOUNT_READ_REQUEST" }, { status: 400 });
+  }
+  const qs = new URLSearchParams(query);
+  const stamp = Number(qs.get("timestamp"));
+  const recvWindow = Number(qs.get("recvWindow") || 5000);
+  const binanceSig = String(qs.get("signature") || "");
+  if (!Number.isFinite(stamp) || Math.abs(Date.now() - stamp) > Math.max(60000, recvWindow + 10000) || !/^[a-f0-9]{64}$/i.test(binanceSig)) {
+    return Response.json({ ok: false, status: "BAD_BINANCE_ACCOUNT_SIGNATURE" }, { status: 400 });
+  }
+
+  let last = { status: 502, code: null, msg: "Binance unavailable" };
+  for (const base of BINANCE_API_BASES) {
+    try {
+      const r = await fetch(`${base}/api/v3/account?${query}`, {
+        method: "GET",
+        headers: { "X-MBX-APIKEY": apiKey, Accept: "application/json" },
+      });
+      const text = await r.text();
+      let data = {};
+      try { data = JSON.parse(text || "{}"); } catch { data = {}; }
+      if (r.ok && !(Number(data?.code) < 0)) {
+        const usdt = (data.balances || []).find((x) => x.asset === "USDT") || { free: "0", locked: "0" };
+        return Response.json({
+          ok: true,
+          status: "ACCOUNT_READ_OK",
+          canTrade: Boolean(data.canTrade),
+          usdt: { free: Number(usdt.free || 0), locked: Number(usdt.locked || 0) },
+          checkedAt: Date.now(),
+        }, { headers: { "Cache-Control": "no-store" } });
+      }
+      last = { status: r.status, code: data?.code ?? null, msg: String(data?.msg || "upstream rejected").slice(0, 160) };
+      if (Number(last.code) < 0) break;
+    } catch (e) {
+      last = { status: 502, code: null, msg: String(e?.message || e).slice(0, 160) };
+    }
+  }
+  return Response.json({ ok: false, status: "ACCOUNT_READ_FAILED", upstream: last }, { status: 502 });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") {
       return verifyRailwayFastIngest(request, env, ctx);
+    }
+    if (url.pathname === "/account-read-relay" && request.method === "POST") {
+      return readBinanceAccountRelay(request, env);
     }
     return worker.fetch(request, env, ctx);
   },
