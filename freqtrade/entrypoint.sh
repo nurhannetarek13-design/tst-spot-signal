@@ -27,6 +27,23 @@ if [[ ! -s /freqtrade/telegram_signal_bridge.py ]]; then
 fi
 
 sleep 3
+
+if [[ "${TELEGRAM_STARTUP_TEST:-0}" == "1" ]]; then
+  python - <<'PY'
+import sys
+sys.path.insert(0, '/freqtrade')
+import telegram_signal_bridge as bridge
+try:
+    bridge.tg_api('sendMessage', {
+        'text': '✅ TST Signal Bot ONLINE\nTelegram connected successfully.\nLive market scanner is running.',
+        'disable_web_page_preview': True,
+    })
+    print('[telegram-test] SENT successfully', flush=True)
+except Exception as exc:
+    print(f'[telegram-test] FAILED {type(exc).__name__}: {exc}', flush=True)
+PY
+fi
+
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] fast entry engine started pid=${FAST_PID}"
