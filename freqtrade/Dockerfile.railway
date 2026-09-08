@@ -1,7 +1,8 @@
 FROM freqtradeorg/freqtrade:stable
 
 # Railway runtime: NFI + Fast Entry + signed Make relay + front proxy.
-# Dynamic sizing preflight v2: live signals require a successful free-USDT read.
+# Dynamic sizing preflight v3: live signals require a successful real free-USDT read;
+# Binance 451 egress restrictions fall back to the authenticated read-only Vercel relay.
 # Telegram callback ownership is Cloudflare-only. Railway may validate outbound
 # Telegram access, but must never poll getUpdates or own the webhook.
 USER root
