@@ -6,6 +6,7 @@ WORKDIR /freqtrade
 
 COPY telegram_signal_bridge.py /freqtrade/telegram_signal_bridge.py
 COPY one_tap_bridge.py /freqtrade/one_tap_bridge.py
+COPY binance_private_preflight.py /freqtrade/binance_private_preflight.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
 COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
