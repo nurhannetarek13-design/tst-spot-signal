@@ -16,14 +16,14 @@
       "openedAt": "2026-09-03T19:18:35.560Z",
       "signalBarTime": "2026-09-03T16:00:00.000Z",
       "highestClose": 2520.2,
-      "barsHeld": 19,
+      "barsHeld": 20,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     },
     {
       "symbol": "AVAXUSDT",
       "entry": 7.525,
-      "stop": 7.732813584180888,
+      "stop": 7.751413791462369,
       "qty": 0.665530597156,
       "notionalUSDT": 5.00811774,
       "riskUSDT": 0.2,
@@ -31,7 +31,7 @@
       "openedAt": "2026-09-03T19:18:35.560Z",
       "signalBarTime": "2026-09-03T16:00:00.000Z",
       "highestClose": 8.104,
-      "barsHeld": 19,
+      "barsHeld": 20,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -41,7 +41,7 @@
     "ETHUSDT:1788451200000",
     "AVAXUSDT:1788451200000"
   ],
-  "lastRunAt": "2026-09-07T22:51:42.120Z",
+  "lastRunAt": "2026-09-08T04:41:01.942Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
