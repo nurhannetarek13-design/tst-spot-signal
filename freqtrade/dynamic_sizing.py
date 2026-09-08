@@ -31,10 +31,24 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _clean_credential(value: str) -> str:
+    v = (value or '').replace('\r', '').replace('\n', '').strip()
+    if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
+        v = v[1:-1].strip()
+    return v
+
+
+def _validate_hmac_secret(secret: str) -> None:
+    upper = secret.upper()
+    if 'BEGIN PRIVATE KEY' in upper or 'BEGIN RSA PRIVATE KEY' in upper or 'BEGIN OPENSSH PRIVATE KEY' in upper:
+        raise RuntimeError('BINANCE_SECRET_IS_ASYMMETRIC_KEY_NOT_HMAC')
+
+
 def _signed_account_query(secret: str) -> str:
-    params = {'recvWindow': 5000, 'timestamp': int(time.time() * 1000)}
+    _validate_hmac_secret(secret)
+    params = [('recvWindow', '5000'), ('timestamp', str(int(time.time() * 1000)))]
     query = urlencode(params)
-    signature = hmac.new(secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+    signature = hmac.new(secret.encode('utf-8'), query.encode('utf-8'), hashlib.sha256).hexdigest()
     return f'{query}&signature={signature}'
 
 
@@ -52,7 +66,7 @@ def _safe_http_error(exc: HTTPError) -> str:
 
 
 def _relay_free_usdt(key: str, secret: str) -> float:
-    caller_secret = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
+    caller_secret = _clean_credential(os.getenv('TELEGRAM_BOT_TOKEN') or '')
     if not caller_secret:
         raise RuntimeError('SIZING_RELAY_AUTH_MISSING')
     body = json.dumps({'apiKey': key, 'query': _signed_account_query(secret)}, separators=(',', ':')).encode()
@@ -65,7 +79,7 @@ def _relay_free_usdt(key: str, secret: str) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/4.0',
+            'User-Agent': 'tst-dynamic-sizing/5.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -81,20 +95,18 @@ def _relay_free_usdt(key: str, secret: str) -> float:
 
 
 def free_usdt() -> float:
-    key = (os.getenv('BINANCE_API_KEY') or '').strip()
-    secret = (os.getenv('BINANCE_API_SECRET') or '').strip()
+    key = _clean_credential(os.getenv('BINANCE_API_KEY') or '')
+    secret = _clean_credential(os.getenv('BINANCE_API_SECRET') or '')
     if not key or not secret:
         raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
+    _validate_hmac_secret(secret)
 
-    # Prefer direct Binance access. If infrastructure routing blocks direct access,
-    # the fallback is a strictly read-only authenticated Cloudflare relay. Neither
-    # path exposes order endpoints. Never log API keys, secrets, queries or signatures.
     last_error = 'unavailable'
     for base in API_BASES:
         query = _signed_account_query(secret)
         req = Request(
             f'{base}/api/v3/account?{query}',
-            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/4.0'},
+            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/5.0'},
         )
         try:
             with urlopen(req, timeout=8) as r:
@@ -105,8 +117,6 @@ def free_usdt() -> float:
             return 0.0
         except HTTPError as exc:
             last_error = _safe_http_error(exc)
-            # Credential/signature/IP errors will be identical on alternate Binance hosts.
-            # Stop retrying those hosts so startup fails fast with the real Binance code.
             if any(marker in last_error for marker in ('code=-1022', 'code=-2014', 'code=-2015', 'code=-1021')):
                 break
         except Exception as exc:
@@ -119,11 +129,6 @@ def free_usdt() -> float:
 
 
 def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
-    """Return (stake_usdt, free_usdt).
-
-    Live size uses verified free USDT, stop distance, risk budget, balance fraction
-    and a hard 10 USDT ceiling. If balance cannot be verified, callers fail closed.
-    """
     free = free_usdt()
     min_stake = max(5.0, _env_float('MIN_STAKE_USDT', 5.0))
     max_stake_fraction = min(max(_env_float('MAX_STAKE_FRACTION', 0.50), 0.01), 0.95)
