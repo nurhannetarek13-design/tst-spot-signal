@@ -1,0 +1,109 @@
+name: Deploy Fast One-Tap Executor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/patch-fast-signal-ingest.py"
+      - ".github/workflows/fast-one-tap-deploy.yml"
+
+permissions:
+  contents: write
+
+env:
+  WORKER_URL: https://tst-spot-signal.nurhanne-tarek13.workers.dev
+
+jobs:
+  patch-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Patch live gateway
+        run: python scripts/patch-fast-signal-ingest.py
+
+      - name: Validate sources
+        run: |
+          node --check src/buy-gateway-stable.js
+          node --check src/buy-gateway-canonical.js
+          grep -q '/fast-signal-ingest' src/buy-gateway-stable.js
+          grep -q 'FAST_SIGNAL_READY' src/buy-gateway-stable.js
+          grep -q 'fastSignalIngest: true' src/buy-gateway-stable.js
+          grep -q 'CONFIRM:${id}' src/buy-gateway-stable.js
+          grep -q 'claimState' src/buy-gateway-stable.js
+          grep -q 'autoBuy:false' src/buy-gateway-stable.js
+
+      - name: Persist patched gateway
+        run: |
+          if ! git diff --quiet -- src/buy-gateway-stable.js; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/buy-gateway-stable.js
+            git commit -m "Enable Fast Engine one-tap confirm ingest [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
+
+      - name: Set Telegram callback webhook
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          test -n "${TELEGRAM_BOT_TOKEN:-}"
+          curl --fail --silent --show-error -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            -H 'content-type: application/json' \
+            --data '{"url":"https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook","allowed_updates":["callback_query"],"drop_pending_updates":false}'
+
+      - name: Verify live runtime and account relay
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 12); do
+            nonce=$(date +%s%N)
+            curl --silent --show-error --max-time 20 -H 'cache-control: no-store' "$WORKER_URL/runtime-check?nonce=$nonce" -o /tmp/runtime.json || true
+            cat /tmp/runtime.json || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/runtime.json'))
+          except Exception: sys.exit(1)
+          checks=[
+            r.get('ok') is True,
+            r.get('credentialMode') == 'LIVE',
+            r.get('telegramConfigured') is True,
+            r.get('atomicConfirmClaim') is True,
+            r.get('fastSignalIngest') is True,
+            r.get('oneTapConfirm') is True,
+            r.get('autoBuy') is False,
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
+          curl --fail --silent --show-error --max-time 25 -H 'cache-control: no-store' "$WORKER_URL/balance-refresh?nonce=$(date +%s%N)" -o /tmp/balance.json
+          cat /tmp/balance.json
+          python - <<'PY'
+          import json,sys
+          r=json.load(open('/tmp/balance.json'))
+          b=r.get('balance') or {}
+          checks=[r.get('ok') is True,b.get('ok') is True,b.get('canTrade') is True,b.get('credentialMode') == 'LIVE']
+          sys.exit(0 if all(checks) else 1)
+          PY
