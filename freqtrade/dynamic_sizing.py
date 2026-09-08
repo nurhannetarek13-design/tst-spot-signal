@@ -36,6 +36,14 @@ def _clean_credential(value: str) -> str:
     v = (value or '').replace('\r', '').replace('\n', '').strip()
     if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
         v = v[1:-1].strip()
+    # Recover accidental NAME=value pastes without logging the value.
+    if '=' in v:
+        prefix, rest = v.split('=', 1)
+        if prefix.strip().upper() in {
+            'BINANCE_API_KEY', 'BINANCE_API_SECRET', 'API_KEY', 'API_SECRET',
+            'KEY', 'SECRET',
+        }:
+            v = rest.strip().strip('"').strip("'").strip()
     return v
 
 
@@ -46,7 +54,6 @@ def _validate_hmac_secret(secret: str) -> None:
 
 
 def _secret_candidates(secret: str):
-    """Yield safe HMAC-secret interpretations without ever logging secret values."""
     seen: set[bytes] = set()
 
     def add(label: str, raw: bytes):
@@ -63,8 +70,6 @@ def _secret_candidates(secret: str):
     if decoded_url != raw_text:
         yield from add('url', decoded_url.encode('utf-8'))
 
-    # Some secrets get stored base64-encoded by deployment tooling. Only accept
-    # decodes that are plausible non-empty key material.
     for label, text in [('b64', raw_text), ('b64url', raw_text)]:
         try:
             pad = '=' * ((4 - len(text) % 4) % 4)
@@ -125,7 +130,7 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/6.0',
+            'User-Agent': 'tst-dynamic-sizing/7.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -140,44 +145,66 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
     return max(0.0, float(((data.get('usdt') or {}).get('free')) or 0.0))
 
 
-def free_usdt() -> float:
-    key = _clean_credential(os.getenv('BINANCE_API_KEY') or '')
-    secret = os.getenv('BINANCE_API_SECRET') or ''
-    if not key or not _clean_credential(secret):
-        raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
+def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) -> float | None:
+    key = _clean_credential(key)
+    if not key or not _clean_credential(secret_text):
+        return None
 
-    errors: list[str] = []
-    for label, secret_bytes in _secret_candidates(secret):
+    for secret_label, secret_bytes in _secret_candidates(secret_text):
         last_error = 'unavailable'
         for base in API_BASES:
             query = _signed_account_query(secret_bytes)
             req = Request(
                 f'{base}/api/v3/account?{query}',
-                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/6.0'},
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/7.0'},
             )
             try:
                 with urlopen(req, timeout=8) as r:
                     data = json.loads(r.read().decode())
-                print(f'[dynamic-sizing] BALANCE_READ_OK secret_mode={label}', flush=True)
+                print(
+                    f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}',
+                    flush=True,
+                )
                 return _extract_free_usdt(data)
             except HTTPError as exc:
                 last_error = _safe_http_error(exc)
-                if any(marker in last_error for marker in ('code=-2014', 'code=-2015', 'code=-1021')):
-                    break
-                if 'code=-1022' in last_error:
+                if any(marker in last_error for marker in ('code=-2014', 'code=-2015', 'code=-1021', 'code=-1022')):
                     break
             except Exception as exc:
                 last_error = f'{type(exc).__name__}:{str(exc)[:180]}'
-        errors.append(f'{label}:{last_error}')
+        errors.append(f'{pair_label}/{secret_label}:{last_error}')
 
         try:
             free = _relay_free_usdt(key, secret_bytes)
-            print(f'[dynamic-sizing] BALANCE_READ_OK secret_mode={label}:relay', flush=True)
+            print(
+                f'[dynamic-sizing] BALANCE_READ_OK pair_mode={pair_label} secret_mode={secret_label}:relay',
+                flush=True,
+            )
             return free
         except Exception as exc:
-            errors.append(f'{label}:relay:{type(exc).__name__}:{str(exc)[:160]}')
+            errors.append(f'{pair_label}/{secret_label}:relay:{type(exc).__name__}:{str(exc)[:150]}')
+    return None
 
-    safe_diag = '; '.join(errors[:8])
+
+def free_usdt() -> float:
+    raw_key = os.getenv('BINANCE_API_KEY') or ''
+    raw_secret = os.getenv('BINANCE_API_SECRET') or ''
+    key = _clean_credential(raw_key)
+    secret = _clean_credential(raw_secret)
+    if not key or not secret:
+        raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
+
+    errors: list[str] = []
+    value = _try_pair('normal', key, secret, errors)
+    if value is not None:
+        return value
+
+    # Safe read-only recovery for accidentally swapped Railway variables.
+    value = _try_pair('swapped', secret, key, errors)
+    if value is not None:
+        return value
+
+    safe_diag = '; '.join(errors[:12])
     raise RuntimeError(f'BINANCE_BALANCE_READ_FAILED:{safe_diag}')
 
 
