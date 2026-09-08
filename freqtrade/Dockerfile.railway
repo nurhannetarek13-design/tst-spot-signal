@@ -24,4 +24,4 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
 USER ftuser
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
-CMD ["/bin/bash", "/freqtrade/entrypoint.sh"]
+CMD ["/bin/bash", "-lc", "python -u /freqtrade/binance_private_preflight.py || true; exec /bin/bash /freqtrade/entrypoint.sh"]
