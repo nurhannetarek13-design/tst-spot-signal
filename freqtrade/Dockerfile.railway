@@ -1,8 +1,8 @@
 FROM freqtradeorg/freqtrade:stable
 
 # Railway runtime: NFI + Fast Entry + signed Make relay + front proxy.
-# Telegram callback ownership is Cloudflare-only. Legacy Railway polling/executor/signer
-# services are intentionally not started to avoid webhook conflicts and bypass routes.
+# Telegram callback ownership is Cloudflare-only. Railway may validate outbound
+# Telegram access, but must never poll getUpdates or own the webhook.
 USER root
 WORKDIR /freqtrade
 
@@ -16,7 +16,6 @@ COPY user_data /freqtrade/user_data
 RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.sh \
     && sed -i '/from telegram_signal_bridge import send_prealert/a send_prealert = lambda **kwargs: None' /freqtrade/run_ready_bot.sh \
     && sed -i "s/if python - <<'PY'/if python - 2>\/dev\/null <<'PY'/" /freqtrade/run_ready_bot.sh \
-    && sed -i 's/telegram_ok = validate_and_resolve_telegram_chat()/telegram_ok = True # Cloudflare owns Telegram callback; Railway must not poll Telegram/' /freqtrade/fast_entry_engine.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|true # Cloudflare owns Telegram webhook; do not start Railway Telegram bridge|' /freqtrade/run_ready_bot.sh \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
