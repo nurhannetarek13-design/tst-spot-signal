@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export NUMEXPR_MAX_THREADS="${NUMEXPR_MAX_THREADS:-4}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-2}"
+
 USER_DATA="/freqtrade/user_data"
 STRATEGY_DIR="$USER_DATA/strategies"
 NFI_DIR="$USER_DATA/nfi-pinned"
@@ -24,7 +28,7 @@ import io, os, shutil, tarfile
 
 nfi_dir = Path("${NFI_DIR}")
 archive_url = "${NFI_ARCHIVE}"
-req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.2"})
+req = Request(archive_url, headers={"User-Agent": "tst-ready-bot/3.3"})
 with urlopen(req, timeout=120) as r:
     data = r.read()
 if len(data) < 1_000_000:
@@ -54,7 +58,7 @@ shutil.rmtree(tmp, ignore_errors=True)
 print(f"[ready-bot] NFI package ready: {nfi_dir}")
 
 def fetch(url: str, out: str, min_size: int, needle: bytes):
-    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.2"})
+    req = Request(url, headers={"User-Agent": "tst-ready-bot/3.3"})
     with urlopen(req, timeout=60) as r:
         payload = r.read()
     if len(payload) < min_size or needle not in payload:
@@ -169,9 +173,11 @@ MAX_CHANGE_24H = 30.0
 MIN_1H_RANGE = 0.012
 MIN_15M_MOMENTUM = 0.001
 MIN_VOLUME_RATIO = 1.15
+NFI_MAX_PAIRS = 28
+CORE = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 
 def get_scan():
-    with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/3.0','Accept':'application/json'}), timeout=25) as r:
+    with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/3.1','Accept':'application/json'}), timeout=25) as r:
         return json.loads(r.read())
 
 def to_pair(symbol):
@@ -187,7 +193,7 @@ def get_klines(symbol):
     last_error = None
     for base in KLINE_BASES:
         try:
-            req = Request(f'{base}/klines?{query}', headers={'User-Agent':'tst-fast-prealert/1.0','Accept':'application/json'})
+            req = Request(f'{base}/klines?{query}', headers={'User-Agent':'tst-fast-prealert/1.1','Accept':'application/json'})
             with urlopen(req, timeout=12) as r:
                 data = json.loads(r.read())
             if isinstance(data, list) and len(data) >= 13:
@@ -216,13 +222,39 @@ while True:
     try:
         data = get_scan()
         liquid_symbols = data.get('liquid') or []
-        pairs = [p for p in (to_pair(s) for s in liquid_symbols) if p][:120]
-        if pairs:
+        movers = data.get('movers') or []
+
+        # Full-market discovery stays external; only a small dynamic shortlist is sent to heavy NFI.
+        shortlist = []
+        seen = set(CORE)
+        shortlist.extend(CORE)
+        for item in movers:
+            symbol = str(item.get('symbol') or '')
+            pair = to_pair(symbol)
+            if not pair or pair in seen:
+                continue
+            change = float(item.get('change') or 0.0)
+            volume = float(item.get('volume') or 0.0)
+            if volume >= MIN_QUOTE_VOLUME_24H and MIN_CHANGE_24H <= change <= MAX_CHANGE_24H:
+                shortlist.append(pair)
+                seen.add(pair)
+            if len(shortlist) >= NFI_MAX_PAIRS:
+                break
+        if len(shortlist) < NFI_MAX_PAIRS:
+            for symbol in liquid_symbols:
+                pair = to_pair(symbol)
+                if pair and pair not in seen:
+                    shortlist.append(pair); seen.add(pair)
+                if len(shortlist) >= NFI_MAX_PAIRS:
+                    break
+
+        if shortlist:
             tmp = pairlist_file.with_suffix('.tmp')
-            tmp.write_text(json.dumps({'pairs': pairs, 'refresh_period': 60}))
+            tmp.write_text(json.dumps({'pairs': shortlist, 'refresh_period': 60}))
             tmp.replace(pairlist_file)
-            print(f'[vercel-pairlist] wrote {len(pairs)} pairs to {pairlist_file}')
-        all_symbols = set(liquid_symbols) | {x.get('symbol') for x in (data.get('movers') or []) if x.get('symbol')}
+            print(f'[nfi-shortlist] wrote {len(shortlist)} pairs to {pairlist_file}')
+
+        all_symbols = set(liquid_symbols) | {x.get('symbol') for x in movers if x.get('symbol')}
         if all_symbols:
             if known_universe is None:
                 known_universe = all_symbols
@@ -230,11 +262,11 @@ while True:
                 for sym in sorted(all_symbols - known_universe):
                     print(f'[universe-change] {sym} entered liquid/mover universe')
                 known_universe = all_symbols
-        movers = data.get('movers') or []
         if movers:
             print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('change',0)):+.1f}%" for x in movers[:8]))
+
         now = time.time()
-        for m in movers[:12]:
+        for m in movers[:16]:
             symbol = str(m.get('symbol') or '')
             pair = to_pair(symbol)
             if not pair:
@@ -250,8 +282,14 @@ while True:
                 if not metrics:
                     continue
                 last, range_1h, momentum_15m, volume_ratio = metrics
-                setup_ok = range_1h >= MIN_1H_RANGE and momentum_15m >= MIN_15M_MOMENTUM and volume_ratio >= MIN_VOLUME_RATIO
-                print(f'[setup-gate] {symbol} range1h={range_1h*100:.2f}% mom15m={momentum_15m*100:+.2f}% volx={volume_ratio:.2f} ok={setup_ok}')
+                checks = {
+                    'range1h': range_1h >= MIN_1H_RANGE,
+                    'momentum15m': momentum_15m >= MIN_15M_MOMENTUM,
+                    'volume_ratio': volume_ratio >= MIN_VOLUME_RATIO,
+                }
+                setup_ok = all(checks.values())
+                failed = ','.join(k for k,v in checks.items() if not v) or 'none'
+                print(f'[setup-gate] {symbol} range1h={range_1h*100:.2f}% mom15m={momentum_15m*100:+.2f}% volx={volume_ratio:.2f} ok={setup_ok} failed={failed}')
                 if setup_ok:
                     send_prealert(pair=pair, last=last, change_24h=change, volume_24h=volume, range_1h=range_1h, momentum_15m=momentum_15m, volume_ratio=volume_ratio)
                     last_prealert[symbol] = now
