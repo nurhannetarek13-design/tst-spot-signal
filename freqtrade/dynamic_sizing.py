@@ -19,7 +19,7 @@ API_BASES = [
 ]
 ACCOUNT_READ_RELAY = os.getenv(
     'BINANCE_ACCOUNT_READ_RELAY_URL',
-    'https://tst-spot-signal.vercel.app/api/binance-account-read-relay',
+    'https://tst-spot-signal.nurhanne-tarek13.workers.dev/account-read-relay',
 )
 
 
@@ -51,7 +51,7 @@ def _relay_free_usdt(key: str, secret: str) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/2.0',
+            'User-Agent': 'tst-dynamic-sizing/3.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -69,15 +69,15 @@ def free_usdt() -> float:
     if not key or not secret:
         raise RuntimeError('BINANCE_CREDENTIALS_MISSING_FOR_SIZING')
 
-    # Direct account access is preferred. Railway can receive Binance HTTP 451
-    # depending on egress region, so a strictly read-only authenticated Vercel
-    # relay is the fallback. The relay never accepts order routes.
+    # Prefer direct Binance access. Railway can receive HTTP 451 depending on its
+    # egress region, so the fallback is a strictly read-only authenticated
+    # Cloudflare relay. It exposes only /api/v3/account and never order routes.
     last_error = 'unavailable'
     for base in API_BASES:
         query = _signed_account_query(secret)
         req = Request(
             f'{base}/api/v3/account?{query}',
-            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/2.0'},
+            headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/3.0'},
         )
         try:
             with urlopen(req, timeout=8) as r:
@@ -111,7 +111,7 @@ def recommended_stake(stop_pct: float) -> tuple[float | None, float]:
     risk_budget = min(max_risk, free * risk_fraction)
     by_risk = risk_budget / stop
     by_balance = free * max_stake_fraction
-    available = max(0.0, free - 0.10)  # leave a small fee/dust buffer
+    available = max(0.0, free - 0.10)
     raw = min(10.0, available, by_balance, by_risk)
     stake = math.floor(raw * 100.0) / 100.0
 
