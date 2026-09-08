@@ -37,11 +37,14 @@
   },
   "pairlists": [
     {
-      "method": "VolumePairList",
+      "method": "RemotePairList",
+      "mode": "whitelist",
+      "processing_mode": "filter",
+      "pairlist_url": "https://tst-spot-signal.vercel.app/api/market-scan?format=freqtrade",
       "number_assets": 120,
-      "sort_key": "quoteVolume",
-      "min_value": 0,
-      "refresh_period": 60
+      "refresh_period": 60,
+      "keep_pairlist_on_failure": true,
+      "read_timeout": 20
     }
   ],
   "entry_pricing": {"price_side": "other", "use_order_book": false},
