@@ -9,6 +9,13 @@ if 'import dynamic_sizing\n' not in s:
         raise SystemExit('dynamic sizing patch failed: import marker missing')
     s = s.replace(import_marker, import_marker + 'import dynamic_sizing\n', 1)
 
+preflight_marker = "        execution_ready = row.get('status') == 'FAST_SIGNAL_DRYRUN_OK' and row.get('userConfirmationRequired') is True and row.get('autoBuy') is False\n"
+preflight_replacement = preflight_marker + "        if execution_ready:\n            dynamic_sizing.free_usdt()\n            print('[dynamic-sizing] balance read OK')\n"
+if "[dynamic-sizing] balance read OK" not in s:
+    if preflight_marker not in s:
+        raise SystemExit('dynamic sizing patch failed: preflight marker missing')
+    s = s.replace(preflight_marker, preflight_replacement, 1)
+
 payload_marker = "    payload = {\n        'id': f'{symbol}-{int(now)}',"
 insert = (
     "    stake_usdt, free_usdt = dynamic_sizing.recommended_stake(sl_pct)\n"
