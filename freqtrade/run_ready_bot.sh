@@ -10,8 +10,8 @@ CONFIG_FILE="$USER_DATA/config_nfi_dryrun.json"
 PAIRLIST_FILE="$USER_DATA/vercel_pairlist.json"
 NFI_COMMIT="da50440bd5f8a829af9dc768822fa31cfe4b7867"
 NFI_ARCHIVE="https://github.com/iterativv/NostalgiaForInfinity/archive/${NFI_COMMIT}.tar.gz"
-PROTECTED_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/user_data/strategies/NFIProtectedX7.py"
-BRIDGE_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/main/freqtrade/telegram_signal_bridge.py"
+PROTECTED_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/afc7708923a31a8264584910af1b8b6ae536a288/freqtrade/user_data/strategies/NFIProtectedX7.py"
+BRIDGE_URL="https://raw.githubusercontent.com/nurhannetarek13-design/tst-spot-signal/893e57d2f96d03c4febaf389bc199fa807c088a1/freqtrade/telegram_signal_bridge.py"
 SCANNER_URL="${VERCEL_SCANNER_URL:-https://tst-spot-signal.vercel.app/api/market-scanner}"
 
 mkdir -p "$STRATEGY_DIR" "$USER_DATA/logs" "$USER_DATA/signals"
@@ -78,9 +78,6 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 3
 fi
 
-# Reclaim Telegram updates from an obsolete webhook without dropping pending
-# messages, then prefer the latest real private user chat over a mistakenly
-# configured bot id. This resolved id is inherited by every child process.
 RESOLVED_CHAT_ID="$(python - <<'PY'
 import json, os, sys, time
 from urllib.error import HTTPError
@@ -105,14 +102,12 @@ def api(method, payload):
 try:
     me = api('getMe', {})
     bot_id = str((me.get('result') or {}).get('id') or '')
-
     hook = api('getWebhookInfo', {})
     hook_url = str((hook.get('result') or {}).get('url') or '')
     if hook_url:
         print('[telegram-resolve] active webhook found; reclaiming updates without dropping pending messages', file=sys.stderr)
         api('deleteWebhook', {'drop_pending_updates': False})
         time.sleep(1.0)
-
     updates = None
     last_exc = None
     for _ in range(4):
@@ -124,7 +119,6 @@ try:
             time.sleep(1.0)
     if updates is None:
         raise last_exc or RuntimeError('getUpdates unavailable')
-
     candidates = []
     for upd in updates.get('result') or []:
         msg = upd.get('message') or {}
@@ -135,7 +129,6 @@ try:
             continue
         candidates.append((int(upd.get('update_id') or 0), str(cid)))
     candidates.sort()
-
     resolved = candidates[-1][1] if candidates else configured
     if resolved and resolved != configured:
         print(f'[telegram-resolve] RESOLVED_CHAT_ID={resolved}', file=sys.stderr)
@@ -167,7 +160,6 @@ url = os.environ['SCANNER_URL']
 pairlist_file = Path(os.environ['PAIRLIST_FILE'])
 known_universe = None
 last_prealert = {}
-
 EXCLUDE = {'USDCUSDT','FDUSDUSDT','TUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','AEURUSDT','BUSDUSDT'}
 KLINE_BASES = ['https://data-api.binance.vision/api/v3', 'https://api.binance.com/api/v3']
 PREALERT_COOLDOWN = 20 * 60
@@ -178,11 +170,9 @@ MIN_1H_RANGE = 0.012
 MIN_15M_MOMENTUM = 0.001
 MIN_VOLUME_RATIO = 1.15
 
-
 def get_scan():
     with urlopen(Request(url, headers={'User-Agent':'tst-vercel-trigger/3.0','Accept':'application/json'}), timeout=25) as r:
         return json.loads(r.read())
-
 
 def to_pair(symbol):
     if not symbol.endswith('USDT') or symbol in EXCLUDE:
@@ -191,7 +181,6 @@ def to_pair(symbol):
     if not base or re.search(r'(UP|DOWN|BULL|BEAR)$', base):
         return None
     return f'{base}/USDT'
-
 
 def get_klines(symbol):
     query = urlencode({'symbol': symbol, 'interval': '5m', 'limit': 13})
@@ -206,7 +195,6 @@ def get_klines(symbol):
         except Exception as exc:
             last_error = exc
     raise RuntimeError(f'klines unavailable: {last_error}')
-
 
 def fast_metrics(symbol):
     k = get_klines(symbol)
@@ -224,7 +212,6 @@ def fast_metrics(symbol):
     volume_ratio = recent / prior if prior > 0 else 0.0
     return last, range_1h, momentum_15m, volume_ratio
 
-
 while True:
     try:
         data = get_scan()
@@ -235,7 +222,6 @@ while True:
             tmp.write_text(json.dumps({'pairs': pairs, 'refresh_period': 60}))
             tmp.replace(pairlist_file)
             print(f'[vercel-pairlist] wrote {len(pairs)} pairs to {pairlist_file}')
-
         all_symbols = set(liquid_symbols) | {x.get('symbol') for x in (data.get('movers') or []) if x.get('symbol')}
         if all_symbols:
             if known_universe is None:
@@ -244,11 +230,9 @@ while True:
                 for sym in sorted(all_symbols - known_universe):
                     print(f'[universe-change] {sym} entered liquid/mover universe')
                 known_universe = all_symbols
-
         movers = data.get('movers') or []
         if movers:
             print('[vercel-scan] top movers: ' + ', '.join(f"{x.get('symbol')}:{float(x.get('change',0)):+.1f}%" for x in movers[:8]))
-
         now = time.time()
         for m in movers[:12]:
             symbol = str(m.get('symbol') or '')
@@ -266,29 +250,13 @@ while True:
                 if not metrics:
                     continue
                 last, range_1h, momentum_15m, volume_ratio = metrics
-                setup_ok = (
-                    range_1h >= MIN_1H_RANGE
-                    and momentum_15m >= MIN_15M_MOMENTUM
-                    and volume_ratio >= MIN_VOLUME_RATIO
-                )
-                print(
-                    f'[setup-gate] {symbol} range1h={range_1h*100:.2f}% '
-                    f'mom15m={momentum_15m*100:+.2f}% volx={volume_ratio:.2f} ok={setup_ok}'
-                )
+                setup_ok = range_1h >= MIN_1H_RANGE and momentum_15m >= MIN_15M_MOMENTUM and volume_ratio >= MIN_VOLUME_RATIO
+                print(f'[setup-gate] {symbol} range1h={range_1h*100:.2f}% mom15m={momentum_15m*100:+.2f}% volx={volume_ratio:.2f} ok={setup_ok}')
                 if setup_ok:
-                    send_prealert(
-                        pair=pair,
-                        last=last,
-                        change_24h=change,
-                        volume_24h=volume,
-                        range_1h=range_1h,
-                        momentum_15m=momentum_15m,
-                        volume_ratio=volume_ratio,
-                    )
+                    send_prealert(pair=pair, last=last, change_24h=change, volume_24h=volume, range_1h=range_1h, momentum_15m=momentum_15m, volume_ratio=volume_ratio)
                     last_prealert[symbol] = now
             except Exception as exc:
                 print(f'[setup-gate] {symbol} warning: {type(exc).__name__}: {exc}')
-
     except Exception as e:
         print(f'[vercel-scan] warning: {type(e).__name__}: {e}')
     time.sleep(60)
@@ -307,9 +275,7 @@ fi
 python -u - <<'PY' &
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-
 pairlist = Path('/freqtrade/user_data/vercel_pairlist.json')
-
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != '/pairs':
@@ -326,7 +292,6 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
     def log_message(self, *_):
         pass
-
 print('[pairlist-http] serving http://127.0.0.1:8765/pairs')
 HTTPServer(('127.0.0.1', 8765), H).serve_forever()
 PY
