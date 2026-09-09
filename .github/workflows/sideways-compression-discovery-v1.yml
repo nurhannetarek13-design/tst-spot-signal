@@ -1,0 +1,44 @@
+name: Sideways Compression Discovery V1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/sideways_compression_discovery_v1.py'
+      - '.github/workflows/sideways-compression-discovery-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/sideways_compression_discovery_v1.py research/systematic_edge_scanner_v3.py
+      - name: Run sideways/compression discovery
+        run: python research/sideways_compression_discovery_v1.py
+      - name: Enforce research-only fail-closed output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/sideways-compression-v1-latest.json'
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['liveEligibleCount']==0
+          assert d['methodology']['timeSplit']=='50/25/25'
+          print('research-only gate OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sideways-compression-v1
+          path: validation/edges/sideways-compression-v1-latest.json
+          retention-days: 14
