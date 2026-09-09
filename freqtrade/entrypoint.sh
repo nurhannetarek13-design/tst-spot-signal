@@ -6,7 +6,7 @@ set -euo pipefail
 BOT_PID=$!
 
 cleanup() {
-  kill "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -61,6 +61,12 @@ echo "[entrypoint] Binance reconciler started pid=${RECONCILE_PID}"
 python -u /freqtrade/execution_recovery.py &
 RECOVERY_PID=$!
 echo "[entrypoint] exact-once execution recovery started pid=${RECOVERY_PID}"
+
+# Research-only context. It never blocks or triggers a BUY. The live engine reads
+# it only when writing telemetry for later OOS calibration.
+python -u /freqtrade/market_context.py &
+MARKET_CONTEXT_PID=$!
+echo "[entrypoint] shadow market-context collector started pid=${MARKET_CONTEXT_PID}"
 
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
