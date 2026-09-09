@@ -5,18 +5,21 @@ import os
 import tempfile
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # Canonical live state defaults to Railway's persistent /data volume.
 STATE_PATH = Path(os.getenv('TST_TRADE_STATE_PATH', '/data/tst_live_positions.json'))
 EVENT_PATH = Path(os.getenv('TST_TRADE_EVENT_PATH', '/data/tst_trade_events.jsonl'))
 RESERVATION_PATH = Path(os.getenv('TST_EXECUTION_RESERVATION_PATH', '/data/tst_execution_reservations.json'))
+RISK_TIMEZONE = os.getenv('RISK_TIMEZONE', 'Africa/Cairo')
 _LOCK = threading.RLock()
 
 
 def _empty() -> dict[str, Any]:
-    return {'version': 3, 'updated_at': time.time(), 'positions': {}}
+    return {'version': 4, 'updated_at': time.time(), 'positions': {}}
 
 
 def _empty_reservations() -> dict[str, Any]:
@@ -151,12 +154,13 @@ def get_reservation(signal_id: str, action: str) -> dict[str, Any] | None:
 
 def reservations(action: str | None = None, statuses: set[str] | None = None) -> list[dict[str, Any]]:
     rows=[]
+    wanted={x.upper() for x in statuses} if statuses else None
     for row in (load_reservations().get('reservations') or {}).values():
         if not isinstance(row,dict):
             continue
         if action and str(row.get('action') or '').upper()!=action.upper():
             continue
-        if statuses and str(row.get('status') or '').upper() not in {x.upper() for x in statuses}:
+        if wanted and str(row.get('status') or '').upper() not in wanted:
             continue
         rows.append(dict(row))
     return rows
@@ -255,6 +259,27 @@ def update_position(signal_id: str, **changes: Any) -> None:
         save_state(state)
 
 
+def close_position(signal_id: str, *, exit_price: float, exit_qty: float, exit_quote: float,
+                   realized_pnl_usdt: float, close_reason: str, exit_order_id: int | None = None,
+                   closed_at: float | None = None, **extra: Any) -> None:
+    """Persist a reconciled close and its conservative net-PnL estimate."""
+    when=float(closed_at or time.time())
+    with _LOCK:
+        state=load_state(); pos=state.get('positions',{}).get(signal_id)
+        if not isinstance(pos,dict):
+            return
+        pos.update({
+            'status':'CLOSED','closed_at':when,'close_reason':close_reason,
+            'exit_price':float(exit_price),'exit_quantity':float(exit_qty),'exit_quote':float(exit_quote),
+            'realized_pnl_usdt':float(realized_pnl_usdt),'exit_order_id':exit_order_id,
+            'updated_at':time.time(), **extra,
+        })
+        state['positions'][signal_id]=pos; save_state(state)
+    append_event('POSITION_CLOSED', signal_id=signal_id, symbol=pos.get('symbol'), reason=close_reason,
+                 exit_price=exit_price, exit_quantity=exit_qty, exit_quote=exit_quote,
+                 realized_pnl_usdt=realized_pnl_usdt, exit_order_id=exit_order_id)
+
+
 def position_for_signal(signal_id: str) -> dict[str, Any] | None:
     pos = (load_state().get('positions') or {}).get(signal_id)
     return dict(pos) if isinstance(pos, dict) else None
@@ -263,6 +288,13 @@ def position_for_signal(signal_id: str) -> dict[str, Any] | None:
 def open_positions() -> list[dict[str, Any]]:
     state = load_state()
     return [dict(v) for v in state.get('positions', {}).values() if isinstance(v, dict) and v.get('status') in {'BUY_FILLED', 'OCO_ACTIVE', 'PROTECTION_PENDING'}]
+
+
+def closed_positions() -> list[dict[str, Any]]:
+    state=load_state()
+    rows=[dict(v) for v in state.get('positions',{}).values() if isinstance(v,dict) and v.get('status')=='CLOSED' and v.get('realized_pnl_usdt') is not None]
+    rows.sort(key=lambda x:float(x.get('closed_at') or 0))
+    return rows
 
 
 def portfolio_snapshot() -> dict[str, Any]:
@@ -281,3 +313,46 @@ def portfolio_snapshot() -> dict[str, Any]:
         except Exception:
             incomplete += 1
     return {'open_count': len(positions), 'stop_risk_usdt': risk, 'incomplete_count': incomplete}
+
+
+def performance_snapshot(now: float | None = None) -> dict[str, Any]:
+    """Actual reconciled bot results used by risk circuit breakers.
+
+    Uses the configured local risk day (Africa/Cairo by default), not candle
+    outcomes or theoretical signals. Drawdown is measured on cumulative realized
+    bot PnL so a restart cannot reset it.
+    """
+    t=float(now or time.time())
+    try: tz=ZoneInfo(RISK_TIMEZONE)
+    except Exception: tz=ZoneInfo('UTC')
+    today=datetime.fromtimestamp(t,tz).date()
+    rows=closed_positions()
+    today_rows=[]
+    for p in rows:
+        try:
+            d=datetime.fromtimestamp(float(p.get('closed_at') or 0),tz).date()
+            if d==today: today_rows.append(p)
+        except Exception: pass
+    realized_today=sum(float(p.get('realized_pnl_usdt') or 0) for p in today_rows)
+
+    consecutive_losses=0
+    for p in reversed(rows):
+        if float(p.get('realized_pnl_usdt') or 0)<0: consecutive_losses+=1
+        else: break
+
+    cumulative=0.0; peak=0.0; max_dd=0.0
+    for p in rows:
+        cumulative+=float(p.get('realized_pnl_usdt') or 0)
+        peak=max(peak,cumulative)
+        max_dd=max(max_dd,peak-cumulative)
+
+    return {
+        'timezone':RISK_TIMEZONE,'day':today.isoformat(),
+        'closed_today':len(today_rows),'closed_total':len(rows),
+        'realized_pnl_today_usdt':round(realized_today,8),
+        'cumulative_realized_pnl_usdt':round(cumulative,8),
+        'current_realized_drawdown_usdt':round(max(0.0,peak-cumulative),8),
+        'max_realized_drawdown_usdt':round(max_dd,8),
+        'consecutive_losses':consecutive_losses,
+        'last_closed_at':float(rows[-1].get('closed_at') or 0) if rows else None,
+    }
