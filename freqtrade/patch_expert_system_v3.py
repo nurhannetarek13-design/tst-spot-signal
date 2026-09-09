@@ -17,8 +17,8 @@ constants = '''
 SIGNAL_BURST_GUARD_SEC = int(os.getenv('FAST_SIGNAL_BURST_GUARD_SEC', '90'))
 PORTFOLIO_RISK_CAP_USDT = float(os.getenv('FAST_PORTFOLIO_RISK_CAP_USDT', '1.25'))
 PORTFOLIO_MAX_POSITIONS = int(os.getenv('FAST_PORTFOLIO_MAX_POSITIONS', '3'))
-CANDIDATE_EVENT_PATH = os.getenv('TST_CANDIDATE_EVENT_PATH', '/tmp/tst_candidate_events.jsonl')
-LANE_HEALTH_PATH = os.getenv('TST_LANE_HEALTH_PATH', '/tmp/tst_lane_health.json')
+CANDIDATE_EVENT_PATH = os.getenv('TST_CANDIDATE_EVENT_PATH', '/data/tst_candidate_events.jsonl')
+LANE_HEALTH_PATH = os.getenv('TST_LANE_HEALTH_PATH', '/data/tst_lane_health.json')
 DERIVATIVES_CACHE_SEC = int(os.getenv('FAST_DERIVATIVES_CACHE_SEC', '120'))
 GLOBAL_COOLDOWN_SEC = SIGNAL_BURST_GUARD_SEC
 _candidate_event_last = {}
@@ -66,6 +66,7 @@ def _record_candidate(symbol: str, lane: str, score: float, price: float, decisi
             'score': round(float(score), 3), 'price': float(price),
             'decision': decision, 'reason': reason, **extra,
         }
+        Path(CANDIDATE_EVENT_PATH).parent.mkdir(parents=True, exist_ok=True)
         with open(CANDIDATE_EVENT_PATH, 'a', encoding='utf-8') as f:
             f.write(json.dumps(row, separators=(',', ':'), ensure_ascii=False) + '\n')
     except Exception as exc:
@@ -234,4 +235,4 @@ if '[expert-system-v3] ONLINE' not in s:
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[expert-system-v3-patch] OK risk-based portfolio gate + public derivatives context + forward outcome telemetry + conservative lane kill-switch enabled')
+print('[expert-system-v3-patch] OK risk-based portfolio gate + public derivatives context + persistent forward outcome telemetry + conservative lane kill-switch enabled')
