@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment marker: momentum growth + dedicated fail-closed new-listing watcher v1
+# Deployment marker: expert system v3 + outcome learning + read-only profit shadow
 /freqtrade/run_ready_bot.sh &
 BOT_PID=$!
 
 cleanup() {
-  kill "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -48,6 +48,14 @@ fi
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] fast entry engine started pid=${FAST_PID}"
+
+python -u /freqtrade/outcome_engine.py &
+OUTCOME_ENGINE_PID=$!
+echo "[entrypoint] outcome engine started pid=${OUTCOME_ENGINE_PID}"
+
+python -u /freqtrade/profit_manager.py &
+PROFIT_MANAGER_PID=$!
+echo "[entrypoint] smart profit shadow started pid=${PROFIT_MANAGER_PID}"
 
 python -u /freqtrade/sol_buy_zone_watch.py &
 SOL_MONITOR_PID=$!
