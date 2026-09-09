@@ -7,6 +7,7 @@ const MAKE_ROUTE = "CLOUDFLARE_SIGNED_RAILWAY_MAKE_BINANCE";
 const SIGNAL_TTL_SEC = 10 * 60;
 const PREPARE_TTL_SEC = 5 * 60;
 const MIN_ORDER_USDT = 5;
+const MAX_ORDER_USDT = 100;
 
 // Legacy markers intentionally retained for CI migration compatibility only.
 const LEGACY_DEMO_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_DEMO_READONLY";
@@ -78,9 +79,9 @@ async function handleFastSignalIngest(request, env) {
   const symbol=String(body.symbol||"").toUpperCase();
   const entry=Number(body.entry), stop=Number(body.stop), target=Number(body.target);
   const requested=Math.floor(Number(body.stakeUSDT)*100)/100, score=Number(body.score);
-  if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) return Response.json({ok:false,status:"BAD_SYMBOL"},{status:400});
+  if (!/^[\p{L}\p{N}]{1,20}USDT$/u.test(symbol)) return Response.json({ok:false,status:"BAD_SYMBOL"},{status:400});
   if (![entry,stop,target].every(Number.isFinite) || !(stop<entry && target>entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
-  if (!Number.isFinite(requested) || requested<MIN_ORDER_USDT || requested>10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
+  if (!Number.isFinite(requested) || requested<MIN_ORDER_USDT || requested>MAX_ORDER_USDT) return Response.json({ok:false,status:"BAD_STAKE",gateway:"canonical-v100-unicode",requested,min:MIN_ORDER_USDT,max:MAX_ORDER_USDT},{status:400});
   if (body.dryRun===true) return Response.json({ok:true,status:"FAST_SIGNAL_DRYRUN_OK",canTrade:true,credentialMode:"MAKE_VERIFIED",executionRoute:MAKE_ROUTE,recommendedUSDT:requested,autoBuy:false,userConfirmationRequired:true});
 
   const id=String(body.id||`${symbol}-${Date.now()}`).replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || `${Date.now()}`;
