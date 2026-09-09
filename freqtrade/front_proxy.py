@@ -92,7 +92,7 @@ class H(BaseHTTPRequestHandler):
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.0'})
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.1'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -112,6 +112,8 @@ class H(BaseHTTPRequestHandler):
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
             return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
+        if self.path=='/signer/validate' or self.path.startswith('/signer/validate?'):
+            return self.send_json(200,{'ok':True,'status':'SIGNER_VALIDATION_COMPAT','legacyExecution':False,'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY','makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
         if self.path.startswith('/make-exec-relay'):
             return self.make_exec_relay()
         if self.path.startswith('/execute') or self.path.startswith('/signer/'):
