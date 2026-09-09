@@ -62,8 +62,13 @@ python -u /freqtrade/execution_recovery.py &
 RECOVERY_PID=$!
 echo "[entrypoint] exact-once execution recovery started pid=${RECOVERY_PID}"
 
-# Research-only context. It never blocks or triggers a BUY. The live engine reads
-# it only when writing telemetry for later OOS calibration.
+# Research-only context. Failure is fail-open because these labels are not yet a
+# validated live gate; they are collected for OOS calibration only.
+if python -u /freqtrade/market_context.py --once; then
+  echo "[entrypoint] initial shadow market-context snapshot ready"
+else
+  echo "[entrypoint] market-context preflight unavailable; continuing without unvalidated shadow context" >&2
+fi
 python -u /freqtrade/market_context.py &
 MARKET_CONTEXT_PID=$!
 echo "[entrypoint] shadow market-context collector started pid=${MARKET_CONTEXT_PID}"
