@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""No-network build tests for execution-state invariants."""
-import os,tempfile
+"""No-network build tests for execution-state and risk-ledger invariants."""
+import os,tempfile,time
 from pathlib import Path
 
 root=Path(tempfile.mkdtemp(prefix='tst-exec-test-'))
 os.environ['TST_TRADE_STATE_PATH']=str(root/'positions.json')
 os.environ['TST_TRADE_EVENT_PATH']=str(root/'events.jsonl')
 os.environ['TST_EXECUTION_RESERVATION_PATH']=str(root/'reservations.json')
+os.environ['RISK_TIMEZONE']='Africa/Cairo'
 
 import trade_state
 from front_proxy import _client_id
@@ -50,7 +51,17 @@ snap=trade_state.portfolio_snapshot()
 assert snap['open_count']==1 and snap['incomplete_count']==0
 assert abs(snap['stop_risk_usdt']-0.2)<1e-9,snap
 
+# Reconciled close must persist actual PnL into the risk ledger and remove risk.
+trade_state.close_position(sid,exit_price=95.0,exit_qty=0.1,exit_quote=9.5,
+                           realized_pnl_usdt=-0.52,close_reason='STOP_LOSS',
+                           exit_order_id=789,closed_at=time.time())
+assert trade_state.portfolio_snapshot()['open_count']==0
+perf=trade_state.performance_snapshot()
+assert perf['closed_today']==1 and perf['consecutive_losses']==1,perf
+assert abs(perf['realized_pnl_today_usdt']+0.52)<1e-9,perf
+assert perf['current_realized_drawdown_usdt']>=0.52-1e-9,perf
+
 # Persistence exists on disk and can be parsed after writes.
 assert Path(os.environ['TST_TRADE_STATE_PATH']).exists()
 assert Path(os.environ['TST_EXECUTION_RESERVATION_PATH']).exists()
-print('[execution-safety-test] PASS duplicate=100 exact-once=1 unknown_retry=blocked lifecycle=protected persistence=ok')
+print('[execution-safety-test] PASS duplicate=100 exact-once=1 unknown_retry=blocked lifecycle=protected realized_pnl=ok drawdown=ok persistence=ok')
