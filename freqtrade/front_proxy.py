@@ -42,6 +42,16 @@ def _signal_epoch(body):
         return 0.0
 
 
+def _client_id(prefix: str, signal_id: str) -> str:
+    """Stable Binance-safe id, <=36 chars, independent of symbol alphabet.
+
+    The same signal/action always produces the same client id, including after
+    HTTP retries or Railway restarts. This is the exchange-level idempotency key.
+    """
+    digest=hashlib.sha256(signal_id.encode('utf-8')).hexdigest()[:26]
+    return f'{prefix}{digest}'
+
+
 class H(BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
 
@@ -102,6 +112,9 @@ class H(BaseHTTPRequestHandler):
                 quote,filter_meta=binance_filters.normalize_buy_quote(symbol,quote)
                 body['quote_amount_usdt']=quote
                 body['execution_filter_meta']=filter_meta
+                # Exchange-level exact-once key. Make maps this to Binance
+                # newClientOrderId. Retries cannot silently create a second BUY.
+                body['client_order_id']=_client_id('TSTB-',signal_id)
                 target_url=MAKE_BUY_WEBHOOK_URL
             elif action=='OCO':
                 try:
@@ -119,6 +132,9 @@ class H(BaseHTTPRequestHandler):
                 normalized,filter_meta=binance_filters.normalize_oco(symbol,quantity,tp,sl,sl_limit)
                 body.update(normalized)
                 body['execution_filter_meta']=filter_meta
+                body['list_client_order_id']=_client_id('TSTO-',signal_id)
+                body['stop_client_order_id']=_client_id('TSTS-',signal_id)
+                body['limit_client_order_id']=_client_id('TSTL-',signal_id)
                 target_url=MAKE_OCO_WEBHOOK_URL
             else:
                 return self.send_json(400,{'ok':False,'status':'BAD_ACTION'})
@@ -146,7 +162,7 @@ class H(BaseHTTPRequestHandler):
             })
 
         make_raw=_json_bytes(body)
-        req=urllib.request.Request(target_url,data=make_raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/5.1'})
+        req=urllib.request.Request(target_url,data=make_raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/5.2'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -192,7 +208,7 @@ class H(BaseHTTPRequestHandler):
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
             snap=trade_state.portfolio_snapshot()
-            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT,'maxSignalAgeSec':MAX_SIGNAL_AGE_SEC,'persistentState':str(trade_state.STATE_PATH).startswith('/data/'),'filterNormalizer':True,'idempotency':True,'trackedOpenPositions':snap.get('open_count',0),'trackedStopRiskUSDT':round(float(snap.get('stop_risk_usdt',0)),4),'incompleteTrackedPositions':snap.get('incomplete_count',0)})
+            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT,'maxSignalAgeSec':MAX_SIGNAL_AGE_SEC,'persistentState':str(trade_state.STATE_PATH).startswith('/data/'),'filterNormalizer':True,'idempotency':True,'exchangeClientIds':True,'trackedOpenPositions':snap.get('open_count',0),'trackedStopRiskUSDT':round(float(snap.get('stop_risk_usdt',0)),4),'incompleteTrackedPositions':snap.get('incomplete_count',0)})
         if self.path=='/signer/validate' or self.path.startswith('/signer/validate?'):
             return self.send_json(200,{'ok':True,'status':'SIGNER_VALIDATION_COMPAT','legacyExecution':False,'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY','makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
         if self.path.startswith('/make-exec-relay'):
@@ -206,5 +222,5 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f} trade_state=PERSISTENT idempotency=ON filter_normalizer=ON', flush=True)
+    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f} trade_state=PERSISTENT idempotency=ON exchange_client_ids=ON filter_normalizer=ON', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
