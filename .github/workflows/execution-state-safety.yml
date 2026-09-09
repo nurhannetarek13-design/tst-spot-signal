@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "freqtrade/trade_state.py"
+      - "freqtrade/patch_trade_state_protection_gate.py"
       - "freqtrade/test_execution_state_machine.py"
       - ".github/workflows/execution-state-safety.yml"
 
@@ -21,6 +22,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Apply production trade-state patch
+        run: |
+          cp freqtrade/trade_state.py /freqtrade_trade_state_tmp.py
+          sed 's|/freqtrade/trade_state.py|/freqtrade_trade_state_tmp.py|' freqtrade/patch_trade_state_protection_gate.py > /tmp/apply_patch.py
+          python /tmp/apply_patch.py
+          mv /freqtrade_trade_state_tmp.py freqtrade/trade_state.py
       - name: Syntax check
         run: python -m py_compile freqtrade/trade_state.py freqtrade/test_execution_state_machine.py
       - name: Run offline state-machine tests
