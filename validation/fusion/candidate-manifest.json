@@ -47,8 +47,8 @@
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-08T07:21:27.595584+00:00",
-      "symbol": "XLMUSDT",
+      "sourceGeneratedAt": "2026-09-09T07:30:22.327311+00:00",
+      "symbol": "SAHARAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
       "params": {
@@ -65,36 +65,36 @@
       },
       "sourceMetrics": {
         "base": {
-          "trades": 69,
-          "wins": 30,
-          "winRate": 0.43478260869565216,
-          "netPnlUSDT": 1.838461957742881,
-          "expectancyUSDT": 0.026644376199172187,
-          "profitFactor": 1.2820125527564685,
-          "maxDrawdownUSDT": 1.2687675000000012
+          "trades": 72,
+          "wins": 31,
+          "winRate": 0.4305555555555556,
+          "netPnlUSDT": 1.5446489946803792,
+          "expectancyUSDT": 0.02145345825944971,
+          "profitFactor": 1.2140045059040803,
+          "maxDrawdownUSDT": 3.2078910060704047
         },
         "stress2x": {
-          "trades": 69,
-          "wins": 29,
-          "winRate": 0.42028985507246375,
-          "netPnlUSDT": 0.6954898065795205,
-          "expectancyUSDT": 0.01007956241419595,
-          "profitFactor": 1.0971708224575403,
-          "maxDrawdownUSDT": 1.384796784396411
+          "trades": 72,
+          "wins": 31,
+          "winRate": 0.4305555555555556,
+          "netPnlUSDT": 0.3525438634915745,
+          "expectancyUSDT": 0.00489644254849409,
+          "profitFactor": 1.044713493537305,
+          "maxDrawdownUSDT": 3.8936972404741317
         }
       },
       "liquidity": {
-        "quoteVolume24h": 23714275.9102,
-        "priceUSDT": 0.189
+        "quoteVolume24h": 29762241.09285,
+        "priceUSDT": 0.00972
       },
       "rankKey": [
         1,
-        0.01007956241419595,
-        1.0971708224575403,
-        69
+        0.00489644254849409,
+        1.044713493537305,
+        72
       ],
-      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "46ad824ea85b257ae59f"
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e"
     },
     {
       "source": "VECTORBT",
@@ -170,5 +170,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-09T06:24:04.941205+00:00"
+  "generatedAt": "2026-09-09T07:30:22.656151+00:00"
 }
