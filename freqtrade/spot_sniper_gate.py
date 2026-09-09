@@ -24,6 +24,10 @@ import market_context
 TOP_N = max(1, min(10, int(os.getenv('SPOT_SNIPER_TOP_N', '3'))))
 MAX_CONTEXT_AGE_SEC = max(120, int(os.getenv('SPOT_SNIPER_MAX_CONTEXT_AGE_SEC', '600')))
 PANIC_BLOCK = (os.getenv('SPOT_SNIPER_BLOCK_PANIC', '1').strip() == '1')
+# Current regime-specific research has no statistically validated Sideways edge.
+# Keep collecting telemetry, but do not risk real capital in this regime until
+# a dedicated OOS + holdout + stress validation explicitly justifies enabling it.
+SIDEWAYS_BLOCK = (os.getenv('SPOT_SNIPER_BLOCK_SIDEWAYS', '1').strip() == '1')
 
 # These are the minimum model outputs required before a real BUY can ever pass.
 REQUIRED_EV_FIELDS = (
@@ -64,6 +68,12 @@ def evaluate(payload: dict) -> dict:
     if PANIC_BLOCK and regime == 'PANIC_HIGH_VOL_BEAR':
         return _reject(
             'REGIME_REJECT', 'panic-high-vol-bear',
+            regime=regime, age=age,
+        )
+
+    if SIDEWAYS_BLOCK and regime == 'SIDEWAYS_COMPRESSION':
+        return _reject(
+            'REGIME_REJECT', 'sideways-compression-no-validated-edge',
             regime=regime, age=age,
         )
 
