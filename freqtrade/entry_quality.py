@@ -21,9 +21,18 @@ MAX_15M_IMPULSE = float(os.getenv('FAST_MAX_15M_IMPULSE', '0.018'))
 BTC_MAX_15M_DROP = float(os.getenv('FAST_BTC_MAX_15M_DROP', '0.006'))
 BTC_MAX_1H_DROP = float(os.getenv('FAST_BTC_MAX_1H_DROP', '0.012'))
 
+# Strong first-touch momentum exception. This is deliberately stricter than
+# the normal micro gate so we can catch ignition at resistance without
+# turning the strategy into a chase/fake-breakout machine.
+IGNITION_MIN_VOLUME_RATIO = float(os.getenv('FAST_IGNITION_MIN_VOLUME_RATIO', '1.35'))
+IGNITION_MIN_TAKER_BUY_RATIO = float(os.getenv('FAST_IGNITION_MIN_TAKER_BUY_RATIO', '0.68'))
+IGNITION_MAX_SPREAD_PCT = float(os.getenv('FAST_IGNITION_MAX_SPREAD_PCT', '0.08'))
+IGNITION_MAX_WICK_RATIO = float(os.getenv('FAST_IGNITION_MAX_WICK_RATIO', '1.80'))
+IGNITION_MIN_DISTANCE = float(os.getenv('FAST_IGNITION_MIN_DISTANCE', '-0.0010'))
+
 
 def _get_json(url: str, timeout: int = 10):
-    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.1', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.2', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -58,8 +67,22 @@ def _closed_klines(symbol: str, interval: str, limit: int) -> list:
     return rows
 
 
+def _ignition_exception(m: dict) -> bool:
+    distance = float(m.get('distance_to_breakout') or 0.0)
+    return (
+        IGNITION_MIN_DISTANCE <= distance < MIN_BREAKOUT_DISTANCE
+        and float(m.get('volume_ratio') or 0.0) >= IGNITION_MIN_VOLUME_RATIO
+        and float(m.get('taker_buy_ratio') or 0.0) >= IGNITION_MIN_TAKER_BUY_RATIO
+        and bool(m.get('volume_accel'))
+        and float(m.get('spread_pct') or 999.0) <= IGNITION_MAX_SPREAD_PCT
+        and float(m.get('wick_ratio') or 999.0) <= IGNITION_MAX_WICK_RATIO
+        and float(m.get('compression_ratio') or 999.0) <= 1.10
+    )
+
+
 def micro_gate(m: dict) -> tuple[bool, str]:
-    if m['distance_to_breakout'] < MIN_BREAKOUT_DISTANCE:
+    ignition = _ignition_exception(m)
+    if m['distance_to_breakout'] < MIN_BREAKOUT_DISTANCE and not ignition:
         return False, 'too-close-to-breakout'
     if m['distance_to_breakout'] > MAX_BREAKOUT_DISTANCE:
         return False, 'too-far-from-breakout'
@@ -75,7 +98,7 @@ def micro_gate(m: dict) -> tuple[bool, str]:
         return False, 'no-volume-confirmation'
     if m['wick_ratio'] > 2.5:
         return False, 'rejection-wick'
-    return True, 'micro-ok'
+    return True, 'ignition-ok' if ignition else 'micro-ok'
 
 
 def _trend_snapshot(symbol: str) -> dict:
@@ -171,8 +194,8 @@ def validate_entry(symbol: str, m: dict) -> tuple[bool, str, dict]:
         return False, '1h-trend-not-confirmed', trend
 
     btc = _btc_regime()
-    context = {**trend, 'btc': btc}
+    context = {**trend, 'btc': btc, 'micro_reason': micro_reason}
     if not btc['ok']:
         return False, 'btc-regime-weak', context
 
-    return True, 'quality-ok', context
+    return True, 'quality-ignition-ok' if micro_reason == 'ignition-ok' else 'quality-ok', context
