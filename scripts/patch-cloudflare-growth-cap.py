@@ -1,7 +1,8 @@
 from pathlib import Path
 import re
 
-# Runtime contract v5: Cloudflare must accept growth-mode dry-runs up to 100 USDT.
+# Runtime contract v6: Cloudflare must accept growth-mode dry-runs up to 100 USDT
+# and Binance symbols whose base asset uses Unicode letters (e.g. 牛来USDT).
 FILES = [
     Path('src/buy-gateway-canonical.js'),
     Path('src/buy-gateway-stable.js'),
@@ -21,8 +22,17 @@ for p in FILES:
     if re.search(r'requested\s*>\s*10', s):
         raise SystemExit(f'growth cap patch failed for {p}: legacy 10 USDT gate remains')
 
+    # Binance can use Unicode base-asset symbols. Keep USDT suffix mandatory and
+    # allow Unicode letters/numbers only in the base portion.
+    ascii_guard = 'if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol))'
+    unicode_guard = 'if (!/^[\\p{L}\\p{N}]{1,20}USDT$/u.test(symbol))'
+    if ascii_guard in s:
+        s = s.replace(ascii_guard, unicode_guard, 1)
+    elif unicode_guard not in s:
+        raise SystemExit(f'growth cap patch failed for {p}: symbol guard marker missing')
+
     # Make any remaining BAD_STAKE rejection self-identifying at runtime.
-    gateway = 'canonical-v100' if 'canonical' in p.name else 'stable-v100'
+    gateway = 'canonical-v100-unicode' if 'canonical' in p.name else 'stable-v100-unicode'
     s = s.replace(
         'return Response.json({ok:false,status:"BAD_STAKE"},{status:400});',
         f'return Response.json({{ok:false,status:"BAD_STAKE",gateway:"{gateway}",requested,min:MIN_ORDER_USDT,max:MAX_ORDER_USDT}},{{status:400}});'
@@ -32,7 +42,7 @@ for p in FILES:
         f'return Response.json({{ok:false,status:"BAD_STAKE",gateway:"{gateway}",requested,min:MIN_ORDER_USDT,max:MAX_ORDER_USDT}},{{status:400}});'
     )
     p.write_text(s, encoding='utf-8')
-    print(f'[cloudflare-growth-cap] {p.name} OK replacements={count}')
+    print(f'[cloudflare-growth-cap] {p.name} OK replacements={count} unicode-symbols=ON')
 
 for p in Path('src').glob('buy-gateway-*.js'):
     s = p.read_text(encoding='utf-8')
@@ -48,13 +58,13 @@ probe_fn = '''async function growthCapDryRun(env, ctx) {
   }
   const body = JSON.stringify({
     id: `growth-cap-${Date.now()}`,
-    symbol: "BTCUSDT",
+    symbol: "牛来USDT",
     entry: 100,
     stop: 99,
     target: 102,
     stakeUSDT: 40,
     score: 100,
-    strategy: "GROWTH_CAP_RUNTIME_PROBE",
+    strategy: "GROWTH_CAP_UNICODE_RUNTIME_PROBE",
     dryRun: true,
   });
   const ts = String(Date.now());
@@ -77,6 +87,7 @@ probe_fn = '''async function growthCapDryRun(env, ctx) {
     status: row.status || `HTTP_${r.status}`,
     recommendedUSDT: row.recommendedUSDT ?? null,
     testedStakeUSDT: 40,
+    testedSymbol: "牛来USDT",
     dryRun: true,
     autoBuy: false,
     noSecretValuesExposed: true,
@@ -107,4 +118,4 @@ if 'url.pathname === "/growth-cap-check"' not in a:
 
 auth.write_text(a, encoding='utf-8')
 print('[cloudflare-growth-cap] runtime dry-run probe installed at outer /growth-cap-check')
-print('[cloudflare-growth-cap] OK max accepted signal stake = 100 USDT across canonical + stable')
+print('[cloudflare-growth-cap] OK max accepted signal stake = 100 USDT + Unicode Binance symbols')
