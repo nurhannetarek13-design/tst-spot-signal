@@ -18,6 +18,7 @@ COPY fast_ingest_ecdsa.py /freqtrade/fast_ingest_ecdsa.py
 COPY dynamic_sizing.py /freqtrade/dynamic_sizing.py
 COPY entry_quality.py /freqtrade/entry_quality.py
 COPY patch_dynamic_sizing.py /freqtrade/patch_dynamic_sizing.py
+COPY patch_momentum_ignition.py /freqtrade/patch_momentum_ignition.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
@@ -27,8 +28,9 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && sed -i '/import telegram_signal_bridge as bridge/a from fast_ingest_ecdsa import sign_fast_ingest' /freqtrade/fast_entry_engine.py \
     && sed -i "/'X-Fast-Signature': signature,/a\            'X-Fast-ECDSA': sign_fast_ingest(raw, ts)," /freqtrade/fast_entry_engine.py \
     && python /freqtrade/patch_dynamic_sizing.py \
+    && python /freqtrade/patch_momentum_ignition.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|true # Cloudflare owns Telegram webhook; do not start Railway Telegram bridge|' /freqtrade/run_ready_bot.sh \
-    && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality' \
+    && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine' \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
