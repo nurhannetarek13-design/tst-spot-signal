@@ -53,6 +53,7 @@ COPY patch_expert_system_v4.py /freqtrade/patch_expert_system_v4.py
 COPY patch_expert_system_v5.py /freqtrade/patch_expert_system_v5.py
 COPY patch_expert_system_v6.py /freqtrade/patch_expert_system_v6.py
 COPY patch_expert_system_v7.py /freqtrade/patch_expert_system_v7.py
+COPY patch_trade_state_protection_gate.py /freqtrade/patch_trade_state_protection_gate.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
@@ -61,6 +62,7 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && sed -i "s/if python - <<'PY'/if python - 2>\/dev\/null <<'PY'/" /freqtrade/run_ready_bot.sh \
     && sed -i '/import telegram_signal_bridge as bridge/a from fast_ingest_ecdsa import sign_fast_ingest' /freqtrade/fast_entry_engine.py \
     && sed -i "/'X-Fast-Signature': signature,/a\            'X-Fast-ECDSA': sign_fast_ingest(raw, ts)," /freqtrade/fast_entry_engine.py \
+    && python /freqtrade/patch_trade_state_protection_gate.py \
     && python /freqtrade/patch_market_context_v2.py \
     && python /freqtrade/patch_reconcile_health.py \
     && python /freqtrade/patch_dynamic_sizing.py \
