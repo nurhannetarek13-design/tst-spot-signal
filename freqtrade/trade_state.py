@@ -16,11 +16,11 @@ _LOCK = threading.RLock()
 
 
 def _empty() -> dict[str, Any]:
-    return {'version': 2, 'updated_at': time.time(), 'positions': {}}
+    return {'version': 3, 'updated_at': time.time(), 'positions': {}}
 
 
 def _empty_reservations() -> dict[str, Any]:
-    return {'version': 1, 'updated_at': time.time(), 'reservations': {}}
+    return {'version': 2, 'updated_at': time.time(), 'reservations': {}}
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -111,6 +111,15 @@ def reserve_execution(body: dict[str, Any], action: str) -> tuple[bool, dict[str
             'symbol': str(body.get('symbol') or '').upper(),
             'quote_amount_usdt': body.get('quote_amount_usdt'),
             'quantity': body.get('quantity'),
+            'take_profit_price': body.get('take_profit_price'),
+            'model_take_profit_price': body.get('model_take_profit_price'),
+            'stop_loss_price': body.get('stop_loss_price'),
+            'stop_limit_price': body.get('stop_limit_price'),
+            'signal_timestamp': body.get('timestamp'),
+            'client_order_id': body.get('client_order_id'),
+            'list_client_order_id': body.get('list_client_order_id'),
+            'stop_client_order_id': body.get('stop_client_order_id'),
+            'limit_client_order_id': body.get('limit_client_order_id'),
             'status': 'RESERVED',
             'reserved_at': time.time(),
             'updated_at': time.time(),
@@ -140,6 +149,19 @@ def get_reservation(signal_id: str, action: str) -> dict[str, Any] | None:
     return dict(row) if isinstance(row, dict) else None
 
 
+def reservations(action: str | None = None, statuses: set[str] | None = None) -> list[dict[str, Any]]:
+    rows=[]
+    for row in (load_reservations().get('reservations') or {}).values():
+        if not isinstance(row,dict):
+            continue
+        if action and str(row.get('action') or '').upper()!=action.upper():
+            continue
+        if statuses and str(row.get('status') or '').upper() not in {x.upper() for x in statuses}:
+            continue
+        rows.append(dict(row))
+    return rows
+
+
 def record_buy(body: dict[str, Any], response: dict[str, Any]) -> None:
     signal_id = _signal_id(body) or str(response.get('signal_id') or '').strip()
     if not signal_id:
@@ -163,6 +185,10 @@ def record_buy(body: dict[str, Any], response: dict[str, Any]) -> None:
             'quantity': qty,
             'quote_spent': quote,
             'buy_order_id': response.get('order_id'),
+            'buy_client_order_id': body.get('client_order_id') or response.get('client_order_id'),
+            'target': body.get('take_profit_price'),
+            'model_target': body.get('model_take_profit_price'),
+            'stop': body.get('stop_loss_price'),
             'status': 'BUY_FILLED',
             'opened_at': pos.get('opened_at') or time.time(),
             'updated_at': time.time(),
@@ -170,7 +196,7 @@ def record_buy(body: dict[str, Any], response: dict[str, Any]) -> None:
         state['positions'][signal_id] = pos
         save_state(state)
     update_reservation(signal_id, 'BUY', status='FILLED', response=response, filled_at=time.time())
-    append_event('BUY_FILLED', signal_id=signal_id, symbol=symbol, entry=entry, quantity=qty, quote_spent=quote, order_id=response.get('order_id'))
+    append_event('BUY_FILLED', signal_id=signal_id, symbol=symbol, entry=entry, quantity=qty, quote_spent=quote, order_id=response.get('order_id'), client_order_id=body.get('client_order_id'))
 
 
 def record_oco(body: dict[str, Any], response: dict[str, Any]) -> None:
@@ -199,6 +225,9 @@ def record_oco(body: dict[str, Any], response: dict[str, Any]) -> None:
             'stop': sl,
             'stop_limit': sl_limit,
             'oco_order_list_id': order_list_id,
+            'oco_list_client_order_id': body.get('list_client_order_id'),
+            'oco_stop_client_order_id': body.get('stop_client_order_id'),
+            'oco_limit_client_order_id': body.get('limit_client_order_id'),
             'status': 'OCO_ACTIVE',
             'oco_updated_at': time.time(),
             'updated_at': time.time(),
@@ -211,7 +240,7 @@ def record_oco(body: dict[str, Any], response: dict[str, Any]) -> None:
         state['positions'][signal_id] = pos
         save_state(state)
     update_reservation(signal_id, 'OCO', status='PLACED', response=response, placed_at=time.time())
-    append_event('OCO_ACTIVE', signal_id=signal_id, symbol=symbol, order_list_id=order_list_id, quantity=qty, target=tp, stop=sl)
+    append_event('OCO_ACTIVE', signal_id=signal_id, symbol=symbol, order_list_id=order_list_id, list_client_order_id=body.get('list_client_order_id'), quantity=qty, target=tp, stop=sl)
 
 
 def update_position(signal_id: str, **changes: Any) -> None:
