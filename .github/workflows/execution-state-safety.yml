@@ -24,10 +24,10 @@ jobs:
           python-version: "3.12"
       - name: Apply production trade-state patch
         run: |
-          cp freqtrade/trade_state.py /freqtrade_trade_state_tmp.py
-          sed 's|/freqtrade/trade_state.py|/freqtrade_trade_state_tmp.py|' freqtrade/patch_trade_state_protection_gate.py > /tmp/apply_patch.py
+          cp freqtrade/trade_state.py /tmp/trade_state_runtime.py
+          sed 's|/freqtrade/trade_state.py|/tmp/trade_state_runtime.py|' freqtrade/patch_trade_state_protection_gate.py > /tmp/apply_patch.py
           python /tmp/apply_patch.py
-          mv /freqtrade_trade_state_tmp.py freqtrade/trade_state.py
+          mv /tmp/trade_state_runtime.py freqtrade/trade_state.py
       - name: Syntax check
         run: python -m py_compile freqtrade/trade_state.py freqtrade/test_execution_state_machine.py
       - name: Run offline state-machine tests
