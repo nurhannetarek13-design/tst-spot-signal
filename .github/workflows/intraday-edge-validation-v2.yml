@@ -62,3 +62,5 @@ jobs:
           name: intraday-edge-validation-v2-report
           path: validation/edges/intraday-edge-validation-v2-latest.json
           retention-days: 14
+
+# manual rerun marker: 2026-09-10
