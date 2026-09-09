@@ -24,7 +24,7 @@ jobs:
       - name: Syntax check
         run: python -m py_compile research/sideways_compression_discovery_v1.py research/systematic_edge_scanner_v3.py
       - name: Run sideways/compression discovery
-        run: python research/sideways_compression_discovery_v1.py
+        run: python -m research.sideways_compression_discovery_v1
       - name: Enforce research-only fail-closed output
         run: |
           python - <<'PY'
