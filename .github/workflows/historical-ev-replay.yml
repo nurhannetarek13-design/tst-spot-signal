@@ -1,0 +1,72 @@
+name: Historical EV Replay
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 3 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_ev_replay.py"
+      - "freqtrade/shadow_ev_model.py"
+      - ".github/workflows/historical-ev-replay.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: historical-ev-replay
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run frozen Binance Vision historical replay
+        env:
+          HIST_EV_MONTHS: "8"
+          HIST_EV_MIN_SAMPLE: "600"
+          HIST_EV_MIN_TEST: "100"
+          HIST_EV_TOP_N: "3"
+          HIST_EV_ROUND_TRIP_COST_PCT: "0.28"
+          HIST_EV_EXTRA_STRESS_PCT: "0.28"
+        run: python research/historical_ev_replay.py
+
+      - name: Validate evidence package is research-only
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path("freqtrade/historical_ev_evidence.json")
+          x=json.loads(p.read_text())
+          assert x.get("authorization")=="RESEARCH_ONLY"
+          assert x.get("liveTrading") is False
+          assert x.get("status") in {"APPROVED","NOT_APPROVED","INSUFFICIENT_HISTORICAL_SAMPLE"}
+          assert "feature_version" in x
+          assert "ruleset_hash" in x
+          print({"status":x.get("status"),"path_labeled_events":x.get("path_labeled_events"),"ruleset_hash":x.get("ruleset_hash")})
+          PY
+
+      - name: Commit historical evidence snapshot safely
+        run: |
+          cp freqtrade/historical_ev_evidence.json /tmp/historical_ev_evidence.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/historical_ev_evidence.json freqtrade/historical_ev_evidence.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add freqtrade/historical_ev_evidence.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update historical EV evidence [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
