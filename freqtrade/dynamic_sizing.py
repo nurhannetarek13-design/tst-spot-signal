@@ -130,7 +130,7 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/11.0',
+            'User-Agent': 'tst-dynamic-sizing/12.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -156,7 +156,7 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
             query = _signed_account_query(secret_bytes)
             req = Request(
                 f'{base}/api/v3/account?{query}',
-                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/11.0'},
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/12.0'},
             )
             try:
                 with urlopen(req, timeout=8) as r:
@@ -196,31 +196,33 @@ def free_usdt() -> float:
 
 
 def _score_fraction(score: float, hard_cap: float) -> float:
-    """Increase capital allocation only for stronger qualified setups.
+    """Allocate more capital only to the strongest already-qualified signals.
 
-    90-92  -> 12%-16%
-    93-95  -> 18%-24%
-    96-97  -> 30%
-    98-100 -> 40%
+    90-92  -> 20%-25%
+    93-95  -> 35%-45%
+    96-97  -> 55%-60%
+    98-100 -> 70%-80%
 
-    Risk/stop/daily-loss limits still override these fractions.
+    The execution cap, stop-distance risk budget and daily-loss guard still
+    override these fractions. This is not martingale and does not increase
+    size merely because the account is behind a growth target.
     """
     s = min(100.0, max(90.0, float(score)))
     if s < 93.0:
-        fraction = 0.12 + ((s - 90.0) / 2.0) * 0.04
+        fraction = 0.20 + ((s - 90.0) / 2.0) * 0.05
     elif s < 96.0:
-        fraction = 0.18 + ((s - 93.0) / 2.0) * 0.06
+        fraction = 0.35 + ((s - 93.0) / 2.0) * 0.10
     elif s < 98.0:
-        fraction = 0.30
+        fraction = 0.55 + (s - 96.0) * 0.05
     else:
-        fraction = 0.40
-    return min(fraction, hard_cap, 0.40)
+        fraction = 0.70 + ((s - 98.0) / 2.0) * 0.10
+    return min(fraction, hard_cap, 0.80)
 
 
 def recommended_stake(stop_pct: float, score: float = 90.0) -> tuple[float | None, float]:
     free = free_usdt()
     min_stake = max(5.0, _env_float('MIN_STAKE_USDT', 5.0))
-    hard_fraction_cap = min(max(_env_float('MAX_STAKE_FRACTION', 0.50), 0.01), 0.95)
+    hard_fraction_cap = min(max(_env_float('MAX_STAKE_FRACTION', 0.80), 0.01), 0.95)
     risk_fraction = min(max(_env_float('RISK_FRACTION_OF_BALANCE', 0.02), 0.001), 0.20)
     max_risk = max(0.01, _env_float('MAX_RISK_PER_TRADE_USDT', 0.50))
     daily_loss_limit = max(0.01, _env_float('DAILY_LOSS_LIMIT_USDT', 2.0))
@@ -229,11 +231,12 @@ def recommended_stake(stop_pct: float, score: float = 90.0) -> tuple[float | Non
     stop = max(float(stop_pct), 0.001)
     capital_fraction = _score_fraction(score, hard_fraction_cap)
 
-    # Preserve the daily-loss guardrail even when stake size grows.
+    # Stronger signals can use more capital, but actual dollars-at-risk remain
+    # bounded by the stop, per-trade risk and daily-loss limits.
     risk_budget = min(max_risk, free * risk_fraction, daily_loss_limit / 3.0)
     by_risk = risk_budget / stop
     by_quality = free * capital_fraction
-    available = max(0.0, free - max(0.10, free * 0.05))  # keep at least 5% free
+    available = max(0.0, free - max(0.10, free * 0.05))
 
     raw = min(execution_cap, available, by_quality, by_risk)
     stake = math.floor(raw * 100.0) / 100.0
