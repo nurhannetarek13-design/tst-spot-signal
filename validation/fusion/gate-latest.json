@@ -139,6 +139,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-09T21:32:01.997859+00:00",
+  "generatedAt": "2026-09-09T21:32:12.089249+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
