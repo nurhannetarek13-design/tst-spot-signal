@@ -26,6 +26,7 @@ COPY patch_unicode_symbols.py /freqtrade/patch_unicode_symbols.py
 COPY patch_stablecoin_exclusions.py /freqtrade/patch_stablecoin_exclusions.py
 COPY patch_fast_momentum_discovery.py /freqtrade/patch_fast_momentum_discovery.py
 COPY patch_runtime_cleanup.py /freqtrade/patch_runtime_cleanup.py
+COPY patch_scoreboard.py /freqtrade/patch_scoreboard.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
@@ -42,6 +43,7 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_stablecoin_exclusions.py \
     && python /freqtrade/patch_fast_momentum_discovery.py \
     && python /freqtrade/patch_runtime_cleanup.py \
+    && python /freqtrade/patch_scoreboard.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|sleep infinity \& # Cloudflare owns Telegram webhook; keep placeholder PID only|' /freqtrade/run_ready_bot.sh \
     && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine, new_listing_watcher; assert not fast_entry_engine.symbol_ok("UUSDT"); assert fast_entry_engine.symbol_ok("DOGEUSDT"); assert hasattr(fast_entry_engine,"fast_momentum_candidates")' \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
