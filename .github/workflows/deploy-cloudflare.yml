@@ -11,6 +11,7 @@ on:
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
       - "scripts/patch-telegram-ltr.py"
+      - "scripts/patch-cloudflare-growth-cap.py"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -35,6 +36,9 @@ jobs:
       - name: Patch Telegram numeric direction
         run: python scripts/patch-telegram-ltr.py
 
+      - name: Patch growth-mode execution ceiling
+        run: python scripts/patch-cloudflare-growth-cap.py
+
       - name: Validate canonical Worker + monitor + auth wrapper
         shell: bash
         run: |
@@ -55,6 +59,8 @@ jobs:
           grep -q 'execution-lock:' src/buy-gateway-canonical.js
           grep -q '/telegram-webhook-check' src/buy-gateway-canonical.js
           grep -q 'ltrFmt(requested)' src/buy-gateway-canonical.js
+          grep -q 'const MAX_ORDER_USDT = 100;' src/buy-gateway-canonical.js
+          grep -q 'requested>MAX_ORDER_USDT' src/buy-gateway-canonical.js
           grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway-canonical.js
           grep -q 'REVIEW_45_MS' src/buy-gateway-time-monitor.js
           grep -q 'REVIEW_75_MS' src/buy-gateway-time-monitor.js
