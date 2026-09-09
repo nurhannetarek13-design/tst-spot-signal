@@ -1,0 +1,27 @@
+name: Execution State Safety
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "freqtrade/trade_state.py"
+      - "freqtrade/test_execution_state_machine.py"
+      - ".github/workflows/execution-state-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m py_compile freqtrade/trade_state.py freqtrade/test_execution_state_machine.py
+      - name: Run offline state-machine tests
+        run: PYTHONPATH=freqtrade python freqtrade/test_execution_state_machine.py
