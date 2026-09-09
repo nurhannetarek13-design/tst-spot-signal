@@ -75,11 +75,15 @@ if '# GREEN trigger:' not in s:
     s = s.replace(old_final, new_final, 1)
 
 old_targets = "    tp_pct = clamp(max(0.009, m['atr_pct'] * 5.0), 0.009, 0.014)\n    sl_pct = clamp(tp_pct / 1.55, 0.0055, 0.0090)\n    entry = m['last']\n"
-new_targets = "    tp_pct = clamp(max(0.012, m['atr_pct'] * 6.0), 0.012, 0.020)\n    sl_pct = clamp(tp_pct / 2.0, 0.0055, 0.0090)\n    entry = m['live_price']\n"
-if "m['atr_pct'] * 6.0" not in s:
-    if old_targets not in s:
+old_targets_v2 = "    tp_pct = clamp(max(0.012, m['atr_pct'] * 6.0), 0.012, 0.020)\n    sl_pct = clamp(tp_pct / 2.0, 0.0055, 0.0090)\n    entry = m['live_price']\n"
+new_targets = '''    # Let the strongest ignitions run farther instead of capping every trade near 1%.\n    # This improves upside participation without widening the absolute stop beyond 0.9%.\n    score_strength = clamp((score - 90.0) / 10.0, 0.0, 1.0)\n    pressure_strength = clamp((m['taker_buy_ratio'] - 0.58) / 0.10, 0.0, 1.0)\n    volume_strength = clamp((m['volume_ratio'] - 1.0) / 1.0, 0.0, 1.0)\n    base_tp = max(0.014, m['atr_pct'] * 6.0)\n    tp_pct = clamp(base_tp + score_strength * 0.008 + pressure_strength * 0.002 + volume_strength * 0.002, 0.014, 0.030)\n    sl_pct = clamp(tp_pct / 2.4, 0.0055, 0.0090)\n    entry = m['live_price']\n'''
+if 'score_strength = clamp((score - 90.0)' not in s:
+    if old_targets_v2 in s:
+        s = s.replace(old_targets_v2, new_targets, 1)
+    elif old_targets in s:
+        s = s.replace(old_targets, new_targets, 1)
+    else:
         raise SystemExit('momentum ignition patch failed: target marker missing')
-    s = s.replace(old_targets, new_targets, 1)
 
 old_tag = "        f\"PREMOMENTUM|score={score:.0f}|dist={m['distance_to_breakout']*100:.2f}%|\"\n"
 new_tag = "        f\"IGNITION_GREEN|score={score:.0f}|ext={m['live_extension']*100:.3f}%|dist={m['distance_to_breakout']*100:.2f}%|\"\n"
@@ -99,9 +103,10 @@ for required in [
     "'live_price': live_price",
     "entry = m['live_price']",
     "_ignition_aware_micro_gate",
+    "score_strength = clamp((score - 90.0)",
 ]:
     if required not in s:
         raise SystemExit(f'momentum ignition patch failed: missing {required}')
 
 path.write_text(s)
-print('[momentum-ignition-patch] OK live first-break trigger + 20s scan + anti-chase + 1.2-2.0% target')
+print('[momentum-ignition-patch] OK live first-break trigger + 20s scan + anti-chase + quality-weighted 1.4-3.0% target')
