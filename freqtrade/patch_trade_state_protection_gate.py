@@ -27,9 +27,12 @@ new = '''    for pos in positions:
             except Exception:
                 oco_id = 0
             protected = status == 'OCO_ACTIVE' and oco_id > 0
-            if not protected:
+            risk_fields_ok = entry > 0 and stop > 0 and qty > 0
+            # Fail closed if protection is missing OR the reconciler could not
+            # reconstruct enough entry/stop/quantity data to calculate risk.
+            if not protected or not risk_fields_ok:
                 incomplete += 1
-            if entry > 0 and stop > 0 and qty > 0:
+            if risk_fields_ok:
                 risk += max(0.0, entry - stop) * qty
         except Exception:
             incomplete += 1
@@ -40,4 +43,4 @@ if new not in s:
     s = s.replace(old, new, 1)
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[trade-state-protection-patch] OK incomplete_count now requires confirmed active OCO')
+print('[trade-state-protection-patch] OK incomplete_count requires active OCO + complete risk fields')
