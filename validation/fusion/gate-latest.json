@@ -11,8 +11,10 @@
   "smallLiveReviewReasons": [
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
-    "freqtrade:CANDIDATE_ID_MISMATCH",
-    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
+    "freqtrade:BASE_PF_LT_1_15",
+    "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
+    "freqtrade:STRESS_PF_LT_1_0",
+    "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -46,10 +48,7 @@
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
-    "freqtrade:CANDIDATE_ID_MISMATCH",
-    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:FAIL",
-    "freqtrade:LT_100_TRADES",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
@@ -77,19 +76,19 @@
       "stressExpectancyUSDT": 0.0
     },
     "freqtrade": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
+      "candidateFingerprint": "62e620408a8cb85cc7c2",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 478,
+      "independentEnginePass": false,
+      "baseProfitFactor": 0.7274629833583853,
+      "baseExpectancyUSDT": -0.0123323670083682,
+      "stressProfitFactor": 0.4712282309181958,
+      "stressExpectancyUSDT": -0.030531897211328974
     },
     "jesse": {
       "status": "ERROR",
@@ -137,6 +136,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-09T07:30:51.474269+00:00",
+  "generatedAt": "2026-09-09T07:31:31.508977+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
