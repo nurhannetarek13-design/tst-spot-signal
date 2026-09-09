@@ -28,8 +28,13 @@ jobs:
         run: pip install numpy pandas
       - name: Syntax check
         run: python -m py_compile research/orthogonal_edge_scanner_v1.py
-      - name: Run orthogonal raw-edge discovery
-        run: PYTHONPATH=. python research/orthogonal_edge_scanner_v1.py
+      - name: Run orthogonal raw-edge discovery with clean universe
+        run: |
+          python - <<'PY'
+          from research import orthogonal_edge_scanner_v1 as scan
+          scan.EXCLUDED.add('U')
+          scan.main()
+          PY
       - name: Assert research-only output
         run: |
           python - <<'PY'
@@ -39,7 +44,8 @@ jobs:
           assert x['authorization']=='RESEARCH_ONLY'
           assert x['liveTrading'] is False
           assert x['multipleTesting']['method']=='Benjamini-Hochberg'
-          print('orthogonal scanner research-only assertions passed')
+          assert 'UUSDT' not in x['symbolsLoaded']
+          print('orthogonal scanner research-only assertions passed; stable U excluded')
           PY
       - uses: actions/upload-artifact@v4
         with:
