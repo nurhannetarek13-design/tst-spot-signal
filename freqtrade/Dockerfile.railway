@@ -33,7 +33,6 @@ COPY sol_buy_zone_watch.py /freqtrade/sol_buy_zone_watch.py
 COPY patch_market_context_v2.py /freqtrade/patch_market_context_v2.py
 COPY patch_reconcile_health.py /freqtrade/patch_reconcile_health.py
 COPY patch_dynamic_sizing.py /freqtrade/patch_dynamic_sizing.py
-COPY patch_risk_only_sizing.py /freqtrade/patch_risk_only_sizing.py
 COPY patch_momentum_ignition.py /freqtrade/patch_momentum_ignition.py
 COPY patch_growth_mode.py /freqtrade/patch_growth_mode.py
 COPY patch_new_listing_reservation.py /freqtrade/patch_new_listing_reservation.py
@@ -63,7 +62,6 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_market_context_v2.py \
     && python /freqtrade/patch_reconcile_health.py \
     && python /freqtrade/patch_dynamic_sizing.py \
-    && python /freqtrade/patch_risk_only_sizing.py \
     && python /freqtrade/patch_momentum_ignition.py \
     && python /freqtrade/patch_growth_mode.py \
     && python /freqtrade/patch_new_listing_reservation.py \
