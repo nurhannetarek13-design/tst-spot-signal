@@ -15,6 +15,7 @@ COPY front_proxy.py /freqtrade/front_proxy.py
 COPY trade_state.py /freqtrade/trade_state.py
 COPY binance_filters.py /freqtrade/binance_filters.py
 COPY reconcile_state.py /freqtrade/reconcile_state.py
+COPY runtime_bootstrap.sh /freqtrade/runtime_bootstrap.sh
 COPY profit_manager.py /freqtrade/profit_manager.py
 COPY outcome_engine.py /freqtrade/outcome_engine.py
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
@@ -65,11 +66,14 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_expert_system_v3b.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|sleep infinity \& # Cloudflare owns Telegram webhook; keep placeholder PID only|' /freqtrade/run_ready_bot.sh \
     && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine, new_listing_watcher, sol_buy_zone_watch, trade_state, binance_filters, reconcile_state, profit_manager, outcome_engine; assert str(trade_state.STATE_PATH).startswith("/data/"); assert not fast_entry_engine.symbol_ok("UUSDT"); assert fast_entry_engine.symbol_ok("DOGEUSDT"); assert hasattr(fast_entry_engine,"fast_momentum_candidates"); assert hasattr(fast_entry_engine,"explosive_candidates"); assert hasattr(fast_entry_engine,"extreme_candidates"); assert hasattr(fast_entry_engine,"mid_candidates"); assert hasattr(fast_entry_engine,"score_mid"); assert hasattr(fast_entry_engine,"_normalize_tp_for_execution"); assert hasattr(fast_entry_engine,"_expert_pre_ingest"); assert fast_entry_engine.WATCH_SCORE <= fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.MID_WATCH_SCORE <= fast_entry_engine.MID_DIRECT_SCORE; assert fast_entry_engine.EXTREME_WATCH_SCORE <= fast_entry_engine.EXTREME_DIRECT_SCORE; assert fast_entry_engine.MIN_SCORE == fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.GLOBAL_COOLDOWN_SEC == fast_entry_engine.SIGNAL_BURST_GUARD_SEC' \
-    && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
+    && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh /freqtrade/runtime_bootstrap.sh \
     && chown -R ftuser:ftuser /freqtrade
 
-USER ftuser
+# Keep image entry as root only long enough to prepare the Railway-mounted
+# persistent volume. runtime_bootstrap immediately chowns /data and execs every
+# trading process as ftuser.
+USER root
 ENV PYTHONUNBUFFERED=1
 ENV BRIDGE_PORT=8082
 EXPOSE 8080
-CMD ["/bin/bash", "-lc", "python -u /freqtrade/front_proxy.py & exec /bin/bash /freqtrade/entrypoint.sh"]
+CMD ["/bin/bash", "/freqtrade/runtime_bootstrap.sh"]
