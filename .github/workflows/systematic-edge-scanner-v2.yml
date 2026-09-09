@@ -1,5 +1,6 @@
 name: Systematic Edge Scanner V2
 
+# Re-run raw-edge discovery after intraday barrier validation found no production survivor.
 on:
   workflow_dispatch:
   push:
