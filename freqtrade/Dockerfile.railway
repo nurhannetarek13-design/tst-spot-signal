@@ -3,6 +3,7 @@ FROM freqtradeorg/freqtrade:stable
 # Railway runtime: NFI + Fast Entry + signed Make relay + front proxy.
 # Dynamic sizing preflight: live signals require a successful real free-USDT read.
 # Entry quality is fail-closed on microstructure, higher timeframes and BTC regime.
+# Canonical protection is incomplete unless Binance has an active OCO and risk fields are known.
 # Telegram callback ownership is Cloudflare-only. Railway may validate outbound
 # Telegram access, but must never poll getUpdates or own the webhook.
 USER root
