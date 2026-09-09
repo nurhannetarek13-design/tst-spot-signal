@@ -3,10 +3,7 @@
   "calibration_pass": false,
   "candidate_events": 3857,
   "chronological_oos": {
-    "bootstrap95": [
-      -0.8545,
-      -0.339
-    ],
+    "bootstrap95": [-0.8545, -0.339],
     "hit_rate_stressed": 0.3651,
     "mean_stressed_net_pct": -0.5878,
     "median_stressed_net_pct": -1.18,
@@ -19,18 +16,8 @@
     "baseline_brier": 0.214031,
     "baseline_logloss": 0.619376,
     "bins": [
-      {
-        "actual": 0.1176,
-        "lo": 0.2,
-        "mean_pred": 0.2947,
-        "n": 17
-      },
-      {
-        "actual": 0.3212,
-        "lo": 0.3,
-        "mean_pred": 0.3247,
-        "n": 302
-      }
+      {"actual": 0.1176, "lo": 0.2, "mean_pred": 0.2947, "n": 17},
+      {"actual": 0.3212, "lo": 0.3, "mean_pred": 0.3247, "n": 302}
     ],
     "brier": 0.212969,
     "brier_skill": 0.005,
@@ -46,16 +33,7 @@
   "liveTrading": false,
   "minimum_historical_sample": 600,
   "model": {},
-  "months": [
-    "2026-01",
-    "2026-02",
-    "2026-03",
-    "2026-04",
-    "2026-05",
-    "2026-06",
-    "2026-07",
-    "2026-08"
-  ],
+  "months": ["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08"],
   "path_labeled_events": 1591,
   "rules": {
     "bar_interval": "15m",
@@ -75,143 +53,27 @@
   "source": "Binance Vision Spot monthly 15m archives",
   "status": "NOT_APPROVED",
   "survivorship_bias_note": "Frozen listed-symbol universe; historical approval is never sufficient without fresh forward confirmation.",
-  "symbols_requested": [
-    "BTCUSDT",
-    "ETHUSDT",
-    "BNBUSDT",
-    "SOLUSDT",
-    "XRPUSDT",
-    "DOGEUSDT",
-    "ADAUSDT",
-    "TRXUSDT",
-    "LINKUSDT",
-    "AVAXUSDT",
-    "SUIUSDT",
-    "LTCUSDT",
-    "BCHUSDT",
-    "XLMUSDT",
-    "DOTUSDT",
-    "NEARUSDT",
-    "AAVEUSDT",
-    "UNIUSDT",
-    "ETCUSDT",
-    "FILUSDT",
-    "ATOMUSDT",
-    "ARBUSDT",
-    "OPUSDT",
-    "HBARUSDT"
-  ],
-  "symbols_with_data": [
-    "BTCUSDT",
-    "ETHUSDT",
-    "BNBUSDT",
-    "SOLUSDT",
-    "XRPUSDT",
-    "DOGEUSDT",
-    "ADAUSDT",
-    "TRXUSDT",
-    "LINKUSDT",
-    "AVAXUSDT",
-    "SUIUSDT",
-    "LTCUSDT",
-    "BCHUSDT",
-    "XLMUSDT",
-    "DOTUSDT",
-    "NEARUSDT",
-    "AAVEUSDT",
-    "UNIUSDT",
-    "ETCUSDT",
-    "FILUSDT",
-    "ATOMUSDT",
-    "ARBUSDT",
-    "OPUSDT",
-    "HBARUSDT"
-  ],
+  "symbols_requested": ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","SUIUSDT","LTCUSDT","BCHUSDT","XLMUSDT","DOTUSDT","NEARUSDT","AAVEUSDT","UNIUSDT","ETCUSDT","FILUSDT","ATOMUSDT","ARBUSDT","OPUSDT","HBARUSDT"],
+  "symbols_with_data": ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT","LINKUSDT","AVAXUSDT","SUIUSDT","LTCUSDT","BCHUSDT","XLMUSDT","DOTUSDT","NEARUSDT","AAVEUSDT","UNIUSDT","ETCUSDT","FILUSDT","ATOMUSDT","ARBUSDT","OPUSDT","HBARUSDT"],
   "unseen_symbol_holdout": {
-    "bootstrap95": [
-      -0.6275,
-      0.0502
-    ],
+    "bootstrap95": [-0.6275, 0.0502],
     "hit_rate_stressed": 0.4889,
     "mean_stressed_net_pct": -0.292,
     "median_stressed_net_pct": -1.18,
     "n": 225,
     "pass": false,
     "probability_calibration_gap_top": 0.1718,
-    "symbols": [
-      "DOGEUSDT",
-      "HBARUSDT",
-      "UNIUSDT"
-    ],
+    "symbols": ["DOGEUSDT","HBARUSDT","UNIUSDT"],
     "top_n": 45
   },
   "unseen_symbol_holdout_pass": false,
   "version": 1,
   "walk_forward_folds": [
-    {
-      "bootstrap95": [
-        -0.8456,
-        -0.206
-      ],
-      "end_ts": 1779179400,
-      "hit_rate_stressed": 0.3617,
-      "mean_stressed_net_pct": -0.5283,
-      "median_stressed_net_pct": -1.18,
-      "n": 238,
-      "pass": false,
-      "probability_calibration_gap_top": 0.0388,
-      "start_ts": 1776317400,
-      "top_n": 47,
-      "train_n": 636
-    },
-    {
-      "bootstrap95": [
-        -0.6995,
-        0.0251
-      ],
-      "end_ts": 1782121500,
-      "hit_rate_stressed": 0.4468,
-      "mean_stressed_net_pct": -0.3292,
-      "median_stressed_net_pct": -1.1875,
-      "n": 238,
-      "pass": false,
-      "probability_calibration_gap_top": 0.0679,
-      "start_ts": 1779187500,
-      "top_n": 47,
-      "train_n": 874
-    },
-    {
-      "bootstrap95": [
-        -0.7484,
-        -0.1679
-      ],
-      "end_ts": 1785049200,
-      "hit_rate_stressed": 0.383,
-      "mean_stressed_net_pct": -0.4763,
-      "median_stressed_net_pct": -1.18,
-      "n": 238,
-      "pass": false,
-      "probability_calibration_gap_top": 0.0562,
-      "start_ts": 1782135000,
-      "top_n": 47,
-      "train_n": 1112
-    },
-    {
-      "bootstrap95": [
-        -0.842,
-        -0.2512
-      ],
-      "end_ts": 1788208200,
-      "hit_rate_stressed": 0.3958,
-      "mean_stressed_net_pct": -0.5389,
-      "median_stressed_net_pct": -1.18,
-      "n": 241,
-      "pass": false,
-      "probability_calibration_gap_top": 0.0975,
-      "start_ts": 1785060000,
-      "top_n": 48,
-      "train_n": 1350
-    }
+    {"bootstrap95": [-0.8456,-0.206],"end_ts":1779179400,"hit_rate_stressed":0.3617,"mean_stressed_net_pct":-0.5283,"median_stressed_net_pct":-1.18,"n":238,"pass":false,"probability_calibration_gap_top":0.0388,"start_ts":1776317400,"top_n":47,"train_n":636},
+    {"bootstrap95": [-0.6995,0.0251],"end_ts":1782121500,"hit_rate_stressed":0.4468,"mean_stressed_net_pct":-0.3292,"median_stressed_net_pct":-1.1875,"n":238,"pass":false,"probability_calibration_gap_top":0.0679,"start_ts":1779187500,"top_n":47,"train_n":874},
+    {"bootstrap95": [-0.7484,-0.1679],"end_ts":1785049200,"hit_rate_stressed":0.383,"mean_stressed_net_pct":-0.4763,"median_stressed_net_pct":-1.18,"n":238,"pass":false,"probability_calibration_gap_top":0.0562,"start_ts":1782135000,"top_n":47,"train_n":1112},
+    {"bootstrap95": [-0.842,-0.2512],"end_ts":1788208200,"hit_rate_stressed":0.3958,"mean_stressed_net_pct":-0.5389,"median_stressed_net_pct":-1.18,"n":241,"pass":false,"probability_calibration_gap_top":0.0975,"start_ts":1785060000,"top_n":48,"train_n":1350}
   ],
-  "walk_forward_pass": false
+  "walk_forward_pass": false,
+  "deployment_sync": "railway-watch-path-enabled"
 }
