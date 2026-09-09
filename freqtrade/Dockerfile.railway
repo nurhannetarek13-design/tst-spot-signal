@@ -37,6 +37,7 @@ COPY patch_extreme_continuation.py /freqtrade/patch_extreme_continuation.py
 COPY patch_tp_execution_tick.py /freqtrade/patch_tp_execution_tick.py
 COPY patch_profit_engine_v2.py /freqtrade/patch_profit_engine_v2.py
 COPY patch_expert_system_v3.py /freqtrade/patch_expert_system_v3.py
+COPY patch_expert_system_v3b.py /freqtrade/patch_expert_system_v3b.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
@@ -59,7 +60,7 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_extreme_continuation.py \
     && python /freqtrade/patch_tp_execution_tick.py \
     && python /freqtrade/patch_profit_engine_v2.py \
-    && python /freqtrade/patch_expert_system_v3.py \
+    && python /freqtrade/patch_expert_system_v3b.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|sleep infinity \& # Cloudflare owns Telegram webhook; keep placeholder PID only|' /freqtrade/run_ready_bot.sh \
     && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine, new_listing_watcher, sol_buy_zone_watch, trade_state, profit_manager, outcome_engine; assert not fast_entry_engine.symbol_ok("UUSDT"); assert fast_entry_engine.symbol_ok("DOGEUSDT"); assert hasattr(fast_entry_engine,"fast_momentum_candidates"); assert hasattr(fast_entry_engine,"explosive_candidates"); assert hasattr(fast_entry_engine,"extreme_candidates"); assert hasattr(fast_entry_engine,"mid_candidates"); assert hasattr(fast_entry_engine,"score_mid"); assert hasattr(fast_entry_engine,"_normalize_tp_for_execution"); assert hasattr(fast_entry_engine,"_expert_pre_ingest"); assert fast_entry_engine.WATCH_SCORE <= fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.MID_WATCH_SCORE <= fast_entry_engine.MID_DIRECT_SCORE; assert fast_entry_engine.EXTREME_WATCH_SCORE <= fast_entry_engine.EXTREME_DIRECT_SCORE; assert fast_entry_engine.MIN_SCORE == fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.GLOBAL_COOLDOWN_SEC == fast_entry_engine.SIGNAL_BURST_GUARD_SEC' \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
