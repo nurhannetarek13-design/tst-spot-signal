@@ -10,6 +10,7 @@ if 'def fast_momentum_candidates()' in s:
 const_marker = "MAX_SPREAD_PCT = float(os.getenv('FAST_MAX_SPREAD_PCT', '0.20'))\n"
 const_insert = const_marker + (
     "FAST_DISCOVERY_REFRESH_SEC = int(os.getenv('FAST_DISCOVERY_REFRESH_SEC', '45'))\n"
+    "FAST_DISCOVERY_MIN_24H_QV = float(os.getenv('FAST_DISCOVERY_MIN_24H_QV', '3000000'))\n"
     "FAST_DISCOVERY_MIN_5M_PCT = float(os.getenv('FAST_DISCOVERY_MIN_5M_PCT', '0.08'))\n"
     "FAST_DISCOVERY_MAX_5M_PCT = float(os.getenv('FAST_DISCOVERY_MAX_5M_PCT', '1.50'))\n"
     "FAST_DISCOVERY_MIN_5M_QV = float(os.getenv('FAST_DISCOVERY_MIN_5M_QV', '10000'))\n"
@@ -31,10 +32,10 @@ helper = r'''
 def fast_momentum_candidates() -> list[tuple[str, float, float]]:
     """Discover fresh 5m movers from the full liquid USDT universe.
 
-    The old discovery path started from top-24h-volume / top-24h-movers, which
-    can notice a mid-cap only after the move is already extended. This layer is
-    discovery-only: it never bypasses score, ignition, quality, BTC, spread,
-    sizing or user-confirmation gates.
+    The normal scanner keeps its stricter 24h liquidity floor. This discovery
+    layer deliberately uses a separate 3M USDT/24h floor so mid-caps such as
+    COT can enter the scoring queue early, while all score, 5m turnover,
+    ignition, quality, BTC, spread, sizing and user-confirmation gates remain.
     """
     global _fast_discovery_cache_at, _fast_discovery_cache
     now = time.time()
@@ -54,7 +55,7 @@ def fast_momentum_candidates() -> list[tuple[str, float, float]]:
                 continue
             qv = float(row.get('quoteVolume') or 0.0)
             ch24 = float(row.get('priceChangePercent') or 0.0)
-            if qv < MIN_QUOTE_VOLUME_24H:
+            if qv < FAST_DISCOVERY_MIN_24H_QV:
                 continue
             # Discovery should be broad, but avoid assets already in a huge
             # 24h blow-off move. The final anti-chase gate remains stricter.
@@ -93,7 +94,7 @@ def fast_momentum_candidates() -> list[tuple[str, float, float]]:
         _fast_discovery_cache = [(sym, pct5, qv24) for sym, pct5, qv24, _ in found[:FAST_DISCOVERY_MAX_CANDIDATES]]
         _fast_discovery_cache_at = now
         preview = ', '.join(f'{sym}:{pct5:+.2f}%' for sym, pct5, _ in _fast_discovery_cache[:8]) or 'none'
-        print(f'[fast-discovery] liquid5m={len(_fast_discovery_cache)} top={preview}')
+        print(f'[fast-discovery] min24h={FAST_DISCOVERY_MIN_24H_QV:.0f} liquid5m={len(_fast_discovery_cache)} top={preview}')
         return list(_fast_discovery_cache)
     except Exception as exc:
         print(f'[fast-discovery] warning {type(exc).__name__}: {exc}')
@@ -137,6 +138,8 @@ s = s.replace(old_start, new_start, 1)
 
 for required in [
     'def fast_momentum_candidates()',
+    "FAST_DISCOVERY_MIN_24H_QV = float(os.getenv('FAST_DISCOVERY_MIN_24H_QV', '3000000'))",
+    'qv < FAST_DISCOVERY_MIN_24H_QV',
     "'windowSize': '5m'",
     '[fast-discovery]',
     'for symbol, pct5, volume in fast_momentum_candidates()',
@@ -147,4 +150,4 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[fast-momentum-discovery] OK full liquid USDT 5m discovery -> existing ignition/quality gates')
+print('[fast-momentum-discovery] OK 3M 24h discovery floor + 5m turnover -> existing ignition/quality gates')
