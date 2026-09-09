@@ -1,5 +1,30 @@
 from pathlib import Path
 
+# First patch the sizing module itself. The legacy Score/100 is heuristic, not a
+# calibrated probability, so it must not increase real capital allocation.
+sizing_path = Path('/freqtrade/dynamic_sizing.py')
+ds = sizing_path.read_text(encoding='utf-8')
+legacy_fraction = "    capital_fraction = _score_fraction(score, hard_fraction_cap)\n"
+risk_fraction = """    # Score/100 is not yet statistically calibrated. Until the probability/EV
+    # model passes frozen OOS + walk-forward validation, position size is driven
+    # by stop-risk, balance and a concentration cap only.
+    uncalibrated_cap = min(max(_env_float('MAX_UNCALIBRATED_STAKE_FRACTION', 0.50), 0.05), 0.80)
+    capital_fraction = min(hard_fraction_cap, uncalibrated_cap)
+"""
+if legacy_fraction in ds:
+    ds = ds.replace(legacy_fraction, risk_fraction, 1)
+elif 'MAX_UNCALIBRATED_STAKE_FRACTION' not in ds:
+    raise SystemExit('dynamic sizing patch failed: score-fraction marker missing')
+legacy_comment = """    # Stronger signals can use more capital, but actual dollars-at-risk remain
+    # bounded by the stop, per-trade risk and daily-loss limits.
+"""
+if legacy_comment in ds:
+    ds = ds.replace(legacy_comment, """    # Heuristic score cannot increase capital. Dollars-at-risk remain bounded
+    # by stop distance, per-trade risk and the hard portfolio limits.
+""", 1)
+compile(ds, str(sizing_path), 'exec')
+sizing_path.write_text(ds, encoding='utf-8')
+
 path = Path('/freqtrade/fast_entry_engine.py')
 s = path.read_text()
 
@@ -97,7 +122,7 @@ insert = (
     "    if stake_usdt is None:\n"
     "        print(f'[sizing] {symbol} blocked: free_usdt={free_usdt:.2f} below adaptive minimum/risk allowance')\n"
     "        return False\n"
-    "    print(f'[sizing] {symbol} free_usdt={free_usdt:.2f} score={score:.0f} stake_usdt={stake_usdt:.2f} sl_pct={sl_pct*100:.2f}%')\n\n"
+    "    print(f'[sizing] {symbol} free_usdt={free_usdt:.2f} score={score:.0f} stake_usdt={stake_usdt:.2f} sl_pct={sl_pct*100:.2f}% sizing=risk-only')\n\n"
     + payload_marker
 )
 if '[sizing] {symbol} free_usdt=' not in s:
@@ -116,4 +141,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[live-safety-patch] OK normalized growth payload + quality preflight + hard gates + adaptive sizing enabled')
+print('[live-safety-patch] OK quality gates + risk-only adaptive sizing; heuristic score capital boost disabled')
