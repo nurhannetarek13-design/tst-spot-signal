@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment marker: momentum growth + dedicated fail-closed new-listing watcher
+# Deployment marker: momentum growth + dedicated fail-closed new-listing watcher v1
 /freqtrade/run_ready_bot.sh &
 BOT_PID=$!
 
