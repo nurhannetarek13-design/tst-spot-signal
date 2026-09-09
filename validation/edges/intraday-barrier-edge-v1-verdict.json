@@ -1,0 +1,62 @@
+{
+  "engine": "INTRADAY_BARRIER_EDGE_SCANNER_V1_VERDICT",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "verdict": "REJECT_ALL_TESTED_RULES",
+  "fullEvidencePassCount": 0,
+  "hypothesisCount": 12,
+  "bestByChronologicalTest": {
+    "setup": "FIRST_BREAK",
+    "contract": "EXPANSION_22_14",
+    "discovery": {
+      "n": 1044,
+      "meanNet": -0.005023873745977663,
+      "profitFactor": 0.4163469971224212,
+      "tpRate": 0.1657088122605364
+    },
+    "calibration": {
+      "n": 308,
+      "meanNet": -0.003786892427505722,
+      "profitFactor": 0.4710684867982526,
+      "tpRate": 0.13636363636363635
+    },
+    "test": {
+      "n": 589,
+      "meanNet": -0.00016510420808063045,
+      "profitFactor": 0.9769087979290277,
+      "tpRate": 0.3310696095076401
+    },
+    "symbolHoldout": {
+      "n": 411,
+      "meanNet": -0.0016399874752084332,
+      "profitFactor": 0.8116275349445613,
+      "tpRate": 0.34793187347931875
+    }
+  },
+  "interpretation": [
+    "None of the six tested setup families had positive net expectancy across discovery, calibration, chronological test and unseen-symbol holdout under the fixed barrier contracts.",
+    "The least-bad chronological test result was FIRST_BREAK with the 2.2%/1.4% contract, but it remained negative after estimated costs and failed badly in discovery and symbol holdout. It must not be promoted.",
+    "This run is negative evidence against using broad indicator combinations or a raw score as proof of edge."
+  ],
+  "methodologyDefectsFound": [
+    {
+      "name": "CURRENT_UNIVERSE_SURVIVORSHIP",
+      "severity": "P0_RESEARCH",
+      "detail": "The v1 symbol universe was selected from currently trading/currently liquid Binance pairs. Delisted and historically liquid pairs were therefore absent.",
+      "requiredFix": "Build the research universe from Binance Vision archive listings and apply liquidity eligibility point-in-time at each event."
+    },
+    {
+      "name": "FILTERED_BARRIER_TIMELINE",
+      "severity": "P0_RESEARCH",
+      "detail": "Barrier traversal used the post-feature/post-liquidity filtered symbol frame. A liquidity-filter gap could make the next retained row differ from the true next market bar.",
+      "requiredFix": "Generate signals on the feature frame but label entries/exits against the untouched raw OHLC timeline."
+    },
+    {
+      "name": "STABLE_SYMBOL_EXCLUSION_DRIFT",
+      "severity": "P1_RESEARCH",
+      "detail": "UUSDT appeared in the archive sample although the live runtime excludes U as a stable-like base.",
+      "requiredFix": "Use one canonical stable/base exclusion policy across live and research."
+    }
+  ],
+  "nextAction": "STOP parameter tuning on v1. Build archive-derived, regime-stratified v2 with raw-timeline labels, point-in-time liquidity, multiple-testing control, cost stress and untouched symbol/time holdouts before changing any live entry rule."
+}
