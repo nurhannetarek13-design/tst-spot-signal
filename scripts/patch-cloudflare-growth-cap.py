@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-# Runtime contract v4: Cloudflare must accept growth-mode dry-runs up to 100 USDT.
+# Runtime contract v5: Cloudflare must accept growth-mode dry-runs up to 100 USDT.
 FILES = [
     Path('src/buy-gateway-canonical.js'),
     Path('src/buy-gateway-stable.js'),
@@ -20,6 +20,17 @@ for p in FILES:
         raise SystemExit(f'growth cap patch failed for {p}: MAX_ORDER constant missing')
     if re.search(r'requested\s*>\s*10', s):
         raise SystemExit(f'growth cap patch failed for {p}: legacy 10 USDT gate remains')
+
+    # Make any remaining BAD_STAKE rejection self-identifying at runtime.
+    gateway = 'canonical-v100' if 'canonical' in p.name else 'stable-v100'
+    s = s.replace(
+        'return Response.json({ok:false,status:"BAD_STAKE"},{status:400});',
+        f'return Response.json({{ok:false,status:"BAD_STAKE",gateway:"{gateway}",requested,min:MIN_ORDER_USDT,max:MAX_ORDER_USDT}},{{status:400}});'
+    )
+    s = s.replace(
+        'return Response.json({ ok:false, status:"BAD_STAKE" }, { status:400 });',
+        f'return Response.json({{ok:false,status:"BAD_STAKE",gateway:"{gateway}",requested,min:MIN_ORDER_USDT,max:MAX_ORDER_USDT}},{{status:400}});'
+    )
     p.write_text(s, encoding='utf-8')
     print(f'[cloudflare-growth-cap] {p.name} OK replacements={count}')
 
@@ -78,7 +89,6 @@ if 'async function growthCapDryRun(env, ctx)' not in a:
         raise SystemExit('growth cap runtime probe failed: insertion marker missing')
     a = a.replace(probe_marker, probe_fn + probe_marker, 1)
 
-# Insert the route specifically inside the outer auth wrapper fetch() before fast-signal handling.
 fetch_marker = '''  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") {
