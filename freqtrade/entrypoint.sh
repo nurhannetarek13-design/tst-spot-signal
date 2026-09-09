@@ -6,7 +6,7 @@ set -euo pipefail
 BOT_PID=$!
 
 cleanup() {
-  kill "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -84,6 +84,12 @@ echo "[entrypoint] outcome engine started pid=${OUTCOME_ENGINE_PID}"
 python -u /freqtrade/shadow_research_monitor.py &
 SHADOW_RESEARCH_PID=$!
 echo "[entrypoint] shadow research evidence monitor started pid=${SHADOW_RESEARCH_PID}"
+
+# Calibrated probability/EV model is deliberately shadow-only. It will not train
+# until the minimum point-in-time sample exists and can never enable live trading.
+python -u /freqtrade/shadow_ev_model.py &
+SHADOW_EV_PID=$!
+echo "[entrypoint] calibrated probability/EV shadow model started pid=${SHADOW_EV_PID}"
 
 python -u /freqtrade/profit_manager.py &
 PROFIT_MANAGER_PID=$!
