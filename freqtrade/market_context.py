@@ -12,6 +12,7 @@ import json
 import math
 import os
 import statistics
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -74,7 +75,6 @@ def _features(symbol: str, qv: float) -> dict | None:
     if not isinstance(rows, list) or len(rows) < 25:
         return None
     try:
-        o = [float(x[1]) for x in rows]
         h = [float(x[2]) for x in rows]
         l = [float(x[3]) for x in rows]
         c = [float(x[4]) for x in rows]
@@ -281,4 +281,7 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    if '--once' in sys.argv:
+        run_once()
+    else:
+        main()
