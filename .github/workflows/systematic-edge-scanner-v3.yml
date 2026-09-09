@@ -28,8 +28,13 @@ jobs:
         run: pip install numpy pandas
       - name: Syntax check
         run: python -m py_compile research/systematic_edge_scanner_v3.py
-      - name: Run point-in-time OOS discovery
-        run: PYTHONPATH=. python research/systematic_edge_scanner_v3.py
+      - name: Run point-in-time OOS discovery with clean universe
+        run: |
+          python - <<'PY'
+          from research import systematic_edge_scanner_v3 as scan
+          scan.EXCLUDED.add('U')
+          scan.main()
+          PY
       - name: Assert research methodology and fail-closed promotion
         run: |
           python - <<'PY'
@@ -43,7 +48,8 @@ jobs:
           assert x['methodology']['futureLeakageFix'].startswith('NO_FULL_SAMPLE_QUANTILES')
           assert x['methodology']['multipleTesting']['method']=='Benjamini-Hochberg'
           assert x['methodology']['survivorshipBias']=='UNRESOLVED_CURRENT_LIQUIDITY_UNIVERSE'
-          print('systematic scanner v3 fail-closed methodology assertions passed')
+          assert 'UUSDT' not in x['symbolsLoaded']
+          print('systematic scanner v3 fail-closed methodology assertions passed; stable U excluded')
           PY
       - uses: actions/upload-artifact@v4
         with:
