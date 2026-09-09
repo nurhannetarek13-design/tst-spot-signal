@@ -31,6 +31,7 @@ COPY patch_scoreboard.py /freqtrade/patch_scoreboard.py
 COPY patch_adaptive_watch.py /freqtrade/patch_adaptive_watch.py
 COPY patch_no_daily_signal_cap.py /freqtrade/patch_no_daily_signal_cap.py
 COPY patch_extreme_continuation.py /freqtrade/patch_extreme_continuation.py
+COPY patch_tp_execution_tick.py /freqtrade/patch_tp_execution_tick.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 COPY user_data /freqtrade/user_data
 
@@ -51,8 +52,9 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_adaptive_watch.py \
     && python /freqtrade/patch_no_daily_signal_cap.py \
     && python /freqtrade/patch_extreme_continuation.py \
+    && python /freqtrade/patch_tp_execution_tick.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|sleep infinity \& # Cloudflare owns Telegram webhook; keep placeholder PID only|' /freqtrade/run_ready_bot.sh \
-    && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine, new_listing_watcher, sol_buy_zone_watch; assert not fast_entry_engine.symbol_ok("UUSDT"); assert fast_entry_engine.symbol_ok("DOGEUSDT"); assert hasattr(fast_entry_engine,"fast_momentum_candidates"); assert hasattr(fast_entry_engine,"explosive_candidates"); assert hasattr(fast_entry_engine,"extreme_candidates"); assert fast_entry_engine.WATCH_SCORE <= fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.EXTREME_WATCH_SCORE <= fast_entry_engine.EXTREME_DIRECT_SCORE; assert fast_entry_engine.MIN_SCORE == fast_entry_engine.DIRECT_SCORE' \
+    && python -c 'import sys; sys.path.insert(0,"/freqtrade"); import fast_ingest_ecdsa, dynamic_sizing, entry_quality, fast_entry_engine, new_listing_watcher, sol_buy_zone_watch; assert not fast_entry_engine.symbol_ok("UUSDT"); assert fast_entry_engine.symbol_ok("DOGEUSDT"); assert hasattr(fast_entry_engine,"fast_momentum_candidates"); assert hasattr(fast_entry_engine,"explosive_candidates"); assert hasattr(fast_entry_engine,"extreme_candidates"); assert hasattr(fast_entry_engine,"_normalize_tp_for_execution"); assert fast_entry_engine.WATCH_SCORE <= fast_entry_engine.DIRECT_SCORE; assert fast_entry_engine.EXTREME_WATCH_SCORE <= fast_entry_engine.EXTREME_DIRECT_SCORE; assert fast_entry_engine.MIN_SCORE == fast_entry_engine.DIRECT_SCORE' \
     && chmod +x /freqtrade/run_ready_bot.sh /freqtrade/entrypoint.sh \
     && chown -R ftuser:ftuser /freqtrade
 
