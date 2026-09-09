@@ -64,7 +64,6 @@ if "self.path.startswith('/ops.json')" not in s:
         raise SystemExit('ops-proxy: proxy marker missing')
     s = s.replace(proxy_marker, proxy_new, 1)
 
-# Health exposes only whether the dashboard is configured, never its token.
 health_old = "'incompleteTrackedPositions':snap.get('incomplete_count',0)})\n"
 health_new = "'incompleteTrackedPositions':snap.get('incomplete_count',0),'opsDashboardConfigured':bool(OPS_DASHBOARD_TOKEN)})\n"
 if "'opsDashboardConfigured'" not in s:
@@ -74,4 +73,20 @@ if "'opsDashboardConfigured'" not in s:
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[ops-dashboard-proxy-patch] OK authenticated /ops + /ops.json enabled with no-store security headers')
+
+# The persistent candidate recorder is injected into fast_entry_engine by the
+# expert-system patch and uses pathlib.Path. Ensure the runtime module imports it
+# so SCANNED/REJECT/READY telemetry cannot silently fail.
+engine = Path('/freqtrade/fast_entry_engine.py')
+e = engine.read_text(encoding='utf-8')
+if 'from pathlib import Path\n' not in e:
+    marker = 'import time\n'
+    if marker not in e:
+        raise SystemExit('ops-proxy: fast-entry Path import marker missing')
+    e = e.replace(marker, marker + 'from pathlib import Path\n', 1)
+if 'Path(CANDIDATE_EVENT_PATH)' not in e:
+    raise SystemExit('ops-proxy: candidate telemetry Path usage missing')
+compile(e, str(engine), 'exec')
+engine.write_text(e, encoding='utf-8')
+
+print('[ops-dashboard-proxy-patch] OK authenticated /ops + /ops.json enabled; candidate telemetry Path import fixed')
