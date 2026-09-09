@@ -6,6 +6,7 @@ const REVIEW_75_MS = 75 * 60 * 1000;
 const DECISION_REPEAT_MS = 15 * 60 * 1000;
 const HOLD_EXTENSION_MS = 30 * 60 * 1000;
 const POSITION_TTL_SEC = 24 * 60 * 60;
+const EXIT_INTENT_TTL_SEC = 10 * 60;
 
 function stateStub(env) {
   const id = env.STATE_COORDINATOR.idFromName("global");
@@ -22,6 +23,14 @@ async function putState(env, key, value, ttl = POSITION_TTL_SEC) {
     body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
   });
 }
+async function claimState(env, key, value, ttl) {
+  const r = await stateStub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
+  });
+  return r.ok;
+}
 async function tg(env, method, payload) {
   const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: "POST",
@@ -34,6 +43,9 @@ async function tg(env, method, payload) {
 }
 function fmt(v) {
   return Number(v || 0).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 8 });
+}
+function binanceTradeUrl(symbol) {
+  return `https://www.binance.com/en/trade/${String(symbol).replace("USDT", "_USDT")}?type=spot`;
 }
 async function publicPrice(symbol) {
   const bases = ["https://data-api.binance.vision", "https://api-gcp.binance.com", "https://api1.binance.com", "https://api2.binance.com"];
@@ -87,10 +99,10 @@ async function sendReview(env, p, current, stage) {
   const headline = stage === 45 ? "⏱ 45m POSITION REVIEW" : "⏰ 75m+ DECISION DEADLINE";
   const action = stage === 45
     ? "دي مراجعة مبكرة. الـOCO شغال، ولو الصفقة فضلت مفتوحة هيوصل قرار عند 75 دقيقة."
-    : "الصفقة عدّت مدة PRE-MOMENTUM المستهدفة. خدي قرار EXIT أو HOLD؛ لو مفيش قرار هفكرك كل 15 دقيقة عشان ما تتسابش معلقة بالساعات.";
+    : "الصفقة عدّت مدة PRE-MOMENTUM المستهدفة. اختاري EXIT أو HOLD؛ زر EXIT بقى له تأكيد منفصل قبل فتح Binance.";
   const keyboard = stage === 75 ? {
     inline_keyboard: [
-      [{ text: "📤 EXIT NOW — افتحي Binance", url: `https://www.binance.com/en/trade/${p.symbol.replace("USDT", "_USDT")}?type=spot` }],
+      [{ text: "📤 EXIT NOW", callback_data: `EXITASK:${p.id}` }],
       [{ text: "⏳ HOLD 30m", callback_data: `HOLD30:${p.id}` }],
     ],
   } : undefined;
@@ -152,6 +164,68 @@ async function handleHoldCallback(request, env) {
   await tg(env, "sendMessage", { chat_id: String(env.TELEGRAM_CHAT_ID), text: `⏳ HOLD +30m — ${p.symbol}\nهراجعها تاني بعد 30 دقيقة. الـOCO يفضل شغال.` });
   return new Response("ok");
 }
+async function handleExitAsk(request, env) {
+  const u = await request.clone().json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q || String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return null;
+  const [action, id] = String(q.data || "").split(":");
+  if (action !== "EXITASK") return null;
+  const rows = await readOpenPositions(env);
+  const p = rows.find((x) => x.id === id && !x.closed);
+  if (!p) {
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Position not found/closed", show_alert: true });
+    return new Response("ok");
+  }
+  await putState(env, `exit-intent:${id}`, { id, symbol: p.symbol, createdAt: Date.now() }, EXIT_INTENT_TTL_SEC);
+  await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Confirm exit first" });
+  await tg(env, "sendMessage", {
+    chat_id: String(env.TELEGRAM_CHAT_ID),
+    text: `⚠️ CONFIRM EXIT — ${p.symbol}\n\nالزر ده مش هيبيع تلقائيًا. بعد التأكيد هيفتحلك نفس الزوج على Binance.\nالـOCO هيفضل شغال لحد ما تلغيه بنفسك، عشان الصفقة ما تفضلش من غير حماية لو ماكملتيش البيع.`,
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "⚠️ CONFIRM EXIT", callback_data: `EXITOPEN:${id}` }],
+        [{ text: "↩️ KEEP POSITION", callback_data: `EXITCANCEL:${id}` }],
+      ],
+    },
+  });
+  return new Response("ok");
+}
+async function handleExitOpen(request, env) {
+  const u = await request.clone().json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q || String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return null;
+  const [action, id] = String(q.data || "").split(":");
+  if (action !== "EXITOPEN") return null;
+  const intent = await getState(env, `exit-intent:${id}`);
+  if (!intent?.symbol) {
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Exit confirmation expired", show_alert: true });
+    return new Response("ok");
+  }
+  const claimed = await claimState(env, `exit-open-lock:${id}`, { at: Date.now(), symbol: intent.symbol }, 120);
+  if (!claimed) {
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Already opened — duplicate blocked", show_alert: true });
+    return new Response("ok");
+  }
+  await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Opening Binance exit page" });
+  await tg(env, "sendMessage", {
+    chat_id: String(env.TELEGRAM_CHAT_ID),
+    text: `📤 EXIT READY — ${intent.symbol}\n\n1) افتحي Binance من الزر.\n2) الغي OCO الخاص بالصفقة لو لسه مفتوح.\n3) Sell → Market → 100%.\n\n⚠️ مفيش بيع اتنفذ من Telegram نفسه.`,
+    reply_markup: {
+      inline_keyboard: [[{ text: `📤 OPEN ${intent.symbol} ON BINANCE`, url: binanceTradeUrl(intent.symbol) }]],
+    },
+  });
+  return new Response("ok");
+}
+async function handleExitCancel(request, env) {
+  const u = await request.clone().json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q || String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return null;
+  const [action, id] = String(q.data || "").split(":");
+  if (action !== "EXITCANCEL") return null;
+  await putState(env, `exit-intent:${id}`, null, 1);
+  await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Exit cancelled — OCO stays active" });
+  return new Response("ok");
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -163,6 +237,18 @@ export default {
       if (data.startsWith("HOLD30:")) {
         const held = await handleHoldCallback(request, env);
         if (held) return held;
+      }
+      if (data.startsWith("EXITASK:")) {
+        const asked = await handleExitAsk(request, env);
+        if (asked) return asked;
+      }
+      if (data.startsWith("EXITOPEN:")) {
+        const opened = await handleExitOpen(request, env);
+        if (opened) return opened;
+      }
+      if (data.startsWith("EXITCANCEL:")) {
+        const cancelled = await handleExitCancel(request, env);
+        if (cancelled) return cancelled;
       }
       const confirmId = data.startsWith("CONFIRM:") ? data.split(":")[1] : null;
       const response = await canonicalWorker.fetch(request, env, ctx);
