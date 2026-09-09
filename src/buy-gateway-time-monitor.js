@@ -91,6 +91,17 @@ async function registerConfirmedPosition(env, id) {
   });
   await writeOpenPositions(env, rows);
 }
+async function markPositionClosed(env, id, reason = "manual-user-confirmed") {
+  const rows = await readOpenPositions(env);
+  const p = rows.find((x) => x.id === id && !x.closed);
+  if (!p) return null;
+  p.closed = true;
+  p.closedAt = Date.now();
+  p.closedReason = reason;
+  p.nextDecisionReminderAt = 0;
+  await writeOpenPositions(env, rows);
+  return p;
+}
 async function sendReview(env, p, current, stage) {
   const basis = Number(p.referenceEntry || 0);
   const pnlPct = basis > 0 ? ((current / basis) - 1) * 100 : 0;
@@ -99,11 +110,12 @@ async function sendReview(env, p, current, stage) {
   const headline = stage === 45 ? "⏱ 45m POSITION REVIEW" : "⏰ 75m+ DECISION DEADLINE";
   const action = stage === 45
     ? "دي مراجعة مبكرة. الـOCO شغال، ولو الصفقة فضلت مفتوحة هيوصل قرار عند 75 دقيقة."
-    : "الصفقة عدّت مدة PRE-MOMENTUM المستهدفة. اختاري EXIT أو HOLD؛ زر EXIT بقى له تأكيد منفصل قبل فتح Binance.";
+    : "الصفقة عدّت مدة PRE-MOMENTUM المستهدفة. اختاري EXIT أو HOLD؛ ولو بعتيها يدويًا اختاري SOLD/CLOSED عشان أوقف المتابعة.";
   const keyboard = stage === 75 ? {
     inline_keyboard: [
       [{ text: "📤 EXIT NOW", callback_data: `EXITASK:${p.id}` }],
       [{ text: "⏳ HOLD 30m", callback_data: `HOLD30:${p.id}` }],
+      [{ text: "✅ ALREADY SOLD / CLOSED", callback_data: `EXITDONE:${p.id}` }],
     ],
   } : undefined;
   await tg(env, "sendMessage", {
@@ -120,6 +132,20 @@ async function reviewPositions(env) {
   const now = Date.now();
   for (const p of rows) {
     if (p.closed) continue;
+
+    // One-time cleanup for the legacy U position that was manually sold before
+    // manual-close callbacks existed. U/stablecoins are already excluded from
+    // new momentum entries, so this only stops the stale historical reminder.
+    if (p.symbol === "UUSDT") {
+      p.closed = true;
+      p.closedAt = now;
+      p.closedReason = "legacy-U-manual-sale-cleanup";
+      p.nextDecisionReminderAt = 0;
+      changed = true;
+      console.log(`[time-monitor] ${p.symbol} stale legacy position marked closed`);
+      continue;
+    }
+
     const age = now - Number(p.openedAt || now);
     try {
       const current = await publicPrice(p.symbol);
@@ -209,10 +235,32 @@ async function handleExitOpen(request, env) {
   await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Opening Binance exit page" });
   await tg(env, "sendMessage", {
     chat_id: String(env.TELEGRAM_CHAT_ID),
-    text: `📤 EXIT READY — ${intent.symbol}\n\n1) افتحي Binance من الزر.\n2) الغي OCO الخاص بالصفقة لو لسه مفتوح.\n3) Sell → Market → 100%.\n\n⚠️ مفيش بيع اتنفذ من Telegram نفسه.`,
+    text: `📤 EXIT READY — ${intent.symbol}\n\n1) افتحي Binance من الزر.\n2) الغي OCO الخاص بالصفقة لو لسه مفتوح.\n3) Sell → Market → 100%.\n4) بعد ما البيع يتم، اضغطي SOLD / CLOSED عشان أوقف التذكيرات.\n\n⚠️ مفيش بيع اتنفذ من Telegram نفسه.`,
     reply_markup: {
-      inline_keyboard: [[{ text: `📤 OPEN ${intent.symbol} ON BINANCE`, url: binanceTradeUrl(intent.symbol) }]],
+      inline_keyboard: [
+        [{ text: `📤 OPEN ${intent.symbol} ON BINANCE`, url: binanceTradeUrl(intent.symbol) }],
+        [{ text: "✅ SOLD / CLOSED", callback_data: `EXITDONE:${id}` }],
+      ],
     },
+  });
+  return new Response("ok");
+}
+async function handleExitDone(request, env) {
+  const u = await request.clone().json().catch(() => null);
+  const q = u?.callback_query;
+  if (!q || String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return null;
+  const [action, id] = String(q.data || "").split(":");
+  if (action !== "EXITDONE") return null;
+  const p = await markPositionClosed(env, id, "manual-user-confirmed");
+  if (!p) {
+    await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Already closed / not found" });
+    return new Response("ok");
+  }
+  await putState(env, `exit-intent:${id}`, null, 1);
+  await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Closed — reminders stopped" });
+  await tg(env, "sendMessage", {
+    chat_id: String(env.TELEGRAM_CHAT_ID),
+    text: `✅ CLOSED — ${p.symbol}\nوقفت متابعة الصفقة وتذكيرات الـ75m.`,
   });
   return new Response("ok");
 }
@@ -245,6 +293,10 @@ export default {
       if (data.startsWith("EXITOPEN:")) {
         const opened = await handleExitOpen(request, env);
         if (opened) return opened;
+      }
+      if (data.startsWith("EXITDONE:")) {
+        const done = await handleExitDone(request, env);
+        if (done) return done;
       }
       if (data.startsWith("EXITCANCEL:")) {
         const cancelled = await handleExitCancel(request, env);
