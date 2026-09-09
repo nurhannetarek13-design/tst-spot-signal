@@ -92,7 +92,7 @@ class H(BaseHTTPRequestHandler):
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.1'})
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.2'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -101,13 +101,21 @@ class H(BaseHTTPRequestHandler):
         except Exception as exc:
             print(f'[make-relay] {action} transport failed: {type(exc).__name__}: {str(exc)[:160]}',flush=True)
             return self.send_json(502,{'ok':False,'status':'MAKE_TRANSPORT_FAILED','action':action})
-        self.send_response(status)
-        self.send_header('Content-Type','application/json; charset=utf-8')
-        self.send_header('Cache-Control','no-store')
-        self.send_header('Content-Length',str(len(data)))
-        self.send_header('Connection','close')
-        self.end_headers()
-        self.wfile.write(data)
+
+        # Never forward an opaque/non-JSON Make response to Cloudflare. A stale
+        # or disabled webhook used to surface only as NON_JSON_400, which made it
+        # impossible to distinguish routing failures from Binance order errors.
+        try:
+            row=json.loads(data or b'{}')
+        except Exception:
+            print(f'[make-relay] {action} upstream non-json status={status} bytes={len(data)}',flush=True)
+            code=status if status>=400 else 502
+            label=f'MAKE_HTTP_{status}' if status>=400 else 'MAKE_NON_JSON_RESPONSE'
+            return self.send_json(code,{'ok':False,'status':label,'action':action})
+        if not isinstance(row,dict):
+            print(f'[make-relay] {action} upstream non-object-json status={status}',flush=True)
+            return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action})
+        return self.send_json(status,row)
 
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
