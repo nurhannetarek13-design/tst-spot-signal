@@ -16,7 +16,7 @@ import shadow_ev_model
 MODEL_PATH=Path(os.getenv('TST_SHADOW_EV_MODEL_PATH','/data/tst_shadow_ev_model.json'))
 REPORT_PATH=Path(os.getenv('TST_SHADOW_EV_REPORT_PATH','/data/tst_shadow_ev_report.json'))
 APPROVAL_PATH=Path(os.getenv('TST_EV_LIVE_APPROVAL_PATH','/data/tst_ev_live_approval.json'))
-HISTORICAL_PATH=Path(os.getenv('TST_HISTORICAL_EV_EVIDENCE_PATH','/freqtrade/historical_ev_evidence.json'))
+HISTORICAL_PATH=Path(os.getenv('TST_HISTORICAL_EV_EVIDENCE_PATH','/freqtrade/user_data/historical_ev_evidence.json'))
 MODE=(os.getenv('SPOT_SNIPER_EV_MODE') or 'auto').strip().lower()
 MIN_PROB=float(os.getenv('SPOT_SNIPER_MIN_TP_PROB','0.56'))
 MIN_NET_EV_PCT=float(os.getenv('SPOT_SNIPER_MIN_NET_EV_PCT','0.12'))
