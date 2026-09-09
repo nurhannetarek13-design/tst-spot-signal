@@ -16,6 +16,10 @@ BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
 MAKE_BUY_WEBHOOK_URL=(os.getenv('MAKE_ONE_TAP_WEBHOOK_URL') or '').strip()
 MAKE_OCO_WEBHOOK_URL=(os.getenv('MAKE_ONE_TAP_OCO_WEBHOOK_URL') or '').strip()
 TELEGRAM_BOT_TOKEN=(os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
+try:
+    MAX_EXECUTION_STAKE_USDT=max(5.0,float(os.getenv('MAX_EXECUTION_STAKE_USDT','40')))
+except Exception:
+    MAX_EXECUTION_STAKE_USDT=40.0
 
 
 def _json_bytes(payload):
@@ -69,8 +73,8 @@ class H(BaseHTTPRequestHandler):
         if action=='BUY':
             try: quote=float(body.get('quote_amount_usdt') or 0)
             except Exception: quote=0
-            if not (5<=quote<=10):
-                return self.send_json(400,{'ok':False,'status':'BAD_STAKE'})
+            if not (5<=quote<=MAX_EXECUTION_STAKE_USDT):
+                return self.send_json(400,{'ok':False,'status':'BAD_STAKE','maxStakeUSDT':MAX_EXECUTION_STAKE_USDT})
             target_url=MAKE_BUY_WEBHOOK_URL
         elif action=='OCO':
             try:
@@ -88,7 +92,7 @@ class H(BaseHTTPRequestHandler):
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/3.0'})
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.0'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -107,7 +111,7 @@ class H(BaseHTTPRequestHandler):
 
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
-            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL)})
+            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
         if self.path.startswith('/make-exec-relay'):
             return self.make_exec_relay()
         if self.path.startswith('/execute') or self.path.startswith('/signer/'):
@@ -119,5 +123,5 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)}', flush=True)
+    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f}', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
