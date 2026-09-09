@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
-  "candidateFingerprint": "62e620408a8cb85cc7c2",
-  "symbol": "UNIUSDT",
-  "family": "VOLATILITY_MOMENTUM",
-  "timeframe": "15m",
+  "candidateId": null,
+  "candidateFingerprint": null,
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-09T07:30:37.792Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-09T07:32:39.408255+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }
