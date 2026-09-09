@@ -6,6 +6,7 @@ s = path.read_text(encoding='utf-8')
 # Keep this guard deliberately simple and robust: the normal engine already
 # rejects anything in EXCLUDE, so add every dollar/fiat-like asset there.
 # This works even after the new-listing reservation patch changes symbol_ok().
+# Railway watches this file directly so any future stablecoin additions redeploy.
 extra = [
     'UUSDT',
     'USDEUSDT',
