@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Deployment marker: momentum ignition gate v1.2
 /freqtrade/run_ready_bot.sh &
 BOT_PID=$!
 
