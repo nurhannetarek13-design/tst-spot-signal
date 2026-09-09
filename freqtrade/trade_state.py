@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import tempfile
@@ -14,16 +15,78 @@ from zoneinfo import ZoneInfo
 STATE_PATH = Path(os.getenv('TST_TRADE_STATE_PATH', '/data/tst_live_positions.json'))
 EVENT_PATH = Path(os.getenv('TST_TRADE_EVENT_PATH', '/data/tst_trade_events.jsonl'))
 RESERVATION_PATH = Path(os.getenv('TST_EXECUTION_RESERVATION_PATH', '/data/tst_execution_reservations.json'))
+LOCK_PATH = Path(os.getenv('TST_TRADE_LOCK_PATH', '/data/tst_trade_state.lock'))
 RISK_TIMEZONE = os.getenv('RISK_TIMEZONE', 'Africa/Cairo')
-_LOCK = threading.RLock()
+
+
+class _InterProcessRLock:
+    """Re-entrant lock across both threads and Railway worker processes.
+
+    Atomic rename prevents torn JSON, but it does not prevent two independent
+    processes from doing read -> modify -> write concurrently and losing one
+    another's update. All canonical state/reservation/event mutations therefore
+    share one advisory flock. The lock is re-entrant within a thread because many
+    public helpers intentionally call other locked helpers.
+    """
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self._thread_lock = threading.RLock()
+        self._local = threading.local()
+
+    def __enter__(self):
+        self._thread_lock.acquire()
+        depth = int(getattr(self._local, 'depth', 0) or 0)
+        if depth == 0:
+            fd = None
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o600)
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                self._local.fd = fd
+            except Exception:
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except Exception:
+                        pass
+                self._thread_lock.release()
+                raise
+        self._local.depth = depth + 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        depth = int(getattr(self._local, 'depth', 1) or 1) - 1
+        try:
+            if depth <= 0:
+                fd = getattr(self._local, 'fd', None)
+                try:
+                    if fd is not None:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                finally:
+                    if fd is not None:
+                        os.close(fd)
+                    for name in ('fd', 'depth'):
+                        try:
+                            delattr(self._local, name)
+                        except AttributeError:
+                            pass
+            else:
+                self._local.depth = depth
+        finally:
+            self._thread_lock.release()
+        return False
+
+
+_LOCK = _InterProcessRLock(LOCK_PATH)
 
 
 def _empty() -> dict[str, Any]:
-    return {'version': 4, 'updated_at': time.time(), 'positions': {}}
+    return {'version': 5, 'updated_at': time.time(), 'positions': {}}
 
 
 def _empty_reservations() -> dict[str, Any]:
-    return {'version': 2, 'updated_at': time.time(), 'reservations': {}}
+    return {'version': 3, 'updated_at': time.time(), 'reservations': {}}
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -129,7 +192,7 @@ def reserve_execution(body: dict[str, Any], action: str) -> tuple[bool, dict[str
         }
         state['reservations'][key] = row
         save_reservations(state)
-    append_event('EXECUTION_RESERVED', **row)
+        append_event('EXECUTION_RESERVED', **row)
     return True, row
 
 
@@ -199,8 +262,8 @@ def record_buy(body: dict[str, Any], response: dict[str, Any]) -> None:
         })
         state['positions'][signal_id] = pos
         save_state(state)
-    update_reservation(signal_id, 'BUY', status='FILLED', response=response, filled_at=time.time())
-    append_event('BUY_FILLED', signal_id=signal_id, symbol=symbol, entry=entry, quantity=qty, quote_spent=quote, order_id=response.get('order_id'), client_order_id=body.get('client_order_id'))
+        update_reservation(signal_id, 'BUY', status='FILLED', response=response, filled_at=time.time())
+        append_event('BUY_FILLED', signal_id=signal_id, symbol=symbol, entry=entry, quantity=qty, quote_spent=quote, order_id=response.get('order_id'), client_order_id=body.get('client_order_id'))
 
 
 def record_oco(body: dict[str, Any], response: dict[str, Any]) -> None:
@@ -243,8 +306,8 @@ def record_oco(body: dict[str, Any], response: dict[str, Any]) -> None:
                 pass
         state['positions'][signal_id] = pos
         save_state(state)
-    update_reservation(signal_id, 'OCO', status='PLACED', response=response, placed_at=time.time())
-    append_event('OCO_ACTIVE', signal_id=signal_id, symbol=symbol, order_list_id=order_list_id, list_client_order_id=body.get('list_client_order_id'), quantity=qty, target=tp, stop=sl)
+        update_reservation(signal_id, 'OCO', status='PLACED', response=response, placed_at=time.time())
+        append_event('OCO_ACTIVE', signal_id=signal_id, symbol=symbol, order_list_id=order_list_id, list_client_order_id=body.get('list_client_order_id'), quantity=qty, target=tp, stop=sl)
 
 
 def update_position(signal_id: str, **changes: Any) -> None:
@@ -275,9 +338,9 @@ def close_position(signal_id: str, *, exit_price: float, exit_qty: float, exit_q
             'updated_at':time.time(), **extra,
         })
         state['positions'][signal_id]=pos; save_state(state)
-    append_event('POSITION_CLOSED', signal_id=signal_id, symbol=pos.get('symbol'), reason=close_reason,
-                 exit_price=exit_price, exit_quantity=exit_qty, exit_quote=exit_quote,
-                 realized_pnl_usdt=realized_pnl_usdt, exit_order_id=exit_order_id)
+        append_event('POSITION_CLOSED', signal_id=signal_id, symbol=pos.get('symbol'), reason=close_reason,
+                     exit_price=exit_price, exit_quantity=exit_qty, exit_quote=exit_quote,
+                     realized_pnl_usdt=realized_pnl_usdt, exit_order_id=exit_order_id)
 
 
 def position_for_signal(signal_id: str) -> dict[str, Any] | None:
