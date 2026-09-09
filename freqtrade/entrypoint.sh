@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment marker: expert system v3 + outcome learning + read-only profit shadow
+# Deployment marker: production-safety state + reconciliation + research telemetry
 /freqtrade/run_ready_bot.sh &
 BOT_PID=$!
 
 cleanup() {
-  kill "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -44,6 +44,19 @@ except Exception as exc:
     print(f'[telegram-test] FAILED {type(exc).__name__}: {exc}', flush=True)
 PY
 fi
+
+# Fail closed: no new live opportunity may be emitted until the canonical
+# persistent ledger is reconciled against Binance open bot-owned OCOs.
+if ! python -u /freqtrade/reconcile_state.py --once; then
+  echo "[entrypoint] CRITICAL reconciliation failed; fast live entry engine remains disabled" >&2
+  wait "$BOT_PID"
+  exit $?
+fi
+
+echo "[entrypoint] startup reconciliation passed"
+python -u /freqtrade/reconcile_state.py &
+RECONCILE_PID=$!
+echo "[entrypoint] Binance reconciler started pid=${RECONCILE_PID}"
 
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
