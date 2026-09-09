@@ -6,7 +6,7 @@ set -euo pipefail
 BOT_PID=$!
 
 cleanup() {
-  kill "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${PROFIT_MANAGER_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -57,6 +57,10 @@ echo "[entrypoint] startup reconciliation passed"
 python -u /freqtrade/reconcile_state.py &
 RECONCILE_PID=$!
 echo "[entrypoint] Binance reconciler started pid=${RECONCILE_PID}"
+
+python -u /freqtrade/execution_recovery.py &
+RECOVERY_PID=$!
+echo "[entrypoint] exact-once execution recovery started pid=${RECOVERY_PID}"
 
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
