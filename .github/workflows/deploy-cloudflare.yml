@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -61,12 +61,19 @@ jobs:
           grep -q 'ltrFmt(requested)' src/buy-gateway-canonical.js
           grep -q 'const MAX_ORDER_USDT = 100;' src/buy-gateway-canonical.js
           grep -q 'requested>MAX_ORDER_USDT' src/buy-gateway-canonical.js
+          grep -q 'const MAX_ORDER_USDT = 100;' src/buy-gateway-stable.js
+          grep -q 'requested>MAX_ORDER_USDT' src/buy-gateway-stable.js
+          grep -q '/growth-cap-check' src/buy-gateway-auth-wrapper.js
           grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway-canonical.js
           grep -q 'REVIEW_45_MS' src/buy-gateway-time-monitor.js
           grep -q 'REVIEW_75_MS' src/buy-gateway-time-monitor.js
           grep -q 'HOLD30:' src/buy-gateway-time-monitor.js
           grep -q 'x-fast-ecdsa' src/buy-gateway-auth-wrapper.js
           grep -q 'ECDSA' src/buy-gateway-auth-wrapper.js
+          if grep -R -Eq 'requested[[:space:]]*>[[:space:]]*10' src/buy-gateway-*.js; then
+            echo "Legacy 10 USDT signal gate still exists"
+            exit 1
+          fi
           if grep -q 'sendPeriodicScanDigest' src/edge-worker.js; then
             echo "Legacy periodic digest still exists"
             exit 1
@@ -120,6 +127,43 @@ jobs:
               break
             fi
             sleep 3
+          done
+          test "$passed" = "1"
+
+      - name: Verify 40 USDT growth-mode dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          passed=0
+          for attempt in $(seq 1 10); do
+            curl --silent --show-error --max-time 20 \
+              -H 'cache-control: no-store, no-cache, max-age=0' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/growth-cap-check?deploy=${GITHUB_SHA}&attempt=${attempt}&nonce=$(date +%s%N)" \
+              -o /tmp/growth.json || true
+            cat /tmp/growth.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try:
+              row=json.load(open('/tmp/growth.json'))
+          except Exception:
+              sys.exit(1)
+          checks=[
+              row.get('ok') is True,
+              row.get('status') == 'FAST_SIGNAL_DRYRUN_OK',
+              float(row.get('recommendedUSDT') or 0) == 40.0,
+              float(row.get('testedStakeUSDT') or 0) == 40.0,
+              row.get('dryRun') is True,
+              row.get('autoBuy') is False,
+              row.get('noSecretValuesExposed') is True,
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then
+              passed=1
+              break
+            fi
+            sleep 2
           done
           test "$passed" = "1"
 
