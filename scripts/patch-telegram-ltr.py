@@ -39,54 +39,61 @@ if "ltrFmt(requested)" not in s or "ltrFmt(entry)" not in s or "ltrFmt(target)" 
 p.write_text(s, encoding="utf-8")
 print("patched Telegram numeric LTR isolation")
 
-# Time-monitor patch: manual Binance exits are invisible to the Cloudflare
-# reminder state unless the user explicitly closes tracking. Add a SOLD button
-# after the exit flow, and retire the already-sold UUSDT legacy position once.
+# Time monitor manual-exit support. Keep this patch idempotent because the
+# source may already contain the current SOLD/CLOSED flow from a previous commit.
 m = Path("src/buy-gateway-time-monitor.js")
 t = m.read_text(encoding="utf-8")
 
-# The user explicitly confirmed UUSDT was sold manually. U/stablecoins are now
-# excluded from the scanner, so automatically retire any stale UUSDT monitor row.
-legacy_marker = '''  for (const p of rows) {
+legacy_done = (
+    'p.symbol === "UUSDT"' in t
+    and ('legacy-U-manual-sale-cleanup' in t or 'manual-user-sale' in t)
+)
+if not legacy_done:
+    legacy_marker = '''  for (const p of rows) {
     if (p.closed) continue;
     const age = now - Number(p.openedAt || now);
 '''
-legacy_repl = '''  for (const p of rows) {
+    legacy_repl = '''  for (const p of rows) {
     if (p.closed) continue;
     if (p.symbol === "UUSDT") {
       p.closed = true;
       p.closedAt = now;
-      p.closedReason = "manual-user-sale";
+      p.closedReason = "legacy-U-manual-sale-cleanup";
+      p.nextDecisionReminderAt = 0;
       changed = true;
-      console.log(`[time-monitor] ${p.symbol} tracking closed after confirmed manual sale`);
+      console.log(`[time-monitor] ${p.symbol} stale legacy position marked closed`);
       continue;
     }
     const age = now - Number(p.openedAt || now);
 '''
-if 'closedReason = "manual-user-sale"' not in t:
     if legacy_marker not in t:
         raise SystemExit("time monitor legacy-close marker missing")
     t = t.replace(legacy_marker, legacy_repl, 1)
 
-old_keyboard = '''    reply_markup: {
+sold_button_done = (
+    'callback_data: `EXITDONE:${id}`' in t
+    and ('SOLD / CLOSED' in t or 'SOLD — STOP REMINDERS' in t)
+)
+if not sold_button_done:
+    old_keyboard = '''    reply_markup: {
       inline_keyboard: [[{ text: `📤 OPEN ${intent.symbol} ON BINANCE`, url: binanceTradeUrl(intent.symbol) }]],
     },
 '''
-new_keyboard = '''    reply_markup: {
+    new_keyboard = '''    reply_markup: {
       inline_keyboard: [
         [{ text: `📤 OPEN ${intent.symbol} ON BINANCE`, url: binanceTradeUrl(intent.symbol) }],
-        [{ text: "✅ SOLD — STOP REMINDERS", callback_data: `EXITDONE:${id}` }],
+        [{ text: "✅ SOLD / CLOSED", callback_data: `EXITDONE:${id}` }],
       ],
     },
 '''
-if 'SOLD — STOP REMINDERS' not in t:
     if old_keyboard not in t:
         raise SystemExit("time monitor exit-ready keyboard marker missing")
     t = t.replace(old_keyboard, new_keyboard, 1)
 
-handler_marker = '''async function handleExitCancel(request, env) {
+if 'async function handleExitDone' not in t:
+    handler_marker = '''async function handleExitCancel(request, env) {
 '''
-handler = '''async function handleExitDone(request, env) {
+    handler = '''async function handleExitDone(request, env) {
   const u = await request.clone().json().catch(() => null);
   const q = u?.callback_query;
   if (!q || String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return null;
@@ -100,7 +107,8 @@ handler = '''async function handleExitDone(request, env) {
   }
   p.closed = true;
   p.closedAt = Date.now();
-  p.closedReason = "manual-exit-confirmed";
+  p.closedReason = "manual-user-confirmed";
+  p.nextDecisionReminderAt = 0;
   await writeOpenPositions(env, rows);
   await putState(env, `exit-intent:${id}`, null, 1);
   await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Closed — reminders stopped" });
@@ -112,31 +120,31 @@ handler = '''async function handleExitDone(request, env) {
 }
 
 '''
-if 'async function handleExitDone' not in t:
     if handler_marker not in t:
         raise SystemExit("time monitor exit-done handler marker missing")
     t = t.replace(handler_marker, handler + handler_marker, 1)
 
-route_marker = '''      if (data.startsWith("EXITCANCEL:")) {
+if 'data.startsWith("EXITDONE:")' not in t:
+    route_marker = '''      if (data.startsWith("EXITCANCEL:")) {
 '''
-route_insert = '''      if (data.startsWith("EXITDONE:")) {
+    route_insert = '''      if (data.startsWith("EXITDONE:")) {
         const done = await handleExitDone(request, env);
         if (done) return done;
       }
 '''
-if 'data.startsWith("EXITDONE:")' not in t:
     if route_marker not in t:
         raise SystemExit("time monitor exit-done route marker missing")
     t = t.replace(route_marker, route_insert + route_marker, 1)
 
-for required in [
-    'SOLD — STOP REMINDERS',
-    'async function handleExitDone',
-    'data.startsWith("EXITDONE:")',
-    'closedReason = "manual-user-sale"',
-]:
-    if required not in t:
-        raise SystemExit(f"time monitor sold patch incomplete: {required}")
+required_checks = [
+    ('EXITDONE callback', 'callback_data: `EXITDONE:${id}`' in t),
+    ('EXITDONE handler', 'async function handleExitDone' in t),
+    ('EXITDONE route', 'data.startsWith("EXITDONE:")' in t),
+    ('legacy U cleanup', 'p.symbol === "UUSDT"' in t),
+]
+for name, ok in required_checks:
+    if not ok:
+        raise SystemExit(f"time monitor sold patch incomplete: {name}")
 
 m.write_text(t, encoding="utf-8")
-print("patched time monitor manual-sale close + SOLD stop-reminders callback")
+print("patched/verified time monitor manual-sale close + SOLD/CLOSED callback")
