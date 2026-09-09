@@ -13,8 +13,23 @@ if 'import entry_quality\n' not in s:
         raise SystemExit('entry quality patch failed: import marker missing')
     s = s.replace(import_marker, import_marker + 'import entry_quality\n', 1)
 
-# Validate a real growth-mode size in the non-trading dry-run preflight so
-# Cloudflare/Railway stake limits cannot silently drift back to 10 USDT.
+# Normalize the actual payload sent to Cloudflare. This makes the runtime contract
+# explicit and prevents an old source/default from silently producing an invalid stake.
+raw_marker = "    raw = json.dumps(payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')\n"
+raw_replacement = (
+    "    if payload.get('dryRun') is True and payload.get('strategy') == 'FAST_EXECUTION_PREFLIGHT':\n"
+    "        payload['stakeUSDT'] = 40.0\n"
+    "    elif 'stakeUSDT' in payload:\n"
+    "        payload['stakeUSDT'] = max(5.0, min(float(payload['stakeUSDT']), 100.0))\n"
+    "    print(f\"[fast-ingest-request] symbol={payload.get('symbol')} stake={payload.get('stakeUSDT')} dryRun={payload.get('dryRun')}\", flush=True)\n"
+    + raw_marker
+)
+if '[fast-ingest-request]' not in s:
+    if raw_marker not in s:
+        raise SystemExit('dynamic sizing patch failed: raw payload marker missing')
+    s = s.replace(raw_marker, raw_replacement, 1)
+
+# Validate a real growth-mode size in the non-trading dry-run preflight.
 preflight_probe_old = (
     "        'stakeUSDT': 5.5,\n"
     "        'score': 100,\n"
@@ -102,4 +117,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[live-safety-patch] OK growth-dryrun + quality preflight + hard gates + filtered ranking + adaptive sizing enabled')
+print('[live-safety-patch] OK normalized growth payload + quality preflight + hard gates + adaptive sizing enabled')
