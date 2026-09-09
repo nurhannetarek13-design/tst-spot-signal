@@ -12,6 +12,7 @@ on:
       - "src/buy-gateway-auth-wrapper.js"
       - "scripts/patch-telegram-ltr.py"
       - "scripts/patch-cloudflare-growth-cap.py"
+      - "scripts/patch-cloudflare-execution-safety.py"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -46,6 +47,9 @@ jobs:
       - name: Patch growth-mode execution ceiling
         run: python scripts/patch-cloudflare-growth-cap.py
 
+      - name: Patch execution stale-price and spread safety
+        run: python scripts/patch-cloudflare-execution-safety.py
+
       - name: Validate canonical Worker + monitor + auth wrapper
         shell: bash
         run: |
@@ -64,6 +68,10 @@ jobs:
           grep -q 'FAST_SIGNAL_DRYRUN_OK' src/buy-gateway-canonical.js
           grep -q 'executeBuyThenProtect' src/buy-gateway-canonical.js
           grep -q 'execution-lock:' src/buy-gateway-canonical.js
+          grep -q 'executionPriceGate' src/buy-gateway-canonical.js
+          grep -q 'STALE_PRICE_CHASE' src/buy-gateway-canonical.js
+          grep -q 'EXECUTION_SPREAD_TOO_WIDE' src/buy-gateway-canonical.js
+          grep -q 'execution_ask:priceGate.ask' src/buy-gateway-canonical.js
           grep -q '/telegram-webhook-check' src/buy-gateway-canonical.js
           grep -q 'ltrFmt(requested)' src/buy-gateway-canonical.js
           grep -q 'const MAX_ORDER_USDT = 100;' src/buy-gateway-canonical.js
