@@ -21,10 +21,25 @@ try:
     MAX_EXECUTION_STAKE_USDT=max(5.0,float(os.getenv('MAX_EXECUTION_STAKE_USDT','40')))
 except Exception:
     MAX_EXECUTION_STAKE_USDT=40.0
+try:
+    MAX_SIGNAL_AGE_SEC=max(15,int(os.getenv('MAX_SIGNAL_AGE_SEC','120')))
+except Exception:
+    MAX_SIGNAL_AGE_SEC=120
 
 
 def _json_bytes(payload):
     return json.dumps(payload,separators=(',',':'),ensure_ascii=False).encode('utf-8')
+
+
+def _signal_epoch(body):
+    try:
+        ts=float(body.get('timestamp') or 0)
+        # accept seconds or milliseconds, but normalize to seconds
+        if ts > 10_000_000_000:
+            ts/=1000.0
+        return ts
+    except Exception:
+        return 0.0
 
 
 class H(BaseHTTPRequestHandler):
@@ -64,12 +79,19 @@ class H(BaseHTTPRequestHandler):
             body=json.loads(raw or b'{}')
         except Exception:
             return self.send_json(400,{'ok':False,'status':'BAD_JSON'})
+        signal_id=str(body.get('signal_id') or body.get('id') or '').strip()
         symbol=str(body.get('symbol') or '').upper()
         action=str(body.get('action') or '').upper()
+        if not signal_id:
+            return self.send_json(400,{'ok':False,'status':'MISSING_SIGNAL_ID'})
         if body.get('confirmed') is not True or body.get('dry_run') is not False:
             return self.send_json(409,{'ok':False,'status':'CONFIRMATION_REQUIRED'})
         if not re.fullmatch(r'[A-Z0-9]{1,20}USDT',symbol):
             return self.send_json(400,{'ok':False,'status':'BAD_SYMBOL'})
+        signal_ts=_signal_epoch(body)
+        age=time.time()-signal_ts if signal_ts>0 else 1e9
+        if age < -15 or age > MAX_SIGNAL_AGE_SEC:
+            return self.send_json(409,{'ok':False,'status':'STALE_SIGNAL','ageSeconds':round(age,1),'maxAgeSeconds':MAX_SIGNAL_AGE_SEC})
 
         if action=='BUY':
             try: quote=float(body.get('quote_amount_usdt') or 0)
@@ -87,45 +109,77 @@ class H(BaseHTTPRequestHandler):
                 quantity=tp=sl=sl_limit=0
             if not (quantity>0 and tp>0 and sl>0 and sl_limit>0 and sl_limit<=sl<tp):
                 return self.send_json(400,{'ok':False,'status':'BAD_OCO_LEVELS'})
+            # Protection may only be attached to a BUY known by canonical state.
+            pos=trade_state.position_for_signal(signal_id)
+            if not pos or str(pos.get('status') or '') not in {'BUY_FILLED','PROTECTION_PENDING','OCO_ACTIVE'}:
+                return self.send_json(409,{'ok':False,'status':'UNKNOWN_BUY_FOR_OCO','signal_id':signal_id})
             target_url=MAKE_OCO_WEBHOOK_URL
         else:
             return self.send_json(400,{'ok':False,'status':'BAD_ACTION'})
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.3'})
+
+        # Exactly-once guard at the relay boundary. This is persisted on /data.
+        reserved,current=trade_state.reserve_execution(body,action)
+        if not reserved:
+            previous_response=current.get('response') if isinstance(current,dict) else None
+            previous_status=str(current.get('status') or '') if isinstance(current,dict) else ''
+            if isinstance(previous_response,dict) and previous_status in {'FILLED','PLACED'}:
+                duplicate=dict(previous_response)
+                duplicate['idempotentReplay']=True
+                return self.send_json(200,duplicate)
+            return self.send_json(409,{
+                'ok':False,
+                'status':'DUPLICATE_OR_UNCERTAIN_EXECUTION_BLOCKED',
+                'signal_id':signal_id,
+                'action':action,
+                'reservationStatus':previous_status or 'UNKNOWN',
+            })
+
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/5.0'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
         except urllib.error.HTTPError as exc:
             status=exc.code; data=exc.read() or b'{}'
         except Exception as exc:
-            print(f'[make-relay] {action} transport failed: {type(exc).__name__}: {str(exc)[:160]}',flush=True)
-            return self.send_json(502,{'ok':False,'status':'MAKE_TRANSPORT_FAILED','action':action})
+            # The side effect may have happened even though the response was lost.
+            # Never auto-retry this signal; require reconciliation first.
+            trade_state.update_reservation(signal_id,action,status='UNKNOWN',error=f'{type(exc).__name__}:{str(exc)[:160]}')
+            trade_state.append_event('EXECUTION_UNKNOWN',signal_id=signal_id,action=action,symbol=symbol,error=type(exc).__name__)
+            print(f'[make-relay] {action} transport unknown-state: {type(exc).__name__}: {str(exc)[:160]}',flush=True)
+            return self.send_json(502,{'ok':False,'status':'EXECUTION_STATE_UNKNOWN_NO_RETRY','action':action,'signal_id':signal_id})
 
         try:
             row=json.loads(data or b'{}')
         except Exception:
+            trade_state.update_reservation(signal_id,action,status='UNKNOWN',error=f'NON_JSON_HTTP_{status}')
             print(f'[make-relay] {action} upstream non-json status={status} bytes={len(data)}',flush=True)
             code=status if status>=400 else 502
             label=f'MAKE_HTTP_{status}' if status>=400 else 'MAKE_NON_JSON_RESPONSE'
-            return self.send_json(code,{'ok':False,'status':label,'action':action})
+            return self.send_json(code,{'ok':False,'status':label,'action':action,'signal_id':signal_id})
         if not isinstance(row,dict):
+            trade_state.update_reservation(signal_id,action,status='UNKNOWN',error='NON_OBJECT_JSON')
             print(f'[make-relay] {action} upstream non-object-json status={status}',flush=True)
-            return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action})
+            return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action,'signal_id':signal_id})
 
-        # Persist only confirmed successful bot executions. This gives the signal
-        # engine a shared risk ledger without ever placing orders from Railway.
         try:
             if status < 400 and row.get('ok') is True:
                 if action == 'BUY' and str(row.get('status') or '') == 'BUY_FILLED':
                     trade_state.record_buy(body, row)
-                    print(f"[trade-state] BUY tracked signal={row.get('signal_id') or body.get('signal_id')} symbol={symbol}", flush=True)
+                    trade_state.update_position(signal_id,status='PROTECTION_PENDING')
+                    print(f"[trade-state] BUY tracked signal={row.get('signal_id') or signal_id} symbol={symbol} protection=PENDING", flush=True)
                 elif action == 'OCO' and str(row.get('status') or '') == 'OCO_PLACED':
                     trade_state.record_oco(body, row)
-                    print(f"[trade-state] OCO tracked signal={row.get('signal_id') or body.get('signal_id')} symbol={symbol} list={row.get('oco_order_list_id')}", flush=True)
+                    print(f"[trade-state] OCO tracked signal={row.get('signal_id') or signal_id} symbol={symbol} list={row.get('oco_order_list_id')}", flush=True)
+                else:
+                    trade_state.update_reservation(signal_id,action,status='UNKNOWN',response=row,error='SUCCESS_WITH_UNEXPECTED_STATUS')
+            else:
+                # A clear upstream rejection is terminal for this signal. A fresh
+                # signal may be generated later; the same one is never re-sent.
+                trade_state.update_reservation(signal_id,action,status='REJECTED',response=row,http_status=status)
         except Exception as exc:
-            # Tracking failure must not corrupt a successful Binance response.
             print(f'[trade-state] tracking warning {type(exc).__name__}: {exc}', flush=True)
 
         return self.send_json(status,row)
@@ -133,7 +187,7 @@ class H(BaseHTTPRequestHandler):
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
             snap=trade_state.portfolio_snapshot()
-            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT,'trackedOpenPositions':snap.get('open_count',0),'trackedStopRiskUSDT':round(float(snap.get('stop_risk_usdt',0)),4)})
+            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT,'maxSignalAgeSec':MAX_SIGNAL_AGE_SEC,'persistentState':str(trade_state.STATE_PATH).startswith('/data/'),'trackedOpenPositions':snap.get('open_count',0),'trackedStopRiskUSDT':round(float(snap.get('stop_risk_usdt',0)),4),'incompleteTrackedPositions':snap.get('incomplete_count',0)})
         if self.path=='/signer/validate' or self.path.startswith('/signer/validate?'):
             return self.send_json(200,{'ok':True,'status':'SIGNER_VALIDATION_COMPAT','legacyExecution':False,'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY','makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
         if self.path.startswith('/make-exec-relay'):
@@ -147,5 +201,5 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f} trade_state=ON', flush=True)
+    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f} trade_state=PERSISTENT idempotency=ON', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
