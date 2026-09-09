@@ -6,7 +6,7 @@ set -euo pipefail
 BOT_PID=$!
 
 cleanup() {
-  kill "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -48,6 +48,10 @@ fi
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] fast entry engine started pid=${FAST_PID}"
+
+python -u /freqtrade/sol_buy_zone_watch.py &
+SOL_MONITOR_PID=$!
+echo "[entrypoint] SOL buy-zone Telegram monitor started pid=${SOL_MONITOR_PID}"
 
 if [[ -n "${NEW_LISTING_SYMBOL:-}" && -n "${NEW_LISTING_START_UTC:-}" ]]; then
   python -u /freqtrade/new_listing_watcher.py &
