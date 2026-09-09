@@ -18,6 +18,12 @@ on:
 permissions:
   contents: read
 
+# Production is a single mutable Worker. Never let an older/slower workflow
+# finish after a newer one and silently roll the Worker back.
+concurrency:
+  group: deploy-cloudflare-production
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-24.04
