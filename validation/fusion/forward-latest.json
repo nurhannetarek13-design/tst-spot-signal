@@ -17,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-09T07:32:39.408255+00:00",
-  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
+  "generatedAt": "2026-09-09T09:09:28.533Z",
+  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
 }
