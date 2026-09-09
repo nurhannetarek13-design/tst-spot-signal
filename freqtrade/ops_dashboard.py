@@ -43,20 +43,35 @@ def _jsonl(path: Path, limit: int) -> list[dict]:
     return out
 
 
+def _barrier_ready(row: dict) -> bool:
+    try:
+        entry = float(row.get('price') or 0)
+        target = float(row.get('target') or 0)
+        stop = float(row.get('stop') or 0)
+        return entry > 0 and target > entry and 0 < stop < entry
+    except Exception:
+        return False
+
+
 def snapshot() -> dict:
     state = trade_state.load_state()
     positions = list((state.get('positions') or {}).values())
-    candidates = _jsonl(CANDIDATE_PATH, 2500)
-    outcomes = _jsonl(OUTCOME_PATH, 2500)
+    candidates = _jsonl(CANDIDATE_PATH, 5000)
+    outcomes = _jsonl(OUTCOME_PATH, 5000)
     now = time.time()
     recent_candidates = [r for r in candidates if now - float(r.get('ts') or 0) <= 24 * 3600]
     decision_counts = Counter(str(r.get('decision') or 'UNKNOWN') for r in recent_candidates)
     reason_counts = Counter(str(r.get('reason') or 'UNKNOWN') for r in recent_candidates if str(r.get('decision') or '') in {'REJECT', 'SCANNED'})
     lane_counts = Counter(str(r.get('lane') or 'UNKNOWN') for r in recent_candidates)
+    barrier_ready = sum(1 for r in recent_candidates if _barrier_ready(r))
+    barrier_version_counts = Counter(str(r.get('research_barrier_version') or 'LEGACY') for r in recent_candidates if _barrier_ready(r))
     complete = {}
+    path_labeled = {}
     for r in outcomes:
         if r.get('event_id') and r.get('complete') is True:
             complete[str(r['event_id'])] = r
+            if r.get('tp_before_sl') in {0, 1} and r.get('sim_net_pct') is not None:
+                path_labeled[str(r['event_id'])] = r
     completed = list(complete.values())
     market = market_context.load_snapshot(max_age_sec=3600)
     top = []
@@ -102,7 +117,11 @@ def snapshot() -> dict:
             'decisions': dict(decision_counts),
             'lanes': dict(lane_counts),
             'top_reject_reasons': reason_counts.most_common(15),
+            'barrier_ready_candidates': barrier_ready,
+            'legacy_or_missing_barriers': max(0, len(recent_candidates) - barrier_ready),
+            'barrier_versions': dict(barrier_version_counts),
             'completed_forward_outcomes_total': len(completed),
+            'path_labeled_forward_outcomes_total': len(path_labeled),
         },
         'lane_health': _read_json(LANE_HEALTH_PATH),
         'recent_candidates': recent_candidates[-40:][::-1],
@@ -137,9 +156,10 @@ body{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;mar
 </style></head><body><h1>TST Spot Sniper — Operations</h1><small>Updated {esc(time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(s['generated_at'])))}</small><br><br>
 <div class='grid'>
 <div class='card'><h2>Market</h2><div class='big'>{esc(market.get('regime'))}</div><p>Breadth 1h: <b>{esc(market.get('breadth_1h'))}</b><br>Breadth 4h: <b>{esc(market.get('breadth_4h'))}</b><br>Universe: {esc(market.get('universe_n'))}</p></div>
-<div class='card'><h2>Probability / EV</h2><div class='big'>{esc(approval.get('status') or 'WARMUP')}</div><p>EV model: {esc(ev.get('status'))}<br>Forward samples: {esc(approval.get('forward_sample'))}/{esc(approval.get('minimum_forward_sample'))}<br>Evidence pass: {esc(ev.get('evidence_pass'))}</p></div>
+<div class='card'><h2>Probability / EV</h2><div class='big'>{esc(approval.get('status') or 'WARMUP')}</div><p>EV model: {esc(ev.get('status'))}<br>Validated forward samples: {esc(approval.get('forward_sample'))}/{esc(approval.get('minimum_forward_sample'))}<br>Path-labeled outcomes: {esc(tele.get('path_labeled_forward_outcomes_total'))}<br>Evidence pass: {esc(ev.get('evidence_pass'))}</p></div>
 <div class='card'><h2>Risk</h2><div class='big'>{esc(system['portfolio'].get('open_count'))} open</div><p>Open stop risk: {esc(round(float(system['portfolio'].get('stop_risk_usdt') or 0),4))} USDT<br>P&L today: {esc(round(float(system['performance'].get('realized_pnl_today_usdt') or 0),4))} USDT<br>Consecutive losses: {esc(system['performance'].get('consecutive_losses'))}</p></div>
-<div class='card'><h2>Telemetry 24h</h2><div class='big'>{esc(tele.get('candidate_events'))}</div><p>Decision events<br><code>{esc(tele.get('decisions'))}</code><br>Completed outcomes total: {esc(tele.get('completed_forward_outcomes_total'))}</p></div>
+<div class='card'><h2>Research Coverage</h2><div class='big'>{esc(tele.get('barrier_ready_candidates'))}</div><p>Point-in-time TP/SL candidates (24h)<br>Legacy/missing barriers: {esc(tele.get('legacy_or_missing_barriers'))}<br>Completed forward outcomes: {esc(tele.get('completed_forward_outcomes_total'))}</p></div>
+<div class='card'><h2>Telemetry 24h</h2><div class='big'>{esc(tele.get('candidate_events'))}</div><p>Decision events<br><code>{esc(tele.get('decisions'))}</code><br>Lanes<br><code>{esc(tele.get('lanes'))}</code></p></div>
 </div><br>
 <div class='card'><h2>Top cross-sectional opportunities</h2><table><tr><th>#</th><th>Pair</th><th>Opportunity</th><th>RS/BTC pct</th><th>1h pct</th><th>4h pct</th></tr>{opp_rows}</table></div><br>
 <div class='card'><h2>Tracked positions</h2><table><tr><th>Pair</th><th>Status</th><th>Entry</th><th>Stop</th><th>Target</th><th>Realized P&L</th></tr>{pos_rows}</table></div><br>
