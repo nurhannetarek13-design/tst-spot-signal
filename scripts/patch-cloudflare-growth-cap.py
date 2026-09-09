@@ -17,7 +17,7 @@ for p in FILES:
     # Accept growth-mode stakes consistently in every live signal ingest path.
     s, count = re.subn(
         r'requested\s*>\s*10',
-        'requested > MAX_ORDER_USDT',
+        'requested>MAX_ORDER_USDT',
         s,
     )
     if 'MAX_ORDER_USDT' not in s:
