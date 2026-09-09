@@ -13,15 +13,15 @@ if 'import entry_quality\n' not in s:
         raise SystemExit('entry quality patch failed: import marker missing')
     s = s.replace(import_marker, import_marker + 'import entry_quality\n', 1)
 
-# Validate the maximum live stake in the non-trading dry-run preflight so
-# execution-layer stake limits cannot drift away from dynamic sizing again.
+# Validate a real growth-mode size in the non-trading dry-run preflight so
+# Cloudflare/Railway stake limits cannot silently drift back to 10 USDT.
 preflight_probe_old = (
     "        'stakeUSDT': 5.5,\n"
     "        'score': 100,\n"
     "        'strategy': 'FAST_EXECUTION_PREFLIGHT',\n"
 )
 preflight_probe_new = (
-    "        'stakeUSDT': 10.0,\n"
+    "        'stakeUSDT': 40.0,\n"
     "        'score': 100,\n"
     "        'strategy': 'FAST_EXECUTION_PREFLIGHT',\n"
 )
@@ -102,4 +102,4 @@ else:
     s = s[:idx] + "        'stakeUSDT': stake_usdt," + s[idx + len("        'stakeUSDT': 5.5,"):]
 
 path.write_text(s)
-print('[live-safety-patch] OK cap-dryrun + quality preflight + hard gates + filtered ranking + adaptive sizing enabled')
+print('[live-safety-patch] OK growth-dryrun + quality preflight + hard gates + filtered ranking + adaptive sizing enabled')
