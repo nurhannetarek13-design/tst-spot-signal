@@ -32,6 +32,8 @@ context_path.write_text(c, encoding='utf-8')
 # ---------------------------------------------------------------------------
 # 2) Central Spot Sniper gate immediately before the existing execution path.
 #    Existing portfolio/API/OCO hard gates remain hard and cannot be rescued.
+#    IMPORTANT: fail closed. Only an explicit LIVE_SNIPER_PASS + live_authorized
+#    + ENFORCED_PASS may proceed. WARMUP/OBSERVE/OFF can never become live.
 # ---------------------------------------------------------------------------
 import_marker = 'import market_context\n'
 if 'import spot_sniper_gate\n' not in s:
@@ -74,9 +76,26 @@ def _expert_pre_ingest(payload: dict) -> bool:
         'ev_gate_status': ev.get('status'),
         'sniper_gate_status': decision.get('status'),
     }
-    if not bool(decision.get('passed')):
-        why = 'sniper-' + str(decision.get('reason') or decision.get('status') or 'reject')
-        print(f'[spot-sniper] {symbol} BLOCKED lane={lane} reason={why}', flush=True)
+
+    # Defense in depth: do not trust a generic passed=True. Real execution
+    # requires the explicit live authorization contract from spot_sniper_gate.
+    live_contract_ok = (
+        bool(decision.get('passed'))
+        and bool(decision.get('live_authorized'))
+        and str(decision.get('status') or '') == 'LIVE_SNIPER_PASS'
+        and bool(ev.get('enforced'))
+        and bool(ev.get('passed'))
+        and str(ev.get('status') or '') == 'ENFORCED_PASS'
+        and decision.get('opportunity_rank') is not None
+    )
+    if not live_contract_ok:
+        why = 'sniper-live-contract-reject:' + str(decision.get('reason') or decision.get('status') or 'reject')
+        print(
+            f"[spot-sniper] {symbol} BLOCKED lane={lane} reason={why} "
+            f"status={decision.get('status')} live={decision.get('live_authorized')} "
+            f"ev_status={ev.get('status')} ev_enforced={ev.get('enforced')} rank={decision.get('opportunity_rank')}",
+            flush=True,
+        )
         _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)
         return False
 
@@ -145,7 +164,7 @@ for old, new in optional:
         s = s.replace(old, new, 1)
 
 startup_marker = "    last_chat_retry = 0.0\n"
-startup = "    print(f'[spot-sniper-v1] ONLINE top_n={spot_sniper_gate.TOP_N} panic_block={spot_sniper_gate.PANIC_BLOCK} ev_mode={spot_sniper_gate.live_ev_gate.MODE} forward_validation=REQUIRED')\n"
+startup = "    print(f'[spot-sniper-v1] ONLINE fail_closed=True top_n={spot_sniper_gate.TOP_N} panic_block={spot_sniper_gate.PANIC_BLOCK} ev_mode={spot_sniper_gate.live_ev_gate.MODE} forward_validation=REQUIRED')\n"
 if '[spot-sniper-v1] ONLINE' not in s:
     if startup_marker not in s:
         raise SystemExit('spot-sniper-v1: startup marker missing')
@@ -156,6 +175,9 @@ for required in [
     'def _legacy_expert_pre_ingest(payload: dict)',
     'def _expert_pre_ingest(payload: dict)',
     "payload['sniperGate'] = decision",
+    "decision.get('live_authorized')",
+    "str(ev.get('status') or '') == 'ENFORCED_PASS'",
+    'sniper-live-contract-reject',
     '[spot-sniper-v1] ONLINE',
 ]:
     if required not in s:
@@ -163,4 +185,4 @@ for required in [
 
 compile(s, str(engine_path), 'exec')
 engine_path.write_text(s, encoding='utf-8')
-print('[spot-sniper-v1-patch] OK centralized regime/rank/EV gate + full scored-candidate audit telemetry wired')
+print('[spot-sniper-v1-patch] OK fail-closed live contract + regime/rank/EV gate + audit telemetry wired')
