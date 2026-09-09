@@ -6,7 +6,7 @@ import shadow_ev_model as m
 
 APPROVAL_PATH=Path(os.getenv('TST_EV_LIVE_APPROVAL_PATH','/data/tst_ev_live_approval.json'))
 REPORT_PATH=Path(os.getenv('TST_SHADOW_EV_REPORT_PATH','/data/tst_shadow_ev_report.json'))
-HISTORICAL_PATH=Path(os.getenv('TST_HISTORICAL_EV_EVIDENCE_PATH','/freqtrade/historical_ev_evidence.json'))
+HISTORICAL_PATH=Path(os.getenv('TST_HISTORICAL_EV_EVIDENCE_PATH','/freqtrade/user_data/historical_ev_evidence.json'))
 MIN_FORWARD=max(400,int(os.getenv('EV_PROMOTION_MIN_FORWARD_SAMPLE','600')))
 HYBRID_MIN_FORWARD=max(125,int(os.getenv('EV_HYBRID_MIN_FORWARD_SAMPLE','150')))
 MIN_FOLD_TEST=max(40,int(os.getenv('EV_PROMOTION_MIN_FOLD_TEST','60')))
