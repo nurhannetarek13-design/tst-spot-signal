@@ -1,0 +1,12 @@
+{
+  "authorization": "RESEARCH_ONLY",
+  "evidence_pass": false,
+  "feature_version": "",
+  "generated_at": 0,
+  "liveTrading": false,
+  "model": {},
+  "ruleset_hash": null,
+  "source": "Binance Vision Spot monthly 15m archives",
+  "status": "NOT_RUN",
+  "version": 1
+}
