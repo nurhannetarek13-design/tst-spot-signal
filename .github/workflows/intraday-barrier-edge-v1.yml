@@ -1,0 +1,50 @@
+name: Intraday Barrier Edge V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/intraday_barrier_edge_scanner_v1.py"
+      - ".github/workflows/intraday-barrier-edge-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intraday-barrier-edge-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/intraday_barrier_edge_scanner_v1.py
+      - name: Run intraday barrier discovery and OOS validation
+        run: PYTHONPATH=. python research/intraday_barrier_edge_scanner_v1.py
+      - name: Assert fail-closed research output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/intraday-barrier-edge-v1-latest.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['automaticPromotion'] is False
+          assert x['validationDesign']['entryTiming']=='NEXT_15M_OPEN'
+          assert x['validationDesign']['sameBarTpSlResolution']=='SL_FIRST_PESSIMISTIC'
+          print('intraday barrier edge research-only assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intraday-barrier-edge-v1-report
+          path: validation/edges/intraday-barrier-edge-v1-latest.json
+          retention-days: 14
