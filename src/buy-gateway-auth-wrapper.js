@@ -77,6 +77,48 @@ async function verifyRailwayFastIngest(request, env, ctx) {
   return worker.fetch(internalRequest, env, ctx);
 }
 
+async function growthCapDryRun(env, ctx) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    return Response.json({ ok:false, status:"TELEGRAM_NOT_CONFIGURED" }, { status:503 });
+  }
+  const body = JSON.stringify({
+    id: `growth-cap-${Date.now()}`,
+    symbol: "牛来USDT",
+    entry: 100,
+    stop: 99,
+    target: 102,
+    stakeUSDT: 40,
+    score: 100,
+    strategy: "GROWTH_CAP_UNICODE_RUNTIME_PROBE",
+    dryRun: true,
+  });
+  const ts = String(Date.now());
+  const sig = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+  const req = new Request("https://internal/fast-signal-ingest", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-fast-timestamp": ts,
+      "x-fast-signature": sig,
+      "cache-control": "no-store",
+    },
+    body,
+  });
+  const r = await worker.fetch(req, env, ctx);
+  const text = await r.text();
+  let row = {}; try { row = JSON.parse(text || "{}"); } catch { row = { ok:false, status:"NON_JSON" }; }
+  return Response.json({
+    ok: r.ok && row.ok === true && row.status === "FAST_SIGNAL_DRYRUN_OK" && Number(row.recommendedUSDT) === 40,
+    status: row.status || `HTTP_${r.status}`,
+    recommendedUSDT: row.recommendedUSDT ?? null,
+    testedStakeUSDT: 40,
+    testedSymbol: "牛来USDT",
+    dryRun: true,
+    autoBuy: false,
+    noSecretValuesExposed: true,
+  }, { status: r.ok ? 200 : r.status, headers: { "cache-control": "no-store" } });
+}
+
 async function readBinanceAccountRelay(request, env) {
   if (!env.TELEGRAM_BOT_TOKEN) {
     return Response.json({ ok: false, status: "RELAY_AUTH_UNAVAILABLE" }, { status: 503 });
@@ -139,6 +181,9 @@ async function readBinanceAccountRelay(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/growth-cap-check" && request.method === "GET") {
+      return growthCapDryRun(env, ctx);
+    }
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") {
       return verifyRailwayFastIngest(request, env, ctx);
     }
