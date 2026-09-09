@@ -22,6 +22,11 @@ ROUND_TRIP_FEE_PCT=max(0.0,float(os.getenv('OUTCOME_ROUND_TRIP_FEE_PCT','0.20'))
 ROUND_TRIP_SLIPPAGE_PCT=max(0.0,float(os.getenv('OUTCOME_ROUND_TRIP_SLIPPAGE_PCT','0.08')))
 BASE_COST_PCT=ROUND_TRIP_FEE_PCT+ROUND_TRIP_SLIPPAGE_PCT
 PUBLIC_BASES=['https://data-api.binance.vision/api/v3','https://api.binance.com/api/v3']
+CONTEXT_FIELDS=(
+    'regime','regime_trade_permission_shadow','breadth_1h','breadth_4h','universe_n',
+    'rs_vs_btc_4h','r1h_pct_rank','r4h_pct_rank','rs_btc4h_pct_rank','accel1h_pct_rank',
+    'volume_expansion_pct_rank','liquidity_pct_rank','opportunity_pct_shadow','context_generated_at',
+)
 
 def _read_json(path,default):
     try:return json.loads(path.read_text(encoding='utf-8'))
@@ -34,7 +39,7 @@ def _public(path,params):
     q=urllib.parse.urlencode(params); last=None
     for base in PUBLIC_BASES:
         try:
-            req=urllib.request.Request(f'{base}{path}?{q}',headers={'User-Agent':'tst-outcome-engine/2.0'})
+            req=urllib.request.Request(f'{base}{path}?{q}',headers={'User-Agent':'tst-outcome-engine/2.1'})
             with urllib.request.urlopen(req,timeout=12) as r:return json.loads(r.read() or b'[]')
         except Exception as exc:last=exc
     raise RuntimeError(last or 'public API unavailable')
@@ -43,7 +48,7 @@ def _events():
     if not CANDIDATE_PATH.exists():return []
     rows=[]
     try:
-        for line in CANDIDATE_PATH.read_text(encoding='utf-8').splitlines()[-3000:]:
+        for line in CANDIDATE_PATH.read_text(encoding='utf-8').splitlines()[-5000:]:
             try:
                 row=json.loads(line)
                 if isinstance(row,dict) and row.get('event_id'):rows.append(row)
@@ -72,7 +77,16 @@ def _forward(event):
     rows=_public('/klines',{'symbol':symbol,'interval':'1m','startTime':int(ts*1000),'limit':limit})
     if not isinstance(rows,list) or len(rows)<15:return None
     highs=[float(x[2]) for x in rows]; lows=[float(x[3]) for x in rows]; closes=[float(x[4]) for x in rows]
-    result={'event_id':event['event_id'],'source_ts':ts,'evaluated_at':time.time(),'symbol':symbol,'lane':event.get('lane'),'score':event.get('score'),'decision':event.get('decision'),'reason':event.get('reason'),'price':price,'target':event.get('target'),'stop':event.get('stop'),'stake_usdt':event.get('stake_usdt'),'strategy':event.get('strategy'),'risk_pct':event.get('risk_pct'),'reward_pct':event.get('reward_pct'),'mfe_pct':(max(highs)/price-1)*100,'mae_pct':(min(lows)/price-1)*100,'assumed_cost_pct':BASE_COST_PCT}
+    result={
+        'event_id':event['event_id'],'ts':ts,'source_ts':ts,'evaluated_at':time.time(),
+        'symbol':symbol,'lane':event.get('lane'),'setup_type':event.get('strategy') or event.get('lane'),
+        'score':event.get('score'),'decision':event.get('decision'),'reason':event.get('reason'),'price':price,
+        'target':event.get('target'),'stop':event.get('stop'),'stake_usdt':event.get('stake_usdt'),
+        'strategy':event.get('strategy'),'risk_pct':event.get('risk_pct'),'reward_pct':event.get('reward_pct'),
+        'mfe_pct':(max(highs)/price-1)*100,'mae_pct':(min(lows)/price-1)*100,'assumed_cost_pct':BASE_COST_PCT,
+    }
+    for field in CONTEXT_FIELDS:
+        result[field]=event.get(field)
     if len(closes)>=15:result['ret15_pct']=(closes[14]/price-1)*100
     if len(closes)>=30:result['ret30_pct']=(closes[29]/price-1)*100
     if len(closes)>=60:
@@ -85,6 +99,8 @@ def _forward(event):
         elif outcome=='SL': gross=(stop/price-1)*100
         else:gross=result['ret60_pct']
         result['sim_gross_pct']=gross; result['sim_net_pct']=gross-BASE_COST_PCT
+        result['net_return_pct']=result['sim_net_pct']
+        result['holding_min']=(int(bar)+1) if bar is not None else 60
     else:result['complete']=False
     return result
 
@@ -95,7 +111,7 @@ def _append_outcome(row):
 def _all_outcomes():
     if not OUTCOME_PATH.exists():return []
     out=[]
-    for line in OUTCOME_PATH.read_text(encoding='utf-8').splitlines()[-5000:]:
+    for line in OUTCOME_PATH.read_text(encoding='utf-8').splitlines()[-8000:]:
         try:
             row=json.loads(line)
             if isinstance(row,dict):out.append(row)
@@ -127,12 +143,12 @@ def run_once():
         if row is None:continue
         _append_outcome(row); latest_eval[eid]=time.time(); changed=True
         if row.get('complete'):done60.add(eid)
-        print(f"[outcome] {row['lane']} {row['symbol']} decision={row['decision']} MFE={row['mfe_pct']:+.2f}% MAE={row['mae_pct']:+.2f}% path={row.get('path_outcome')} net={row.get('sim_net_pct')}",flush=True)
-    if changed:_write_json(STATE_PATH,{'done60':list(done60)[-5000:],'latest_eval':latest_eval})
+        print(f"[outcome] {row['lane']} {row['symbol']} regime={row.get('regime')} opp={row.get('opportunity_pct_shadow')} decision={row['decision']} MFE={row['mfe_pct']:+.2f}% MAE={row['mae_pct']:+.2f}% path={row.get('path_outcome')} net={row.get('sim_net_pct')}",flush=True)
+    if changed:_write_json(STATE_PATH,{'done60':list(done60)[-8000:],'latest_eval':latest_eval})
     _health()
 
 def main():
-    print(f'[outcome-engine] ONLINE horizons=15m,30m,60m path_aware=True baseline_cost={BASE_COST_PCT:.2f}% kill_sample={KILL_MIN_SAMPLE}',flush=True)
+    print(f'[outcome-engine] ONLINE horizons=15m,30m,60m path_aware=True context_features=True baseline_cost={BASE_COST_PCT:.2f}% kill_sample={KILL_MIN_SAMPLE}',flush=True)
     while True:
         try:run_once()
         except Exception as exc:print(f'[outcome-engine] loop warning: {type(exc).__name__}: {str(exc)[:160]}',flush=True)
