@@ -130,7 +130,7 @@ def _relay_free_usdt(key: str, secret_bytes: bytes) -> float:
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'tst-dynamic-sizing/10.0',
+            'User-Agent': 'tst-dynamic-sizing/11.0',
             'X-Sizing-Timestamp': ts,
             'X-Sizing-Signature': caller_sig,
         },
@@ -156,7 +156,7 @@ def _try_pair(pair_label: str, key: str, secret_text: str, errors: list[str]) ->
             query = _signed_account_query(secret_bytes)
             req = Request(
                 f'{base}/api/v3/account?{query}',
-                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/10.0'},
+                headers={'X-MBX-APIKEY': key, 'User-Agent': 'tst-dynamic-sizing/11.0'},
             )
             try:
                 with urlopen(req, timeout=8) as r:
@@ -196,11 +196,25 @@ def free_usdt() -> float:
 
 
 def _score_fraction(score: float, hard_cap: float) -> float:
-    """Use 12%-20% of free USDT for qualified 90-100 scores, before risk caps."""
+    """Increase capital allocation only for stronger qualified setups.
+
+    90-92  -> 12%-16%
+    93-95  -> 18%-24%
+    96-97  -> 30%
+    98-100 -> 40%
+
+    Risk/stop/daily-loss limits still override these fractions.
+    """
     s = min(100.0, max(90.0, float(score)))
-    quality = (s - 90.0) / 10.0
-    adaptive = 0.12 + (0.08 * quality)  # 12% at 90 -> 20% at 100
-    return min(adaptive, hard_cap, 0.20)
+    if s < 93.0:
+        fraction = 0.12 + ((s - 90.0) / 2.0) * 0.04
+    elif s < 96.0:
+        fraction = 0.18 + ((s - 93.0) / 2.0) * 0.06
+    elif s < 98.0:
+        fraction = 0.30
+    else:
+        fraction = 0.40
+    return min(fraction, hard_cap, 0.40)
 
 
 def recommended_stake(stop_pct: float, score: float = 90.0) -> tuple[float | None, float]:
@@ -210,18 +224,17 @@ def recommended_stake(stop_pct: float, score: float = 90.0) -> tuple[float | Non
     risk_fraction = min(max(_env_float('RISK_FRACTION_OF_BALANCE', 0.02), 0.001), 0.20)
     max_risk = max(0.01, _env_float('MAX_RISK_PER_TRADE_USDT', 0.50))
     daily_loss_limit = max(0.01, _env_float('DAILY_LOSS_LIMIT_USDT', 2.0))
-    execution_cap = max(min_stake, _env_float('MAX_EXECUTION_STAKE_USDT', 10.0))
+    execution_cap = max(min_stake, _env_float('MAX_EXECUTION_STAKE_USDT', 40.0))
 
     stop = max(float(stop_pct), 0.001)
     capital_fraction = _score_fraction(score, hard_fraction_cap)
 
-    # One trade may not consume more than one third of the configured daily loss budget.
+    # Preserve the daily-loss guardrail even when stake size grows.
     risk_budget = min(max_risk, free * risk_fraction, daily_loss_limit / 3.0)
     by_risk = risk_budget / stop
     by_quality = free * capital_fraction
     available = max(0.0, free - max(0.10, free * 0.05))  # keep at least 5% free
 
-    # The execution layer currently accepts up to MAX_EXECUTION_STAKE_USDT.
     raw = min(execution_cap, available, by_quality, by_risk)
     stake = math.floor(raw * 100.0) / 100.0
 
