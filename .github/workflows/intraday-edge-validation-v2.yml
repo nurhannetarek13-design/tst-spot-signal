@@ -26,6 +26,19 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install numpy pandas
+      - name: Apply research runtime integrity fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('research/intraday_edge_validation_v2.py')
+          s=p.read_text()
+          needle="    x['ret_15m']=r15; x['ret_24h']=c.pct_change(96)\n"
+          insert="    x['prior24_high']=x.high.rolling(96,min_periods=48).max().shift(1)\n" + needle
+          if "x['prior24_high']=" not in s:
+              if needle not in s: raise SystemExit('prior24-high marker missing')
+              s=s.replace(needle,insert,1)
+          p.write_text(s)
+          PY
       - name: Syntax check
         run: python -m py_compile research/intraday_edge_validation_v2.py
       - name: Run v2 research validation
