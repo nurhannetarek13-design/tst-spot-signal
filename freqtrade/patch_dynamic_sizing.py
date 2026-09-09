@@ -21,7 +21,7 @@ raw_replacement = (
     "        payload['stakeUSDT'] = 40.0\n"
     "    elif 'stakeUSDT' in payload:\n"
     "        payload['stakeUSDT'] = max(5.0, min(float(payload['stakeUSDT']), 100.0))\n"
-    "    print(f\"[fast-ingest-request] symbol={payload.get('symbol')} stake={payload.get('stakeUSDT')} dryRun={payload.get('dryRun')}\", flush=True)\n"
+    "    print(f\"[fast-ingest-request] url={FAST_INGEST_URL} symbol={payload.get('symbol')} stake={payload.get('stakeUSDT')} dryRun={payload.get('dryRun')}\", flush=True)\n"
     + raw_marker
 )
 if '[fast-ingest-request]' not in s:
@@ -29,7 +29,6 @@ if '[fast-ingest-request]' not in s:
         raise SystemExit('dynamic sizing patch failed: raw payload marker missing')
     s = s.replace(raw_marker, raw_replacement, 1)
 
-# Validate a real growth-mode size in the non-trading dry-run preflight.
 preflight_probe_old = (
     "        'stakeUSDT': 5.5,\n"
     "        'score': 100,\n"
