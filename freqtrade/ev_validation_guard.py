@@ -6,7 +6,9 @@ import shadow_ev_model as m
 
 APPROVAL_PATH=Path(os.getenv('TST_EV_LIVE_APPROVAL_PATH','/data/tst_ev_live_approval.json'))
 REPORT_PATH=Path(os.getenv('TST_SHADOW_EV_REPORT_PATH','/data/tst_shadow_ev_report.json'))
+HISTORICAL_PATH=Path(os.getenv('TST_HISTORICAL_EV_EVIDENCE_PATH','/freqtrade/historical_ev_evidence.json'))
 MIN_FORWARD=max(400,int(os.getenv('EV_PROMOTION_MIN_FORWARD_SAMPLE','600')))
+HYBRID_MIN_FORWARD=max(125,int(os.getenv('EV_HYBRID_MIN_FORWARD_SAMPLE','150')))
 MIN_FOLD_TEST=max(40,int(os.getenv('EV_PROMOTION_MIN_FOLD_TEST','60')))
 FOLDS=max(3,min(6,int(os.getenv('EV_PROMOTION_FOLDS','4'))))
 EXTRA_STRESS_COST_PCT=max(0.0,float(os.getenv('EV_PROMOTION_EXTRA_STRESS_COST_PCT','0.28')))
@@ -15,10 +17,13 @@ POLL_SEC=max(300,int(os.getenv('EV_PROMOTION_POLL_SEC','900')))
 def _atomic(row):
     APPROVAL_PATH.parent.mkdir(parents=True,exist_ok=True); t=APPROVAL_PATH.with_suffix('.tmp'); t.write_text(json.dumps(row,separators=(',',':')),encoding='utf-8'); os.replace(t,APPROVAL_PATH)
 
-def _report():
+def _read(path):
     try:
-        x=json.loads(REPORT_PATH.read_text(encoding='utf-8')); return x if isinstance(x,dict) else {}
+        x=json.loads(path.read_text(encoding='utf-8')); return x if isinstance(x,dict) else {}
     except Exception:return {}
+
+def _report(): return _read(REPORT_PATH)
+def _historical(): return _read(HISTORICAL_PATH)
 
 def _fit_predict(train,test):
     if len(train)<120 or len(test)<20:return [],[]
@@ -31,14 +36,13 @@ def _fit_predict(train,test):
         xc=[m._vec(r,schema) for r in cal]; cy=[int(r['tp_before_sl']) for r in cal]
         if len(set(cy))==2: platt=m._fit_platt([m._sigmoid(m._dot(pw,x)) for x in xc],cy)
     probs=[m._calibrate(m._sigmoid(m._dot(pw,x)),platt) for x in xt]
-    # EV regression may use full pre-test history; test remains untouched.
     schema2=m._fit_schema(train); xall=[m._vec(r,schema2) for r in train]; xte=[m._vec(r,schema2) for r in test]
     nw=m._fit_linear(xall,[float(r['sim_net_pct']) for r in train]); evs=[m._dot(nw,x) for x in xte]
     return probs,evs
 
 def _metrics(test,probs,evs):
     if not test or not probs or not evs:return {'n':len(test),'pass':False}
-    k=max(10,int(len(test)*.2)); ids=sorted(range(len(test)),key=lambda i:evs[i],reverse=True)[:k]
+    k=max(25,int(len(test)*.2)); k=min(k,len(test)); ids=sorted(range(len(test)),key=lambda i:evs[i],reverse=True)[:k]
     vals=[float(test[i]['sim_net_pct'])-EXTRA_STRESS_COST_PCT for i in ids]; pp=[probs[i] for i in ids]; yy=[int(test[i]['tp_before_sl']) for i in ids]
     mean=sum(vals)/len(vals); med=statistics.median(vals); hit=sum(v>0 for v in vals)/len(vals); gap=abs(sum(pp)/len(pp)-sum(yy)/len(yy)); ci=m._bootstrap_mean_ci(vals); lo=ci[0]
     passed=mean>0 and med>-.05 and hit>=.50 and gap<=.12 and lo is not None and lo>-.10
@@ -51,28 +55,50 @@ def _symbol_holdout(rows):
     if len(hold)<80 or syms<5:return {'n':len(hold),'symbols':syms,'pass':False,'reason':'insufficient-unseen-symbols'}
     p,e=_fit_predict(train,hold); out=_metrics(hold,p,e); out['symbols']=syms; return out
 
+def _historical_model_ok(hist):
+    if not hist or str(hist.get('status') or '')!='APPROVED' or not bool(hist.get('evidence_pass')):return False,'historical-not-approved'
+    if str(hist.get('feature_version') or '')!=str(m.FEATURE_VERSION):return False,'historical-feature-version-mismatch'
+    model=hist.get('model') or {}
+    if str(model.get('feature_version') or '')!=str(m.FEATURE_VERSION):return False,'historical-model-feature-version-mismatch'
+    if not model.get('schema') or not model.get('probability_weights') or not (model.get('regression_weights') or {}).get('net_pct'):return False,'historical-model-incomplete'
+    return True,'historical-approved'
+
+def _predict_with_historical(hist,rows):
+    model=hist.get('model') or {}; schema=model.get('schema') or {}; pw=model.get('probability_weights') or []; platt=model.get('platt') or []; nw=(model.get('regression_weights') or {}).get('net_pct') or []; probs=[]; evs=[]
+    for r in rows:
+        x=m._vec(r,schema); probs.append(m._calibrate(m._sigmoid(m._dot(pw,x)),platt)); evs.append(m._dot(nw,x))
+    return probs,evs
+
+def _hybrid_forward_confirmation(hist,rows):
+    out={'minimum_forward_sample':HYBRID_MIN_FORWARD,'forward_sample':len(rows),'pass':False}
+    if len(rows)<HYBRID_MIN_FORWARD:out['reason']='insufficient-hybrid-forward-sample';return out
+    ok,why=_historical_model_ok(hist)
+    if not ok:out['reason']=why;return out
+    try:probs,evs=_predict_with_historical(hist,rows)
+    except Exception as exc:out['reason']=f'historical-inference-failed:{type(exc).__name__}:{str(exc)[:100]}';return out
+    top=_metrics(rows,probs,evs); pm=m._prob_metrics(probs,[int(r['tp_before_sl']) for r in rows]); brier=float(pm.get('brier_skill') or -1); cal=float(pm.get('calibration_mae') or 99); pp=brier>0.0 and cal<=.12; passed=bool(top.get('pass')) and pp
+    out.update({'top_bucket':top,'probability':pm,'probability_pass':pp,'pass':passed,'reason':'pass' if passed else 'hybrid-forward-evidence-not-passing'});return out
+
 def build():
-    rows=[r for r in m._rows() if r.get('tp_before_sl') in {0,1} and r.get('sim_net_pct') is not None]
-    rep=_report(); base={'version':2,'feature_version':m.FEATURE_VERSION,'generated_at':time.time(),'minimum_forward_sample':MIN_FORWARD,'forward_sample':len(rows),'extra_stress_cost_pct':EXTRA_STRESS_COST_PCT,'automatic_order_execution':False}
-    if len(rows)<MIN_FORWARD:return {**base,'status':'WAITING_FORWARD_SAMPLE','approved_at':None,'folds':[]}
-    if not bool(rep.get('evidence_pass')):return {**base,'status':'WAITING_BASE_MODEL_EVIDENCE','approved_at':None,'folds':[]}
+    rows=[r for r in m._rows() if r.get('tp_before_sl') in {0,1} and r.get('sim_net_pct') is not None]; rep=_report(); hist=_historical(); base={'version':3,'feature_version':m.FEATURE_VERSION,'generated_at':time.time(),'minimum_forward_sample':MIN_FORWARD,'hybrid_minimum_forward_sample':HYBRID_MIN_FORWARD,'forward_sample':len(rows),'extra_stress_cost_pct':EXTRA_STRESS_COST_PCT,'automatic_order_execution':False}
+    hist_ok,hist_reason=_historical_model_ok(hist); hybrid=_hybrid_forward_confirmation(hist,rows) if hist_ok else {'minimum_forward_sample':HYBRID_MIN_FORWARD,'forward_sample':len(rows),'pass':False,'reason':hist_reason}; base['historical_evidence_status']=str(hist.get('status') or 'MISSING'); base['historical_ruleset_hash']=hist.get('ruleset_hash'); base['hybrid_forward_confirmation']=hybrid
+    if hist_ok and bool(hybrid.get('pass')):
+        return {**base,'status':'APPROVED','approval_mode':'HYBRID_HISTORICAL_FORWARD','approved_at':time.time(),'historical_evidence_pass':True,'folds':[],'symbol_holdout_pass':bool(hist.get('unseen_symbol_holdout_pass')),'calibration_pass':bool(hist.get('calibration_pass')),'base_evidence_pass':bool(hist.get('evidence_pass'))}
+    if len(rows)<MIN_FORWARD:return {**base,'status':'WAITING_FORWARD_SAMPLE','approval_mode':None,'approved_at':None,'historical_evidence_pass':hist_ok,'folds':[]}
+    if not bool(rep.get('evidence_pass')):return {**base,'status':'WAITING_BASE_MODEL_EVIDENCE','approval_mode':None,'approved_at':None,'historical_evidence_pass':hist_ok,'folds':[]}
     n=len(rows); initial=max(240,int(n*.4)); step=max(MIN_FOLD_TEST,(n-initial)//FOLDS); folds=[]; cur=initial
     while cur<n and len(folds)<FOLDS:
         end=n if len(folds)==FOLDS-1 else min(n,cur+step); test=rows[cur:end]
         if len(test)<MIN_FOLD_TEST:break
         p,e=_fit_predict(rows[:cur],test); fm=_metrics(test,p,e); fm.update({'train_n':cur,'start_ts':test[0].get('source_ts') or test[0].get('ts'),'end_ts':test[-1].get('source_ts') or test[-1].get('ts')}); folds.append(fm); cur=end
-    fold_pass=len(folds)>=3 and all(x.get('pass') for x in folds)
-    hold=_symbol_holdout(rows)
-    prob=rep.get('probability_test') or {}; cal_ok=float(prob.get('brier_skill') or -1)>.02 and float(prob.get('calibration_mae') or 99)<=.10
-    regime_counts=rep.get('test_regime_counts') or {}; regime_ok=sum(1 for v in regime_counts.values() if int(v)>=15)>=3
-    approved=fold_pass and bool(hold.get('pass')) and cal_ok and regime_ok
-    return {**base,'status':'APPROVED' if approved else 'NOT_APPROVED','approved_at':time.time() if approved else None,'folds':folds,'fold_pass':fold_pass,'true_unseen_symbol_holdout':hold,'symbol_holdout_pass':bool(hold.get('pass')),'calibration_pass':cal_ok,'regime_coverage_pass':regime_ok,'base_evidence_pass':bool(rep.get('evidence_pass'))}
+    fold_pass=len(folds)>=3 and all(x.get('pass') for x in folds); hold=_symbol_holdout(rows); prob=rep.get('probability_test') or {}; cal_ok=float(prob.get('brier_skill') or -1)>.02 and float(prob.get('calibration_mae') or 99)<=.10; regime_counts=rep.get('test_regime_counts') or {}; regime_ok=sum(1 for v in regime_counts.values() if int(v)>=15)>=3; approved=fold_pass and bool(hold.get('pass')) and cal_ok and regime_ok
+    return {**base,'status':'APPROVED' if approved else 'NOT_APPROVED','approval_mode':'FULL_FORWARD' if approved else None,'approved_at':time.time() if approved else None,'historical_evidence_pass':hist_ok,'folds':folds,'fold_pass':fold_pass,'true_unseen_symbol_holdout':hold,'symbol_holdout_pass':bool(hold.get('pass')),'calibration_pass':cal_ok,'regime_coverage_pass':regime_ok,'base_evidence_pass':bool(rep.get('evidence_pass'))}
 
 def run_once():
-    r=build(); _atomic(r); print(f"[ev-validation] status={r['status']} n={r['forward_sample']} folds={len(r.get('folds') or [])} holdout={r.get('symbol_holdout_pass')} feature={r['feature_version']}",flush=True); return r
+    r=build(); _atomic(r); print(f"[ev-validation] status={r['status']} mode={r.get('approval_mode')} n={r['forward_sample']} hist={r.get('historical_evidence_status')} hybrid={bool((r.get('hybrid_forward_confirmation') or {}).get('pass'))} feature={r['feature_version']}",flush=True); return r
 
 def main():
-    print(f'[ev-validation] ONLINE leakage_safe=True true_symbol_holdout=True min_forward={MIN_FORWARD} folds={FOLDS} extra_stress={EXTRA_STRESS_COST_PCT:.2f}%',flush=True)
+    print(f'[ev-validation] ONLINE hybrid_historical=True leakage_safe=True true_symbol_holdout=True full_forward_min={MIN_FORWARD} hybrid_forward_min={HYBRID_MIN_FORWARD} folds={FOLDS} extra_stress={EXTRA_STRESS_COST_PCT:.2f}%',flush=True)
     while True:
         t=time.time()
         try:run_once()
