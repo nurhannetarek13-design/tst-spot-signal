@@ -36,20 +36,20 @@ def main():
         rows=trade_state.reservations('BUY')
         assert len(rows)==1 and rows[0]['signal_id']=='TEST-SIGNAL-001'
 
-        # Simulate a confirmed fill and verify canonical lifecycle state.
+        # Simulate a confirmed fill: until an exchange OCO exists, protection is incomplete.
         trade_state.record_buy(body,{
             'signal_id':'TEST-SIGNAL-001','symbol':'SOLUSDT','order_id':111,
             'client_order_id':'TSTB-TEST001','executed_qty':2.0,'quote_spent':200.0,
         })
         snap=trade_state.portfolio_snapshot()
         assert snap['open_count']==1
-        assert snap['incomplete_count']>=1
+        assert snap['incomplete_count']==1
 
         # Process/module restart must preserve reservation + position state.
         importlib.reload(trade_state)
         assert trade_state.get_reservation('TEST-SIGNAL-001','BUY')['status']=='FILLED'
         snap2=trade_state.portfolio_snapshot()
-        assert snap2['open_count']==1
+        assert snap2['open_count']==1 and snap2['incomplete_count']==1
 
         # Add OCO lifecycle; the position must become protected.
         oco_body={
@@ -69,7 +69,19 @@ def main():
         ok,row=trade_state.reserve_execution(body,'BUY')
         assert ok is False and row['status']=='FILLED'
 
-        print('EXECUTION_STATE_MACHINE_TESTS_PASS duplicates=100 accepted=1 restart=persistent protected=1')
+        # Reconstructed OCO with unknown entry/cost basis must still fail closed.
+        state=trade_state.load_state()
+        state['positions']['REC-UNKNOWN-RISK']={
+            'signal_id':'REC-UNKNOWN-RISK','symbol':'DOGEUSDT','entry':0.0,
+            'quantity':100.0,'stop':0.10,'target':0.12,
+            'oco_order_list_id':333,'status':'OCO_ACTIVE','opened_at':1234567890,
+        }
+        trade_state.save_state(state)
+        snap4=trade_state.portfolio_snapshot()
+        assert snap4['open_count']==2
+        assert snap4['incomplete_count']==1, snap4
+
+        print('EXECUTION_STATE_MACHINE_TESTS_PASS duplicates=100 accepted=1 restart=persistent unprotected=blocked unknown_risk=blocked protected=1')
 
 
 if __name__=='__main__': main()
