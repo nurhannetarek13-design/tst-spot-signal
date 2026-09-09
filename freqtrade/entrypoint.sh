@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment marker: momentum ignition gate v1.3 + growth-cap runtime revalidation
+# Deployment marker: momentum growth + dedicated fail-closed new-listing watcher
 /freqtrade/run_ready_bot.sh &
 BOT_PID=$!
 
 cleanup() {
-  kill "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -48,6 +48,14 @@ fi
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] fast entry engine started pid=${FAST_PID}"
+
+if [[ -n "${NEW_LISTING_SYMBOL:-}" && -n "${NEW_LISTING_START_UTC:-}" ]]; then
+  python -u /freqtrade/new_listing_watcher.py &
+  NEW_LISTING_PID=$!
+  echo "[entrypoint] new listing watcher started pid=${NEW_LISTING_PID} symbol=${NEW_LISTING_SYMBOL} start=${NEW_LISTING_START_UTC}"
+else
+  echo "[entrypoint] new listing watcher disabled: schedule not configured"
+fi
 
 wait "$BOT_PID"
 exit $?
