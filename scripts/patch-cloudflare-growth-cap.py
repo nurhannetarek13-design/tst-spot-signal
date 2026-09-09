@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+# Runtime contract v3: Cloudflare must accept growth-mode dry-runs up to 100 USDT.
 FILES = [
     Path('src/buy-gateway-canonical.js'),
     Path('src/buy-gateway-stable.js'),
