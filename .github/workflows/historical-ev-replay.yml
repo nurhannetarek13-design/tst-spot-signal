@@ -38,13 +38,15 @@ jobs:
           HIST_EV_TOP_N: "3"
           HIST_EV_ROUND_TRIP_COST_PCT: "0.28"
           HIST_EV_EXTRA_STRESS_PCT: "0.28"
-        run: python research/historical_ev_replay.py
+        run: |
+          python research/historical_ev_replay.py
+          cp freqtrade/historical_ev_evidence.json freqtrade/user_data/historical_ev_evidence.json
 
       - name: Validate evidence package is research-only
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path("freqtrade/historical_ev_evidence.json")
+          p=pathlib.Path("freqtrade/user_data/historical_ev_evidence.json")
           x=json.loads(p.read_text())
           assert x.get("authorization")=="RESEARCH_ONLY"
           assert x.get("liveTrading") is False
@@ -56,14 +58,14 @@ jobs:
 
       - name: Commit historical evidence snapshot safely
         run: |
-          cp freqtrade/historical_ev_evidence.json /tmp/historical_ev_evidence.json
+          cp freqtrade/user_data/historical_ev_evidence.json /tmp/historical_ev_evidence.json
           for i in 1 2 3 4 5; do
             git fetch origin main
             git reset --hard origin/main
-            cp /tmp/historical_ev_evidence.json freqtrade/historical_ev_evidence.json
+            cp /tmp/historical_ev_evidence.json freqtrade/user_data/historical_ev_evidence.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add freqtrade/historical_ev_evidence.json
+            git add freqtrade/user_data/historical_ev_evidence.json
             git diff --cached --quiet && exit 0
             git commit -m "Update historical EV evidence [skip ci]"
             git push origin HEAD:main && exit 0
