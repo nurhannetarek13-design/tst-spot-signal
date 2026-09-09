@@ -16,6 +16,8 @@ const_insert = const_marker + (
     "IGNITION_MIN_TAKER = float(os.getenv('FAST_MIN_TAKER_BUY_RATIO', '0.58'))\n"
     "IGNITION_MIN_VOLUME = float(os.getenv('FAST_MIN_VOLUME_RATIO', '0.95'))\n"
     "IGNITION_MAX_RSI = float(os.getenv('FAST_IGNITION_MAX_RSI', '68'))\n"
+    "IGNITION_EXPLOSIVE_VOLUME_MIN_TAKER = float(os.getenv('FAST_IGNITION_EXPLOSIVE_VOLUME_MIN_TAKER', '0.60'))\n"
+    "IGNITION_EXPLOSIVE_VOLUME_MAX_RSI = float(os.getenv('FAST_IGNITION_EXPLOSIVE_VOLUME_MAX_RSI', '66'))\n"
 )
 if 'IGNITION_MAX_EXTENSION' not in s:
     if const_marker not in s:
@@ -57,6 +59,16 @@ if "reasons.append('fresh-breakout')" not in s:
         trend_marker + "    if fresh_ignition_zone:\n        score += 18; reasons.append('fresh-breakout')\n",
         1,
     )
+
+# Explosive volume is not automatically bad. It is useful only when it arrives
+# on the first live breakout with real buy pressure, a tight spread and no price
+# extension. Otherwise keep the old anti-pump penalty.
+old_volume_penalty = "    if m['volume_ratio'] > 2.2:\n        score -= 12\n"
+new_volume_context = '''    if m['volume_ratio'] > 2.2:\n        contextual_ignition_volume = (\n            fresh_ignition_zone\n            and m['taker_buy_ratio'] >= IGNITION_EXPLOSIVE_VOLUME_MIN_TAKER\n            and m['spread_pct'] <= MAX_SPREAD_PCT\n            and m['rsi'] <= IGNITION_EXPLOSIVE_VOLUME_MAX_RSI\n            and m['mom5'] <= MAX_MOM5\n            and m['mom15'] <= MAX_MOM15\n            and m['wick_ratio'] <= 2.5\n        )\n        if contextual_ignition_volume:\n            score += 6; reasons.append('ignition-volume-confirmation')\n        else:\n            score -= 12\n'''
+if 'ignition-volume-confirmation' not in s:
+    if old_volume_penalty not in s:
+        raise SystemExit('momentum ignition patch failed: volume penalty marker missing')
+    s = s.replace(old_volume_penalty, new_volume_context, 1)
 
 # Make the existing quality module accept the tiny live breakout window while
 # keeping its volume, taker, spread, compression and wick protections.
@@ -104,9 +116,11 @@ for required in [
     "entry = m['live_price']",
     "_ignition_aware_micro_gate",
     "score_strength = clamp((score - 90.0)",
+    "ignition-volume-confirmation",
+    "IGNITION_EXPLOSIVE_VOLUME_MIN_TAKER",
 ]:
     if required not in s:
         raise SystemExit(f'momentum ignition patch failed: missing {required}')
 
 path.write_text(s)
-print('[momentum-ignition-patch] OK live first-break trigger + 20s scan + anti-chase + quality-weighted 1.4-3.0% target')
+print('[momentum-ignition-patch] OK live first-break + contextual explosive-volume confirmation + BUY-ready only scoring')
