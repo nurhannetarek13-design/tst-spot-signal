@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -163,8 +164,6 @@ def run_once() -> None:
         if list_id not in known_by_list:
             _rebuild_unknown_open_oco(row)
 
-    # Anything we previously tracked as OCO_ACTIVE but no longer appears in
-    # Binance open order lists is verified via orderList before being closed.
     state = trade_state.load_state()
     for signal_id, pos in list((state.get('positions') or {}).items()):
         if not isinstance(pos, dict) or pos.get('status') != 'OCO_ACTIVE':
@@ -198,4 +197,7 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    if '--once' in sys.argv:
+        run_once()
+    else:
+        main()
