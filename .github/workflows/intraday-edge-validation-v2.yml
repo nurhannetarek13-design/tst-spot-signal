@@ -1,0 +1,51 @@
+name: Intraday Edge Validation V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/intraday_edge_validation_v2.py"
+      - ".github/workflows/intraday-edge-validation-v2.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intraday-edge-validation-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/intraday_edge_validation_v2.py
+      - name: Run v2 research validation
+        run: PYTHONPATH=. python research/intraday_edge_validation_v2.py
+      - name: Assert fail-closed output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/intraday-edge-validation-v2-latest.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['automaticPromotion'] is False
+          assert x['productionPromotionBlocked'] is True
+          assert x['validationDesign']['entryTiming']=='NEXT_15M_OPEN'
+          assert x['validationDesign']['sameBarTpSlResolution']=='SL_FIRST_PESSIMISTIC'
+          print('intraday edge v2 fail-closed assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intraday-edge-validation-v2-report
+          path: validation/edges/intraday-edge-validation-v2-latest.json
+          retention-days: 14
