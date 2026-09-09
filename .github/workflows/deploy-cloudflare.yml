@@ -10,6 +10,7 @@ on:
       - "src/buy-gateway-canonical.js"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
+      - "scripts/patch-telegram-ltr.py"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -31,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Patch Telegram numeric direction
+        run: python scripts/patch-telegram-ltr.py
+
       - name: Validate canonical Worker + monitor + auth wrapper
         shell: bash
         run: |
@@ -50,6 +54,7 @@ jobs:
           grep -q 'executeBuyThenProtect' src/buy-gateway-canonical.js
           grep -q 'execution-lock:' src/buy-gateway-canonical.js
           grep -q '/telegram-webhook-check' src/buy-gateway-canonical.js
+          grep -q 'ltrFmt(requested)' src/buy-gateway-canonical.js
           grep -Eq 'autoBuy[[:space:]]*:[[:space:]]*false' src/buy-gateway-canonical.js
           grep -q 'REVIEW_45_MS' src/buy-gateway-time-monitor.js
           grep -q 'REVIEW_75_MS' src/buy-gateway-time-monitor.js
