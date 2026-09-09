@@ -1,8 +1,9 @@
 from pathlib import Path
 import re
 
-# Runtime contract v6: Cloudflare must accept growth-mode dry-runs up to 100 USDT
-# and Binance symbols whose base asset uses Unicode letters (e.g. 牛来USDT).
+# Runtime contract v7: force a fresh Cloudflare deployment after the listing-mode wiring.
+# Cloudflare must accept growth-mode dry-runs up to 100 USDT and Binance symbols
+# whose base asset uses Unicode letters (e.g. 牛来USDT).
 FILES = [
     Path('src/buy-gateway-canonical.js'),
     Path('src/buy-gateway-stable.js'),
