@@ -1,5 +1,8 @@
 from pathlib import Path
 
+# Deployment safety version 2: keep the pre-BUY book/spread/stale-price guard
+# explicitly in the Cloudflare production deploy path. This file is watched by
+# deploy-cloudflare.yml, so changes here force runtime verification before use.
 path = Path('src/buy-gateway-canonical.js')
 s = path.read_text(encoding='utf-8')
 
