@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import http.client
 import json
 import os
 import re
@@ -10,6 +9,8 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import trade_state
 
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
@@ -92,7 +93,7 @@ class H(BaseHTTPRequestHandler):
 
         if not target_url:
             return self.send_json(503,{'ok':False,'status':'MAKE_ROUTE_NOT_CONFIGURED'})
-        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.2'})
+        req=urllib.request.Request(target_url,data=raw,method='POST',headers={'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'tst-make-relay/4.3'})
         try:
             with urllib.request.urlopen(req,timeout=45) as r:
                 data=r.read(); status=r.status
@@ -102,9 +103,6 @@ class H(BaseHTTPRequestHandler):
             print(f'[make-relay] {action} transport failed: {type(exc).__name__}: {str(exc)[:160]}',flush=True)
             return self.send_json(502,{'ok':False,'status':'MAKE_TRANSPORT_FAILED','action':action})
 
-        # Never forward an opaque/non-JSON Make response to Cloudflare. A stale
-        # or disabled webhook used to surface only as NON_JSON_400, which made it
-        # impossible to distinguish routing failures from Binance order errors.
         try:
             row=json.loads(data or b'{}')
         except Exception:
@@ -115,11 +113,27 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(row,dict):
             print(f'[make-relay] {action} upstream non-object-json status={status}',flush=True)
             return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action})
+
+        # Persist only confirmed successful bot executions. This gives the signal
+        # engine a shared risk ledger without ever placing orders from Railway.
+        try:
+            if status < 400 and row.get('ok') is True:
+                if action == 'BUY' and str(row.get('status') or '') == 'BUY_FILLED':
+                    trade_state.record_buy(body, row)
+                    print(f"[trade-state] BUY tracked signal={row.get('signal_id') or body.get('signal_id')} symbol={symbol}", flush=True)
+                elif action == 'OCO' and str(row.get('status') or '') == 'OCO_PLACED':
+                    trade_state.record_oco(body, row)
+                    print(f"[trade-state] OCO tracked signal={row.get('signal_id') or body.get('signal_id')} symbol={symbol} list={row.get('oco_order_list_id')}", flush=True)
+        except Exception as exc:
+            # Tracking failure must not corrupt a successful Binance response.
+            print(f'[trade-state] tracking warning {type(exc).__name__}: {exc}', flush=True)
+
         return self.send_json(status,row)
 
     def proxy(self):
         if self.path=='/health' or self.path.startswith('/health?'):
-            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
+            snap=trade_state.portfolio_snapshot()
+            return self.send_json(200,{'ok':True,'status':'HEALTHY','role':'SIGNED_MAKE_RELAY','telegramOwner':'CLOUDFLARE','legacyExecution':False,'makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT,'trackedOpenPositions':snap.get('open_count',0),'trackedStopRiskUSDT':round(float(snap.get('stop_risk_usdt',0)),4)})
         if self.path=='/signer/validate' or self.path.startswith('/signer/validate?'):
             return self.send_json(200,{'ok':True,'status':'SIGNER_VALIDATION_COMPAT','legacyExecution':False,'executionRoute':'TELEGRAM_CONFIRM_CLOUDFLARE_MAKE_ONLY','makeBuyConfigured':bool(MAKE_BUY_WEBHOOK_URL),'makeOcoConfigured':bool(MAKE_OCO_WEBHOOK_URL),'maxExecutionStakeUSDT':MAX_EXECUTION_STAKE_USDT})
         if self.path.startswith('/make-exec-relay'):
@@ -133,5 +147,5 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
 
 if __name__=='__main__':
-    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f}', flush=True)
+    print(f'[front-proxy] ONLINE role=signed-make-relay make_buy={bool(MAKE_BUY_WEBHOOK_URL)} make_oco={bool(MAKE_OCO_WEBHOOK_URL)} max_stake={MAX_EXECUTION_STAKE_USDT:.2f} trade_state=ON', flush=True)
     ThreadingHTTPServer(('0.0.0.0',PORT),H).serve_forever()
