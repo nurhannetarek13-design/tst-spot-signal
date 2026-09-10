@@ -1,0 +1,57 @@
+name: Gate D Event Discovery V2 Chunked
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_d_event_chunk_v2.py'
+      - 'research/gate_d_event_aggregate_v2.py'
+      - '.github/workflows/gate-d-event-discovery-v2.yml'
+jobs:
+  chunk:
+    strategy:
+      fail-fast: false
+      matrix:
+        offset: [0, 30, 60]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Build 30-day core chunk
+        run: PYTHONPATH=. python research/gate_d_event_chunk_v2.py --offset-days ${{ matrix.offset }} --core-days 30 --out chunk-${{ matrix.offset }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-chunk-${{ matrix.offset }}
+          path: chunk-${{ matrix.offset }}.json
+  aggregate:
+    needs: chunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-d-chunk-*
+          path: chunks
+          merge-multiple: true
+      - name: Aggregate frozen 90-day gate
+        run: PYTHONPATH=. python research/gate_d_event_aggregate_v2.py --glob 'chunks/*.json'
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-d-event-discovery-v2.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['usesML'] is False and x['usesSizing'] is False and x['thresholdsFrozen'] is True
+          print({'period':x['period'],'winners':x['winners'],'next':x['next']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-event-discovery-v2
+          path: validation/edges/gate-d-event-discovery-v2.json
