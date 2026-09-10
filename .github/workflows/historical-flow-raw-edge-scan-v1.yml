@@ -1,0 +1,73 @@
+name: Historical Flow Raw Edge Scan V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_flow_raw_edge_scan_v1.py"
+      - ".github/workflows/historical-flow-raw-edge-scan-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-flow-raw-edge-scan-v1
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, BNBUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas pyarrow
+      - name: Syntax check
+        run: python -m py_compile research/historical_flow_raw_edge_scan_v1.py
+      - name: Run frozen discovery/OOS raw-edge scan
+        run: |
+          PYTHONPATH=. python research/historical_flow_raw_edge_scan_v1.py \
+            --symbol "${{ matrix.symbol }}" \
+            --start 2025-01-01 \
+            --split 2025-01-08 \
+            --end 2025-01-14 \
+            --output-dir "artifacts/${{ matrix.symbol }}"
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import glob, json, os
+          paths=glob.glob(f"artifacts/{os.environ['PAIR']}/*raw-edge-v1.json")
+          assert len(paths)==1, paths
+          d=json.load(open(paths[0]))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['frozenDefinition']['zTail']==2.0
+          assert d['frozenDefinition']['noTpSl'] is True
+          assert d['frozenDefinition']['noSizing'] is True
+          assert len(d['tests'])==36
+          print(json.dumps({
+            'symbol':d['symbol'],
+            'rows':d['rows'],
+            'survivorCount':d['survivorCount'],
+            'verdict':d['verdict'],
+            'survivors':d['survivors'][:10]
+          },indent=2))
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-edge-${{ matrix.symbol }}-2025h1
+          path: artifacts/${{ matrix.symbol }}
+          retention-days: 14
