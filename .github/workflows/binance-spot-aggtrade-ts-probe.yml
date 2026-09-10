@@ -1,0 +1,16 @@
+name: Binance Spot AggTrade TS Probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/binance_spot_aggtrade_ts_probe.py'
+      - '.github/workflows/binance-spot-aggtrade-ts-probe.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python research/binance_spot_aggtrade_ts_probe.py
