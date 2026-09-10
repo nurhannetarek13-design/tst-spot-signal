@@ -4,6 +4,7 @@ COPY research/requirements-forward-collector.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY research/forward_liquidation_collector.py /app/forward_liquidation_collector.py
 COPY research/forward_microstructure_collector_v2.py /app/forward_microstructure_collector_v2.py
+COPY research/forward_microstructure_collector_v3.py /app/forward_microstructure_collector_v3.py
 COPY research/coinalyze_liquidation_history.py /app/coinalyze_liquidation_history.py
 COPY research/coinalyze_daily_regime_discovery.py /app/coinalyze_daily_regime_discovery.py
 COPY research/binance_vision_extreme_shock_validation.py /app/binance_vision_extreme_shock_validation.py
