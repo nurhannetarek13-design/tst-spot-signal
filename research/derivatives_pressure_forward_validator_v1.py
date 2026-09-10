@@ -130,7 +130,7 @@ def score_event(e, now):
         })
     entry_i = next((i for i, b in enumerate(bars) if b["ot"] >= signal), None)
     if entry_i is None:
-        return {**e, "status": "NO_ENTRY_BAR"}
+        return {**e, "signalTime": signal.isoformat(), "status": "NO_ENTRY_BAR"}
     entry = bars[entry_i]["open"]
     entry_time = bars[entry_i]["ot"]
     out = {
