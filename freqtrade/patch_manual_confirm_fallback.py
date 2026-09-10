@@ -7,11 +7,9 @@ if 'MANUAL_FALLBACK_MIN_SCORE' in s:
     print('[manual-confirm-fallback] already applied')
     raise SystemExit(0)
 
-# This fallback exists only to avoid a completely silent / zero-trade system
-# while the calibrated EV layer is still warming up. It NEVER enables auto-buy.
-# All upstream entry-quality checks and all downstream execution-health,
-# daily-loss, loss-streak, drawdown, position-count, stop-risk, OCO and explicit
-# user-confirmation controls remain mandatory.
+# Manual-only bridge while calibrated EV evidence is warming up. This never
+# enables auto-buy and does not weaken quality, API health, daily-loss,
+# loss-streak, drawdown, position-count, stop-risk, OCO or confirmation gates.
 const_anchor = "PORTFOLIO_MAX_POSITIONS = int(os.getenv('FAST_PORTFOLIO_MAX_POSITIONS', '3'))\n"
 const_block = const_anchor + (
     "MANUAL_FALLBACK_MIN_SCORE = float(os.getenv('FAST_MANUAL_FALLBACK_MIN_SCORE', '80'))\n"
@@ -22,36 +20,15 @@ if const_anchor not in s:
     raise SystemExit('manual-confirm fallback failed: constants anchor missing')
 s = s.replace(const_anchor, const_block, 1)
 
-old = """    if not live_contract_ok:
-        why = 'sniper-live-contract-reject:' + str(decision.get('reason') or decision.get('status') or 'reject')
-        print(
-            f\"[spot-sniper] {symbol} BLOCKED lane={lane} reason={why} \"
-            f\"status={decision.get('status')} live={decision.get('live_authorized')} \"
-            f\"ev_status={ev.get('status')} ev_enforced={ev.get('enforced')} rank={decision.get('opportunity_rank')}\",
-            flush=True,
-        )
-        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)
-        _signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED', price=price, reason=why, regime=str(decision.get('regime') or ''))
-        return False
+# patch_signal_visibility runs immediately before us, so target only its stable
+# two-line tail rather than the whole Spot Sniper wrapper.
+reject_tail = (
+    "        _signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED', price=price, reason=why, regime=str(decision.get('regime') or ''))\n"
+    "        return False\n"
+)
+replacement = r'''        _signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED', price=price, reason=why, regime=str(decision.get('regime') or ''))
 
-    ok, why = _portfolio_allows(payload)
-"""
-
-new = """    if not live_contract_ok:
         reject_reason = str(decision.get('reason') or decision.get('status') or 'reject')
-        why = 'sniper-live-contract-reject:' + reject_reason
-        print(
-            f\"[spot-sniper] {symbol} BLOCKED lane={lane} reason={why} \"
-            f\"status={decision.get('status')} live={decision.get('live_authorized')} \"
-            f\"ev_status={ev.get('status')} ev_enforced={ev.get('enforced')} rank={decision.get('opportunity_rank')}\",
-            flush=True,
-        )
-        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)
-        _signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED', price=price, reason=why, regime=str(decision.get('regime') or ''))
-
-        # Manual-only warmup fallback. Never rescue panic, a real enforced-EV
-        # rejection, stale context, bad rank, missing evidence in enforce mode,
-        # or any portfolio / execution-health / daily-loss failure.
         ctx = market_context.symbol_context(symbol) or {}
         try:
             ctx_generated = float(ctx.get('context_generated_at') or 0.0)
@@ -61,6 +38,10 @@ new = """    if not live_contract_ok:
             ctx_age = 1e12
             ctx_rank = None
         regime = str(ctx.get('regime') or decision.get('regime') or 'UNKNOWN')
+
+        # Only rescue lack-of-model-evidence / Sideways authorization. Never
+        # rescue panic, enforced-EV rejection, stale context, poor rank, or a
+        # genuine hard-risk rejection.
         warmup_or_sideways = (
             str(decision.get('status') or '') == 'WARMUP_BLOCK'
             or reject_reason == 'sideways-compression-no-validated-edge'
@@ -74,7 +55,7 @@ new = """    if not live_contract_ok:
             and ctx_age <= spot_sniper_gate.MAX_CONTEXT_AGE_SEC
             and ctx_rank is not None
             and ctx_rank <= MANUAL_FALLBACK_TOP_N
-            and str(ev.get('status') or '') not in {'ENFORCED_REJECT'}
+            and str(ev.get('status') or '') != 'ENFORCED_REJECT'
         )
         if not manual_ok:
             return False
@@ -89,15 +70,11 @@ new = """    if not live_contract_ok:
             f'regime={regime} reason={reject_reason} autoBuy=False confirmation=REQUIRED',
             flush=True,
         )
+'''
+if reject_tail not in s:
+    raise SystemExit('manual-confirm fallback failed: signal-visibility reject tail missing')
+s = s.replace(reject_tail, replacement, 1)
 
-    ok, why = _portfolio_allows(payload)
-"""
-
-if old not in s:
-    raise SystemExit('manual-confirm fallback failed: spot-sniper reject block marker missing')
-s = s.replace(old, new, 1)
-
-# Preserve an explicit audit label on READY records.
 ready_old = "    _record_candidate(symbol, lane, score, price, 'READY', 'spot-sniper-pass|' + str(why), **telemetry)\n"
 ready_new = "    _record_candidate(symbol, lane, score, price, 'READY', ('manual-confirm-fallback|' if payload.get('manualFallback') else 'spot-sniper-pass|') + str(why), **telemetry)\n"
 if ready_old in s:
@@ -108,7 +85,7 @@ for required in [
     'MANUAL_FALLBACK_TOP_N',
     "payload['manualFallback'] = True",
     '[manual-fallback]',
-    "str(ev.get('status') or '') not in {'ENFORCED_REJECT'}",
+    "str(ev.get('status') or '') != 'ENFORCED_REJECT'",
     '_portfolio_allows(payload)',
 ]:
     if required not in s:
