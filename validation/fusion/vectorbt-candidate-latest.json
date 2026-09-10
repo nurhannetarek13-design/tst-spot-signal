@@ -1,41 +1,12 @@
 {
   "engine": "VECTORBT_CANDIDATE",
   "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
-  "candidateFingerprint": "62e620408a8cb85cc7c2",
-  "symbol": "UNIUSDT",
-  "family": "VOLATILITY_MOMENTUM",
-  "timeframe": "15m",
-  "params": {
-    "lookback": 20,
-    "relvol": 1.4,
-    "rsi_min": 57,
-    "sl": 0.018,
-    "tp": 0.06
-  },
-  "base": {
-    "trades": 96,
-    "wins": 28,
-    "winRate": 0.2916666666666667,
-    "netPnlUSDT": -0.7235237020912756,
-    "expectancyUSDT": -0.007536705230117454,
-    "profitFactor": 0.9108364669239598,
-    "maxDrawdownUSDT": 2.703918970085368
-  },
-  "stress2x": {
-    "trades": 96,
-    "wins": 26,
-    "winRate": 0.2708333333333333,
-    "netPnlUSDT": -2.30881635551828,
-    "expectancyUSDT": -0.024050170369982082,
-    "profitFactor": 0.7501785317346009,
-    "maxDrawdownUSDT": 3.5631896020439613
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-09T07:33:51.052675+00:00",
-  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
+  "generatedAt": "2026-09-10T07:26:29.207507+00:00",
+  "notes": "No unified candidate; heavy VectorBT validation skipped."
 }
