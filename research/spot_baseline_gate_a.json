@@ -18,6 +18,11 @@
     "meanNetPctMinExclusive": 0.0,
     "maxDrawdownPctMax": 8.0
   },
+  "portfolioRisk": {
+    "maxOpenPositions": 3,
+    "maxDailyLossUSDT": 2.0,
+    "oneOpenTradePerSymbol": true
+  },
   "costModel": {
     "feeRoundTripPct": 0.20,
     "spreadEstimateRoundTripPct": 0.04,
@@ -34,7 +39,10 @@
   "frozenGitBlobs": {
     "research/pro_stack_feature_store.py": "7211031a21509deb7b46a17134276632687f7d29",
     "research/pro_stack_edge_model.py": "a62f93f6d51c48f04f937b52525f9c2f40192b62",
-    "research/pro_stack_shadow_trader.py": "4d330d6f6c185241fb90340ab4f5405ce308254b"
+    "research/pro_stack_shadow_trader.py": "4d330d6f6c185241fb90340ab4f5405ce308254b",
+    "research/shadow_labeler.py": "0e2d68b49ba863144d8ddc399d4cad6f145f5c2b",
+    "research/shadow_performance_gate.py": "8a545d7743e78a14d8701cfe663a6cd5bab6db67",
+    "research/shadow_forward_state.py": "a82ec92c6fd28065b0b6c4a1690437e3f062234a"
   },
   "nextExperiment": "GATE_B_DERIVATIVES_ADDITION_ONLY_AFTER_GATE_A_CLOSE"
 }
