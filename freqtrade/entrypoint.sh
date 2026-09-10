@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment marker: production-safety state + reconciliation + Spot Sniper research/ops v1
-/freqtrade/run_ready_bot.sh &
-BOT_PID=$!
+# Production priority: keep the live signal/execution path alive. The full NFI
+# Freqtrade dry-run is useful for shadow comparison, but it is memory-heavy and
+# must never be allowed to OOM-kill the Telegram/fast-entry service.
+SIGNAL_FIRST_MODE="${SIGNAL_FIRST_MODE:-1}"
+
+if [[ "$SIGNAL_FIRST_MODE" == "1" ]]; then
+  echo "[entrypoint] SIGNAL_FIRST_MODE=1; skipping memory-heavy NFI/Freqtrade dry-run"
+  sleep infinity &
+  BOT_PID=$!
+else
+  /freqtrade/run_ready_bot.sh &
+  BOT_PID=$!
+fi
 
 cleanup() {
   kill "${EV_VALIDATION_PID:-}" "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${DYNAMIC_EXIT_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
-for _ in $(seq 1 60); do
+# telegram_signal_bridge.py is baked into the image. In legacy mode run_ready_bot
+# may refresh it, but signal-first mode does not need that heavy bootstrap.
+for _ in $(seq 1 20); do
   if [[ -s /freqtrade/telegram_signal_bridge.py ]]; then
     break
   fi
@@ -27,7 +39,7 @@ if [[ ! -s /freqtrade/telegram_signal_bridge.py ]]; then
   exit $?
 fi
 
-sleep 3
+sleep 1
 
 if [[ "${TELEGRAM_STARTUP_TEST:-0}" == "1" ]]; then
   python - <<'PY'
@@ -69,25 +81,10 @@ python -u /freqtrade/market_context.py &
 MARKET_CONTEXT_PID=$!
 echo "[entrypoint] market-context collector started pid=${MARKET_CONTEXT_PID}"
 
+# This is the primary production workload. Start it before all research workers.
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] Spot Sniper fast entry engine started pid=${FAST_PID}"
-
-python -u /freqtrade/outcome_engine.py &
-OUTCOME_ENGINE_PID=$!
-echo "[entrypoint] forward outcome engine started pid=${OUTCOME_ENGINE_PID}"
-
-python -u /freqtrade/shadow_research_monitor.py &
-SHADOW_RESEARCH_PID=$!
-echo "[entrypoint] shadow research evidence monitor started pid=${SHADOW_RESEARCH_PID}"
-
-python -u /freqtrade/shadow_ev_model.py &
-SHADOW_EV_PID=$!
-echo "[entrypoint] calibrated probability/EV model trainer started pid=${SHADOW_EV_PID}"
-
-python -u /freqtrade/ev_validation_guard.py &
-EV_VALIDATION_PID=$!
-echo "[entrypoint] EV walk-forward promotion guard started pid=${EV_VALIDATION_PID}"
 
 python -u /freqtrade/dynamic_exit_manager.py &
 DYNAMIC_EXIT_PID=$!
@@ -105,5 +102,39 @@ else
   echo "[entrypoint] new listing watcher disabled: schedule not configured"
 fi
 
-wait "$BOT_PID"
-exit $?
+# Research remains enabled, but it starts after the signal path so an OOM issue
+# can be isolated without ever sacrificing signal delivery again.
+if [[ "${ENABLE_RESEARCH_WORKERS:-1}" == "1" ]]; then
+  python -u /freqtrade/outcome_engine.py &
+  OUTCOME_ENGINE_PID=$!
+  echo "[entrypoint] forward outcome engine started pid=${OUTCOME_ENGINE_PID}"
+
+  python -u /freqtrade/shadow_research_monitor.py &
+  SHADOW_RESEARCH_PID=$!
+  echo "[entrypoint] shadow research evidence monitor started pid=${SHADOW_RESEARCH_PID}"
+
+  python -u /freqtrade/shadow_ev_model.py &
+  SHADOW_EV_PID=$!
+  echo "[entrypoint] calibrated probability/EV model trainer started pid=${SHADOW_EV_PID}"
+
+  python -u /freqtrade/ev_validation_guard.py &
+  EV_VALIDATION_PID=$!
+  echo "[entrypoint] EV walk-forward promotion guard started pid=${EV_VALIDATION_PID}"
+else
+  echo "[entrypoint] research workers disabled; signal/execution path remains active"
+fi
+
+# Keep the container alive while continuously supervising the primary fast engine.
+while true; do
+  if ! kill -0 "$FAST_PID" 2>/dev/null; then
+    echo "[entrypoint] CRITICAL fast-entry engine exited; terminating for clean Railway restart" >&2
+    wait "$FAST_PID" || true
+    exit 1
+  fi
+  if ! kill -0 "$RECONCILE_PID" 2>/dev/null; then
+    echo "[entrypoint] CRITICAL reconciler exited; fail-closed restart" >&2
+    wait "$RECONCILE_PID" || true
+    exit 1
+  fi
+  sleep 15
+done
