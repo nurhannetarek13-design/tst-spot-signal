@@ -1,0 +1,61 @@
+name: Derivatives Metrics Frozen Untouched V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/derivatives_metrics_frozen_untouched_v2.py'
+      - '.github/workflows/derivatives-metrics-frozen-untouched-v2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: derivatives-metrics-frozen-untouched-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas
+      - name: Run untouched validation with costs and de-clustering
+        run: |
+          PYTHONPATH=. python research/derivatives_metrics_frozen_untouched_v2.py \
+            --symbol '${{ matrix.symbol }}' \
+            --warm-start 2025-01-15 \
+            --eval-start 2025-01-29 \
+            --end 2025-02-11 \
+            --output-dir artifacts/${{ matrix.symbol }}
+      - name: Enforce fail-closed research contract
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          p=glob.glob(f"artifacts/{os.environ['PAIR']}/*.json")[0]
+          d=json.load(open(p))
+          assert d['engine']=='DERIVATIVES_METRICS_FROZEN_UNTOUCHED_V2'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['automaticPromotion'] is False
+          assert d['costs']['normalRoundTrip']==0.0028
+          assert d['costs']['stressRoundTrip']==0.005
+          assert d['selectionSourceWindow']=='2025-01-01..2025-01-28'
+          print(json.dumps({'symbol':d['symbol'],'productionPassCount':d['productionPassCount'],'results':d['results']},indent=2))
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: derivatives-metrics-frozen-v2-${{ matrix.symbol }}
+          path: artifacts/${{ matrix.symbol }}
+          retention-days: 14
