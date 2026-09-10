@@ -3,6 +3,7 @@ from huggingface_hub import list_repo_files
 import json
 REPO='rogerdehe/mktdata-binance-2026'
 files=list_repo_files(REPO,repo_type='dataset')
-keys=('BTCUSDT','ETHUSDT','SOLUSDT')
-sel=[f for f in files if any(k in f for k in keys) and ('2026-07' in f or '202607' in f)]
-print(json.dumps({'totalFiles':len(files),'matched':sel[:500],'matchedCount':len(sel)},indent=2))
+btc=[f for f in files if 'BTC' in f.upper()]
+eth=[f for f in files if 'ETH' in f.upper()]
+sol=[f for f in files if 'SOL' in f.upper()]
+print(json.dumps({'totalFiles':len(files),'first':files[:120],'last':files[-120:],'btc':btc[:200],'eth':eth[:100],'sol':sol[:100],'btcCount':len(btc),'ethCount':len(eth),'solCount':len(sol)},indent=2))
