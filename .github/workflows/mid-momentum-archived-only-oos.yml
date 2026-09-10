@@ -1,0 +1,48 @@
+name: Mid Momentum Archived-Only OOS
+
+on:
+  push:
+    paths:
+      - 'research/mid_momentum_archived_only_oos.py'
+      - '.github/workflows/mid-momentum-archived-only-oos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/mid_momentum_archived_only_oos.py research/mid_momentum_continuation_v1.py
+      - name: Run archived-only OOS validation
+        run: PYTHONPATH=. python research/mid_momentum_archived_only_oos.py
+      - name: Assert fail-closed output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/mid-momentum-archived-only-oos-latest.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['automaticPromotion'] is False
+          assert x['productionPromotionBlocked'] is True
+          assert x['validationDesign']['thresholdOptimization'] is False
+          assert x['validationDesign']['entryTiming']=='NEXT_15M_OPEN'
+          assert x['validationDesign']['sameBarTpSlResolution']=='SL_FIRST_PESSIMISTIC'
+          assert x['hypothesisCount']==9
+          print('archived-only OOS fail-closed assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mid-momentum-archived-only-oos-report
+          path: validation/edges/mid-momentum-archived-only-oos-latest.json
+          retention-days: 14
