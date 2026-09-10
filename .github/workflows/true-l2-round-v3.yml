@@ -1,0 +1,45 @@
+name: True L2 Microstructure Round V3
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/true_l2_round_v3.py'
+      - '.github/workflows/true-l2-round-v3.yml'
+jobs:
+  research:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow sortedcontainers
+      - name: Canonical valid-block replay and frozen edge test
+        run: python research/true_l2_round_v3.py --symbol '${{ matrix.symbol }}'
+      - name: Validate research contract
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          python - <<'PY'
+          import json, os
+          s=os.environ['SYMBOL']
+          p=f'artifacts/true-l2-v3/{s}/verdict.json'
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['automaticPromotion'] is False
+          assert d['verdict'] in ('NO_PRODUCTION_EDGE','PRODUCTION_EDGE_FOUND','DATA_QUALITY_INSUFFICIENT')
+          if d['status']=='COMPLETE':
+              assert d['quality']['featureRows'] >= 500
+              assert len(d['tests']) == 15
+          print(json.dumps({'symbol':s,'status':d['status'],'quality':d['quality'],'verdict':d['verdict'],'productionCandidate':d.get('productionCandidate',False)},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: true-l2-v3-${{ matrix.symbol }}
+          path: artifacts/true-l2-v3/${{ matrix.symbol }}
+          retention-days: 14
