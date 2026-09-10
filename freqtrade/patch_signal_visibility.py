@@ -8,8 +8,7 @@ if 'def _signal_visibility_alert(' in s:
     raise SystemExit(0)
 
 # Visibility is deliberately separate from authorization. WATCH / BLOCKED alerts
-# tell the user what the scanner is seeing; they never call fast_ingest and can
-# never place or prepare an order. Confirmed BUY remains behind every existing
+# can be disabled entirely. Confirmed BUY remains behind every existing
 # execution, quality, regime, EV, portfolio, OCO and user-confirmation gate.
 insert_marker = '\ndef _watch_live_price(m: dict) -> float:\n'
 helper = r'''
@@ -26,6 +25,8 @@ def _signal_visibility_alert(
     reason: str = '',
     regime: str = '',
 ) -> None:
+    if str(os.getenv('FAST_VISIBILITY_ENABLED', '1')).strip().lower() not in {'1', 'true', 'yes', 'on'}:
+        return
     now = time.time()
     key = f'{state}:{symbol}'
     cooldown = int(os.getenv('FAST_VISIBILITY_COOLDOWN_SEC', '600'))
@@ -77,7 +78,7 @@ if watch_marker not in s:
 s = s.replace(watch_marker, watch_replacement, 1)
 
 # If a direct-score setup is rejected by the final Spot Sniper authorization
-# contract, surface it as HIGH-SCORE SETUP. This does not bypass the rejection.
+# contract, surface it only when visibility alerts are explicitly enabled.
 reject_marker = "        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)\n        return False\n"
 reject_replacement = (
     "        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)\n"
@@ -90,6 +91,7 @@ s = s.replace(reject_marker, reject_replacement, 1)
 
 for required in [
     'def _signal_visibility_alert(',
+    "FAST_VISIBILITY_ENABLED",
     "_signal_visibility_alert(symbol, score, 'WATCH'",
     "_signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED'",
     '[signal-visibility] SENT',
@@ -99,4 +101,4 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[signal-visibility-patch] OK WATCH + blocked-direct Telegram visibility; execution authorization unchanged')
+print('[signal-visibility-patch] OK optional WATCH/blocked visibility; execution authorization unchanged')
