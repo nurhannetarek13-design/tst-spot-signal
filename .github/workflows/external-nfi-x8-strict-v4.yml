@@ -1,0 +1,282 @@
+name: NFI X8 Strict V4
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - '.github/workflows/external-nfi-x8-strict-v4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  x8-strict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NFI_SHA: e9e165f8fc832d77a50ea115e3d06c7418fa5661
+      DATA_TIMERANGE: 20250101-20260905
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned NFI commit only
+        run: |
+          set -euo pipefail
+          mkdir -p external/NostalgiaForInfinity validation/external-nfi-x8-strict-v4
+          git -C external/NostalgiaForInfinity init
+          git -C external/NostalgiaForInfinity remote add origin https://github.com/iterativv/NostalgiaForInfinity.git
+          git -C external/NostalgiaForInfinity fetch --depth 1 origin "$NFI_SHA"
+          git -C external/NostalgiaForInfinity checkout --detach FETCH_HEAD
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-x8-strict-v4/upstream-sha.txt
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker compose build freqtrade
+
+      - name: Prepare memory-safe user-capital configs
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          mkdir -p user_data/tst-strategies user_data/backtest_results
+          cp NostalgiaForInfinityX8.py user_data/tst-strategies/
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            freqtrade:
+              volumes:
+                - "./NostalgiaForInfinityX.py:/freqtrade/NostalgiaForInfinityX.py:ro"
+                - "./NostalgiaForInfinityX2.py:/freqtrade/NostalgiaForInfinityX2.py:ro"
+                - "./NostalgiaForInfinityX3.py:/freqtrade/NostalgiaForInfinityX3.py:ro"
+                - "./NostalgiaForInfinityX4.py:/freqtrade/NostalgiaForInfinityX4.py:ro"
+                - "./NostalgiaForInfinityX5.py:/freqtrade/NostalgiaForInfinityX5.py:ro"
+                - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
+                - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
+                - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+                - "./legacy:/freqtrade/legacy:ro"
+          YAML
+          python - <<'PY'
+          import hashlib, json, pathlib
+          official=json.load(open('configs/pairlist-static-binance-spot-usdt.json'))
+          pairs=official['exchange']['pair_whitelist']
+          assert 40 <= len(pairs) <= 80, len(pairs)
+          ranked=sorted(pairs, key=lambda s: hashlib.sha256(('nfi-v4:'+s).encode()).hexdigest())
+          holdout=ranked[:max(12, len(pairs)//5)]
+          lookahead=ranked[:max(20, len(pairs)//3)]
+          def cfg(selected, bot_name):
+              return {
+                  '$schema':'https://schema.freqtrade.io/schema.json',
+                  'bot_name':bot_name,
+                  'stake_currency':'USDT','tradable_balance_ratio':0.90,'fiat_display_currency':'USD',
+                  'dry_run':True,'trading_mode':'spot','margin_mode':'','timeframe':'5m',
+                  'process_only_new_candles':True,'max_open_trades':3,'stake_amount':10,'dry_run_wallet':50,
+                  'exchange':{
+                      'name':'binance','key':'','secret':'',
+                      'ccxt_config':{
+                          'enableRateLimit':True,
+                          'urls':{'api':{'public':'https://data-api.binance.vision/api/v3','private':'https://api.binance.com/api','sapi':'https://api.binance.com/sapi'}},
+                          'options':{'defaultType':'spot','fetchMarkets':['spot']}
+                      },
+                      'pair_whitelist':selected,'pair_blacklist':['.*(UP|DOWN|BULL|BEAR)/USDT']
+                  },
+                  'pairlists':[{'method':'StaticPairList'}],
+                  'entry_pricing':{'price_side':'other','use_order_book':False,'price_last_balance':0.0},
+                  'exit_pricing':{'price_side':'other','use_order_book':False},
+                  'order_types':{'entry':'market','exit':'market','emergency_exit':'market','force_entry':'market','force_exit':'market','stoploss':'market','stoploss_on_exchange':False},
+                  'unfilledtimeout':{'entry':5,'exit':5,'exit_timeout_count':0,'unit':'minutes'},
+                  'telegram':{'enabled':False,'token':'','chat_id':''},
+                  'api_server':{'enabled':False,'listen_ip_address':'127.0.0.1','listen_port':8080,'username':'research','password':'research-only','jwt_secret_key':'researchOnlyJwtSecretKey1234567890123456'},
+                  'internals':{'process_throttle_secs':5}
+              }
+          json.dump(cfg(pairs,'TST NFI X8 Strict V4'),open('user_data/tst-config-v4.json','w'),indent=2)
+          json.dump(cfg(holdout,'TST NFI X8 V4 Holdout'),open('user_data/tst-config-v4-holdout.json','w'),indent=2)
+          json.dump(cfg(lookahead,'TST NFI X8 V4 Lookahead'),open('user_data/tst-config-v4-lookahead.json','w'),indent=2)
+          out=pathlib.Path('../../validation/external-nfi-x8-strict-v4')
+          (out/'pairs.json').write_text(json.dumps(pairs,indent=2))
+          (out/'holdout-pairs.json').write_text(json.dumps(holdout,indent=2))
+          (out/'lookahead-pairs.json').write_text(json.dumps(lookahead,indent=2))
+          print('FULL',len(pairs),'HOLDOUT',len(holdout),'LOOKAHEAD',len(lookahead))
+          PY
+
+      - name: Smoke-load X8 Spot
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade list-strategies \
+            --config /freqtrade/user_data/tst-config-v4.json \
+            --strategy-path /freqtrade/user_data/tst-strategies \
+            | tee ../../validation/external-nfi-x8-strict-v4/list-strategies.log
+          grep -q 'NostalgiaForInfinityX8' ../../validation/external-nfi-x8-strict-v4/list-strategies.log
+
+      - name: Download official Spot data once
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade download-data \
+            --config /freqtrade/user_data/tst-config-v4.json \
+            --timeframes 5m 15m 1h 4h 1d \
+            --timerange "$DATA_TIMERANGE" \
+            | tee ../../validation/external-nfi-x8-strict-v4/download.log
+
+      - name: Run memory-safe yearly stress and walk-forward validation
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          OUT=../../validation/external-nfi-x8-strict-v4
+          run_bt() {
+            tag="$1"; timerange="$2"; fee="$3"; cfg="${4:-/freqtrade/user_data/tst-config-v4.json}"
+            set +e
+            docker compose run --rm freqtrade backtesting \
+              --config "$cfg" \
+              --strategy NostalgiaForInfinityX8 \
+              --strategy-path /freqtrade/user_data/tst-strategies \
+              --timerange "$timerange" --fee "$fee" --export none \
+              > "$OUT/$tag.log" 2>&1
+            code=$?
+            set -e
+            echo "$code" > "$OUT/$tag-exit-code.txt"
+            echo "$tag exit=$code"
+            tail -n 55 "$OUT/$tag.log" || true
+          }
+
+          # Annual slices prevent the exit-137 full-period memory failure seen in V3.
+          run_bt y2025-base040 20250101-20251231 0.002
+          run_bt y2026-base040 20260101-20260905 0.002
+          run_bt y2025-stress080 20250101-20251231 0.004
+          run_bt y2026-stress080 20260101-20260905 0.004
+          run_bt y2025-stress100 20250101-20251231 0.005
+          run_bt y2026-stress100 20260101-20260905 0.005
+
+          # Chronological frozen-rule windows. No tuning between folds.
+          run_bt wf1 20250101-20250430 0.002
+          run_bt wf2 20250501-20250831 0.002
+          run_bt wf3 20250901-20251231 0.002
+          run_bt wf4 20260101-20260430 0.002
+          run_bt wf5 20260501-20260905 0.002
+
+          # Deterministic symbol holdout under base and harsh 1.00% round-trip fee proxy.
+          run_bt holdout-2025-base040 20250101-20251231 0.002 /freqtrade/user_data/tst-config-v4-holdout.json
+          run_bt holdout-2026-base040 20260101-20260905 0.002 /freqtrade/user_data/tst-config-v4-holdout.json
+          run_bt holdout-2025-stress100 20250101-20251231 0.005 /freqtrade/user_data/tst-config-v4-holdout.json
+          run_bt holdout-2026-stress100 20260101-20260905 0.005 /freqtrade/user_data/tst-config-v4-holdout.json
+
+      - name: Lookahead-bias analysis on deterministic subset
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set +e
+          OUT=../../validation/external-nfi-x8-strict-v4
+          docker compose run --rm freqtrade lookahead-analysis \
+            --config /freqtrade/user_data/tst-config-v4-lookahead.json \
+            --strategy NostalgiaForInfinityX8 \
+            --strategy-path /freqtrade/user_data/tst-strategies \
+            --timerange 20260101-20260905 \
+            --fee 0.002 \
+            --minimum-trade-amount 10 \
+            --targeted-trade-amount 30 \
+            > "$OUT/lookahead.log" 2>&1
+          code=$?
+          echo "$code" > "$OUT/lookahead-exit-code.txt"
+          tail -n 100 "$OUT/lookahead.log" || true
+          exit 0
+
+      - name: Build strict machine-readable verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          root=pathlib.Path('validation/external-nfi-x8-strict-v4')
+          def parse(tag):
+              text=(root/f'{tag}.log').read_text(errors='ignore') if (root/f'{tag}.log').exists() else ''
+              try: code=int((root/f'{tag}-exit-code.txt').read_text().strip())
+              except Exception: code=999
+              def grab(pat, cast=float):
+                  m=re.search(pat,text,re.I)
+                  if not m:return None
+                  try:return cast(m.group(1).replace(',','').strip())
+                  except Exception:return None
+              trades=grab(r'Total/Daily Avg Trades\s*│\s*(\d+)',int)
+              if trades is None: trades=grab(r'│\s*TOTAL\s*│\s*(\d+)',int)
+              return {
+                  'exitCode':code,'trades':trades,
+                  'profitFactor':grab(r'Profit factor\s*│\s*([-+0-9.]+)'),
+                  'totalProfitPct':grab(r'Total profit %\s*│\s*([-+0-9.]+)'),
+                  'absoluteProfit':grab(r'Absolute profit\s*│\s*([-+0-9.]+)'),
+                  'maxAccountDrawdownPct':grab(r'Max % of account underwater\s*│\s*([-+0-9.]+)'),
+                  'maxBalanceDrawdownPct':grab(r'Max % of account underwater \(balance\)\s*│\s*([-+0-9.]+)'),
+                  'worstDayUSDT':grab(r'Worst day\s*│\s*([-+0-9.]+)\s+USDT'),
+                  'worstTradePct':grab(r'Worst trade\s*│\s*[^│]+?\s+([-+0-9.]+)%'),
+                  'expectancy':grab(r'Expectancy \(Ratio\)\s*│\s*([-+0-9.]+)'),
+                  'sharpeClosed':grab(r'Sharpe \(closed trades\)\s*│\s*([-+0-9.]+)')
+              }
+          tags=['y2025-base040','y2026-base040','y2025-stress080','y2026-stress080','y2025-stress100','y2026-stress100',
+                'wf1','wf2','wf3','wf4','wf5',
+                'holdout-2025-base040','holdout-2026-base040','holdout-2025-stress100','holdout-2026-stress100']
+          rows={t:parse(t) for t in tags}
+          try: lcode=int((root/'lookahead-exit-code.txt').read_text().strip())
+          except Exception: lcode=999
+          ltxt=(root/'lookahead.log').read_text(errors='ignore') if (root/'lookahead.log').exists() else ''
+          bias=bool(re.search(r'has bias\s*│\s*true|biased\s*[:=]\s*true|lookahead.bias.*true',ltxt,re.I))
+          statistical=[]
+          suitability=[]
+          for t,r in rows.items():
+              if r['exitCode']!=0: statistical.append(f'{t}:BACKTEST_ERROR_{r["exitCode"]}')
+              if r['absoluteProfit'] is None or r['absoluteProfit']<=0: statistical.append(f'{t}:NONPOSITIVE_PROFIT')
+          for t in ['y2025-base040','y2026-base040']:
+              r=rows[t]
+              if (r['trades'] or 0)<30: statistical.append(f'{t}:LT_30_TRADES')
+              if (r['profitFactor'] or 0)<1.15: statistical.append(f'{t}:PF_LT_1_15')
+          for t in ['y2025-stress080','y2026-stress080']:
+              if (rows[t]['profitFactor'] or 0)<1.05: statistical.append(f'{t}:PF_LT_1_05')
+          for t in ['y2025-stress100','y2026-stress100']:
+              if (rows[t]['profitFactor'] or 0)<1.00: statistical.append(f'{t}:PF_LT_1_00')
+          for t in ['wf1','wf2','wf3','wf4','wf5']:
+              r=rows[t]
+              if (r['trades'] or 0)<12: statistical.append(f'{t}:LT_12_TRADES')
+              if (r['profitFactor'] or 0)<1.00: statistical.append(f'{t}:PF_LT_1_00')
+          for t in ['holdout-2025-base040','holdout-2026-base040','holdout-2025-stress100','holdout-2026-stress100']:
+              r=rows[t]
+              if (r['trades'] or 0)<8: statistical.append(f'{t}:LT_8_TRADES')
+              if (r['profitFactor'] or 0)<1.00: statistical.append(f'{t}:PF_LT_1_00')
+          if lcode!=0: statistical.append(f'LOOKAHEAD:ERROR_{lcode}')
+          if bias: statistical.append('LOOKAHEAD:BIAS_DETECTED')
+
+          # User suitability is deliberately separate from edge validity.
+          for t in ['y2025-base040','y2026-base040']:
+              r=rows[t]
+              if r['maxBalanceDrawdownPct'] is None or r['maxBalanceDrawdownPct']>15:
+                  suitability.append(f'{t}:BALANCE_DD_GT_15')
+              if r['worstDayUSDT'] is None or r['worstDayUSDT'] < -2.0:
+                  suitability.append(f'{t}:WORST_DAY_EXCEEDS_2_USDT')
+          total_trades=sum(rows[t]['trades'] or 0 for t in ['y2025-base040','y2026-base040'])
+          trades_per_day=total_trades/613.0
+          if trades_per_day<0.50: suitability.append('TRADE_RATE_LT_0_50_PER_DAY')
+
+          stat_pass=not statistical
+          suit_pass=not suitability
+          if stat_pass and suit_pass: status='PASS_TO_SHADOW_ONLY'
+          elif stat_pass: status='EDGE_PROMISING_BUT_NOT_USER_READY'
+          else: status='REJECT_OR_RESEARCH_ONLY'
+          result={
+              'engine':'NFI_X8_STRICT_V4','strategy':'NostalgiaForInfinityX8','strategyVersion':'v18.0.24',
+              'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,
+              'researchOnly':True,'liveAuthorization':False,
+              'profile':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3,'spotOnly':True},
+              'feeStressRoundTripApprox':{'base':0.004,'stress080':0.008,'stress100':0.010},
+              'rows':rows,
+              'lookahead':{'exitCode':lcode,'biasDetected':bias},
+              'totalAnnualTrades':total_trades,'tradesPerDay':trades_per_day,
+              'statisticalGatePass':stat_pass,'userSuitabilityPass':suit_pass,
+              'status':status,'statisticalReasons':statistical,'suitabilityReasons':suitability,
+              'nextGate':'risk-overlay revalidation + forward shadow; never direct live' if stat_pass else 'do not wire live',
+              'notes':['V3 full-period exit 137 is avoided by bounded yearly/fold slices.','Historical data through 2026 is not true author-unseen OOS because NFI was developed during the period.','Symbol holdout is a robustness test, not proof of author-unseen OOS.']
+          }
+          (root/'verdict.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfi-x8-strict-v4
+          path: validation/external-nfi-x8-strict-v4/**
+          if-no-files-found: error
