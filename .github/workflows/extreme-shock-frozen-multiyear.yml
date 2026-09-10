@@ -1,0 +1,75 @@
+name: Frozen Extreme Shock Multiyear Replication
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/extreme_shock_frozen_multiyear.py"
+      - "research/coinalyze_liquidation_history.py"
+      - "research/binance_vision_extreme_shock_validation.py"
+      - ".github/workflows/extreme-shock-frozen-multiyear.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frozen-extreme-shock-multiyear
+  cancel-in-progress: true
+
+jobs:
+  replicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COINALYZE_API_KEY: ${{ secrets.COINALYZE_API_KEY }}
+      FROZEN_MULTIYEAR_DIR: artifacts/frozen-extreme-shock-multiyear
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax check frozen research
+        run: |
+          python -m py_compile \
+            research/extreme_shock_frozen_multiyear.py \
+            research/coinalyze_liquidation_history.py \
+            research/binance_vision_extreme_shock_validation.py
+
+      - name: Require research data credential
+        run: |
+          if [ -z "${COINALYZE_API_KEY:-}" ]; then
+            echo "COINALYZE_API_KEY is not configured; frozen replication cannot be evaluated." >&2
+            exit 2
+          fi
+
+      - name: Run frozen multiyear replication
+        run: python research/extreme_shock_frozen_multiyear.py
+
+      - name: Enforce frozen research-only contract
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('artifacts/frozen-extreme-shock-multiyear/frozen_multiyear_report.json')
+          d=json.loads(p.read_text())
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['definitionFrozen'] is True
+          f=d['fixedDefinition']
+          assert abs(float(f['liqTotalMinUsd'])-93166010.59829867) < 1e-6
+          assert float(f['liqImbalanceMax']) == -0.50
+          assert f['oiChange']=='< 0'
+          assert f['takerBuyShare']=='< 0.50'
+          assert f['direction']=='SHORT'
+          assert d['window']=={'from':'2022-09-06','toExclusive':'2025-09-06'}
+          print(json.dumps({'confirmedEvents':d['confirmedEvents'],'pooled':d['pooled'],'gate':d['gate']},indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frozen-extreme-shock-multiyear-report
+          path: artifacts/frozen-extreme-shock-multiyear
+          if-no-files-found: warn
+          retention-days: 14
