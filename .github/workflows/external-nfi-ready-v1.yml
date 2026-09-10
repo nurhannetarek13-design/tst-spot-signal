@@ -52,6 +52,7 @@ jobs:
                 - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
                 - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
                 - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+                - "./legacy:/freqtrade/legacy:ro"
           YAML
           python - <<'PY'
           import json
