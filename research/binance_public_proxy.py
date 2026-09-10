@@ -4,7 +4,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ALLOWED = {
+SPOT_ALLOWED = {
     "/api/v3/ticker/24hr",
     "/api/v3/ticker/bookTicker",
     "/api/v3/exchangeInfo",
@@ -13,7 +13,15 @@ ALLOWED = {
     "/api/v3/trades",
     "/api/v3/aggTrades",
 }
-BASES = [
+FUTURES_ALLOWED = {
+    "/fapi/v1/exchangeInfo",
+    "/fapi/v1/ticker/24hr",
+    "/fapi/v1/depth",
+    "/fapi/v1/openInterest",
+    "/fapi/v1/premiumIndex",
+    "/futures/data/takerlongshortRatio",
+}
+SPOT_BASES = [
     "https://data-api.binance.vision",
     "https://api.binance.com",
     "https://api-gcp.binance.com",
@@ -22,6 +30,8 @@ BASES = [
     "https://api3.binance.com",
     "https://api4.binance.com",
 ]
+FUTURES_BASES = ["https://fapi.binance.com"]
+
 
 class Handler(BaseHTTPRequestHandler):
     def _json(self, status, body):
@@ -36,20 +46,29 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         req = urllib.parse.urlsplit(self.path)
         if req.path == "/health":
-            return self._json(200, {"ok": True, "service": "binance-public-proxy"})
+            return self._json(200, {"ok": True, "service": "binance-public-proxy", "spot": True, "futures": True})
         if req.path != "/api/binance-public":
             return self._json(404, {"ok": False, "error": "NOT_FOUND"})
+
         q = urllib.parse.parse_qs(req.query)
         raw = (q.get("path") or [""])[0]
         decoded = urllib.parse.unquote(raw)
         upstream = urllib.parse.urlsplit("https://local" + decoded)
-        if upstream.path not in ALLOWED:
+        if upstream.path in SPOT_ALLOWED:
+            bases = SPOT_BASES
+        elif upstream.path in FUTURES_ALLOWED:
+            bases = FUTURES_BASES
+        else:
             return self._json(403, {"ok": False, "error": "PATH_NOT_ALLOWED"})
+
         last = "unavailable"
-        for base in BASES:
+        for base in bases:
             try:
                 url = base + upstream.path + (("?" + upstream.query) if upstream.query else "")
-                r = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "tst-railway-binance-proxy/2.0"})
+                r = urllib.request.Request(
+                    url,
+                    headers={"Accept": "application/json", "User-Agent": "tst-railway-binance-proxy/3.0"},
+                )
                 with urllib.request.urlopen(r, timeout=12) as resp:
                     data = resp.read()
                     self.send_response(200)
@@ -66,7 +85,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(json.dumps({"kind": "binance_public_proxy", "message": fmt % args}), flush=True)
 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PROXY_PORT", "8080"))
-    print(json.dumps({"kind": "binance_public_proxy_start", "port": port}), flush=True)
+    print(json.dumps({"kind": "binance_public_proxy_start", "port": port, "futures": True}), flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
