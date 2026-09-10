@@ -1,0 +1,10 @@
+{
+  "experiment": "SPOT_BASELINE_GATE_A_V1",
+  "status": "CLOSED_INVALID_BEFORE_FIRST_TRADE",
+  "reason": "Live feature snapshot used the latest Binance 15m kline without enforcing candle closure; historical replay used closed candles. This creates live/historical feature-timing mismatch.",
+  "closedTrades": 0,
+  "openTrades": 0,
+  "liveTrading": false,
+  "countsTowardAnyFutureGate": false,
+  "replacement": "SPOT_BASELINE_GATE_A_V2_CLOSED_CANDLES"
+}
