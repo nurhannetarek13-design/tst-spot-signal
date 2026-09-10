@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - research/gate_b_derivatives_ablation_v1.py
       - .github/workflows/gate-b-derivatives-ablation-smoke.yml
 permissions: {contents: read}
 jobs:
