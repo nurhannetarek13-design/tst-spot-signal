@@ -1,0 +1,61 @@
+name: Historical Flow Discovery Gate V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_flow_discovery_gate_v2.py"
+      - ".github/workflows/historical-flow-discovery-gate-v2.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: historical-flow-discovery-gate-v2
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow
+      - name: Download frozen week-1 historical artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34484596841
+          pattern: historical-flow-*-2025w01
+          path: artifacts/historical-flow-input
+          merge-multiple: true
+      - name: Run de-clustered discovery
+        run: |
+          python research/historical_flow_discovery_gate_v2.py \
+            --input "artifacts/historical-flow-input/**/*.parquet" \
+            --output validation/edges/historical-flow-discovery-gate-v2.json
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('validation/edges/historical-flow-discovery-gate-v2.json'))
+          assert d['engine']=='HISTORICAL_FLOW_DISCOVERY_GATE_V2'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['automaticPromotion'] is False
+          assert d['researchStage']=='DECLUSTERED_DISCOVERY_ONLY'
+          assert len(d['symbols'])==6
+          assert d['testCount']>0
+          print(json.dumps({'tests':d['testCount'],'survivors':d['survivorCount'],'recurringFamilyCount':d['recurringFamilyCount'],'recurringFamilies':d['recurringFamilies'],'top':d['survivors'][:10]},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-flow-discovery-gate-v2-report
+          path: validation/edges/historical-flow-discovery-gate-v2.json
+          retention-days: 14
