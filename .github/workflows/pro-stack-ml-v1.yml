@@ -1,0 +1,33 @@
+name: Pro Stack ML V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/pro_stack_train_model.py
+      - .github/workflows/pro-stack-ml-v1.yml
+permissions: {contents: read}
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas scikit-learn
+      - run: python -m py_compile research/pro_stack_train_model.py
+      - run: python research/pro_stack_train_model.py
+      - name: Enforce research-only ML contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/pro_stack/model.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          print(json.dumps({'qualityGatePassed':x['qualityGatePassed'],'validation':x['validation'],'test':x['test']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pro-stack-ml-v1
+          path: validation/pro_stack/model.json
+          retention-days: 14
