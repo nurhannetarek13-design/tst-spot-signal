@@ -1,0 +1,49 @@
+name: True L2 Microstructure Round V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/true_l2_round_v2.py'
+      - '.github/workflows/true-l2-round-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow sortedcontainers
+      - name: Run canonical true-L2 research round
+        run: python research/true_l2_round_v2.py --symbol '${{ matrix.symbol }}'
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json,os
+          s=os.environ['SYMBOL']; p=f'artifacts/true-l2-v2/{s}/verdict.json'; d=json.load(open(p))
+          assert d['engine']=='TRUE_L2_MICROSTRUCTURE_ROUND_V2'
+          assert d['authorization']=='RESEARCH_ONLY' and d['liveTrading'] is False and d['automaticPromotion'] is False
+          assert d['status']=='COMPLETE' and len(d['tests'])==15 and d['quality']['eventGroups']>100000
+          assert d['quality']['featureRows']>5000
+          print(json.dumps({'symbol':s,'selectionSurvivorCount':d['selectionSurvivorCount'],'productionPassCount':d['productionPassCount'],'quality':d['quality'],'verdict':d['verdict']},indent=2))
+          PY
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: true-l2-v2-${{ matrix.symbol }}
+          path: artifacts/true-l2-v2/${{ matrix.symbol }}
+          retention-days: 14
