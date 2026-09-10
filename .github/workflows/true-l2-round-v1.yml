@@ -1,0 +1,47 @@
+name: True L2 Microstructure Round V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/true_l2_round_v1.py'
+      - '.github/workflows/true-l2-round-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Run frozen true-L2 research round
+        run: python research/true_l2_round_v1.py
+      - name: Enforce research-only fail-closed contract
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/true-l2-round-v1/true-l2-round-v1-verdict.json'
+          d=json.load(open(p))
+          assert d['engine']=='TRUE_L2_MICROSTRUCTURE_ROUND_V1'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['status']=='COMPLETE'
+          assert len(d['hypotheses'])==5
+          assert len(d['tests'])==15
+          assert d['quality']['featureRows']>0
+          print(json.dumps({'verdict':d['verdict'],'selectionSurvivorCount':d['selectionSurvivorCount'],'productionPassCount':d['productionPassCount'],'quality':d['quality']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: true-l2-round-v1
+          path: artifacts/true-l2-round-v1
+          retention-days: 14
