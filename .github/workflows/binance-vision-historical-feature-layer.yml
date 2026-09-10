@@ -28,50 +28,26 @@ jobs:
         run: pip install numpy pandas pyarrow
       - name: Syntax check
         run: python -m py_compile research/binance_vision_historical_feature_layer.py
-      - name: Build two-day BTC historical flow sample
+      - name: Build two-day BTC historical sample with futures metrics
         run: |
           python research/binance_vision_historical_feature_layer.py \
-            --symbol BTCUSDT \
-            --start 2025-01-02 \
-            --end 2025-01-03 \
-            --freq 5min \
+            --symbol BTCUSDT --start 2025-01-02 --end 2025-01-03 --freq 5min \
             --output-dir artifacts/binance-vision-historical-features
       - name: Validate semantics and complete datasets
         run: |
           python - <<'PY'
-          import glob, json
-          import pandas as pd
-          js=glob.glob('artifacts/binance-vision-historical-features/*.json')
-          pq=glob.glob('artifacts/binance-vision-historical-features/*.parquet')
+          import glob,json,pandas as pd
+          js=glob.glob('artifacts/binance-vision-historical-features/*.json'); pq=glob.glob('artifacts/binance-vision-historical-features/*.parquet')
           assert len(js)==1 and len(pq)==1
-          m=json.load(open(js[0]))
-          d=pd.read_parquet(pq[0])
-          assert m['authorization']=='RESEARCH_ONLY'
-          assert m['liveTrading'] is False
-          assert m['checksumVerification'] is True
-          assert m['rows'] == len(d) and len(d) > 0
-          assert m['rawRows']['aggTrades'] > 0
-          assert m['rawRows']['markPriceKlines'] > 0
-          assert m['rawRows']['indexPriceKlines'] > 0
-          assert m['rawRows']['premiumIndexKlines'] > 0
-          assert m['failures'] == [], m['failures']
-          required={
-            'ts','symbol','trade_close','buy_quote','sell_quote','delta_quote','cvd_quote',
-            'buy_share_quote','taker_buy_sell_ratio_quote','flow_imbalance_quote',
-            'mark_close','index_close','premium_close','mark_index_basis_bps'
-          }
-          assert required.issubset(d.columns), sorted(required-set(d.columns))
-          assert 'microprice' not in d.columns
-          assert 'orderBookImbalance' not in d.columns
-          assert m['featureSemantics']['microprice'].startswith('NOT AVAILABLE')
-          assert m['featureSemantics']['premiumIndex'].startswith('Binance premiumIndexKlines')
-          print(json.dumps({
-            'rows':len(d),
-            'rawRows':m['rawRows'],
-            'basisNonNull':int(d['mark_index_basis_bps'].notna().sum()),
-            'premiumNonNull':int(d['premium_close'].notna().sum()),
-            'failures':m['failures']
-          },indent=2,default=str))
+          m=json.load(open(js[0])); d=pd.read_parquet(pq[0])
+          assert m['authorization']=='RESEARCH_ONLY' and m['liveTrading'] is False and m['checksumVerification'] is True
+          assert m['rows']==len(d) and len(d)>0 and m['failures']==[],m['failures']
+          for src in ['aggTrades','markPriceKlines','indexPriceKlines','premiumIndexKlines','metrics']: assert m['rawRows'][src]>0,(src,m['rawRows'])
+          required={'ts','symbol','trade_close','buy_quote','sell_quote','delta_quote','cvd_quote','flow_imbalance_quote','mark_close','index_close','premium_close','mark_index_basis_bps','fut_sum_open_interest','fut_sum_open_interest_value','fut_count_toptrader_long_short_ratio','fut_sum_toptrader_long_short_ratio','fut_count_long_short_ratio','fut_sum_taker_long_short_vol_ratio','fut_oi_change_1bar','fut_oi_value_change_1bar'}
+          assert required.issubset(d.columns),sorted(required-set(d.columns))
+          for c,n in m['metricsCoverage'].items(): assert n>0,(c,n)
+          assert 'microprice' not in d.columns and 'orderBookImbalance' not in d.columns
+          print(json.dumps({'rows':len(d),'rawRows':m['rawRows'],'metricsCoverage':m['metricsCoverage'],'basisNonNull':int(d.mark_index_basis_bps.notna().sum())},indent=2))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
