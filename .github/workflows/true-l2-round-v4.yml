@@ -1,0 +1,42 @@
+name: True L2 Microstructure Round V4
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/true_l2_round_v4.py'
+      - '.github/workflows/true-l2-round-v4.yml'
+jobs:
+  research:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow sortedcontainers
+      - name: Run corrected September canonical L2 round
+        run: python research/true_l2_round_v4.py --symbol '${{ matrix.symbol }}'
+      - name: Validate output
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          python - <<'PY'
+          import json, os
+          s=os.environ['SYMBOL']
+          p=f'artifacts/true-l2-v3/{s}/verdict.json'
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['automaticPromotion'] is False
+          print(json.dumps({'symbol':s,'status':d['status'],'quality':d['quality'],'selectionSurvivorCount':d.get('selectionSurvivorCount'),'productionPassCount':d.get('productionPassCount'),'verdict':d['verdict']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: true-l2-v4-${{ matrix.symbol }}
+          path: artifacts/true-l2-v3/${{ matrix.symbol }}
+          retention-days: 14
