@@ -24,8 +24,8 @@ jobs:
       - name: Clone pinned current NFI
         run: |
           set -euo pipefail
-          git clone https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
-          git -C external/NostalgiaForInfinity checkout "$NFI_SHA"
+          git clone --depth 1 --branch main https://github.com/iterativv/NostalgiaForInfinity.git external/NostalgiaForInfinity
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
           mkdir -p validation/external-nfi-ready-v1
           git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-ready-v1/upstream-sha.txt
 
@@ -40,6 +40,19 @@ jobs:
           mkdir -p user_data/tst-strategies user_data/backtest_results
           cp NostalgiaForInfinityX7.py user_data/tst-strategies/
           cp NostalgiaForInfinityX8.py user_data/tst-strategies/
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            freqtrade:
+              volumes:
+                - "./NostalgiaForInfinityX.py:/freqtrade/NostalgiaForInfinityX.py:ro"
+                - "./NostalgiaForInfinityX2.py:/freqtrade/NostalgiaForInfinityX2.py:ro"
+                - "./NostalgiaForInfinityX3.py:/freqtrade/NostalgiaForInfinityX3.py:ro"
+                - "./NostalgiaForInfinityX4.py:/freqtrade/NostalgiaForInfinityX4.py:ro"
+                - "./NostalgiaForInfinityX5.py:/freqtrade/NostalgiaForInfinityX5.py:ro"
+                - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
+                - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
+                - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+          YAML
           python - <<'PY'
           import json
           pairs = [
