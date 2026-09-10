@@ -1,0 +1,258 @@
+name: NFI X8 Recommended V3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - '.github/workflows/external-nfi-x8-recommended-v3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  x8-recommended-comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      NFI_SHA: e9e165f8fc832d77a50ea115e3d06c7418fa5661
+      FULL_TIMERANGE: 20250101-20260905
+      SPLIT_2025: 20250101-20251231
+      SPLIT_2026: 20260101-20260905
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned NFI commit only
+        run: |
+          set -euo pipefail
+          mkdir -p external/NostalgiaForInfinity validation/external-nfi-x8-recommended-v3
+          git -C external/NostalgiaForInfinity init
+          git -C external/NostalgiaForInfinity remote add origin https://github.com/iterativv/NostalgiaForInfinity.git
+          git -C external/NostalgiaForInfinity fetch --depth 1 origin "$NFI_SHA"
+          git -C external/NostalgiaForInfinity checkout --detach FETCH_HEAD
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-x8-recommended-v3/upstream-sha.txt
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker compose build freqtrade
+
+      - name: Prepare X8 configs from official recommended static universe
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          mkdir -p user_data/tst-strategies user_data/backtest_results
+          cp NostalgiaForInfinityX8.py user_data/tst-strategies/
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            freqtrade:
+              volumes:
+                - "./NostalgiaForInfinityX.py:/freqtrade/NostalgiaForInfinityX.py:ro"
+                - "./NostalgiaForInfinityX2.py:/freqtrade/NostalgiaForInfinityX2.py:ro"
+                - "./NostalgiaForInfinityX3.py:/freqtrade/NostalgiaForInfinityX3.py:ro"
+                - "./NostalgiaForInfinityX4.py:/freqtrade/NostalgiaForInfinityX4.py:ro"
+                - "./NostalgiaForInfinityX5.py:/freqtrade/NostalgiaForInfinityX5.py:ro"
+                - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
+                - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
+                - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+                - "./legacy:/freqtrade/legacy:ro"
+          YAML
+          python - <<'PY'
+          import json, pathlib
+          official = json.load(open('configs/pairlist-static-binance-spot-usdt.json'))
+          pairs = official['exchange']['pair_whitelist']
+          assert 40 <= len(pairs) <= 80, len(pairs)
+          common = {
+              '$schema': 'https://schema.freqtrade.io/schema.json',
+              'bot_name': 'TST NFI X8 Research Only',
+              'stake_currency': 'USDT',
+              'tradable_balance_ratio': 0.90,
+              'fiat_display_currency': 'USD',
+              'dry_run': True,
+              'trading_mode': 'spot',
+              'margin_mode': '',
+              'timeframe': '5m',
+              'process_only_new_candles': True,
+              'exchange': {
+                  'name': 'binance', 'key': '', 'secret': '',
+                  'ccxt_config': {
+                      'enableRateLimit': True,
+                      'urls': {'api': {
+                          'public': 'https://data-api.binance.vision/api/v3',
+                          'private': 'https://api.binance.com/api',
+                          'sapi': 'https://api.binance.com/sapi'}},
+                      'options': {'defaultType': 'spot', 'fetchMarkets': ['spot']}
+                  },
+                  'pair_whitelist': pairs,
+                  'pair_blacklist': ['.*(UP|DOWN|BULL|BEAR)/USDT']
+              },
+              'pairlists': [{'method': 'StaticPairList'}],
+              'entry_pricing': {'price_side': 'other', 'use_order_book': False, 'price_last_balance': 0.0},
+              'exit_pricing': {'price_side': 'other', 'use_order_book': False},
+              'order_types': {
+                  'entry': 'market', 'exit': 'market', 'emergency_exit': 'market',
+                  'force_entry': 'market', 'force_exit': 'market', 'stoploss': 'market',
+                  'stoploss_on_exchange': False
+              },
+              'unfilledtimeout': {'entry': 5, 'exit': 5, 'exit_timeout_count': 0, 'unit': 'minutes'},
+              'telegram': {'enabled': False, 'token': '', 'chat_id': ''},
+              'api_server': {
+                  'enabled': False,
+                  'listen_ip_address': '127.0.0.1',
+                  'listen_port': 8080,
+                  'username': 'research',
+                  'password': 'research-only',
+                  'jwt_secret_key': 'researchOnlyJwtSecretKey1234567890123456'
+              },
+              'internals': {'process_throttle_secs': 5}
+          }
+          recommended = dict(common)
+          recommended.update({'bot_name':'NFI Recommended Profile','dry_run_wallet':1000,'max_open_trades':8,'stake_amount':'unlimited'})
+          bot50 = dict(common)
+          bot50.update({'bot_name':'TST 50USDT Profile','dry_run_wallet':50,'max_open_trades':3,'stake_amount':10})
+          json.dump(recommended, open('user_data/tst-config-recommended.json','w'), indent=2)
+          json.dump(bot50, open('user_data/tst-config-bot50.json','w'), indent=2)
+          out=pathlib.Path('../../validation/external-nfi-x8-recommended-v3')
+          out.mkdir(parents=True, exist_ok=True)
+          (out/'pair-count.txt').write_text(str(len(pairs))+'\n')
+          (out/'pairs.json').write_text(json.dumps(pairs, indent=2))
+          print('OFFICIAL_STATIC_PAIRS', len(pairs))
+          PY
+
+      - name: Smoke-load X8 Spot
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade list-strategies \
+            --config /freqtrade/user_data/tst-config-bot50.json \
+            --strategy-path /freqtrade/user_data/tst-strategies \
+            | tee ../../validation/external-nfi-x8-recommended-v3/list-strategies.log
+          grep -q 'NostalgiaForInfinityX8' ../../validation/external-nfi-x8-recommended-v3/list-strategies.log
+
+      - name: Download only X8 required timeframes
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade download-data \
+            --config /freqtrade/user_data/tst-config-recommended.json \
+            --timeframes 5m 15m 1h 4h 1d \
+            --timerange "$FULL_TIMERANGE" \
+            | tee ../../validation/external-nfi-x8-recommended-v3/download.log
+
+      - name: Run recommended-vs-bot50 comparison
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          OUT=../../validation/external-nfi-x8-recommended-v3
+          run_bt() {
+            profile="$1"; config="$2"; tag="$3"; timerange="$4"; fee="$5"
+            set +e
+            docker compose run --rm freqtrade backtesting \
+              --config "$config" \
+              --strategy NostalgiaForInfinityX8 \
+              --strategy-path /freqtrade/user_data/tst-strategies \
+              --timerange "$timerange" \
+              --fee "$fee" \
+              --export none \
+              > "$OUT/$tag.log" 2>&1
+            code=$?
+            set -e
+            echo "$code" > "$OUT/$tag-exit-code.txt"
+            tail -n 110 "$OUT/$tag.log" || true
+          }
+          run_bt recommended /freqtrade/user_data/tst-config-recommended.json recommended-full-base "$FULL_TIMERANGE" 0.002
+          run_bt recommended /freqtrade/user_data/tst-config-recommended.json recommended-full-stress068 "$FULL_TIMERANGE" 0.0034
+          run_bt bot50 /freqtrade/user_data/tst-config-bot50.json bot50-full-base "$FULL_TIMERANGE" 0.002
+          run_bt bot50 /freqtrade/user_data/tst-config-bot50.json bot50-full-stress068 "$FULL_TIMERANGE" 0.0034
+          run_bt bot50 /freqtrade/user_data/tst-config-bot50.json bot50-2025-base "$SPLIT_2025" 0.002
+          run_bt bot50 /freqtrade/user_data/tst-config-bot50.json bot50-2026-base "$SPLIT_2026" 0.002
+
+      - name: Build comparison verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          from datetime import date
+          root=pathlib.Path('validation/external-nfi-x8-recommended-v3')
+          def parse(tag):
+              text=(root/f'{tag}.log').read_text(errors='ignore') if (root/f'{tag}.log').exists() else ''
+              try: code=int((root/f'{tag}-exit-code.txt').read_text().strip())
+              except Exception: code=999
+              def grab(pat, cast=float):
+                  m=re.search(pat,text,re.I)
+                  if not m: return None
+                  try: return cast(m.group(1).replace(',','').strip())
+                  except Exception: return None
+              trades=grab(r'Total/Daily Avg Trades\s*│\s*(\d+)',int)
+              if trades is None: trades=grab(r'│\s*TOTAL\s*│\s*(\d+)',int)
+              return {
+                  'exitCode':code,
+                  'trades':trades,
+                  'profitFactor':grab(r'Profit factor\s*│\s*([-+0-9.]+)'),
+                  'totalProfitPct':grab(r'Total profit %\s*│\s*([-+0-9.]+)'),
+                  'absoluteProfit':grab(r'Absolute profit\s*│\s*([-+0-9.]+)'),
+                  'maxDrawdownPct':grab(r'Max % of account underwater\s*│\s*([-+0-9.]+)')
+              }
+          rows={
+              'recommendedBase040':parse('recommended-full-base'),
+              'recommendedStress068':parse('recommended-full-stress068'),
+              'bot50Base040':parse('bot50-full-base'),
+              'bot50Stress068':parse('bot50-full-stress068'),
+              'bot50_2025_Base040':parse('bot50-2025-base'),
+              'bot50_2026_Base040':parse('bot50-2026-base')
+          }
+          days=(date(2026,9,5)-date(2025,1,1)).days+1
+          bottr=rows['bot50Base040']['trades'] or 0
+          rate=bottr/days
+          statistical=[]
+          suitability=[]
+          for label,row in rows.items():
+              if row['exitCode']!=0: statistical.append(f'{label}:BACKTEST_ERROR')
+              if row['absoluteProfit'] is None or row['absoluteProfit']<=0: statistical.append(f'{label}:NONPOSITIVE_PROFIT')
+          if bottr<100: statistical.append('BOT50:LT_100_TRADES')
+          if (rows['bot50Base040']['profitFactor'] or 0)<1.15: statistical.append('BOT50_BASE:PF_LT_1_15')
+          if (rows['bot50Stress068']['profitFactor'] or 0)<1.00: statistical.append('BOT50_STRESS:PF_LT_1_00')
+          for split in ('bot50_2025_Base040','bot50_2026_Base040'):
+              if (rows[split]['trades'] or 0)<30: statistical.append(f'{split}:LT_30_TRADES')
+              if (rows[split]['profitFactor'] or 0)<1.00: statistical.append(f'{split}:PF_LT_1_00')
+          dd=rows['bot50Stress068']['maxDrawdownPct']
+          if dd is None or dd>15: statistical.append('BOT50_STRESS:DD_GT_15_OR_UNAVAILABLE')
+          if rate<0.50: suitability.append('BOT50:LT_0_50_TRADES_PER_DAY')
+          rec_pf=rows['recommendedBase040']['profitFactor'] or 0
+          bot_pf=rows['bot50Base040']['profitFactor'] or 0
+          if rec_pf>=1.15 and bot_pf<1.15: suitability.append('PERFORMANCE_DEGRADES_UNDER_USER_CAPITAL_CONSTRAINTS')
+          result={
+              'engine':'NFI_X8_RECOMMENDED_V3_COMPARISON',
+              'strategy':'NostalgiaForInfinityX8',
+              'strategyVersion':'v18.0.24',
+              'researchOnly':True,
+              'liveAuthorization':False,
+              'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,
+              'officialStaticPairCount':int((root/'pair-count.txt').read_text().strip()) if (root/'pair-count.txt').exists() else None,
+              'requiredTimeframes':['5m','15m','1h','4h','1d'],
+              'period':'2025-01-01..2026-09-05',
+              'periodDays':days,
+              'profiles':{
+                  'recommendedLike':{'walletUSDT':1000,'stake':'unlimited','maxOpenTrades':8},
+                  'userCapital':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3}
+              },
+              'rows':rows,
+              'bot50TradesPerDay':rate,
+              'statisticalGatePass':not statistical,
+              'userSuitabilityPass':not suitability,
+              'status':'PASS_TO_STRICT_GATE' if (not statistical and not suitability) else 'REJECT_OR_RESEARCH_ONLY',
+              'statisticalReasons':statistical,
+              'suitabilityReasons':suitability,
+              'nextGate':'lookahead + chronological walk-forward + unseen-symbol holdout + stronger cost stress + forward shadow' if (not statistical and not suitability) else 'do not wire live',
+              'note':'The recommended-like profile is a diagnostic comparison, not a recommendation to increase user risk. Historical results are not true author-unseen OOS.'
+          }
+          (root/'verdict.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfi-x8-recommended-v3
+          path: validation/external-nfi-x8-recommended-v3/**
+          if-no-files-found: error
