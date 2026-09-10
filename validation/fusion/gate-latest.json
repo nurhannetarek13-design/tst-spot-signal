@@ -10,8 +10,6 @@
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
     "CANDIDATE:MISSING",
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -64,19 +62,19 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "candidateId": "VECTORBT:UNIUSDT:VOLATILITY_MOMENTUM",
-      "candidateFingerprint": "62e620408a8cb85cc7c2",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 96,
-      "independentEnginePass": false,
-      "baseProfitFactor": 0.9108364669239598,
-      "baseExpectancyUSDT": -0.007536705230117454,
-      "stressProfitFactor": 0.7501785317346009,
-      "stressExpectancyUSDT": -0.024050170369982082
+      "trades": 0,
+      "independentEnginePass": null,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": 0.0,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "freqtrade": {
       "status": "NO_CANDIDATE",
@@ -139,6 +137,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-10T05:21:13.972552+00:00",
+  "generatedAt": "2026-09-10T07:26:48.837839+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
