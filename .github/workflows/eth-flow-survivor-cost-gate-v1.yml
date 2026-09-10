@@ -1,0 +1,43 @@
+name: ETH Flow Survivor Cost Gate V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/eth_flow_survivor_cost_gate_v1.py'
+      - '.github/workflows/eth-flow-survivor-cost-gate-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Run untouched cost gate
+        run: PYTHONPATH=. python research/eth_flow_survivor_cost_gate_v1.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('artifacts/eth-flow-survivor-cost-gate-v1.json'))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['costs']['normalRoundTrip']==0.0028
+          assert d['costs']['stressRoundTrip']==0.005
+          print(json.dumps(d,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eth-flow-survivor-cost-gate-v1
+          path: artifacts/eth-flow-survivor-cost-gate-v1.json
+          retention-days: 14
