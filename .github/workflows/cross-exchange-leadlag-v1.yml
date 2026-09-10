@@ -1,0 +1,25 @@
+name: Cross Exchange LeadLag V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/bybit_binance_leadlag_v1.py'
+      - 'validation/edges/cross-exchange-leadlag-v1-spec.json'
+      - '.github/workflows/cross-exchange-leadlag-v1.yml'
+jobs:
+  sol-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas msgspec sortedcontainers
+      - run: python research/bybit_binance_leadlag_v1.py --symbol SOLUSDT --start 2025-01-15 --days 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-exchange-leadlag-v1-sol-smoke
+          path: artifacts/cross-exchange-v1
+          retention-days: 14
