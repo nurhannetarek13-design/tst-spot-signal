@@ -1,0 +1,29 @@
+name: HF L2 Dataset Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/hf_l2_dataset_probe.py'
+      - '.github/workflows/hf-l2-dataset-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe public dataset files
+        run: python research/hf_l2_dataset_probe.py | tee hf_l2_probe.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hf-l2-dataset-probe
+          path: hf_l2_probe.json
+          retention-days: 7
