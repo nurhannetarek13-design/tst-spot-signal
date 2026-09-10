@@ -1,0 +1,68 @@
+name: Historical Retest Entry Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_retest_entry_discovery.py"
+      - "research/historical_ev_replay.py"
+      - ".github/workflows/historical-retest-entry-discovery.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: historical-retest-entry-discovery
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run retest-entry discovery
+        env:
+          HIST_EV_MONTHS: "8"
+          HIST_EV_TOP_N: "3"
+          HIST_EV_ROUND_TRIP_COST_PCT: "0.28"
+          HIST_EV_EXTRA_STRESS_PCT: "0.28"
+        run: python research/historical_retest_entry_discovery.py
+      - name: Validate research-only evidence
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('freqtrade/user_data/historical_retest_entry_discovery.json')
+          x=json.loads(p.read_text())
+          assert x.get('authorization')=='RESEARCH_ONLY'
+          assert x.get('liveTrading') is False
+          assert x.get('status') in {'APPROVED_FOR_FORWARD_SHADOW','NOT_APPROVED','NO_DISCOVERY_WINNER','NO_SETUPS'}
+          if x.get('status')=='APPROVED_FOR_FORWARD_SHADOW':
+              assert x.get('evidence_pass') is True
+              assert x.get('walk_forward_pass') is True
+              assert x.get('unseen_symbol_holdout_pass') is True
+          print({'status':x.get('status'),'selected':x.get('selected_variant'),'setups':x.get('baseline_setup_count')})
+          PY
+      - name: Commit retest discovery snapshot safely
+        run: |
+          cp freqtrade/user_data/historical_retest_entry_discovery.json /tmp/historical_retest_entry_discovery.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p freqtrade/user_data
+            cp /tmp/historical_retest_entry_discovery.json freqtrade/user_data/historical_retest_entry_discovery.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add freqtrade/user_data/historical_retest_entry_discovery.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update retest-entry historical discovery [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
