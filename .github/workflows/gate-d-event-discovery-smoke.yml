@@ -1,0 +1,28 @@
+name: Gate D Event Discovery Smoke
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/gate-d-event-discovery-smoke.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Run 30-day frozen diagnostic
+        run: PYTHONPATH=. python research/gate_d_event_discovery_v1.py --days 30 --out validation/edges/gate-d-event-discovery-smoke.json
+      - name: Assert diagnostic isolation
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-d-event-discovery-smoke.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['usesML'] is False and x['usesSizing'] is False
+          assert x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next']})
+          PY
