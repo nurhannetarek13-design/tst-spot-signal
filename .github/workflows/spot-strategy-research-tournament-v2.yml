@@ -1,0 +1,105 @@
+name: Spot Strategy Research Tournament V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths: ['.github/workflows/spot-strategy-research-tournament-v2.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch candidates
+        run: |
+          set -euo pipefail
+          mkdir -p external user_data/strategies validation/spot-tournament-v2
+          git clone --depth 1 https://github.com/freqtrade/freqtrade-strategies.git external/community
+          git -C external/community rev-parse HEAD | tee validation/spot-tournament-v2/upstream-sha.txt
+          cp external/community/user_data/strategies/berlinguyinca/BinHV45.py user_data/strategies/
+          cp external/community/user_data/strategies/berlinguyinca/BinHV27.py user_data/strategies/
+          cp external/community/user_data/strategies/SwingHighToSky.py user_data/strategies/
+          cp external/community/user_data/strategies/Bandtastic.py user_data/strategies/
+      - name: Prepare research config
+        run: |
+          docker pull freqtradeorg/freqtrade:stable
+          python - <<'PY'
+          import json,pathlib
+          pairs=['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT','UNI/USDT','LDO/USDT','NEAR/USDT','AAVE/USDT','LTC/USDT','ATOM/USDT','TRX/USDT','SUI/USDT','BCH/USDT','ETC/USDT']
+          cfg={'stake_currency':'USDT','stake_amount':10,'max_open_trades':3,'dry_run_wallet':50,'dry_run':True,'trading_mode':'spot','stoploss':-0.03,'trailing_stop':False,'position_adjustment_enable':False,'exchange':{'name':'binance','key':'','secret':'','ccxt_config':{'enableRateLimit':True,'urls':{'api':{'public':'https://data-api.binance.vision/api/v3'}}},'pair_whitelist':pairs,'pair_blacklist':['.*(UP|DOWN|BULL|BEAR)/USDT']},'pairlists':[{'method':'StaticPairList'}]}
+          pathlib.Path('user_data/config.json').write_text(json.dumps(cfg,indent=2))
+          PY
+      - name: Smoke-load
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable list-strategies --config /freqtrade/user_data/config.json 2>&1 | tee validation/spot-tournament-v2/load.log
+          for s in BinHV45 BinHV27 SwingHighToSky Bandtastic; do grep -E "^.*${s}.*OK" validation/spot-tournament-v2/load.log; done
+      - name: Download historical data
+        run: |
+          docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable download-data --config /freqtrade/user_data/config.json --timeframes 5m 15m 1h --timerange 20250101-20260910
+      - name: Backtest candidates
+        run: |
+          set -euo pipefail
+          OUT=validation/spot-tournament-v2
+          for s in BinHV45 BinHV27 SwingHighToSky Bandtastic; do
+            for spec in '2025:20250101-20251231:0.002' '2026:20260101-20260910:0.002' 'stress:20260101-20260910:0.005'; do
+              IFS=: read tag timerange fee <<< "$spec"
+              set +e
+              docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable backtesting --config /freqtrade/user_data/config.json --strategy "$s" --timerange "$timerange" --fee "$fee" > "$OUT/${s}_${tag}.log" 2>&1
+              echo "$?" > "$OUT/${s}_${tag}.exit"
+              set -e
+            done
+          done
+      - name: Rank and verdict
+        run: |
+          python - <<'PY'
+          import json,pathlib,re
+          root=pathlib.Path('validation/spot-tournament-v2'); ss=['BinHV45','BinHV27','SwingHighToSky','Bandtastic']
+          def one(s,t):
+            z=(root/f'{s}_{t}.log').read_text(errors='ignore'); code=int((root/f'{s}_{t}.exit').read_text())
+            def g(p,c=float):
+              m=re.search(p,z,re.I)
+              if not m:return None
+              try:return c(m.group(1).replace(',',''))
+              except:return None
+            tr=g(r'Total/Daily Avg Trades\s*│\s*(\d+)',int) or g(r'│\s*TOTAL\s*│\s*(\d+)',int)
+            return {'exitCode':code,'trades':tr,'pf':g(r'Profit factor\s*│\s*([-+0-9.]+)'),'profitPct':g(r'Total profit %\s*│\s*([-+0-9.]+)'),'profitUSDT':g(r'Absolute profit\s*│\s*([-+0-9.]+)'),'ddPct':g(r'Max % of account underwater \(balance\)\s*│\s*([-+0-9.]+)'),'worstDay':g(r'Worst day\s*│\s*([-+0-9.]+)\s+USDT'),'worstTrade':g(r'Worst trade\s*│\s*[^\n│]*?([-+]\d+(?:\.\d+)?)%')}
+          rows={s:{t:one(s,t) for t in ['2025','2026','stress']} for s in ss}; rank=[]
+          for s,r in rows.items():
+            reasons=[]
+            for t,x in r.items():
+              if x['exitCode']!=0: reasons.append(t+':INFRA'); continue
+              if (x['trades'] or 0)<20: reasons.append(t+':LT20')
+              if (x['profitUSDT'] or 0)<=0: reasons.append(t+':NONPOSITIVE')
+              if (x['pf'] or 0)<(1.05 if t=='stress' else 1.15): reasons.append(t+':PF')
+              if x['ddPct'] is None or x['ddPct']>15: reasons.append(t+':DD')
+              if x['worstDay'] is None or x['worstDay']<-2: reasons.append(t+':WORSTDAY')
+              if x['worstTrade'] is None or x['worstTrade']<-4.5: reasons.append(t+':HARDSTOP')
+            rank.append({'strategy':s,'passFinancial':not reasons,'reasons':reasons,'stressPF':r['stress']['pf'],'stressProfitPct':r['stress']['profitPct']})
+          rank.sort(key=lambda x:((x['passFinancial']),x['stressPF'] or -99,x['stressProfitPct'] or -999),reverse=True)
+          out={'rows':rows,'ranking':rank,'winners':[x['strategy'] for x in rank if x['passFinancial']]}; (root/'verdict.json').write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
+          PY
+      - name: Lookahead financial winners
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/winners
+          import json
+          for s in json.load(open('validation/spot-tournament-v2/verdict.json'))['winners']: print(s)
+          PY
+          while read s; do
+            [ -z "$s" ] && continue
+            set +e
+            docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable lookahead-analysis --config /freqtrade/user_data/config.json --strategy "$s" --timerange 20260101-20260910 --minimum-trade-amount 20 --targeted-trade-amount 50 > "validation/spot-tournament-v2/${s}_lookahead.log" 2>&1
+            echo "$?" > "validation/spot-tournament-v2/${s}_lookahead.exit"
+            set -e
+          done < /tmp/winners
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spot-strategy-research-tournament-v2
+          path: validation/spot-tournament-v2/**
