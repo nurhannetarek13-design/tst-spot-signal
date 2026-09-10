@@ -1,0 +1,19 @@
+name: Calibrated Opportunity Model Selftest
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/calibrated_opportunity_model.py
+      - .github/workflows/calibrated-opportunity-model-selftest.yml
+permissions: {contents: read}
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas scikit-learn
+      - run: python research/calibrated_opportunity_model.py --selftest
