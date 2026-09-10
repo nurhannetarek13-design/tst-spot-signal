@@ -3,6 +3,15 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '*/15 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - research/pro_stack_feature_store.py
+      - research/pro_stack_edge_model.py
+      - research/pro_stack_shadow_trader.py
+      - research/shadow_labeler.py
+      - research/shadow_performance_gate.py
+      - .github/workflows/shadow-forward-cycle-v1.yml
 permissions: {contents: read}
 jobs:
   shadow:
@@ -19,6 +28,10 @@ jobs:
         run: python research/pro_stack_edge_model.py
       - name: Produce shadow decisions only
         run: python research/pro_stack_shadow_trader.py
+      - name: Labeler and performance-gate contracts
+        run: |
+          python research/shadow_labeler.py --selftest
+          python research/shadow_performance_gate.py --selftest
       - name: Assert research-only contract
         run: |
           python - <<'PY'
