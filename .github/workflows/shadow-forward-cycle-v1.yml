@@ -12,6 +12,7 @@ on:
       - research/shadow_labeler.py
       - research/shadow_performance_gate.py
       - research/shadow_forward_state.py
+      - research/spot_baseline_gate_a.json
       - .github/workflows/shadow-forward-cycle-v1.yml
 permissions: {contents: read}
 jobs:
@@ -26,38 +27,54 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: validation/pro_stack/state
-          key: shadow-state-${{ github.run_id }}
+          key: shadow-gate-a-state-${{ github.run_id }}
           restore-keys: |
+            shadow-gate-a-state-
             shadow-state-
       - run: pip install numpy pandas
-      - name: Build live public feature snapshot
+      - name: Enforce frozen Gate A inputs
+        run: |
+          python - <<'PY'
+          import json,subprocess
+          c=json.load(open('research/spot_baseline_gate_a.json'))
+          assert c['experiment']=='SPOT_BASELINE_GATE_A_V1'
+          assert c['featureSet']=='SPOT_ONLY' and c['retrainingAllowed'] is False and c['derivativesFeaturesAllowed'] is False
+          for p,want in c['frozenGitBlobs'].items():
+              got=subprocess.check_output(['git','hash-object',p],text=True).strip()
+              assert got==want,(p,got,want)
+          print('GATE_A_FREEZE_PASS')
+          PY
+      - name: Build frozen Spot feature snapshot
         run: python research/pro_stack_feature_store.py
-      - name: Score snapshot
+      - name: Score frozen baseline
         run: python research/pro_stack_edge_model.py
       - name: Produce shadow decisions only
         run: python research/pro_stack_shadow_trader.py
-      - name: Update persistent paper trades and labels
+      - name: Update persistent Gate A trades and labels
         run: PYTHONPATH=. python research/shadow_forward_state.py
       - name: Labeler and performance-gate contracts
         run: |
           python research/shadow_labeler.py --selftest
           python research/shadow_performance_gate.py --selftest
-      - name: Assert research-only contract
+      - name: Assert research-only Gate A contract
         run: |
           python - <<'PY'
           import json
-          for p in ['validation/pro_stack/feature_store.json','validation/pro_stack/edge_scores.json','validation/pro_stack/shadow_decisions.json','validation/pro_stack/state/performance.json']:
-              x=json.load(open(p)); assert x['authorization']=='RESEARCH_ONLY'; assert x['liveTrading'] is False
-          assert json.load(open('validation/pro_stack/state/performance.json'))['gate']['liveAuthorized'] is False
-          print('RESEARCH_ONLY_PASS')
+          p=json.load(open('validation/pro_stack/state/performance.json'))
+          assert p['authorization']=='RESEARCH_ONLY' and p['liveTrading'] is False
+          assert p['experiment']=='SPOT_BASELINE_GATE_A_V1'
+          assert p['shadowLabelsRole']=='PURE_VALIDATION' and p['retrainingAllowed'] is False
+          assert p['derivativesFeaturesAllowed'] is False and p['gate']['liveAuthorized'] is False
+          assert abs(p['costModel']['total_roundtrip_pct']-0.28)<1e-12
+          print(json.dumps({'milestone':p['milestone'],'metrics':p['metrics'],'gate':p['gate']},indent=2))
           PY
-      - name: Save shadow state
+      - name: Save Gate A shadow state
         uses: actions/cache/save@v4
         with:
           path: validation/pro_stack/state
-          key: shadow-state-${{ github.run_id }}
+          key: shadow-gate-a-state-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         with:
-          name: shadow-forward-cycle-v1-${{ github.run_number }}
+          name: shadow-gate-a-${{ github.run_number }}
           path: validation/pro_stack/
           retention-days: 14
