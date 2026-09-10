@@ -1,0 +1,41 @@
+name: Direct Depth20 Research Round V2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/direct_depth20_round_v2.py'
+      - '.github/workflows/direct-depth20-round-v2.yml'
+jobs:
+  research:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow huggingface_hub
+      - name: Direct depth20 frozen research
+        run: python research/direct_depth20_round_v2.py --symbol '${{ matrix.symbol }}'
+      - name: Validate contract
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          python - <<'PY'
+          import json, os
+          s=os.environ['SYMBOL']; p=f'artifacts/direct-depth20/{s}/verdict.json'; d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['automaticPromotion'] is False
+          assert d['status']=='COMPLETE' and len(d['tests'])==15
+          assert d['bars5m']>500
+          print(json.dumps({'symbol':s,'bars5m':d['bars5m'],'selectionSurvivors':d['selectionSurvivors'],'untouchedResults':d['untouchedResults'],'productionPassCount':d['productionPassCount'],'verdict':d['verdict']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: direct-depth20-v2-${{ matrix.symbol }}
+          path: artifacts/direct-depth20/${{ matrix.symbol }}
+          retention-days: 14
