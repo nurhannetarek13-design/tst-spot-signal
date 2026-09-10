@@ -1,0 +1,115 @@
+name: Historical Flow Unseen Exhaustion V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_flow_unseen_exhaustion_v1.py"
+      - ".github/workflows/historical-flow-unseen-exhaustion-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-flow-unseen-exhaustion-v1
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        symbol: [ADAUSDT, LINKUSDT, LTCUSDT, AVAXUSDT, DOTUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow
+      - name: Build calibration week
+        run: |
+          python research/binance_vision_historical_feature_layer.py \
+            --symbol "${{ matrix.symbol }}" --start 2025-01-01 --end 2025-01-07 --freq 5min \
+            --output-dir "artifacts/unseen/${{ matrix.symbol }}/calibration"
+      - name: Build unseen OOS week
+        run: |
+          python research/binance_vision_historical_feature_layer.py \
+            --symbol "${{ matrix.symbol }}" --start 2025-01-08 --end 2025-01-14 --freq 5min \
+            --output-dir "artifacts/unseen/${{ matrix.symbol }}/oos"
+      - name: Validate complete split
+        run: |
+          python - <<'PY'
+          import glob,json,os,pandas as pd
+          s=os.environ['PAIR']
+          for split in ('calibration','oos'):
+            root=f'artifacts/unseen/{s}/{split}'
+            js=glob.glob(root+'/*.json'); pq=glob.glob(root+'/*.parquet')
+            assert len(js)==1 and len(pq)==1
+            m=json.load(open(js[0])); d=pd.read_parquet(pq[0])
+            assert m['failures']==[],m['failures']
+            assert len(d)>=7*24*12*0.95
+            assert m['rawRows']['aggTrades']>0
+          print({'symbol':s,'status':'complete'})
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unseen-exhaustion-${{ matrix.symbol }}
+          path: artifacts/unseen/${{ matrix.symbol }}
+          retention-days: 14
+
+  validate:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow scipy
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: unseen-exhaustion-*
+          path: artifacts/unseen-merged
+      - name: Normalize artifact layout
+        run: |
+          python - <<'PY'
+          import pathlib,shutil
+          src=pathlib.Path('artifacts/unseen-merged'); dst=pathlib.Path('artifacts/unseen'); dst.mkdir(parents=True,exist_ok=True)
+          for p in src.iterdir():
+            if not p.is_dir() or not p.name.startswith('unseen-exhaustion-'): continue
+            sym=p.name.split('unseen-exhaustion-',1)[1]
+            target=dst/sym
+            if target.exists(): shutil.rmtree(target)
+            shutil.copytree(p,target)
+          print(sorted(x.name for x in dst.iterdir()))
+          PY
+      - name: Run unseen-symbol frozen-family validation
+        run: |
+          python research/historical_flow_unseen_exhaustion_v1.py \
+            --root artifacts/unseen \
+            --output validation/edges/historical-flow-unseen-exhaustion-v1.json
+      - name: Enforce Spot-only contract
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('validation/edges/historical-flow-unseen-exhaustion-v1.json'))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False and d['futuresTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['productionUseIfValidated']=='SPOT_RISK_OFF_ONLY'
+          assert d['family']['quantile']==0.9 and d['family']['declusterMinutes']==240
+          print(json.dumps({'pooled':d['pooled'],'supportingSymbols':d['supportingSymbols'],'gate':d['gate'],'decision':d['decision']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-flow-unseen-exhaustion-v1-report
+          path: validation/edges/historical-flow-unseen-exhaustion-v1.json
+          retention-days: 14
