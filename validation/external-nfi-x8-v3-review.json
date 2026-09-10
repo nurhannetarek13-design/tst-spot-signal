@@ -1,0 +1,90 @@
+{
+  "review": "NFI_X8_V3_EVIDENCE_AND_RISK_REVIEW",
+  "researchOnly": true,
+  "liveAuthorization": false,
+  "source": {
+    "workflowRunId": 34425280219,
+    "artifactId": 10133052526,
+    "workflow": "NFI X8 Recommended V3",
+    "upstreamSha": "e9e165f8fc832d77a50ea115e3d06c7418fa5661",
+    "strategy": "NostalgiaForInfinityX8",
+    "strategyVersion": "v18.0.24",
+    "officialStaticPairCount": 70,
+    "profile": {"walletUSDT": 50, "stakeUSDT": 10, "maxOpenTrades": 3, "spotOnly": true}
+  },
+  "technicalVerdict": {
+    "fullPeriodRuns": "INVALID_DUE_TO_EXIT_137",
+    "fullPeriodExitCodes": {
+      "recommendedBase040": 137,
+      "recommendedStress068": 137,
+      "bot50Base040": 137,
+      "bot50Stress068": 137
+    },
+    "interpretation": "Workflow success is not strategy success. Full-period 2025-2026 runs were killed before metrics were produced, so V3 cannot pass a statistical gate."
+  },
+  "completedSlices": {
+    "2025_base040": {
+      "trades": 192,
+      "tradesPerDay": 0.53,
+      "absoluteProfitUSDT": 59.114,
+      "totalProfitPct": 118.23,
+      "profitFactor": 8.07,
+      "sharpeClosed": 4.24,
+      "expectancy": 0.31,
+      "winRatePct": 98.4,
+      "maxAccountUnderwaterPct": 5.55,
+      "maxBalanceUnderwaterPct": 21.52,
+      "worstDayUSDT": -6.351,
+      "worstTrade": "UNI/USDT -10.87%",
+      "loserAverageDuration": "15d 06:02",
+      "maxConsecutiveWins": 160
+    },
+    "2026_to_2026_09_05_base040": {
+      "trades": 74,
+      "tradesPerDay": 0.30,
+      "absoluteProfitUSDT": 13.107,
+      "totalProfitPct": 26.21,
+      "profitFactor": 9.38,
+      "sharpeClosed": 3.55,
+      "expectancy": 0.18,
+      "winRatePct": 97.3,
+      "maxAccountUnderwaterPct": 1.49,
+      "maxBalanceUnderwaterPct": 4.44,
+      "worstDayUSDT": -0.932,
+      "worstTrade": "LDO/USDT -10.51%",
+      "loserAverageDuration": "23d 08:25"
+    }
+  },
+  "strategyRiskContractObserved": {
+    "stoploss": -0.99,
+    "positionAdjustmentEnable": true,
+    "maxEntryPositionAdjustment": -1,
+    "meaning": "The raw strategy can repeatedly adjust/add to positions and carries a -99% strategy stoploss. This is incompatible with the user's no-martingale/no-DCA requirement without a separate guardrailed variant."
+  },
+  "lossDiagnostics": {
+    "2025": [
+      "One force_exit loss was about -9.82% after 1d 05:45.",
+      "One exit_bad_trade_abandon_23d loss was -10.87% after 23d 06:20 and lost about 6.351 USDT on the 50 USDT account simulation."
+    ],
+    "2026": [
+      "One exit_bad_trade_abandon_29d loss was -10.51% after 28d 18:10."
+    ]
+  },
+  "userSuitability": {
+    "rawX8ReadyForLive": false,
+    "reasons": [
+      "V3 full-period and stress runs did not complete.",
+      "2025 worst day exceeded the 2 USDT daily loss cap.",
+      "2025 balance drawdown exceeded 15%.",
+      "Raw X8 enables unlimited position adjustments/rebuys, conflicting with no martingale/DCA.",
+      "Trade frequency was only 0.53/day in 2025 and 0.30/day in 2026, below the user's desired active cadence.",
+      "Historical 2025-2026 performance is not true author-unseen OOS because the strategy was developed during this era."
+    ]
+  },
+  "decision": "DO_NOT_WIRE_LIVE",
+  "next": [
+    "V4: memory-safe annual stress 0.80%/1.00%, five chronological frozen windows, deterministic symbol holdout, lookahead analysis.",
+    "V5: disable all position adjustment/DCA and test hard -3%/-5%/-10% stops under the 50 USDT / 10 USDT / 3-position contract.",
+    "Only a guardrailed candidate that survives deep validation can proceed to forward shadow; never direct live."
+  ]
+}
