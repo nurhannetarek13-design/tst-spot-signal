@@ -1,0 +1,33 @@
+name: Gate C Interaction Model V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/gate_c_interaction_model_v1.py
+      - .github/workflows/gate-c-interaction-model-v1.yml
+permissions: {contents: read}
+jobs:
+  gatec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow scikit-learn
+      - name: Run 60-day nonlinear interaction walk-forward
+        run: PYTHONPATH=. python research/gate_c_interaction_model_v1.py --days 60
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-c-interaction-model-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False and x['mutatesGateA'] is False
+          print(json.dumps({'summary':x['summary'],'researchGatePass':x['researchGatePass'],'next':x['next']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-c-interaction-model-v1
+          path: validation/edges/gate-c-interaction-model-v1.json
+          retention-days: 14
