@@ -1,0 +1,33 @@
+name: Gate A Historical Replay V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/gate_a_historical_replay_v1.py
+      - .github/workflows/gate-a-historical-replay-v1.yml
+permissions: {contents: read}
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas
+      - run: python research/gate_a_historical_replay_v1.py --days 180
+      - name: Assert diagnostic isolation
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/pro_stack/gate-a-historical-replay-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['countsTowardForwardGateA'] is False
+          print(json.dumps({'metrics':x['metrics'],'bySymbol':x['bySymbol']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-a-historical-replay-v1
+          path: validation/pro_stack/gate-a-historical-replay-v1.json
+          retention-days: 14
