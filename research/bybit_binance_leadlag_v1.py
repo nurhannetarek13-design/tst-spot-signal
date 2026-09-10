@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, csv, gzip, io, json, math, pathlib, urllib.request, zipfile, os
+import argparse, json, math, pathlib, urllib.request, zipfile, os
 from datetime import date, timedelta
 import numpy as np
 import pandas as pd
@@ -13,7 +13,6 @@ HORIZONS={60:6,300:30,900:90}
 BYBIT='https://quote-saver.bycsi.com/orderbook/linear'
 VISION='https://data.binance.vision/data/spot/daily/aggTrades'
 UA={'User-Agent':'Mozilla/5.0'}
-
 
 def download(url,path):
     p=pathlib.Path(path); p.parent.mkdir(parents=True,exist_ok=True)
@@ -41,7 +40,8 @@ def bstate(bids,asks):
     return {'mid':mid,'spread_bps':(ap-bp)/mid*10000,'imb10':(bd-ad)/den if den else np.nan,'micro_dev_bps':(micro/mid-1)*10000}
 
 def bybit_day(path):
-    dec=msgspec.json.Decoder(); bids=SortedDict(); asks=SortedDict(); rows=[]; next_grid=None; last_ts=None; snapshots=0; deltas=0; bad=0; prev_u=None; seq_gaps=0
+    dec=msgspec.json.Decoder(); bids=SortedDict(); asks=SortedDict(); rows=[]; next_grid=None
+    snapshots=0; deltas=0; bad=0; prev_u=None; seq_gaps=0
     with zipfile.ZipFile(path) as z:
         badmember=z.testzip()
         if badmember: raise RuntimeError('ZIP_CRC_FAIL:'+badmember)
@@ -65,7 +65,6 @@ def bybit_day(path):
                     s=bstate(bids,asks)
                     if s: rows.append({'ts_ms':next_grid,**s})
                     next_grid+=10000
-                last_ts=ts
     x=pd.DataFrame(rows).drop_duplicates('ts_ms',keep='last')
     return x,{'snapshots':snapshots,'deltas':deltas,'decodeErrors':bad,'sequenceGapObservations':seq_gaps,'gridRows':len(x),'firstTs':int(x.ts_ms.min()) if len(x) else None,'lastTs':int(x.ts_ms.max()) if len(x) else None}
 
@@ -73,15 +72,14 @@ def binance_spot_day(path):
     with zipfile.ZipFile(path) as z:
         n=[x for x in z.namelist() if x.endswith('.csv')][0]
         a=pd.read_csv(z.open(n),header=None)
-    # Header may or may not exist; canonical aggTrades: id,price,qty,first,last,time,buyer_maker,best_match
     for c in [1,5]: a[c]=pd.to_numeric(a[c],errors='coerce')
-    a=a.dropna(subset=[1,5]); med=float(a[5].median()); unit_div=1000 if med<1e14 else 1000000
-    a['ts_ms']=(a[5]/(1000 if unit_div==1000000 else 1)).astype('int64') if med>1e14 else a[5].astype('int64')
+    a=a.dropna(subset=[1,5]); med=float(a[5].median())
+    a['ts_ms']=(a[5]/1000).astype('int64') if med>1e14 else a[5].astype('int64')
     a['price']=a[1].astype(float); a=a.sort_values('ts_ms')
-    # Last observable trade on each 10s grid, no future fill beyond 1 second age at event gate checked later.
-    idx=pd.to_datetime(a.ts_ms,unit='ms',utc=True)
-    s=pd.Series(a.price.values,index=idx).resample('10s',label='right',closed='right').last().ffill(limit=1)
-    out=s.rename('spot').reset_index().rename(columns={'index':'ts'}); out['ts_ms']=(out.ts.astype('int64')//1_000_000).astype('int64'); return out[['ts_ms','spot']]
+    idx=pd.DatetimeIndex(pd.to_datetime(a.ts_ms,unit='ms',utc=True),name='ts')
+    s=pd.Series(a.price.values,index=idx,name='spot').resample('10s',label='right',closed='right').last().ffill(limit=1)
+    out=s.reset_index(); out['ts_ms']=(out['ts'].astype('int64')//1_000_000).astype('int64')
+    return out[['ts_ms','spot']]
 
 def rz(s,w=8640,minp=2160):
     m=s.rolling(w,min_periods=minp).mean(); sd=s.rolling(w,min_periods=minp).std(ddof=0).replace(0,np.nan); return (s-m)/sd
@@ -94,20 +92,21 @@ def met(v):
         z=float(v.mean()/(v.std(ddof=1)/math.sqrt(len(v)))); p=.5*math.erfc(z/math.sqrt(2))
     else:p=1.
     return {'n':int(len(v)),'mean':float(v.mean()),'median':float(v.median()),'hitRate':float((v>0).mean()),'profitFactor':pf,'pOneSided':float(p)}
+
 def decluster(e,hsec):
     keep=[]; last=None
     for i,r in e.sort_values('ts_ms').iterrows():
         t=int(r.ts_ms)
         if last is None or t-last>=hsec*1000:keep.append(i); last=t
     return e.loc[keep]
+
 def gate(m,n=20):return m['n']>=n and m['mean'] is not None and m['mean']>0 and m['median']>0 and m['hitRate']>.55 and m['profitFactor']>=1.2
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--symbol',default='SOLUSDT'); ap.add_argument('--start',default='2025-01-15'); ap.add_argument('--days',type=int,default=3); a=ap.parse_args()
     root=pathlib.Path('/tmp/cross-exchange'); frames=[]; quality=[]; d=date.fromisoformat(a.start)
     for i in range(a.days):
-        dt=(d+timedelta(days=i)); ds=dt.isoformat()
-        # Jan 2025 files are ob500.
+        dt=d+timedelta(days=i); ds=dt.isoformat()
         burl=f'{BYBIT}/{a.symbol}/{ds}_{a.symbol}_ob500.data.zip'; bpath=download(burl,root/f'{ds}-bybit.zip')
         b,q=bybit_day(bpath); os.remove(bpath)
         surl=f'{VISION}/{a.symbol}/{a.symbol}-aggTrades-{ds}.zip'; spath=download(surl,root/f'{ds}-spot.zip')
