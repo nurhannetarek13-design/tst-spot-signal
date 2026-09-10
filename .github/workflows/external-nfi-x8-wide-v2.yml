@@ -1,0 +1,262 @@
+name: NFI X8 Wide V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - '.github/workflows/external-nfi-x8-wide-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  x8-wide-triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NFI_SHA: e9e165f8fc832d77a50ea115e3d06c7418fa5661
+      FULL_TIMERANGE: 20250101-20260905
+      SPLIT_2025: 20250101-20251231
+      SPLIT_2026: 20260101-20260905
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned NFI commit only
+        run: |
+          set -euo pipefail
+          mkdir -p external/NostalgiaForInfinity validation/external-nfi-x8-wide-v2
+          git -C external/NostalgiaForInfinity init
+          git -C external/NostalgiaForInfinity remote add origin https://github.com/iterativv/NostalgiaForInfinity.git
+          git -C external/NostalgiaForInfinity fetch --depth 1 origin "$NFI_SHA"
+          git -C external/NostalgiaForInfinity checkout --detach FETCH_HEAD
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-x8-wide-v2/upstream-sha.txt
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker compose build freqtrade
+
+      - name: Prepare X8 and official 172-pair research config
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          mkdir -p user_data/tst-strategies user_data/backtest_results
+          cp NostalgiaForInfinityX8.py user_data/tst-strategies/
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            freqtrade:
+              volumes:
+                - "./NostalgiaForInfinityX.py:/freqtrade/NostalgiaForInfinityX.py:ro"
+                - "./NostalgiaForInfinityX2.py:/freqtrade/NostalgiaForInfinityX2.py:ro"
+                - "./NostalgiaForInfinityX3.py:/freqtrade/NostalgiaForInfinityX3.py:ro"
+                - "./NostalgiaForInfinityX4.py:/freqtrade/NostalgiaForInfinityX4.py:ro"
+                - "./NostalgiaForInfinityX5.py:/freqtrade/NostalgiaForInfinityX5.py:ro"
+                - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
+                - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
+                - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+                - "./legacy:/freqtrade/legacy:ro"
+          YAML
+          python - <<'PY'
+          import json, pathlib
+          official = json.load(open('configs/pairlist-backtest-static-binance-spot-usdt.json'))
+          pairs = official['exchange']['pair_whitelist']
+          assert len(pairs) >= 150, len(pairs)
+          base = {
+              '$schema': 'https://schema.freqtrade.io/schema.json',
+              'bot_name': 'TST NFI X8 Wide Research Only',
+              'stake_currency': 'USDT',
+              'tradable_balance_ratio': 0.90,
+              'fiat_display_currency': 'USD',
+              'dry_run': True,
+              'dry_run_wallet': 50,
+              'trading_mode': 'spot',
+              'margin_mode': '',
+              'timeframe': '5m',
+              'max_open_trades': 3,
+              'stake_amount': 10,
+              'process_only_new_candles': True,
+              'exchange': {
+                  'name': 'binance', 'key': '', 'secret': '',
+                  'ccxt_config': {
+                      'enableRateLimit': True,
+                      'urls': {'api': {
+                          'public': 'https://data-api.binance.vision/api/v3',
+                          'private': 'https://api.binance.com/api',
+                          'sapi': 'https://api.binance.com/sapi'}},
+                      'options': {'defaultType': 'spot', 'fetchMarkets': ['spot']}
+                  },
+                  'pair_whitelist': pairs,
+                  'pair_blacklist': ['.*(UP|DOWN|BULL|BEAR)/USDT']
+              },
+              'pairlists': [{'method': 'StaticPairList'}],
+              'entry_pricing': {'price_side': 'other', 'use_order_book': False, 'price_last_balance': 0.0},
+              'exit_pricing': {'price_side': 'other', 'use_order_book': False},
+              'order_types': {
+                  'entry': 'market', 'exit': 'market', 'emergency_exit': 'market',
+                  'force_entry': 'market', 'force_exit': 'market', 'stoploss': 'market',
+                  'stoploss_on_exchange': False
+              },
+              'unfilledtimeout': {'entry': 5, 'exit': 5, 'exit_timeout_count': 0, 'unit': 'minutes'},
+              'telegram': {'enabled': False, 'token': '', 'chat_id': ''},
+              'api_server': {
+                  'enabled': False,
+                  'listen_ip_address': '127.0.0.1',
+                  'listen_port': 8080,
+                  'username': 'research',
+                  'password': 'research-only',
+                  'jwt_secret_key': 'researchOnlyJwtSecretKey1234567890123456'
+              },
+              'internals': {'process_throttle_secs': 5}
+          }
+          with open('user_data/tst-config-x8-wide.json','w') as f:
+              json.dump(base, f, indent=2)
+          out = pathlib.Path('../../validation/external-nfi-x8-wide-v2')
+          out.mkdir(parents=True, exist_ok=True)
+          (out/'requested-pair-count.txt').write_text(str(len(pairs)) + '\n')
+          (out/'requested-pairs.json').write_text(json.dumps(pairs, indent=2))
+          print('OFFICIAL_REQUESTED_PAIRS', len(pairs))
+          PY
+
+      - name: Smoke-load X8 in Spot mode
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade list-strategies \
+            --config /freqtrade/user_data/tst-config-x8-wide.json \
+            --strategy-path /freqtrade/user_data/tst-strategies \
+            | tee ../../validation/external-nfi-x8-wide-v2/list-strategies.log
+          grep -q 'NostalgiaForInfinityX8' ../../validation/external-nfi-x8-wide-v2/list-strategies.log
+
+      - name: Download official Binance Spot research universe
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade download-data \
+            --config /freqtrade/user_data/tst-config-x8-wide.json \
+            --timeframes 1m 5m 15m 1h 4h 1d \
+            --timerange "$FULL_TIMERANGE" \
+            | tee ../../validation/external-nfi-x8-wide-v2/download.log
+
+      - name: Run X8 wide triage
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          OUT=../../validation/external-nfi-x8-wide-v2
+          run_bt() {
+            tag="$1"; timerange="$2"; fee="$3"
+            set +e
+            docker compose run --rm freqtrade backtesting \
+              --config /freqtrade/user_data/tst-config-x8-wide.json \
+              --strategy NostalgiaForInfinityX8 \
+              --strategy-path /freqtrade/user_data/tst-strategies \
+              --timerange "$timerange" \
+              --fee "$fee" \
+              --export none \
+              > "$OUT/$tag.log" 2>&1
+            code=$?
+            set -e
+            echo "$code" > "$OUT/$tag-exit-code.txt"
+            tail -n 120 "$OUT/$tag.log" || true
+          }
+          run_bt full-base "$FULL_TIMERANGE" 0.002
+          run_bt full-stress068 "$FULL_TIMERANGE" 0.0034
+          run_bt split2025-base "$SPLIT_2025" 0.002
+          run_bt split2026-base "$SPLIT_2026" 0.002
+
+      - name: Build fail-closed wide verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          from datetime import date
+          root = pathlib.Path('validation/external-nfi-x8-wide-v2')
+
+          def parse(tag):
+              p = root / f'{tag}.log'
+              text = p.read_text(errors='ignore') if p.exists() else ''
+              try: code = int((root/f'{tag}-exit-code.txt').read_text().strip())
+              except Exception: code = 999
+              def grab(pattern, cast=float):
+                  m = re.search(pattern, text, flags=re.I)
+                  if not m: return None
+                  try: return cast(m.group(1).replace(',', '').strip())
+                  except Exception: return None
+              trades = grab(r'Total/Daily Avg Trades\s*│\s*(\d+)', int)
+              if trades is None: trades = grab(r'│\s*TOTAL\s*│\s*(\d+)', int)
+              return {
+                  'exitCode': code,
+                  'trades': trades,
+                  'profitFactor': grab(r'Profit factor\s*│\s*([-+0-9.]+)'),
+                  'totalProfitPct': grab(r'Total profit %\s*│\s*([-+0-9.]+)'),
+                  'absoluteProfit': grab(r'Absolute profit\s*│\s*([-+0-9.]+)'),
+                  'maxDrawdownPct': grab(r'Max % of account underwater\s*│\s*([-+0-9.]+)'),
+                  'winRatePct': grab(r'Win rate\s*│\s*([-+0-9.]+)')
+              }
+
+          rows = {
+              'fullBase040': parse('full-base'),
+              'fullStress068': parse('full-stress068'),
+              'split2025Base040': parse('split2025-base'),
+              'split2026Base040': parse('split2026-base')
+          }
+          days = (date(2026,9,5) - date(2025,1,1)).days + 1
+          full_trades = rows['fullBase040']['trades'] or 0
+          trades_per_day = full_trades / days
+          reasons=[]
+          for label,row in rows.items():
+              if row['exitCode'] != 0: reasons.append(f'{label}:BACKTEST_ERROR')
+              if row['absoluteProfit'] is None or row['absoluteProfit'] <= 0: reasons.append(f'{label}:NONPOSITIVE_PROFIT')
+              if row['profitFactor'] is None: reasons.append(f'{label}:PF_UNAVAILABLE')
+          if full_trades < 250: reasons.append('FULL:LT_250_TRADES')
+          if trades_per_day < 0.40: reasons.append('FULL:LT_0_40_TRADES_PER_DAY')
+          if (rows['fullBase040']['profitFactor'] or 0) < 1.15: reasons.append('FULL_BASE:PF_LT_1_15')
+          if (rows['fullStress068']['profitFactor'] or 0) < 1.00: reasons.append('FULL_STRESS:PF_LT_1_00')
+          for split in ('split2025Base040','split2026Base040'):
+              if (rows[split]['trades'] or 0) < 30: reasons.append(f'{split}:LT_30_TRADES')
+              if (rows[split]['profitFactor'] or 0) < 1.00: reasons.append(f'{split}:PF_LT_1_00')
+          dd = rows['fullStress068']['maxDrawdownPct']
+          if dd is None or dd > 15.0: reasons.append('FULL_STRESS:DD_GT_15_OR_UNAVAILABLE')
+
+          requested = int((root/'requested-pair-count.txt').read_text().strip()) if (root/'requested-pair-count.txt').exists() else None
+          result = {
+              'engine': 'NFI_X8_WIDE_V2_TRIAGE',
+              'strategy': 'NostalgiaForInfinityX8',
+              'researchOnly': True,
+              'liveAuthorization': False,
+              'upstreamSha': (root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,
+              'requestedUniverse': 'NFI official pairlist-backtest-static-binance-spot-usdt.json',
+              'requestedPairCount': requested,
+              'walletUSDT': 50,
+              'stakeUSDT': 10,
+              'maxOpenTrades': 3,
+              'period': '2025-01-01..2026-09-05',
+              'periodDays': days,
+              'tradesPerDay': trades_per_day,
+              'costsRoundTripApprox': {'base': 0.004, 'stress': 0.0068},
+              'rows': rows,
+              'gate': {
+                  'minFullTrades': 250,
+                  'minTradesPerDay': 0.40,
+                  'minFullBasePF': 1.15,
+                  'minFullStressPF': 1.00,
+                  'minSplitTrades': 30,
+                  'minSplitPF': 1.00,
+                  'maxStressDrawdownPct': 15.0
+              },
+              'pass': not reasons,
+              'status': 'PASS_TO_STRICT_GATE' if not reasons else 'REJECT_WIDE_TRIAGE',
+              'reasons': reasons,
+              'nextGate': 'lookahead analysis + chronological walk-forward + unseen-symbol holdout + 0.80/1.00% round-trip stress + forward shadow',
+              'note': 'This broad historical screen is not true author-unseen OOS because NFI X8 was developed through 2026. It cannot authorize live trading.'
+          }
+          (root/'verdict.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfi-x8-wide-v2
+          path: validation/external-nfi-x8-wide-v2/**
+          if-no-files-found: error
