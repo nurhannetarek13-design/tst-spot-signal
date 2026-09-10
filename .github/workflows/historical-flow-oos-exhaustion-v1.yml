@@ -1,0 +1,115 @@
+name: Historical Flow OOS Exhaustion V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_flow_oos_exhaustion_v1.py"
+      - ".github/workflows/historical-flow-oos-exhaustion-v1.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: historical-flow-oos-exhaustion-v1
+  cancel-in-progress: true
+
+jobs:
+  build-oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, BNBUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow
+      - name: Build disjoint OOS week
+        run: |
+          python research/binance_vision_historical_feature_layer.py \
+            --symbol "${{ matrix.symbol }}" \
+            --start 2025-01-08 \
+            --end 2025-01-14 \
+            --freq 5min \
+            --output-dir "artifacts/oos/${{ matrix.symbol }}"
+      - name: Validate complete OOS archive coverage
+        run: |
+          python - <<'PY'
+          import glob,json,os,pandas as pd
+          root=f"artifacts/oos/{os.environ['PAIR']}"
+          j=glob.glob(root+'/*.json'); p=glob.glob(root+'/*.parquet')
+          assert len(j)==1 and len(p)==1
+          m=json.load(open(j[0])); d=pd.read_parquet(p[0])
+          assert m['failures']==[],m['failures']
+          assert m['authorization']=='RESEARCH_ONLY' and m['liveTrading'] is False
+          assert len(d)>=7*24*12*0.95
+          assert m['rawRows']['aggTrades']>0
+          assert m['rawRows']['markPriceKlines']>0
+          assert m['rawRows']['indexPriceKlines']>0
+          assert m['rawRows']['premiumIndexKlines']>0
+          print({'pair':os.environ['PAIR'],'rows':len(d)})
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: historical-flow-oos-${{ matrix.symbol }}-2025w02
+          path: artifacts/oos/${{ matrix.symbol }}
+          retention-days: 14
+
+  validate:
+    needs: build-oos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow scipy
+      - name: Download this run OOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: historical-flow-oos-*-2025w02
+          path: artifacts/oos
+          merge-multiple: true
+      - name: Download frozen discovery report
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34485533626
+          name: historical-flow-discovery-gate-v1-report
+          path: artifacts/discovery
+      - name: Run frozen de-clustered OOS test
+        run: |
+          python research/historical_flow_oos_exhaustion_v1.py \
+            --discovery artifacts/discovery/historical-flow-discovery-gate-v1.json \
+            --input "artifacts/oos/**/*.parquet" \
+            --output validation/edges/historical-flow-oos-exhaustion-v1.json
+      - name: Enforce Spot-only research contract
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('validation/edges/historical-flow-oos-exhaustion-v1.json'))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['futuresTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['productionUseIfValidated']=='SPOT_RISK_OFF_ONLY'
+          assert d['candidate']['declusterMinutes']==240
+          print(json.dumps({'pooled':d['pooled'],'supportingSymbols':d['supportingSymbols'],'gate':d['gate'],'decision':d['decision']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-flow-oos-exhaustion-v1-report
+          path: validation/edges/historical-flow-oos-exhaustion-v1.json
+          retention-days: 14
