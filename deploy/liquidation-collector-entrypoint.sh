@@ -4,18 +4,22 @@ set -eu
 COINALYZE_OUT="${COINALYZE_DATA_DIR:-/data/coinalyze-liquidations}"
 COINALYZE_DAYS="${COINALYZE_BACKFILL_DAYS:-365}"
 COINALYZE_INTERVAL="${COINALYZE_INTERVAL:-daily}"
+RUN_STARTUP_RESEARCH="${RUN_STARTUP_RESEARCH:-0}"
 
 python /app/binance_public_proxy.py &
 PROXY_PID=$!
 
-# The forward collector is the time-sensitive process. Start it immediately so
-# research backfills/replications never create a liquidation-data blind spot.
+# Time-sensitive forward collectors start immediately. Historical research is
+# optional and must never create a collection blind spot.
 python /app/forward_liquidation_collector.py &
 COLLECTOR_PID=$!
+python /app/forward_microstructure_collector_v1.py &
+MICRO_PID=$!
 
 RESEARCH_PID=""
 cleanup() {
   [ -z "${RESEARCH_PID:-}" ] || kill "$RESEARCH_PID" 2>/dev/null || true
+  kill "$MICRO_PID" 2>/dev/null || true
   kill "$COLLECTOR_PID" 2>/dev/null || true
   kill "$PROXY_PID" 2>/dev/null || true
 }
@@ -39,9 +43,13 @@ run_research_tasks() {
   fi
 }
 
-run_research_tasks &
-RESEARCH_PID=$!
+if [ "$RUN_STARTUP_RESEARCH" = "1" ]; then
+  run_research_tasks &
+  RESEARCH_PID=$!
+else
+  echo "{\"kind\":\"startup_research_skipped\",\"authorization\":\"RESEARCH_ONLY\",\"reason\":\"disabled_after_completed_validation\"}"
+fi
 
-# Keep the service lifecycle tied to the collector. If it exits, Railway's
-# restart policy can recover it instead of leaving only research processes alive.
+# The liquidation collector remains the service lifecycle anchor. The
+# microstructure collector has its own retry loop and is terminated with it.
 wait "$COLLECTOR_PID"
