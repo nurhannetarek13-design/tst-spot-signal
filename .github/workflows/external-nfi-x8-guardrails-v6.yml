@@ -1,0 +1,192 @@
+name: NFI X8 Guardrails V6
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - '.github/workflows/external-nfi-x8-guardrails-v6.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  latest-x8-guardrails:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NFI_SHA: 55f70459ea44e280763d0fb65f3172bad6d1a964
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact latest NFI
+        run: |
+          set -euo pipefail
+          mkdir -p external/NostalgiaForInfinity validation/external-nfi-x8-guardrails-v6
+          git -C external/NostalgiaForInfinity init
+          git -C external/NostalgiaForInfinity remote add origin https://github.com/iterativv/NostalgiaForInfinity.git
+          git -C external/NostalgiaForInfinity fetch --depth 1 origin "$NFI_SHA"
+          git -C external/NostalgiaForInfinity checkout --detach FETCH_HEAD
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-x8-guardrails-v6/upstream-sha.txt
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker compose build freqtrade
+
+      - name: Prepare latest X8 no-DCA variants
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          mkdir -p user_data/tst-strategies
+          cp NostalgiaForInfinityX8.py user_data/tst-strategies/
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            freqtrade:
+              volumes:
+                - "./NostalgiaForInfinityX.py:/freqtrade/NostalgiaForInfinityX.py:ro"
+                - "./NostalgiaForInfinityX2.py:/freqtrade/NostalgiaForInfinityX2.py:ro"
+                - "./NostalgiaForInfinityX3.py:/freqtrade/NostalgiaForInfinityX3.py:ro"
+                - "./NostalgiaForInfinityX4.py:/freqtrade/NostalgiaForInfinityX4.py:ro"
+                - "./NostalgiaForInfinityX5.py:/freqtrade/NostalgiaForInfinityX5.py:ro"
+                - "./NostalgiaForInfinityX6.py:/freqtrade/NostalgiaForInfinityX6.py:ro"
+                - "./NostalgiaForInfinityX7.py:/freqtrade/NostalgiaForInfinityX7.py:ro"
+                - "./NostalgiaForInfinityX8.py:/freqtrade/NostalgiaForInfinityX8.py:ro"
+                - "./legacy:/freqtrade/legacy:ro"
+          YAML
+          cat > user_data/tst-strategies/NFIX8GuardrailsLatest.py <<'PY'
+          from NostalgiaForInfinityX8 import NostalgiaForInfinityX8
+
+          class _NoDcaLatest(NostalgiaForInfinityX8):
+              position_adjustment_enable = False
+              max_entry_position_adjustment = 0
+              def custom_stake_amount(self, pair, current_time, current_rate, proposed_stake,
+                                      min_stake, max_stake, leverage, entry_tag, side, **kwargs):
+                  return min(float(proposed_stake), float(max_stake), 10.0)
+
+          class NFIX8Latest_SL10(_NoDcaLatest):
+              stoploss = -0.10
+          class NFIX8Latest_SL05(_NoDcaLatest):
+              stoploss = -0.05
+          class NFIX8Latest_SL03(_NoDcaLatest):
+              stoploss = -0.03
+          PY
+          python - <<'PY'
+          import json, pathlib
+          pairs=[
+            'BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT',
+            'UNI/USDT','LDO/USDT','NEAR/USDT','AAVE/USDT','LTC/USDT','ATOM/USDT','TRX/USDT','SUI/USDT','BCH/USDT','ETC/USDT'
+          ]
+          cfg={
+            '$schema':'https://schema.freqtrade.io/schema.json','bot_name':'TST NFI X8 Latest Guardrails',
+            'stake_currency':'USDT','stake_amount':10,'max_open_trades':3,'dry_run_wallet':50,
+            'tradable_balance_ratio':0.90,'fiat_display_currency':'USD','dry_run':True,
+            'trading_mode':'spot','margin_mode':'','timeframe':'5m','process_only_new_candles':True,
+            'exchange':{'name':'binance','key':'','secret':'','ccxt_config':{'enableRateLimit':True,'urls':{'api':{'public':'https://data-api.binance.vision/api/v3','private':'https://api.binance.com/api','sapi':'https://api.binance.com/sapi'}},'options':{'defaultType':'spot','fetchMarkets':['spot']}},'pair_whitelist':pairs,'pair_blacklist':['.*(UP|DOWN|BULL|BEAR)/USDT']},
+            'pairlists':[{'method':'StaticPairList'}],
+            'entry_pricing':{'price_side':'other','use_order_book':False,'price_last_balance':0.0},
+            'exit_pricing':{'price_side':'other','use_order_book':False},
+            'order_types':{'entry':'market','exit':'market','emergency_exit':'market','force_entry':'market','force_exit':'market','stoploss':'market','stoploss_on_exchange':False},
+            'unfilledtimeout':{'entry':5,'exit':5,'exit_timeout_count':0,'unit':'minutes'},
+            'telegram':{'enabled':False,'token':'','chat_id':''},
+            'api_server':{'enabled':False,'listen_ip_address':'127.0.0.1','listen_port':8080,'username':'research','password':'research-only','jwt_secret_key':'researchOnlyJwtSecretKey1234567890123456'},
+            'internals':{'process_throttle_secs':5}
+          }
+          json.dump(cfg,open('user_data/tst-config-v6.json','w'),indent=2)
+          pathlib.Path('../../validation/external-nfi-x8-guardrails-v6/pairs.json').write_text(json.dumps(pairs,indent=2))
+          PY
+
+      - name: Smoke-load latest guardrail variants
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade list-strategies \
+            --config /freqtrade/user_data/tst-config-v6.json \
+            --strategy-path /freqtrade/user_data/tst-strategies \
+            | tee ../../validation/external-nfi-x8-guardrails-v6/list-strategies.log
+          for s in NFIX8Latest_SL10 NFIX8Latest_SL05 NFIX8Latest_SL03; do grep -q "$s" ../../validation/external-nfi-x8-guardrails-v6/list-strategies.log; done
+
+      - name: Download Spot data
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker compose run --rm freqtrade download-data \
+            --config /freqtrade/user_data/tst-config-v6.json \
+            --timeframes 5m 15m 1h 4h 1d --timerange 20250101-20260905 \
+            | tee ../../validation/external-nfi-x8-guardrails-v6/download.log
+
+      - name: Backtest latest no-DCA hard stops
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          OUT=../../validation/external-nfi-x8-guardrails-v6
+          run_bt() {
+            strategy="$1"; year="$2"; timerange="$3"; fee="$4"; suffix="$5"
+            tag="${strategy}-${year}-${suffix}"
+            set +e
+            docker compose run --rm freqtrade backtesting \
+              --config /freqtrade/user_data/tst-config-v6.json \
+              --strategy "$strategy" --strategy-path /freqtrade/user_data/tst-strategies \
+              --timerange "$timerange" --fee "$fee" --export none > "$OUT/$tag.log" 2>&1
+            code=$?
+            set -e
+            echo "$code" > "$OUT/$tag-exit-code.txt"
+            tail -n 50 "$OUT/$tag.log" || true
+          }
+          for s in NFIX8Latest_SL10 NFIX8Latest_SL05 NFIX8Latest_SL03; do
+            run_bt "$s" 2025 20250101-20251231 0.002 base040
+            run_bt "$s" 2026 20260101-20260905 0.002 base040
+            run_bt "$s" 2025 20250101-20251231 0.004 stress080
+            run_bt "$s" 2026 20260101-20260905 0.004 stress080
+          done
+
+      - name: Build fail-closed verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json,pathlib,re
+          root=pathlib.Path('validation/external-nfi-x8-guardrails-v6')
+          variants=['NFIX8Latest_SL10','NFIX8Latest_SL05','NFIX8Latest_SL03']
+          def parse(tag):
+              text=(root/f'{tag}.log').read_text(errors='ignore') if (root/f'{tag}.log').exists() else ''
+              try: code=int((root/f'{tag}-exit-code.txt').read_text().strip())
+              except Exception: code=999
+              def g(pat,cast=float):
+                  m=re.search(pat,text,re.I)
+                  if not m:return None
+                  try:return cast(m.group(1).replace(',','').strip())
+                  except Exception:return None
+              trades=g(r'Total/Daily Avg Trades\s*│\s*(\d+)',int)
+              if trades is None: trades=g(r'│\s*TOTAL\s*│\s*(\d+)',int)
+              return {'exitCode':code,'trades':trades,'profitFactor':g(r'Profit factor\s*│\s*([-+0-9.]+)'),'totalProfitPct':g(r'Total profit %\s*│\s*([-+0-9.]+)'),'absoluteProfit':g(r'Absolute profit\s*│\s*([-+0-9.]+)'),'maxBalanceDrawdownPct':g(r'Max % of account underwater \(balance\)\s*│\s*([-+0-9.]+)'),'worstDayUSDT':g(r'Worst day\s*│\s*([-+0-9.]+)\s+USDT')}
+          results={}
+          for v in variants:
+              rows={}
+              for y in ('2025','2026'):
+                  rows[f'{y}_base040']=parse(f'{v}-{y}-base040')
+                  rows[f'{y}_stress080']=parse(f'{v}-{y}-stress080')
+              reasons=[]
+              for label,r in rows.items():
+                  if r['exitCode']!=0: reasons.append(f'{label}:ERROR_{r["exitCode"]}')
+                  if (r['trades'] or 0)<20: reasons.append(f'{label}:LT_20_TRADES')
+                  if r['absoluteProfit'] is None or r['absoluteProfit']<=0: reasons.append(f'{label}:NONPOSITIVE')
+                  floor=1.05 if 'stress' in label else 1.15
+                  if (r['profitFactor'] or 0)<floor: reasons.append(f'{label}:PF_LT_{floor:.2f}')
+                  if r['maxBalanceDrawdownPct'] is None or r['maxBalanceDrawdownPct']>15: reasons.append(f'{label}:DD_GT_15')
+                  if r['worstDayUSDT'] is None or r['worstDayUSDT'] < -2: reasons.append(f'{label}:WORST_DAY_GT_2USDT')
+              results[v]={'rows':rows,'pass':not reasons,'reasons':reasons}
+          passing=[v for v,r in results.items() if r['pass']]
+          def score(v):
+              a=results[v]['rows']['2025_stress080'];b=results[v]['rows']['2026_stress080']
+              return min(a['profitFactor'] or -999,b['profitFactor'] or -999),(a['absoluteProfit'] or -999)+(b['absoluteProfit'] or -999)
+          winner=max(passing,key=score) if passing else None
+          result={'engine':'NFI_X8_GUARDRAILS_V6_LATEST','researchOnly':True,'liveAuthorization':False,'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,'contract':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3,'positionAdjustment':False,'noDCA':True,'dailyLossGateUSDT':2},'variants':results,'winner':winner,'status':'PASS_TO_DEEP_VALIDATION' if winner else 'NO_USER_SAFE_VARIANT','nextGate':'lookahead + frozen chronological walk-forward + unseen-symbol holdout + >=1.00% round-trip stress + forward shadow' if winner else 'do not wire live'}
+          (root/'verdict.json').write_text(json.dumps(result,indent=2)); print(json.dumps(result,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfi-x8-guardrails-v6
+          path: validation/external-nfi-x8-guardrails-v6/**
+          if-no-files-found: error
