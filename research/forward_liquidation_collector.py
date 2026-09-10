@@ -24,9 +24,13 @@ import websockets
 AUTHORIZATION = "RESEARCH_ONLY"
 STREAM_NAME = "!forceOrder@arr"
 WS_URL = os.getenv("BINANCE_FORCE_ORDER_WS", "wss://fstream.binance.com/market/ws/!forceOrder@arr")
-SYMBOL_SPEC = os.getenv("LIQ_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT").strip()
-CAPTURE_ALL_USDT = SYMBOL_SPEC.upper() in {"ALL", "ALL_USDT", "*"}
-SYMBOLS = {s.strip().upper() for s in SYMBOL_SPEC.split(",") if s.strip()} if not CAPTURE_ALL_USDT else set()
+# LIQ_SYMBOLS remains the research universe used by the Coinalyze scripts.
+# LIQ_CAPTURE_SCOPE controls only this forward collector so all-market capture
+# cannot accidentally mutate historical-research symbol selection.
+RESEARCH_SYMBOL_SPEC = os.getenv("LIQ_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT").strip()
+CAPTURE_SCOPE = os.getenv("LIQ_CAPTURE_SCOPE", "").strip().upper()
+CAPTURE_ALL_USDT = CAPTURE_SCOPE in {"ALL", "ALL_USDT", "*"}
+SYMBOLS = {s.strip().upper() for s in RESEARCH_SYMBOL_SPEC.split(",") if s.strip()}
 SCOPE_LABEL = "ALL_USDT" if CAPTURE_ALL_USDT else ",".join(sorted(SYMBOLS))
 
 DATA_DIR = pathlib.Path(os.getenv("LIQ_DATA_DIR", "data/forward-liquidations"))
