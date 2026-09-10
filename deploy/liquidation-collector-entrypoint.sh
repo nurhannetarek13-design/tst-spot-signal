@@ -13,9 +13,9 @@ PROXY_PID=$!
 # optional and must never create a collection blind spot.
 python /app/forward_liquidation_collector.py &
 COLLECTOR_PID=$!
-# Give the local proxy a moment to bind before v3 asks it for Spot exchangeInfo.
+# Give the local proxy a moment to bind before v4 asks it for Spot exchangeInfo.
 sleep 1
-python /app/forward_microstructure_collector_v3.py &
+python /app/forward_microstructure_collector_v4.py &
 MICRO_PID=$!
 
 RESEARCH_PID=""
