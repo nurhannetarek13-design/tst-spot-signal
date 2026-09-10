@@ -1,0 +1,56 @@
+name: Historical Flow Frozen Retest V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/historical_flow_frozen_retest_v1.py'
+      - '.github/workflows/historical-flow-frozen-retest-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  retest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, DOGEUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Frozen untouched Jan 15-28 retest
+        run: |
+          python research/historical_flow_frozen_retest_v1.py \
+            --symbol '${{ matrix.symbol }}' \
+            --start 2025-01-01 \
+            --eval-start 2025-01-15 \
+            --end 2025-01-28 \
+            --output-dir artifacts/${{ matrix.symbol }}
+      - name: Research-only contract
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          p=glob.glob(f"artifacts/{os.environ['PAIR']}/*.json")[0]
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['selectionWindow']=='2025-01-01..2025-01-14'
+          print(json.dumps({'symbol':d['symbol'],'passCount':d['passCount'],'results':d['results']},indent=2))
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frozen-retest-${{ matrix.symbol }}-jan15-28
+          path: artifacts/${{ matrix.symbol }}
+          retention-days: 14
