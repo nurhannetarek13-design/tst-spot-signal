@@ -18,3 +18,4 @@ for s in SYMS:
       except Exception as e:
         out.append({'symbol':s,'date':d,'kind':kind,'ok':False,'error':type(e).__name__+': '+str(e)[:220],'file':fn})
 print(json.dumps(out,indent=2))
+# probe-version: 2
