@@ -1,0 +1,24 @@
+name: Crypto LOB Stream API Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/crypto_lob_stream_api_probe.py'
+      - '.github/workflows/crypto-lob-stream-api-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install crypto-lob-stream
+      - run: python research/crypto_lob_stream_api_probe.py
