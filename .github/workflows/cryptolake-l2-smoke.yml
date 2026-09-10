@@ -1,0 +1,23 @@
+name: Cryptolake L2 Smoke
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/cryptolake_l2_round.py'
+      - '.github/workflows/cryptolake-l2-smoke.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - run: python research/cryptolake_l2_round.py --start 2025-01-09 --days 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cryptolake-l2-smoke
+          path: artifacts/cryptolake-l2-smoke
+          retention-days: 14
