@@ -1,0 +1,58 @@
+name: Derivatives Pressure Forward Validator V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/derivatives_pressure_forward_validator_v1.py"
+      - ".github/workflows/derivatives-pressure-forward-validator-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: derivatives-pressure-forward-validator-v1
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax check
+        run: python -m py_compile research/derivatives_pressure_forward_validator_v1.py
+
+      - name: Run frozen forward validation
+        run: python research/derivatives_pressure_forward_validator_v1.py
+
+      - name: Enforce research-only fail-closed output
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/derivatives-pressure-forward-validation-latest.json'
+          d=json.load(open(p))
+          assert d['engine']=='DERIVATIVES_PRESSURE_FORWARD_VALIDATOR_V1'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['frozenEventDefinition']['scoreMin']==90
+          assert d['frozenEventDefinition']['paperLongPressure'] is True
+          assert d['frozenEventDefinition']['entry']=='NEXT_15M_OPEN'
+          assert d['costs']['normalRoundTrip']==0.0028
+          assert d['costs']['stressRoundTrip']==0.005
+          print(json.dumps({'status':d['status'],'episodes':d['episodes'],'mature24h':d['mature24h'],'metrics':d['metrics']},indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: derivatives-pressure-forward-validator-v1-report
+          path: validation/edges/derivatives-pressure-forward-validation-latest.json
+          retention-days: 14
