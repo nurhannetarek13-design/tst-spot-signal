@@ -1,0 +1,305 @@
+{
+  "authorization": "RESEARCH_ONLY",
+  "baseline_events": 3857,
+  "baseline_ruleset_hash": "c64b53d042c98300",
+  "chronological_oos": {
+    "n": 0,
+    "pass": false
+  },
+  "discovery_cutoff_ts": 1780585200,
+  "discovery_results": {
+    "BASELINE": {
+      "bootstrap95": [
+        -0.601,
+        -0.5356
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.569,
+      "median_abs_mae_pct": 0.4308,
+      "median_mfe_mae_ratio": 0.888,
+      "median_mfe_pct": 0.3825,
+      "median_stressed_net_pct": -0.6598,
+      "n": 1868,
+      "pass": false,
+      "positive_rate_stressed": 0.1943,
+      "profit_factor_stressed": 0.1878,
+      "stop_rate": 0.2864,
+      "timeout_rate": 0.584,
+      "tp_rate": 0.1296
+    },
+    "BULL_RECLAIM": {
+      "bootstrap95": [
+        -0.6092,
+        -0.5061
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.5577,
+      "median_abs_mae_pct": 0.4904,
+      "median_mfe_mae_ratio": 0.9731,
+      "median_mfe_pct": 0.4772,
+      "median_stressed_net_pct": -0.6941,
+      "n": 1074,
+      "pass": false,
+      "positive_rate_stressed": 0.2309,
+      "profit_factor_stressed": 0.219,
+      "stop_rate": 0.3156,
+      "timeout_rate": 0.527,
+      "tp_rate": 0.1574
+    },
+    "BULL_RECLAIM_MAX12PCT": {
+      "bootstrap95": [
+        -0.5945,
+        -0.5021
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.5488,
+      "median_abs_mae_pct": 0.4835,
+      "median_mfe_mae_ratio": 0.979,
+      "median_mfe_pct": 0.4734,
+      "median_stressed_net_pct": -0.6875,
+      "n": 1058,
+      "pass": false,
+      "positive_rate_stressed": 0.2325,
+      "profit_factor_stressed": 0.2215,
+      "stop_rate": 0.3119,
+      "timeout_rate": 0.5293,
+      "tp_rate": 0.1588
+    },
+    "BULL_RECLAIM_RS_POS": {
+      "bootstrap95": [
+        -0.6063,
+        -0.5126
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.5619,
+      "median_abs_mae_pct": 0.5016,
+      "median_mfe_mae_ratio": 0.9559,
+      "median_mfe_pct": 0.4795,
+      "median_stressed_net_pct": -0.6939,
+      "n": 1027,
+      "pass": false,
+      "positive_rate_stressed": 0.2298,
+      "profit_factor_stressed": 0.2179,
+      "stop_rate": 0.3204,
+      "timeout_rate": 0.5248,
+      "tp_rate": 0.1548
+    },
+    "BULL_RECLAIM_SCORE95": {
+      "bootstrap95": [
+        -0.6574,
+        -0.5378
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.5964,
+      "median_abs_mae_pct": 0.4787,
+      "median_mfe_mae_ratio": 0.8954,
+      "median_mfe_pct": 0.4286,
+      "median_stressed_net_pct": -0.7001,
+      "n": 518,
+      "pass": false,
+      "positive_rate_stressed": 0.195,
+      "profit_factor_stressed": 0.1641,
+      "stop_rate": 0.3166,
+      "timeout_rate": 0.5425,
+      "tp_rate": 0.1409
+    },
+    "BULL_RECLAIM_TAKER60": {
+      "bootstrap95": [
+        -0.6553,
+        -0.5509
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.6044,
+      "median_abs_mae_pct": 0.4781,
+      "median_mfe_mae_ratio": 0.8877,
+      "median_mfe_pct": 0.4244,
+      "median_stressed_net_pct": -0.7245,
+      "n": 815,
+      "pass": false,
+      "positive_rate_stressed": 0.2061,
+      "profit_factor_stressed": 0.1715,
+      "stop_rate": 0.3129,
+      "timeout_rate": 0.5521,
+      "tp_rate": 0.135
+    },
+    "BULL_RECLAIM_TAKER62_VOL18": {
+      "bootstrap95": [
+        -0.6647,
+        -0.55
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.6035,
+      "median_abs_mae_pct": 0.4761,
+      "median_mfe_mae_ratio": 0.8579,
+      "median_mfe_pct": 0.4085,
+      "median_stressed_net_pct": -0.7161,
+      "n": 586,
+      "pass": false,
+      "positive_rate_stressed": 0.1962,
+      "profit_factor_stressed": 0.1664,
+      "stop_rate": 0.314,
+      "timeout_rate": 0.5461,
+      "tp_rate": 0.1399
+    },
+    "BULL_REGIME": {
+      "bootstrap95": [
+        -0.6075,
+        -0.5118
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.5596,
+      "median_abs_mae_pct": 0.4898,
+      "median_mfe_mae_ratio": 0.9657,
+      "median_mfe_pct": 0.473,
+      "median_stressed_net_pct": -0.6941,
+      "n": 1080,
+      "pass": false,
+      "positive_rate_stressed": 0.2296,
+      "profit_factor_stressed": 0.2175,
+      "stop_rate": 0.3157,
+      "timeout_rate": 0.5278,
+      "tp_rate": 0.1565
+    },
+    "RECLAIM_ONLY": {
+      "bootstrap95": [
+        -0.6011,
+        -0.5338
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.569,
+      "median_abs_mae_pct": 0.4477,
+      "median_mfe_mae_ratio": 0.9039,
+      "median_mfe_pct": 0.4047,
+      "median_stressed_net_pct": -0.6694,
+      "n": 1804,
+      "pass": false,
+      "positive_rate_stressed": 0.2007,
+      "profit_factor_stressed": 0.1928,
+      "stop_rate": 0.2955,
+      "timeout_rate": 0.571,
+      "tp_rate": 0.1336
+    },
+    "STRONG_BULL_RECLAIM": {
+      "bootstrap95": [
+        -0.5982,
+        -0.2467
+      ],
+      "discovery_eligible": false,
+      "mean_stressed_net_pct": -0.428,
+      "median_abs_mae_pct": 0.5653,
+      "median_mfe_mae_ratio": 1.5366,
+      "median_mfe_pct": 0.8686,
+      "median_stressed_net_pct": -0.4995,
+      "n": 137,
+      "pass": false,
+      "positive_rate_stressed": 0.3066,
+      "profit_factor_stressed": 0.3765,
+      "stop_rate": 0.2628,
+      "timeout_rate": 0.5474,
+      "tp_rate": 0.1898
+    }
+  },
+  "download_failures": [],
+  "evidence_pass": false,
+  "generated_at": 1788998758.544221,
+  "liveTrading": false,
+  "months": [
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08"
+  ],
+  "selected_all_history": {
+    "n": 0,
+    "pass": false
+  },
+  "selected_lane_metrics": {},
+  "selected_regime_metrics": {},
+  "selected_rules": {},
+  "selected_variant": null,
+  "selection_policy": "pre_registered_stricter_subsets; select on first 60% non-holdout only; freeze; validate chrono OOS + unseen symbols + 3 walk-forward folds",
+  "source": "Binance Vision Spot monthly 15m via historical_ev_replay.py",
+  "status": "NO_DISCOVERY_WINNER",
+  "symbols_with_data": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "TRXUSDT",
+    "LINKUSDT",
+    "AVAXUSDT",
+    "SUIUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "XLMUSDT",
+    "DOTUSDT",
+    "NEARUSDT",
+    "AAVEUSDT",
+    "UNIUSDT",
+    "ETCUSDT",
+    "FILUSDT",
+    "ATOMUSDT",
+    "ARBUSDT",
+    "OPUSDT",
+    "HBARUSDT"
+  ],
+  "unseen_symbol_holdout": {
+    "n": 0,
+    "pass": false,
+    "symbols": []
+  },
+  "unseen_symbol_holdout_pass": false,
+  "variant_definitions": {
+    "BASELINE": {},
+    "BULL_RECLAIM": {
+      "bull_regime": true,
+      "reclaim_only": true
+    },
+    "BULL_RECLAIM_MAX12PCT": {
+      "bull_regime": true,
+      "max_r24": 0.12,
+      "reclaim_only": true
+    },
+    "BULL_RECLAIM_RS_POS": {
+      "bull_regime": true,
+      "min_rs_btc4h": 0.0,
+      "reclaim_only": true
+    },
+    "BULL_RECLAIM_SCORE95": {
+      "bull_regime": true,
+      "min_score": 95,
+      "reclaim_only": true
+    },
+    "BULL_RECLAIM_TAKER60": {
+      "bull_regime": true,
+      "min_taker": 0.6,
+      "reclaim_only": true
+    },
+    "BULL_RECLAIM_TAKER62_VOL18": {
+      "bull_regime": true,
+      "min_taker": 0.62,
+      "min_volx": 1.8,
+      "reclaim_only": true
+    },
+    "BULL_REGIME": {
+      "bull_regime": true
+    },
+    "RECLAIM_ONLY": {
+      "reclaim_only": true
+    },
+    "STRONG_BULL_RECLAIM": {
+      "reclaim_only": true,
+      "strong_bull": true
+    }
+  },
+  "version": 1,
+  "walk_forward_folds": [],
+  "walk_forward_pass": false
+}
