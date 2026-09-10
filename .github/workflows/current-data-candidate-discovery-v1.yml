@@ -1,0 +1,36 @@
+name: Current Data Candidate Discovery V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - research/current_data_candidate_discovery_v1.py
+      - .github/workflows/current-data-candidate-discovery-v1.yml
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas
+      - run: python -m py_compile research/current_data_candidate_discovery_v1.py
+      - run: PYTHONPATH=. python research/current_data_candidate_discovery_v1.py
+      - name: Enforce research contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/current-data-candidate-discovery-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['automaticPromotion'] is False
+          assert x['costRoundTrip']==0.0028 and x['stressRoundTrip']==0.005
+          print(json.dumps({'survivors':x['survivorCount'],'top':x['survivors'][:3]},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-data-candidate-discovery-v1
+          path: validation/edges/current-data-candidate-discovery-v1.json
+          retention-days: 14
