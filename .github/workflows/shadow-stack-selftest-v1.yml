@@ -1,0 +1,39 @@
+name: Shadow Stack Selftest V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/unified_feature_store.py
+      - research/portfolio_risk.py
+      - research/shadow_forward_engine.py
+      - research/calibrated_opportunity_model.py
+      - .github/workflows/shadow-stack-selftest-v1.yml
+permissions: {contents: read}
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Compile research stack
+        run: python -m py_compile research/unified_feature_store.py research/portfolio_risk.py research/shadow_forward_engine.py research/calibrated_opportunity_model.py
+      - name: Feature store contract
+        run: PYTHONPATH=. python research/unified_feature_store.py
+      - name: Portfolio risk gate
+        run: PYTHONPATH=. python research/portfolio_risk.py
+      - name: Shadow engine contract
+        run: PYTHONPATH=. python research/shadow_forward_engine.py --selftest
+      - name: Assert no live execution imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          files=['research/unified_feature_store.py','research/portfolio_risk.py','research/shadow_forward_engine.py']
+          forbidden=['create_order','order_market','apiSecret','BINANCE_API_SECRET','withdraw']
+          text='\n'.join(Path(x).read_text() for x in files)
+          hits=[x for x in forbidden if x in text]
+          assert not hits, hits
+          print('RESEARCH_ONLY / SHADOW_ONLY contract PASS')
+          PY
