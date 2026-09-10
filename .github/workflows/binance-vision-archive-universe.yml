@@ -1,0 +1,42 @@
+name: Binance Vision Archive Universe Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/binance_vision_archive_universe.py"
+      - ".github/workflows/binance-vision-archive-universe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m py_compile research/binance_vision_archive_universe.py
+      - name: Build archive-derived universe
+        run: python research/binance_vision_archive_universe.py
+      - name: Assert research-only archive coverage
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/binance-vision-archive-universe.json'
+          x=json.load(open(p))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['counts']['archiveResearchUSDT'] > 0
+          print('archive universe audit assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binance-vision-archive-universe
+          path: validation/edges/binance-vision-archive-universe.json
+          retention-days: 14
