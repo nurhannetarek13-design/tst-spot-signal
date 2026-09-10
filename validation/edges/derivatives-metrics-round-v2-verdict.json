@@ -1,0 +1,44 @@
+{
+  "engine": "DERIVATIVES_METRICS_RESEARCH_ROUND_V2_VERDICT",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "automaticPromotion": false,
+  "status": "COMPLETE",
+  "selectionWindow": "2025-01-01..2025-01-28",
+  "untouchedWindow": "2025-01-29..2025-02-11",
+  "featureMarket": "BINANCE_USDM_FUTURES",
+  "targetMarket": "BINANCE_SPOT",
+  "universe": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"],
+  "hypothesesScanned": 180,
+  "selectionSurvivorCount": 9,
+  "untouchedProductionPassCount": 0,
+  "productionCandidate": false,
+  "costs": {
+    "normalRoundTrip": 0.0028,
+    "stressRoundTrip": 0.005
+  },
+  "selectionSurvivors": [
+    {"symbol":"BTCUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"15m","oosMean":0.001104530859084421,"oosHitRate":0.6180555555555556,"oosProfitFactor":1.9220130300571308},
+    {"symbol":"BTCUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"60m","oosMean":0.0007028626963069798,"oosHitRate":0.5902777777777778,"oosProfitFactor":1.2606969079170307},
+    {"symbol":"ETHUSDT","feature":"oi_contracts_chg_1h","side":"LOW","horizon":"15m","oosMean":0.0004795686808504144,"oosHitRate":0.581081081081081,"oosProfitFactor":1.273321558548826},
+    {"symbol":"ETHUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"15m","oosMean":0.0005619605493631848,"oosHitRate":0.5916666666666667,"oosProfitFactor":1.317711797206072},
+    {"symbol":"ETHUSDT","feature":"taker_long_short_log","side":"LOW","horizon":"15m","oosMean":0.0009100162260620243,"oosHitRate":0.5875,"oosProfitFactor":2.3328735366967437},
+    {"symbol":"SOLUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"60m","oosMean":0.004364187509380119,"oosHitRate":0.5773195876288659,"oosProfitFactor":2.0109646737738207},
+    {"symbol":"SOLUSDT","feature":"toptrader_accounts_log","side":"LOW","horizon":"240m","oosMean":0.007128809010843202,"oosHitRate":0.6620111731843575,"oosProfitFactor":2.2708179908137156},
+    {"symbol":"SOLUSDT","feature":"global_long_short_log","side":"LOW","horizon":"240m","oosMean":0.007570058955417826,"oosHitRate":0.6383495145631068,"oosProfitFactor":2.4400020531144353},
+    {"symbol":"XRPUSDT","feature":"toptrader_positions_log","side":"HIGH","horizon":"240m","oosMean":0.01049978309743743,"oosHitRate":0.6246246246246246,"oosProfitFactor":4.314775467880757}
+  ],
+  "untouchedResults": [
+    {"symbol":"BTCUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"15m","grossMean":0.00024521460064301796,"normalNetMean":-0.002554785399356982,"stressNetMean":-0.004754785399356982,"declusteredNormalNetMean":-0.00260431950490592,"normalNetBHq":0.999999999999816,"productionGatePass":false},
+    {"symbol":"BTCUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"60m","grossMean":0.0009974930042921275,"normalNetMean":-0.001802506995707873,"stressNetMean":-0.004002506995707873,"declusteredNormalNetMean":-0.0025771543442942926,"normalNetBHq":0.999999999999816,"productionGatePass":false},
+    {"symbol":"ETHUSDT","feature":"oi_contracts_chg_1h","side":"LOW","horizon":"15m","grossMean":0.0002580050239895941,"normalNetMean":-0.0025419949760104067,"stressNetMean":-0.004741994976010407,"declusteredNormalNetMean":-0.002870497189468877,"normalNetBHq":0.9999999998398064,"productionGatePass":false},
+    {"symbol":"ETHUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"15m","grossMean":-0.00024120505788441116,"normalNetMean":-0.003041205057884411,"stressNetMean":-0.005241205057884412,"declusteredNormalNetMean":-0.004105219719041656,"normalNetBHq":0.9999999998398064,"productionGatePass":false},
+    {"symbol":"ETHUSDT","feature":"taker_long_short_log","side":"LOW","horizon":"15m","grossMean":-0.0004854189652829845,"normalNetMean":-0.003285418965282984,"stressNetMean":-0.005485418965282984,"declusteredNormalNetMean":-0.003222648949430587,"normalNetBHq":0.9999999998398064,"productionGatePass":false},
+    {"symbol":"SOLUSDT","feature":"oi_value_chg_1h","side":"LOW","horizon":"60m","grossMean":0.000653,"normalNetMean":-0.002147,"stressNetMean":-0.004347,"declusteredNormalNetMean":-0.001924,"normalNetBHq":1.0,"productionGatePass":false},
+    {"symbol":"SOLUSDT","feature":"toptrader_accounts_log","side":"LOW","horizon":"240m","grossMean":0.004827,"normalNetMean":0.002027,"stressNetMean":-0.000173,"declusteredNormalNetMean":-0.006565,"normalNetBHq":0.105194,"productionGatePass":false},
+    {"symbol":"SOLUSDT","feature":"global_long_short_log","side":"LOW","horizon":"240m","grossMean":-0.004561,"normalNetMean":-0.007361,"stressNetMean":-0.009561,"declusteredNormalNetMean":-0.004710,"normalNetBHq":1.0,"productionGatePass":false},
+    {"symbol":"XRPUSDT","feature":"toptrader_positions_log","side":"HIGH","horizon":"240m","grossMean":0.002959,"normalNetMean":0.000159,"stressNetMean":-0.002041,"declusteredNormalNetMean":0.002972,"normalNetBHq":0.451359,"productionGatePass":false}
+  ],
+  "verdict": "REJECT_FAMILY_FOR_PRODUCTION_IN_CURRENT_FORM",
+  "reason": "Nine Discovery/OOS survivors were frozen and retested on a later untouched window with 0.28% normal cost, 0.50% stress cost, horizon-spacing de-clustering, and BH-FDR. Zero passed the production gate."
+}
