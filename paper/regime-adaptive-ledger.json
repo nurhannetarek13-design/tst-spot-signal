@@ -2,25 +2,9 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 14.27979728,
-  "realizedPnLUSDT": 0.00282863,
-  "openPositions": [
-    {
-      "symbol": "SPCXBUSDT",
-      "entry": 146.94,
-      "stop": 141.94103052,
-      "qty": 0.040008245886,
-      "notionalUSDT": 5.87881165,
-      "riskUSDT": 0.2,
-      "score": 82,
-      "openedAt": "2026-09-09T22:34:39.691Z",
-      "signalBarTime": "2026-09-09T20:00:00.000Z",
-      "highestClose": 146.93,
-      "barsHeld": 0,
-      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
-      "mode": "PAPER_ONLY"
-    }
-  ],
+  "cashUSDT": 20.17181165,
+  "realizedPnLUSDT": -0.00513237,
+  "openPositions": [],
   "closedTrades": [
     {
       "symbol": "ETHUSDT",
@@ -49,6 +33,20 @@
       "netPnLUSDT": 0.13734501,
       "barsHeld": 27,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
+    },
+    {
+      "symbol": "SPCXBUSDT",
+      "entry": 146.94,
+      "exit": 147.27,
+      "qty": 0.040008245886,
+      "openedAt": "2026-09-09T22:34:39.691Z",
+      "closedAt": "2026-09-10T04:46:25.885Z",
+      "reason": "EMA50_TREND_FAILURE",
+      "grossPnLUSDT": 0.01320272,
+      "costsUSDT": 0.02116372,
+      "netPnLUSDT": -0.007961,
+      "barsHeld": 1,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
     }
   ],
   "seenSignals": [
@@ -56,7 +54,7 @@
     "AVAXUSDT:1788451200000",
     "SPCXBUSDT:1788984000000"
   ],
-  "lastRunAt": "2026-09-09T22:34:39.691Z",
+  "lastRunAt": "2026-09-10T04:46:25.885Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -69,11 +67,11 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": 0.00282862,
+  "todayRealizedPnLUSDT": -0.007961,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 5.87881165,
-  "closedTradeCount": 2,
+  "openExposureUSDT": 0,
+  "closedTradeCount": 3,
   "winCount": 1,
-  "lossCount": 1,
-  "winRate": 0.5
+  "lossCount": 2,
+  "winRate": 0.3333
 }
