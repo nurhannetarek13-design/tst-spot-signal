@@ -1,0 +1,56 @@
+name: Gate D Event Discovery V3
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_d_event_symbol_chunk_v3.py'
+      - 'research/gate_d_event_aggregate_v3.py'
+      - '.github/workflows/gate-d-event-discovery-v3.yml'
+jobs:
+  chunk:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+        offset: [0, 30, 60]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - name: Build symbol chunk
+        run: PYTHONPATH=. python research/gate_d_event_symbol_chunk_v3.py --symbol ${{ matrix.symbol }} --offset-days ${{ matrix.offset }} --out chunks-v3/${{ matrix.symbol }}-${{ matrix.offset }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-v3-${{ matrix.symbol }}-${{ matrix.offset }}
+          path: chunks-v3/${{ matrix.symbol }}-${{ matrix.offset }}.json
+  aggregate:
+    needs: chunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-d-v3-*
+          path: chunks-v3
+          merge-multiple: true
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas
+      - name: Aggregate 90-day frozen gate
+        run: PYTHONPATH=. python research/gate_d_event_aggregate_v3.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-d-event-discovery-v3.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['usesML'] is False and x['usesSizing'] is False and x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next'],'period':x['period']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-event-discovery-v3
+          path: validation/edges/gate-d-event-discovery-v3.json
