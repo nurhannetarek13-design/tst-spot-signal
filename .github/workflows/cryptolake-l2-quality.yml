@@ -1,0 +1,17 @@
+name: Cryptolake L2 Quality
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/cryptolake_l2_quality.py'
+      - '.github/workflows/cryptolake-l2-quality.yml'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - run: python research/cryptolake_l2_quality.py
