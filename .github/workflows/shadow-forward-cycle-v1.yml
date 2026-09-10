@@ -1,4 +1,4 @@
-name: Shadow Forward Cycle V1
+name: Shadow Forward Cycle V2 Closed Candles
 on:
   workflow_dispatch:
   schedule:
@@ -23,58 +23,69 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Restore shadow state
+      - name: Restore isolated Gate A V2 state
         uses: actions/cache/restore@v4
         with:
           path: validation/pro_stack/state
-          key: shadow-gate-a-state-${{ github.run_id }}
+          key: shadow-gate-a-v2-state-${{ github.run_id }}
           restore-keys: |
-            shadow-gate-a-state-
-            shadow-state-
+            shadow-gate-a-v2-state-
       - run: pip install numpy pandas
-      - name: Enforce frozen Gate A inputs
+      - name: Enforce frozen Gate A V2 inputs
         run: |
           python - <<'PY'
           import json,subprocess
           c=json.load(open('research/spot_baseline_gate_a.json'))
-          assert c['experiment']=='SPOT_BASELINE_GATE_A_V1'
-          assert c['featureSet']=='SPOT_ONLY' and c['retrainingAllowed'] is False and c['derivativesFeaturesAllowed'] is False
+          assert c['experiment']=='SPOT_BASELINE_GATE_A_V2_CLOSED_CANDLES'
+          assert c['featureSet']=='SPOT_ONLY_CLOSED_CANDLES'
+          assert c['retrainingAllowed'] is False and c['derivativesFeaturesAllowed'] is False
           for p,want in c['frozenGitBlobs'].items():
               got=subprocess.check_output(['git','hash-object',p],text=True).strip()
               assert got==want,(p,got,want)
-          print('GATE_A_FREEZE_PASS')
+          print('GATE_A_V2_FREEZE_PASS')
           PY
-      - name: Build frozen Spot feature snapshot
+      - name: Build frozen closed-candle Spot feature snapshot
         run: python research/pro_stack_feature_store.py
+      - name: Assert candle finality
+        run: |
+          python - <<'PY'
+          import json,time
+          x=json.load(open('validation/pro_stack/feature_store.json'))
+          assert x['engine']=='PRO_STACK_FEATURE_STORE_V2_CLOSED_CANDLES'
+          for r in x['rows']:
+              assert r['candleClosed'] is True and int(r['candleCloseTs']) < int(x['asOfMs'])
+          assert len({r['ts'] for r in x['rows']})==1
+          print('CLOSED_CANDLE_ALIGNMENT_PASS')
+          PY
       - name: Score frozen baseline
         run: python research/pro_stack_edge_model.py
       - name: Produce shadow decisions only
         run: python research/pro_stack_shadow_trader.py
-      - name: Update persistent Gate A trades and labels
+      - name: Update persistent Gate A V2 trades and labels
         run: PYTHONPATH=. python research/shadow_forward_state.py
       - name: Labeler and performance-gate contracts
         run: |
           python research/shadow_labeler.py --selftest
           python research/shadow_performance_gate.py --selftest
-      - name: Assert research-only Gate A contract
+      - name: Assert research-only Gate A V2 contract
         run: |
           python - <<'PY'
           import json
           p=json.load(open('validation/pro_stack/state/performance.json'))
           assert p['authorization']=='RESEARCH_ONLY' and p['liveTrading'] is False
-          assert p['experiment']=='SPOT_BASELINE_GATE_A_V1'
+          assert p['experiment']=='SPOT_BASELINE_GATE_A_V2_CLOSED_CANDLES'
           assert p['shadowLabelsRole']=='PURE_VALIDATION' and p['retrainingAllowed'] is False
           assert p['derivativesFeaturesAllowed'] is False and p['gate']['liveAuthorized'] is False
           assert abs(p['costModel']['total_roundtrip_pct']-0.28)<1e-12
-          print(json.dumps({'milestone':p['milestone'],'metrics':p['metrics'],'gate':p['gate']},indent=2))
+          print(json.dumps({'milestone':p['milestone'],'metrics':p['metrics'],'gate':p['gate'],'portfolioRisk':p['portfolioRisk']},indent=2))
           PY
-      - name: Save Gate A shadow state
+      - name: Save Gate A V2 state
         uses: actions/cache/save@v4
         with:
           path: validation/pro_stack/state
-          key: shadow-gate-a-state-${{ github.run_id }}
+          key: shadow-gate-a-v2-state-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         with:
-          name: shadow-gate-a-${{ github.run_number }}
+          name: shadow-gate-a-v2-${{ github.run_number }}
           path: validation/pro_stack/
           retention-days: 14
