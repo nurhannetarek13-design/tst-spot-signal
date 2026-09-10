@@ -5,7 +5,7 @@ Sources (Binance Public Data / data.binance.vision):
 - aggTrades: aggressive buy/sell flow, delta, CVD, trade intensity
 - markPriceKlines: mark price OHLC
 - indexPriceKlines: index price OHLC
-- premiumPriceKlines: premium/basis OHLC
+- premiumIndexKlines: premium index OHLC
 
 Important: aggTrades do NOT contain order-book state, so this module never
 labels any trade-derived feature as microprice or order-book imbalance.
@@ -24,14 +24,14 @@ import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
 
 AUTHORIZATION = "RESEARCH_ONLY"
 BASE = "https://data.binance.vision/data/futures/um"
-UA = "tst-binance-vision-historical-feature-layer/1.0"
+UA = "tst-binance-vision-historical-feature-layer/1.1"
 
 AGG_COLS = [
     "aggregate_trade_id", "price", "quantity", "first_trade_id",
@@ -63,7 +63,7 @@ DATASETS = {
     "aggTrades": DatasetSpec("aggTrades"),
     "markPriceKlines": DatasetSpec("markPriceKlines", "15m"),
     "indexPriceKlines": DatasetSpec("indexPriceKlines", "15m"),
-    "premiumPriceKlines": DatasetSpec("premiumPriceKlines", "15m"),
+    "premiumIndexKlines": DatasetSpec("premiumIndexKlines", "15m"),
 }
 
 
@@ -95,7 +95,6 @@ def read_zip_csv(raw: bytes, names: list[str]) -> pd.DataFrame:
         if len(csv_names) != 1:
             raise RuntimeError(f"expected exactly one CSV in archive, got {csv_names}")
         with zf.open(csv_names[0]) as f:
-            # Binance archives are not perfectly uniform about headers across eras.
             probe = pd.read_csv(f, nrows=3, header=None)
         has_header = False
         if len(probe):
@@ -116,9 +115,13 @@ def bool_series(s: pd.Series) -> pd.Series:
     return s.astype(str).str.strip().str.lower().isin({"true", "1", "t"})
 
 
-def parse_ms_timestamp(s: pd.Series) -> pd.DatetimeIndex:
-    # USD-M futures archive timestamps are milliseconds in Binance's documented
-    # futures schema. Guard against accidental micro/nano values anyway.
+def parse_archive_timestamp(s: pd.Series) -> pd.DatetimeIndex:
+    """Normalize Binance archive timestamps defensively.
+
+    USD-M Futures archives are documented in milliseconds, while Binance Spot
+    archives moved to microseconds from 2025-01-01. This layer targets USD-M,
+    but unit detection is retained to fail safely if archive conventions shift.
+    """
     x = pd.to_numeric(s, errors="coerce")
     med = float(x.dropna().median()) if x.notna().any() else 0.0
     if med > 1e17:
@@ -133,9 +136,8 @@ def parse_ms_timestamp(s: pd.Series) -> pd.DatetimeIndex:
 def process_agg(df: pd.DataFrame, freq: str) -> pd.DataFrame:
     for c in ("price", "quantity"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
-    df = df.dropna(subset=["timestamp", "price", "quantity"])
-    df["timestamp"] = parse_ms_timestamp(df["timestamp"])
-    df = df.dropna(subset=["timestamp"]).set_index("timestamp").sort_index()
+    df["timestamp"] = parse_archive_timestamp(df["timestamp"])
+    df = df.dropna(subset=["timestamp", "price", "quantity"]).set_index("timestamp").sort_index()
     maker = bool_series(df["is_buyer_maker"])
     df["buy_base"] = np.where(~maker, df["quantity"], 0.0)
     df["sell_base"] = np.where(maker, df["quantity"], 0.0)
@@ -168,9 +170,8 @@ def process_agg(df: pd.DataFrame, freq: str) -> pd.DataFrame:
 def process_kline(df: pd.DataFrame, prefix: str, freq: str) -> pd.DataFrame:
     for c in ("open", "high", "low", "close", "volume", "quote_volume"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
-    df["open_time"] = parse_ms_timestamp(df["open_time"])
+    df["open_time"] = parse_archive_timestamp(df["open_time"])
     df = df.dropna(subset=["open_time"]).set_index("open_time").sort_index()
-    # Archives requested at 15m can be resampled upward if the target frequency is larger.
     out = df[["open", "high", "low", "close", "volume", "quote_volume"]].resample(freq, label="left", closed="left").agg({
         "open": "first", "high": "max", "low": "min", "close": "last",
         "volume": "sum", "quote_volume": "sum",
@@ -182,10 +183,6 @@ def process_kline(df: pd.DataFrame, prefix: str, freq: str) -> pd.DataFrame:
 def daily_url(spec: DatasetSpec, symbol: str, d: date) -> str:
     stamp = d.isoformat()
     return f"{BASE}/{spec.relative_dir('daily', symbol)}/{spec.filename(symbol, stamp)}"
-
-
-def monthly_url(spec: DatasetSpec, symbol: str, month: str) -> str:
-    return f"{BASE}/{spec.relative_dir('monthly', symbol)}/{spec.filename(symbol, month)}"
 
 
 def iter_days(start: date, end: date):
@@ -222,7 +219,11 @@ def build(symbol: str, start: date, end: date, freq: str, checksum: bool) -> tup
         raise RuntimeError("no aggTrades loaded; cannot build historical flow layer")
     frame = process_agg(agg_raw, freq)
 
-    for name, prefix in (("markPriceKlines", "mark"), ("indexPriceKlines", "index"), ("premiumPriceKlines", "premium")):
+    for name, prefix in (
+        ("markPriceKlines", "mark"),
+        ("indexPriceKlines", "index"),
+        ("premiumIndexKlines", "premium"),
+    ):
         raw, bad = load_dataset_daily(DATASETS[name], symbol, start, end, checksum)
         failures.extend(bad)
         loaded[name] = len(raw)
@@ -239,7 +240,7 @@ def build(symbol: str, start: date, end: date, freq: str, checksum: bool) -> tup
     frame.index.name = "ts"
     frame = frame.reset_index()
     meta = {
-        "engine": "BINANCE_VISION_HISTORICAL_FEATURE_LAYER_V1",
+        "engine": "BINANCE_VISION_HISTORICAL_FEATURE_LAYER_V1_1",
         "authorization": AUTHORIZATION,
         "liveTrading": False,
         "source": "Binance Public Data / data.binance.vision",
@@ -252,8 +253,13 @@ def build(symbol: str, start: date, end: date, freq: str, checksum: bool) -> tup
         "rawRows": loaded,
         "failures": failures,
         "featureSemantics": {
-            "tradeFlow": "derived from aggTrades aggressor side using is_buyer_maker",
-            "cvd": "cumulative signed quote-volume within the loaded sample",
+            "aggressiveBuyFlowUsd": "sum(price*quantity) where is_buyer_maker is false",
+            "aggressiveSellFlowUsd": "sum(price*quantity) where is_buyer_maker is true",
+            "deltaQuote": "buy_quote - sell_quote",
+            "cvdQuote": "cumulative delta_quote within the loaded sample",
+            "flowImbalanceQuote": "delta_quote / total_quote",
+            "markIndexBasisBps": "(mark_close/index_close - 1)*10000",
+            "premiumIndex": "Binance premiumIndexKlines; retained separately from recomputed mark/index basis",
             "microprice": "NOT AVAILABLE historically from aggTrades; requires order-book depth",
             "orderBookImbalance": "NOT AVAILABLE historically from aggTrades; requires order-book depth",
         },
