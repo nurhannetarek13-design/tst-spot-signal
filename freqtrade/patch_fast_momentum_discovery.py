@@ -29,6 +29,30 @@ s = s.replace(state_marker, state_insert, 1)
 candidate_marker = "\ndef candidate_symbols(scan: dict) -> list[tuple[str, float, float]]:\n"
 helper = r'''
 
+def _fast_spot_usdt_symbols() -> list[str]:
+    """Return currently tradable Spot/USDT symbols before ticker batching."""
+    info = api('/exchangeInfo', {})
+    rows = info.get('symbols') if isinstance(info, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError('exchangeInfo symbols were unavailable')
+
+    symbols: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get('symbol') or '').upper()
+        if str(row.get('status') or '').upper() != 'TRADING':
+            continue
+        if str(row.get('quoteAsset') or '').upper() != 'USDT':
+            continue
+        if row.get('isSpotTradingAllowed') is False:
+            continue
+        if not symbol_ok(symbol):
+            continue
+        symbols.append(symbol)
+    return symbols
+
+
 def fast_momentum_candidates() -> list[tuple[str, float, float]]:
     """Discover fresh 5m movers from the full liquid USDT universe.
 
@@ -43,9 +67,27 @@ def fast_momentum_candidates() -> list[tuple[str, float, float]]:
         return list(_fast_discovery_cache)
 
     try:
-        tickers24 = api('/ticker/24hr', {})
-        if not isinstance(tickers24, list):
-            raise RuntimeError('24h ticker universe was not a list')
+        # Binance's current ticker contract is safest when explicit symbols are
+        # supplied. Build the tradable Spot/USDT universe from exchangeInfo and
+        # request 24h statistics in <=20-symbol batches. Besides avoiding the
+        # no-symbol failure mode, <=20 keeps the 24h endpoint request weight low.
+        spot_symbols = _fast_spot_usdt_symbols()
+        tickers24: list[dict] = []
+        for i in range(0, len(spot_symbols), 20):
+            batch = spot_symbols[i:i + 20]
+            if not batch:
+                continue
+            rows = api('/ticker/24hr', {
+                'symbols': json.dumps(batch, separators=(',', ':')),
+                'type': 'FULL',
+            })
+            if isinstance(rows, dict):
+                rows = [rows]
+            if isinstance(rows, list):
+                tickers24.extend(row for row in rows if isinstance(row, dict))
+
+        if not tickers24 and spot_symbols:
+            raise RuntimeError('24h ticker batches returned no rows')
 
         volume24: dict[str, float] = {}
         eligible: list[str] = []
@@ -65,8 +107,10 @@ def fast_momentum_candidates() -> list[tuple[str, float, float]]:
             eligible.append(symbol)
 
         found: list[tuple[str, float, float, float]] = []
-        for i in range(0, len(eligible), 100):
-            batch = eligible[i:i + 100]
+        # The rolling-window endpoint caps request weight once >50 symbols are
+        # requested. Keeping batches at 50 also avoids oversized query strings.
+        for i in range(0, len(eligible), 50):
+            batch = eligible[i:i + 50]
             if not batch:
                 continue
             rows = api('/ticker', {
@@ -137,10 +181,14 @@ if old_start not in s:
 s = s.replace(old_start, new_start, 1)
 
 for required in [
+    'def _fast_spot_usdt_symbols()',
     'def fast_momentum_candidates()',
     "FAST_DISCOVERY_MIN_24H_QV = float(os.getenv('FAST_DISCOVERY_MIN_24H_QV', '3000000'))",
     'qv < FAST_DISCOVERY_MIN_24H_QV',
     "'windowSize': '5m'",
+    "api('/exchangeInfo', {})",
+    "range(0, len(spot_symbols), 20)",
+    "range(0, len(eligible), 50)",
     '[fast-discovery]',
     'for symbol, pct5, volume in fast_momentum_candidates()',
     "FAST_DISCOVERY_MIN_5M_PCT",
@@ -150,4 +198,4 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[fast-momentum-discovery] OK 3M 24h discovery floor + 5m turnover -> existing ignition/quality gates')
+print('[fast-momentum-discovery] OK batched Spot/USDT universe + 3M 24h floor + 5m turnover -> existing ignition/quality gates')
