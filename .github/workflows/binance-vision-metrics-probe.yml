@@ -1,0 +1,37 @@
+name: Binance Vision Metrics Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/binance_vision_metrics_probe.py'
+      - '.github/workflows/binance-vision-metrics-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pandas
+      - name: Probe one verified metrics archive
+        env:
+          PYTHONPATH: .
+        run: |
+          python research/binance_vision_metrics_probe.py \
+            --symbol BTCUSDT \
+            --date 2025-01-02 \
+            --output artifacts/binance-vision-metrics-probe.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: binance-vision-metrics-probe
+          path: artifacts/binance-vision-metrics-probe.json
+          retention-days: 7
