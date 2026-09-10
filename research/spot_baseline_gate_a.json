@@ -1,9 +1,9 @@
 {
-  "experiment": "SPOT_BASELINE_GATE_A_V1",
+  "experiment": "SPOT_BASELINE_GATE_A_V2_CLOSED_CANDLES",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "purpose": "Pure forward validation of the frozen Spot-only baseline before any derivatives feature addition or retraining.",
-  "featureSet": "SPOT_ONLY",
+  "purpose": "Pure forward validation of the frozen Spot-only baseline using completed 15m candles only.",
+  "featureSet": "SPOT_ONLY_CLOSED_CANDLES",
   "symbols": ["ETHUSDT", "SOLUSDT"],
   "timeframe": "15m",
   "modelStatus": "FROZEN_BASELINE_UNCALIBRATED",
@@ -12,37 +12,18 @@
   "derivativesFeaturesAllowed": false,
   "minimumClosedTradesForDecision": 50,
   "diagnosticMilestones": [10, 25],
-  "promotionGate": {
-    "profitFactorMin": 1.25,
-    "hitRateMin": 0.55,
-    "meanNetPctMinExclusive": 0.0,
-    "maxDrawdownPctMax": 8.0
-  },
-  "portfolioRisk": {
-    "maxOpenPositions": 3,
-    "maxDailyLossUSDT": 2.0,
-    "oneOpenTradePerSymbol": true
-  },
-  "costModel": {
-    "feeRoundTripPct": 0.20,
-    "spreadEstimateRoundTripPct": 0.04,
-    "slippageBufferRoundTripPct": 0.04,
-    "totalRoundTripPct": 0.28,
-    "note": "Frozen conservative Spot baseline accounting assumption. Components are reported separately; total is unchanged from the prior 0.28% baseline."
-  },
-  "barrier": {
-    "takeProfitPct": 1.2,
-    "stopLossPct": 0.7,
-    "timeoutMin": 240,
-    "sameBarAmbiguity": "SL_WINS"
-  },
+  "promotionGate": {"profitFactorMin": 1.25, "hitRateMin": 0.55, "meanNetPctMinExclusive": 0.0, "maxDrawdownPctMax": 8.0},
+  "portfolioRisk": {"maxOpenPositions": 3, "maxDailyLossUSDT": 2.0, "oneOpenTradePerSymbol": true},
+  "costModel": {"feeRoundTripPct": 0.20, "spreadEstimateRoundTripPct": 0.04, "slippageBufferRoundTripPct": 0.04, "totalRoundTripPct": 0.28},
+  "barrier": {"takeProfitPct": 1.2, "stopLossPct": 0.7, "timeoutMin": 240, "sameBarAmbiguity": "SL_WINS"},
   "frozenGitBlobs": {
-    "research/pro_stack_feature_store.py": "7211031a21509deb7b46a17134276632687f7d29",
+    "research/pro_stack_feature_store.py": "a7b94dd127ad03b91be52ee13eadf49de344ef57",
     "research/pro_stack_edge_model.py": "a62f93f6d51c48f04f937b52525f9c2f40192b62",
     "research/pro_stack_shadow_trader.py": "4d330d6f6c185241fb90340ab4f5405ce308254b",
     "research/shadow_labeler.py": "0e2d68b49ba863144d8ddc399d4cad6f145f5c2b",
     "research/shadow_performance_gate.py": "8a545d7743e78a14d8701cfe663a6cd5bab6db67",
     "research/shadow_forward_state.py": "a82ec92c6fd28065b0b6c4a1690437e3f062234a"
   },
-  "nextExperiment": "GATE_B_DERIVATIVES_ADDITION_ONLY_AFTER_GATE_A_CLOSE"
+  "historicalDiagnostic": {"v1ThirtyDayReplayPF": 0.46806254579267087, "note": "V1 historical replay is diagnostic only and not counted in V2 forward validation."},
+  "nextExperiment": "GATE_B_DERIVATIVES_ADDITION_ONLY_AFTER_GATE_A_REFERENCE_IS_RECORDED"
 }
