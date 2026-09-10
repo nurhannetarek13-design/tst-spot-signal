@@ -1,0 +1,61 @@
+name: Gate D Event Discovery V4 Microchunks
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/gate-d-event-discovery-v4.yml'
+jobs:
+  chunk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+        offset: [0,10,20,30,40,50,60,70,80]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Build 10-day symbol chunk
+        run: |
+          mkdir -p chunks-v4
+          PYTHONPATH=. python research/gate_d_event_symbol_chunk_v3.py --symbol ${{ matrix.symbol }} --offset-days ${{ matrix.offset }} --core-days 10 --out chunks-v4/${{ matrix.symbol }}-${{ matrix.offset }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-v4-${{ matrix.symbol }}-${{ matrix.offset }}
+          path: chunks-v4/${{ matrix.symbol }}-${{ matrix.offset }}.json
+  aggregate:
+    needs: chunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-d-v4-*
+          path: chunks-v4
+          merge-multiple: true
+      - name: Aggregate frozen 90-day event gate
+        run: PYTHONPATH=. python research/gate_d_event_aggregate_v3.py --glob 'chunks-v4/*.json' --out validation/edges/gate-d-event-discovery-v4.json
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-d-event-discovery-v4.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['usesML'] is False and x['usesSizing'] is False
+          assert x['thresholdsFrozen'] is True
+          assert x['chunkCount'] >= 27
+          print({'winners':x['winners'],'next':x['next'],'period':x['period'],'chunkCount':x['chunkCount']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-event-discovery-v4
+          path: validation/edges/gate-d-event-discovery-v4.json
