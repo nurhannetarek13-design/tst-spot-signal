@@ -28,7 +28,7 @@ jobs:
       - run: pip install numpy pandas pyarrow
       - name: Frozen untouched Jan 15-28 retest
         run: |
-          python research/historical_flow_frozen_retest_v1.py \
+          PYTHONPATH=. python research/historical_flow_frozen_retest_v1.py \
             --symbol '${{ matrix.symbol }}' \
             --start 2025-01-01 \
             --eval-start 2025-01-15 \
