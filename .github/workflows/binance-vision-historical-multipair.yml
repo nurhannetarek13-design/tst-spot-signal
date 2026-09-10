@@ -1,0 +1,88 @@
+name: Binance Vision Historical Multi-Pair Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/binance_vision_historical_feature_layer.py"
+      - ".github/workflows/binance-vision-historical-multipair.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binance-vision-historical-multipair
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, BNBUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas pyarrow
+      - name: Build seven-day 5m historical flow layer
+        run: |
+          python research/binance_vision_historical_feature_layer.py \
+            --symbol "${{ matrix.symbol }}" \
+            --start 2025-01-01 \
+            --end 2025-01-07 \
+            --freq 5min \
+            --output-dir "artifacts/${{ matrix.symbol }}"
+      - name: Validate frozen schema and coverage
+        run: |
+          python - <<'PY'
+          import glob, json, os
+          import pandas as pd
+          root=f"artifacts/{os.environ['PAIR']}"
+          js=glob.glob(root+'/*.json')
+          pq=glob.glob(root+'/*.parquet')
+          assert len(js)==1 and len(pq)==1
+          m=json.load(open(js[0]))
+          d=pd.read_parquet(pq[0])
+          assert m['authorization']=='RESEARCH_ONLY'
+          assert m['liveTrading'] is False
+          assert m['checksumVerification'] is True
+          assert m['failures'] == [], m['failures']
+          assert len(d) >= 7*24*12*0.95, len(d)
+          assert m['rawRows']['aggTrades'] > 0
+          assert m['rawRows']['markPriceKlines'] > 0
+          assert m['rawRows']['indexPriceKlines'] > 0
+          assert m['rawRows']['premiumIndexKlines'] > 0
+          required={
+            'ts','symbol','trade_close','buy_quote','sell_quote','delta_quote','cvd_quote',
+            'buy_share_quote','taker_buy_sell_ratio_quote','flow_imbalance_quote',
+            'mark_close','index_close','premium_close','mark_index_basis_bps','ret_1bar','realized_range_bps'
+          }
+          assert required.issubset(d.columns), sorted(required-set(d.columns))
+          assert d['symbol'].nunique()==1 and d['symbol'].iloc[0]==os.environ['PAIR']
+          assert d['mark_index_basis_bps'].notna().sum() > 0
+          assert d['premium_close'].notna().sum() > 0
+          print(json.dumps({
+            'symbol':os.environ['PAIR'],
+            'rows':len(d),
+            'rawRows':m['rawRows'],
+            'basisCoverage':float(d['mark_index_basis_bps'].notna().mean()),
+            'premiumCoverage':float(d['premium_close'].notna().mean()),
+            'start':str(d['ts'].min()),
+            'end':str(d['ts'].max())
+          }, indent=2))
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-flow-${{ matrix.symbol }}-2025w01
+          path: artifacts/${{ matrix.symbol }}
+          retention-days: 14
