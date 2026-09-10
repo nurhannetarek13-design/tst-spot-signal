@@ -1,0 +1,229 @@
+name: NFI Ready Strategy V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/nfi-ready-strategy-v1]
+    paths:
+      - '.github/workflows/external-nfi-ready-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfi-bot50-triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NFI_SHA: 55f70459ea44e280763d0fb65f3172bad6d1a964
+      DATA_TIMERANGE: 20251201-20260905
+      TEST_TIMERANGE: 20260101-20260905
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact current NFI commit
+        run: |
+          set -euo pipefail
+          mkdir -p external/NostalgiaForInfinity
+          git -C external/NostalgiaForInfinity init
+          git -C external/NostalgiaForInfinity remote add origin https://github.com/iterativv/NostalgiaForInfinity.git
+          git -C external/NostalgiaForInfinity fetch --depth 1 origin "$NFI_SHA"
+          git -C external/NostalgiaForInfinity checkout --detach FETCH_HEAD
+          test "$(git -C external/NostalgiaForInfinity rev-parse HEAD)" = "$NFI_SHA"
+          mkdir -p validation/external-nfi-ready-v2
+          git -C external/NostalgiaForInfinity rev-parse HEAD | tee validation/external-nfi-ready-v2/upstream-sha.txt
+
+      - name: Build official NFI image
+        working-directory: external/NostalgiaForInfinity
+        run: docker compose build freqtrade
+
+      - name: Prepare bot50 Spot config
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          mkdir -p user_data/backtest_results
+          python - <<'PY'
+          import json
+          pairs = [
+              'BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT',
+              'ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT'
+          ]
+          cfg = {
+              '$schema': 'https://schema.freqtrade.io/schema.json',
+              'bot_name': 'TST NFI Bot50 Research Only',
+              'stake_currency': 'USDT',
+              'stake_amount': 10,
+              'max_open_trades': 3,
+              'dry_run_wallet': 50,
+              'tradable_balance_ratio': 0.90,
+              'fiat_display_currency': 'USD',
+              'dry_run': True,
+              'trading_mode': 'spot',
+              'margin_mode': '',
+              'timeframe': '5m',
+              'process_only_new_candles': True,
+              'exchange': {
+                  'name': 'binance', 'key': '', 'secret': '',
+                  'ccxt_config': {
+                      'enableRateLimit': True,
+                      'urls': {'api': {
+                          'public': 'https://data-api.binance.vision/api/v3',
+                          'private': 'https://api.binance.com/api',
+                          'sapi': 'https://api.binance.com/sapi'}},
+                      'options': {'defaultType': 'spot', 'fetchMarkets': ['spot']}
+                  },
+                  'pair_whitelist': pairs,
+                  'pair_blacklist': ['.*(UP|DOWN|BULL|BEAR)/USDT']
+              },
+              'pairlists': [{'method': 'StaticPairList'}],
+              'entry_pricing': {'price_side': 'other', 'use_order_book': False, 'price_last_balance': 0.0},
+              'exit_pricing': {'price_side': 'other', 'use_order_book': False},
+              'order_types': {
+                  'entry': 'market', 'exit': 'market', 'emergency_exit': 'market',
+                  'force_entry': 'market', 'force_exit': 'market', 'stoploss': 'market',
+                  'stoploss_on_exchange': False
+              },
+              'unfilledtimeout': {'entry': 5, 'exit': 5, 'exit_timeout_count': 0, 'unit': 'minutes'},
+              'telegram': {'enabled': False, 'token': '', 'chat_id': ''},
+              'api_server': {
+                  'enabled': False,
+                  'listen_ip_address': '127.0.0.1',
+                  'listen_port': 8080,
+                  'username': 'research',
+                  'password': 'research-only',
+                  'jwt_secret_key': 'researchOnlyJwtSecretKey1234567890123456'
+              },
+              'internals': {'process_throttle_secs': 5}
+          }
+          with open('user_data/tst-config-bot50-v2.json','w') as f:
+              json.dump(cfg, f, indent=2)
+          PY
+
+      - name: Smoke-load exact X7 and X8 with full upstream tree
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/nfi:ro" \
+            -v "$PWD/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            list-strategies \
+            --config /freqtrade/user_data/tst-config-bot50-v2.json \
+            --strategy-path /nfi \
+            --print-one-column | tee ../../validation/external-nfi-ready-v2/list-strategies.log
+          grep -qx 'NostalgiaForInfinityX7' ../../validation/external-nfi-ready-v2/list-strategies.log
+          grep -qx 'NostalgiaForInfinityX8' ../../validation/external-nfi-ready-v2/list-strategies.log
+
+      - name: Download Binance Spot data
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/nfi:ro" \
+            -v "$PWD/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            download-data \
+            --config /freqtrade/user_data/tst-config-bot50-v2.json \
+            --pairs BTC/USDT ETH/USDT SOL/USDT BNB/USDT XRP/USDT ADA/USDT DOGE/USDT LINK/USDT AVAX/USDT DOT/USDT \
+            --timeframes 1m 5m 15m 1h 4h 1d \
+            --timerange "$DATA_TIMERANGE"
+
+      - name: Run bot50 base and stress triage
+        working-directory: external/NostalgiaForInfinity
+        run: |
+          set -euo pipefail
+          OUT=../../validation/external-nfi-ready-v2
+          run_bt() {
+            strategy="$1"; fee="$2"; tag="$3"
+            set +e
+            docker run --rm \
+              -v "$PWD:/nfi:ro" \
+              -v "$PWD/user_data:/freqtrade/user_data" \
+              freqtradeorg/freqtrade:stable \
+              backtesting \
+              --config /freqtrade/user_data/tst-config-bot50-v2.json \
+              --strategy "$strategy" \
+              --strategy-path /nfi \
+              --timerange "$TEST_TIMERANGE" \
+              --fee "$fee" \
+              --export none \
+              > "$OUT/$tag.log" 2>&1
+            code=$?
+            set -e
+            echo "$code" > "$OUT/$tag-exit-code.txt"
+            tail -n 120 "$OUT/$tag.log" || true
+          }
+          run_bt NostalgiaForInfinityX7 0.0010 X7-base020
+          run_bt NostalgiaForInfinityX7 0.0020 X7-stress040
+          run_bt NostalgiaForInfinityX7 0.0034 X7-stress068
+          run_bt NostalgiaForInfinityX8 0.0010 X8-base020
+          run_bt NostalgiaForInfinityX8 0.0020 X8-stress040
+          run_bt NostalgiaForInfinityX8 0.0034 X8-stress068
+
+      - name: Build research verdict
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          root = pathlib.Path('validation/external-nfi-ready-v2')
+          def parse(tag):
+              text=(root/f'{tag}.log').read_text(errors='ignore') if (root/f'{tag}.log').exists() else ''
+              try: code=int((root/f'{tag}-exit-code.txt').read_text().strip())
+              except Exception: code=999
+              def g(pat, cast=float):
+                  m=re.search(pat,text,re.I)
+                  if not m: return None
+                  try: return cast(m.group(1).replace(',','').strip())
+                  except Exception: return None
+              trades=g(r'Total/Daily Avg Trades\s*│\s*(\d+)',int)
+              if trades is None: trades=g(r'│\s*TOTAL\s*│\s*(\d+)',int)
+              return {
+                'exitCode':code,'trades':trades,
+                'profitFactor':g(r'Profit factor\s*│\s*([-+0-9.]+)'),
+                'totalProfitPct':g(r'Total profit %\s*│\s*([-+0-9.]+)'),
+                'absoluteProfit':g(r'Absolute profit\s*│\s*([-+0-9.]+)'),
+                'maxDrawdownPct':g(r'Max % of account underwater\s*│\s*([-+0-9.]+)')
+              }
+          candidates={}
+          for s in ('X7','X8'):
+              rows={
+                'base020':parse(f'{s}-base020'),
+                'stress040':parse(f'{s}-stress040'),
+                'stress068':parse(f'{s}-stress068')
+              }
+              reasons=[]
+              floors={'base020':1.15,'stress040':1.05,'stress068':1.00}
+              for name,row in rows.items():
+                  if row['exitCode']!=0: reasons.append(f'{name}:BACKTEST_ERROR')
+                  if row['trades'] is None or row['trades']<20: reasons.append(f'{name}:LT_20_TRADES')
+                  if row['absoluteProfit'] is None or row['absoluteProfit']<=0: reasons.append(f'{name}:NONPOSITIVE_PROFIT')
+                  pf=row['profitFactor']
+                  if pf is None or pf<floors[name]: reasons.append(f'{name}:PF_LT_{floors[name]:.2f}')
+              candidates[s]={'strategy':f'NostalgiaForInfinity{s}','metrics':rows,'triagePass':not reasons,'reasons':reasons}
+          passing=[s for s,v in candidates.items() if v['triagePass']]
+          winner=max(passing,key=lambda s:(candidates[s]['metrics']['stress068']['profitFactor'] or -999,candidates[s]['metrics']['stress068']['totalProfitPct'] or -999)) if passing else None
+          result={
+            'engine':'NFI_READY_STRATEGY_V2_BOT50',
+            'researchOnly':True,
+            'liveAuthorization':False,
+            'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,
+            'profile':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3,'market':'Binance Spot'},
+            'universe':['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT'],
+            'testPeriod':'2026-01-01..2026-09-05',
+            'syntheticPerSideFriction':{'base':0.001,'stress1':0.002,'stress2':0.0034},
+            'candidates':candidates,
+            'triageWinner':winner,
+            'triageStatus':'PASS' if winner else 'NO_CANDIDATE',
+            'nextGate':'If PASS: lookahead analysis + chronological walk-forward + unseen-symbol holdout + forward shadow. Never live from this triage alone.',
+            'note':'Current upstream code tested unchanged. This is research-only and does not alter production/live execution.'
+          }
+          (root/'verdict.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfi-ready-strategy-v2
+          path: validation/external-nfi-ready-v2/**
+          if-no-files-found: error
