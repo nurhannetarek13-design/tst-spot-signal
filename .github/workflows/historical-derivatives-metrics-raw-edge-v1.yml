@@ -1,4 +1,4 @@
-name: Historical Derivatives Metrics Raw Edge V1
+name: Historical Derivatives Metrics Spot Raw Edge V2
 
 on:
   workflow_dispatch:
@@ -11,10 +11,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: historical-derivatives-metrics-spot-v2-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       max-parallel: 5
@@ -25,10 +29,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install numpy pandas pyarrow
-      - name: Run independent derivatives-metrics discovery/OOS scan
+      - run: pip install numpy pandas
+      - name: Run independent derivatives-metrics vs Spot discovery/OOS scan
         run: |
-          PYTHONPATH=. python research/historical_derivatives_metrics_raw_edge_v1.py \
+          python research/historical_derivatives_metrics_raw_edge_v1.py \
             --symbol '${{ matrix.symbol }}' \
             --start 2025-01-01 \
             --split 2025-01-15 \
@@ -40,12 +44,16 @@ jobs:
           import glob,json,os
           p=glob.glob(f"artifacts/{os.environ['PAIR']}/*.json")[0]
           d=json.load(open(p))
-          assert d['engine']=='HISTORICAL_DERIVATIVES_METRICS_RAW_EDGE_V1'
+          assert d['engine']=='HISTORICAL_DERIVATIVES_METRICS_SPOT_RAW_EDGE_V2'
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
           assert d['automaticPromotion'] is False
+          assert d['targetMarket']=='BINANCE_SPOT'
+          assert d['featureMarket']=='BINANCE_USDM_FUTURES'
           assert d['frozenDefinition']['zTail']==2.0
+          assert d['frozenDefinition']['priceAlignment']=='backward <=5m'
           assert len(d['tests'])==36
+          assert d['alignedSpotRows']>0
           print(json.dumps({'symbol':d['symbol'],'survivorCount':d['survivorCount'],'survivors':d['survivors']},indent=2))
           PY
         env:
@@ -53,6 +61,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: derivatives-metrics-edge-${{ matrix.symbol }}
+          name: derivatives-metrics-spot-v2-${{ matrix.symbol }}
           path: artifacts/${{ matrix.symbol }}
           retention-days: 14
