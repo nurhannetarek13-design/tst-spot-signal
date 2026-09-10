@@ -1,0 +1,40 @@
+{
+  "experiment": "SPOT_BASELINE_GATE_A_V1",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "purpose": "Pure forward validation of the frozen Spot-only baseline before any derivatives feature addition or retraining.",
+  "featureSet": "SPOT_ONLY",
+  "symbols": ["ETHUSDT", "SOLUSDT"],
+  "timeframe": "15m",
+  "modelStatus": "FROZEN_BASELINE_UNCALIBRATED",
+  "shadowLabelsRole": "PURE_VALIDATION",
+  "retrainingAllowed": false,
+  "derivativesFeaturesAllowed": false,
+  "minimumClosedTradesForDecision": 50,
+  "diagnosticMilestones": [10, 25],
+  "promotionGate": {
+    "profitFactorMin": 1.25,
+    "hitRateMin": 0.55,
+    "meanNetPctMinExclusive": 0.0,
+    "maxDrawdownPctMax": 8.0
+  },
+  "costModel": {
+    "feeRoundTripPct": 0.20,
+    "spreadEstimateRoundTripPct": 0.04,
+    "slippageBufferRoundTripPct": 0.04,
+    "totalRoundTripPct": 0.28,
+    "note": "Frozen conservative Spot baseline accounting assumption. Components are reported separately; total is unchanged from the prior 0.28% baseline."
+  },
+  "barrier": {
+    "takeProfitPct": 1.2,
+    "stopLossPct": 0.7,
+    "timeoutMin": 240,
+    "sameBarAmbiguity": "SL_WINS"
+  },
+  "frozenGitBlobs": {
+    "research/pro_stack_feature_store.py": "7211031a21509deb7b46a17134276632687f7d29",
+    "research/pro_stack_edge_model.py": "a62f93f6d51c48f04f937b52525f9c2f40192b62",
+    "research/pro_stack_shadow_trader.py": "4d330d6f6c185241fb90340ab4f5405ce308254b"
+  },
+  "nextExperiment": "GATE_B_DERIVATIVES_ADDITION_ONLY_AFTER_GATE_A_CLOSE"
+}
