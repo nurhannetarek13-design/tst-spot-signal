@@ -1,0 +1,58 @@
+name: Historical Derivatives Metrics Raw Edge V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/historical_derivatives_metrics_raw_edge_v1.py'
+      - '.github/workflows/historical-derivatives-metrics-raw-edge-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, DOGEUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Run independent derivatives-metrics discovery/OOS scan
+        run: |
+          PYTHONPATH=. python research/historical_derivatives_metrics_raw_edge_v1.py \
+            --symbol '${{ matrix.symbol }}' \
+            --start 2025-01-01 \
+            --split 2025-01-15 \
+            --end 2025-01-28 \
+            --output-dir artifacts/${{ matrix.symbol }}
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          p=glob.glob(f"artifacts/{os.environ['PAIR']}/*.json")[0]
+          d=json.load(open(p))
+          assert d['engine']=='HISTORICAL_DERIVATIVES_METRICS_RAW_EDGE_V1'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['frozenDefinition']['zTail']==2.0
+          assert len(d['tests'])==36
+          print(json.dumps({'symbol':d['symbol'],'survivorCount':d['survivorCount'],'survivors':d['survivors']},indent=2))
+          PY
+        env:
+          PAIR: ${{ matrix.symbol }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: derivatives-metrics-edge-${{ matrix.symbol }}
+          path: artifacts/${{ matrix.symbol }}
+          retention-days: 14
