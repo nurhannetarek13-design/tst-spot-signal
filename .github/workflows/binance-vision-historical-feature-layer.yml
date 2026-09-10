@@ -36,7 +36,7 @@ jobs:
             --end 2025-01-03 \
             --freq 5min \
             --output-dir artifacts/binance-vision-historical-features
-      - name: Validate semantics and output
+      - name: Validate semantics and complete datasets
         run: |
           python - <<'PY'
           import glob, json
@@ -50,12 +50,28 @@ jobs:
           assert m['liveTrading'] is False
           assert m['checksumVerification'] is True
           assert m['rows'] == len(d) and len(d) > 0
-          required={'ts','symbol','trade_close','buy_quote','sell_quote','delta_quote','cvd_quote','buy_share_quote','flow_imbalance_quote'}
+          assert m['rawRows']['aggTrades'] > 0
+          assert m['rawRows']['markPriceKlines'] > 0
+          assert m['rawRows']['indexPriceKlines'] > 0
+          assert m['rawRows']['premiumIndexKlines'] > 0
+          assert m['failures'] == [], m['failures']
+          required={
+            'ts','symbol','trade_close','buy_quote','sell_quote','delta_quote','cvd_quote',
+            'buy_share_quote','taker_buy_sell_ratio_quote','flow_imbalance_quote',
+            'mark_close','index_close','premium_close','mark_index_basis_bps'
+          }
           assert required.issubset(d.columns), sorted(required-set(d.columns))
           assert 'microprice' not in d.columns
           assert 'orderBookImbalance' not in d.columns
           assert m['featureSemantics']['microprice'].startswith('NOT AVAILABLE')
-          print(json.dumps({'rows':len(d),'columns':list(d.columns),'failures':m['failures'][:8]},indent=2,default=str))
+          assert m['featureSemantics']['premiumIndex'].startswith('Binance premiumIndexKlines')
+          print(json.dumps({
+            'rows':len(d),
+            'rawRows':m['rawRows'],
+            'basisNonNull':int(d['mark_index_basis_bps'].notna().sum()),
+            'premiumNonNull':int(d['premium_close'].notna().sum()),
+            'failures':m['failures']
+          },indent=2,default=str))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
