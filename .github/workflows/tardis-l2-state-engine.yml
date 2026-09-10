@@ -1,0 +1,39 @@
+name: Tardis L2 State Engine Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/tardis_l2_state_engine.py'
+      - '.github/workflows/tardis-l2-state-engine.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: python -m py_compile research/tardis_l2_state_engine.py
+      - name: State engine self-test
+        run: python research/tardis_l2_state_engine.py --self-test
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          from research.tardis_l2_state_engine import AUTHORIZATION, L2Book
+          assert AUTHORIZATION == 'RESEARCH_ONLY'
+          b=L2Book()
+          b.apply({'timestamp':'1','is_snapshot':'true','side':'bid','price':'100','amount':'2'})
+          b.apply({'timestamp':'1','is_snapshot':'true','side':'ask','price':'101','amount':'1'})
+          f=b.features(1)
+          assert f and f['best_bid'] < f['best_ask']
+          assert abs(f['depth_imbalance_1'] - (1/3)) < 1e-12
+          print('tardis L2 research-only contract passed')
+          PY
