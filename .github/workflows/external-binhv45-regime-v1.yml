@@ -1,4 +1,4 @@
-name: BinHV45 Regime 5m Gate V1
+name: BinHV45 Regime 5m Gate V2
 
 on:
   workflow_dispatch:
@@ -33,11 +33,24 @@ jobs:
           import json, pathlib
           pairs=['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','LINK/USDT','AVAX/USDT','DOT/USDT','UNI/USDT','LDO/USDT','NEAR/USDT','AAVE/USDT','LTC/USDT','ATOM/USDT','TRX/USDT','SUI/USDT','BCH/USDT','ETC/USDT']
           cfg={
-            '$schema':'https://schema.freqtrade.io/schema.json','bot_name':'TST BinHV45 Regime Gate',
+            '$schema':'https://schema.freqtrade.io/schema.json','bot_name':'TST BinHV45 Regime Gate V2',
             'stake_currency':'USDT','stake_amount':10,'max_open_trades':3,'dry_run_wallet':50,
             'tradable_balance_ratio':0.90,'fiat_display_currency':'USD','dry_run':True,
             'trading_mode':'spot','margin_mode':'','timeframe':'5m','process_only_new_candles':True,
-            'exchange':{'name':'binance','key':'','secret':'','ccxt_config':{'enableRateLimit':True},'pair_whitelist':pairs,'pair_blacklist':['.*(UP|DOWN|BULL|BEAR)/USDT']},
+            'exchange':{
+              'name':'binance','key':'','secret':'',
+              'ccxt_config':{
+                'enableRateLimit':True,
+                'urls':{'api':{
+                  'public':'https://data-api.binance.vision/api/v3',
+                  'private':'https://api.binance.com/api',
+                  'sapi':'https://api.binance.com/sapi'
+                }},
+                'options':{'defaultType':'spot','fetchMarkets':['spot']}
+              },
+              'pair_whitelist':pairs,
+              'pair_blacklist':['.*(UP|DOWN|BULL|BEAR)/USDT']
+            },
             'pairlists':[{'method':'StaticPairList'}],
             'entry_pricing':{'price_side':'other','use_order_book':False,'price_last_balance':0.0},
             'exit_pricing':{'price_side':'other','use_order_book':False},
@@ -56,10 +69,10 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable list-strategies \
-            --config /freqtrade/user_data/config.json --strategy-path /freqtrade/user_data/strategies \
+            --config /freqtrade/user_data/config.json \
             2>&1 | tee validation/external-binhv45-regime-v1/list-strategies.log
           grep -q 'BinHV45_Regime_5m' validation/external-binhv45-regime-v1/list-strategies.log
-          if grep -E 'BinHV45_Regime_5m.*LOAD FAILED|LOAD FAILED.*BinHV45_Regime_5m' validation/external-binhv45-regime-v1/list-strategies.log; then exit 31; fi
+          if grep -E 'BinHV45_Regime_5m.*(LOAD FAILED|DUPLICATE NAME)|(LOAD FAILED|DUPLICATE NAME).*BinHV45_Regime_5m' validation/external-binhv45-regime-v1/list-strategies.log; then exit 31; fi
 
       - name: Download Binance Spot data
         run: |
@@ -76,7 +89,7 @@ jobs:
             tag="$1"; timerange="$2"; fee="$3"
             set +e
             docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable backtesting \
-              --config /freqtrade/user_data/config.json --strategy BinHV45_Regime_5m --strategy-path /freqtrade/user_data/strategies \
+              --config /freqtrade/user_data/config.json --strategy BinHV45_Regime_5m \
               --timerange "$timerange" --fee "$fee" --enable-protections --export trades \
               --export-filename "/freqtrade/user_data/backtest_results/${tag}.json" > "$OUT/${tag}.log" 2>&1
             code=$?
@@ -92,7 +105,7 @@ jobs:
         run: |
           set +e
           docker run --rm -v "$PWD/user_data:/freqtrade/user_data" freqtradeorg/freqtrade:stable lookahead-analysis \
-            --config /freqtrade/user_data/config.json --strategy BinHV45_Regime_5m --strategy-path /freqtrade/user_data/strategies \
+            --config /freqtrade/user_data/config.json --strategy BinHV45_Regime_5m \
             --timerange 20260101-20260910 --minimum-trade-amount 20 --targeted-trade-amount 50 --enable-protections \
             > validation/external-binhv45-regime-v1/lookahead.log 2>&1
           echo "$?" > validation/external-binhv45-regime-v1/lookahead-exit-code.txt
@@ -136,13 +149,13 @@ jobs:
           if lookahead_bias: reasons.append('LOOKAHEAD_BIAS_DETECTED')
           complete=all(r['exitCode']==0 for r in rows.values()) and lookcode==0
           passed=complete and not reasons
-          result={'engine':'BINHV45_REGIME_5M_GATE_V1','researchOnly':True,'liveAuthorization':False,'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,'contract':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3,'noDCA':True,'hardStopPct':-3,'spotOnly':True},'rows':rows,'lookaheadExitCode':lookcode,'lookaheadBiasDetected':lookahead_bias,'pass':passed,'reasons':reasons,'status':'PASS_TO_OOS' if passed else ('TEST_INFRA_FAILURE' if not complete else 'REJECT'),'nextGate':'chronological walk-forward + unseen-symbol OOS + forward shadow' if passed else 'do not wire live'}
+          result={'engine':'BINHV45_REGIME_5M_GATE_V2','researchOnly':True,'liveAuthorization':False,'upstreamSha':(root/'upstream-sha.txt').read_text().strip() if (root/'upstream-sha.txt').exists() else None,'contract':{'walletUSDT':50,'stakeUSDT':10,'maxOpenTrades':3,'noDCA':True,'hardStopPct':-3,'spotOnly':True},'rows':rows,'lookaheadExitCode':lookcode,'lookaheadBiasDetected':lookahead_bias,'pass':passed,'reasons':reasons,'status':'PASS_TO_OOS' if passed else ('TEST_INFRA_FAILURE' if not complete else 'REJECT'),'nextGate':'chronological walk-forward + unseen-symbol OOS + forward shadow' if passed else 'do not wire live'}
           (root/'verdict.json').write_text(json.dumps(result,indent=2)); print(json.dumps(result,indent=2))
           PY
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: binhv45-regime-v1
+          name: binhv45-regime-v2
           path: validation/external-binhv45-regime-v1/**
           if-no-files-found: error
