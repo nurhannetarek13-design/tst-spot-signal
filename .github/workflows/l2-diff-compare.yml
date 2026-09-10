@@ -1,0 +1,30 @@
+name: L2 Diff Compare
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/l2_diff_compare.py'
+      - '.github/workflows/l2-diff-compare.yml'
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        symbol: [SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyarrow
+      - name: Compare first 1000 canonical updates per snapshot
+        run: python research/l2_diff_compare.py --symbol '${{ matrix.symbol }}' --limit 1000 | tee /tmp/l2-diff.json
+      - name: Validate comparator result
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/l2-diff.json'))
+          assert d['groups'] > 100000
+          assert d['snapshots'] > 0
+          print(json.dumps({'symbol':d['symbol'],'snapshots':d['snapshots'],'groups':d['groups'],'divergenceCount':d['divergenceCount'],'firstDivergence':d['firstDivergence']},indent=2))
+          PY
