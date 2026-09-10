@@ -1,0 +1,51 @@
+{
+  "engine": "CROSS_EXCHANGE_LEADLAG_V1",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "automaticPromotion": false,
+  "frozenBeforeForwardReturns": true,
+  "featureMarket": "BYBIT_USDT_PERP_L2",
+  "targetMarket": "BINANCE_SPOT",
+  "sampling": "10s event grid",
+  "entry": "next observable Binance Spot trade after event timestamp",
+  "forwardHorizonsSec": [60, 300, 900],
+  "costs": {
+    "normalRoundTrip": 0.0028,
+    "stressRoundTrip": 0.005
+  },
+  "quality": {
+    "maxBybitBookAgeMs": 1000,
+    "maxBinanceTradeAgeMs": 1000,
+    "maxSpreadVsRollingMedianMultiple": 1.5,
+    "declusterByHorizon": true
+  },
+  "hypotheses": [
+    {
+      "id": "CE1_BYBIT_UP_LEAD",
+      "event": "bybit_mid_return_30s >= 0.0010 AND binance_spot_return_30s <= 0.0003 AND bybit_depth_imbalance_10 >= 0.30 AND bybit_spread_bps <= rolling_24h_median_spread_bps*1.5"
+    },
+    {
+      "id": "CE2_BYBIT_UP_LEAD_WITH_MICROPRICE",
+      "event": "bybit_mid_return_30s >= 0.0010 AND binance_spot_return_30s <= 0.0003 AND bybit_depth_imbalance_10 >= 0.30 AND bybit_microprice_minus_mid_bps > 0 AND bybit_spread_bps <= rolling_24h_median_spread_bps*1.5"
+    },
+    {
+      "id": "CE3_CROSS_EXCHANGE_DISLOCATION_Z",
+      "event": "zscore_24h(bybit_mid_return_30s - binance_spot_return_30s) >= 2.5 AND bybit_depth_imbalance_10 >= 0.30 AND bybit_microprice_minus_mid_bps > 0"
+    }
+  ],
+  "selectionGate": {
+    "minimumDeclusteredEvents": 20,
+    "meanGrossPositive": true,
+    "medianGrossPositive": true,
+    "hitRateGreaterThan": 0.55,
+    "profitFactorAtLeast": 1.2
+  },
+  "productionGate": {
+    "requiresUntouchedOOS": true,
+    "minimumDeclusteredEvents": 20,
+    "normalNetPositive": true,
+    "stressNetMeanPositive": true,
+    "bhFdrQAtMost": 0.10,
+    "requiresSymbolOrTimeReplication": true
+  }
+}
