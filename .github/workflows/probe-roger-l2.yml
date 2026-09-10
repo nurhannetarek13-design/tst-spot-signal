@@ -1,0 +1,23 @@
+name: Probe Roger L2 Dataset
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/probe_roger_l2.py'
+      - '.github/workflows/probe-roger-l2.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install huggingface_hub pyarrow
+      - run: python research/probe_roger_l2.py | tee /tmp/roger-probe.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roger-l2-probe
+          path: /tmp/roger-probe.json
+          retention-days: 7
