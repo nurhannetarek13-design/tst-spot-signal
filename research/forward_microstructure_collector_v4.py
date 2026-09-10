@@ -7,7 +7,9 @@ Binance retired legacy USD-M WebSocket routes in April 2026 and split streams:
 
 This v4 coordinator keeps v2's storage/feature logic but uses two sockets so
 routing matches the current Binance architecture. Open interest remains sourced
-from Coinalyze's public research API. No account/order endpoints are used.
+from Coinalyze's public research API. Forward labels are built in-process from
+later futures-mid snapshots, avoiding REST dependency and DuckDB multi-writer
+conflicts. No account/order endpoints are used.
 """
 from __future__ import annotations
 
@@ -27,10 +29,93 @@ MARKET_WS_URL = os.getenv("MICRO_MARKET_WS_URL", "wss://fstream.binance.com/mark
 PUBLIC_WS_URL = os.getenv("MICRO_PUBLIC_WS_URL", "wss://fstream.binance.com/public/ws")
 WARMUP_SECONDS = float(os.getenv("MICRO_WARMUP_SECONDS", "5"))
 MARKET_BASE_STREAMS = ["!ticker@arr", "!markPrice@arr@1s"]
+LABEL_HORIZONS_MIN = (15, 60, 240)
+LABEL_TOLERANCE_MS = int(os.getenv("MICRO_LABEL_TOLERANCE_MS", "120000"))
 
 
 def log(kind: str, **payload) -> None:
     print(json.dumps({"kind": kind, "authorization": AUTHORIZATION, "liveTrading": False, **payload}, separators=(",", ":")), flush=True)
+
+
+def ensure_label_table(store: core.Store) -> None:
+    store.con.execute("""
+        CREATE TABLE IF NOT EXISTS microstructure_forward_labels (
+          tsMs BIGINT,
+          symbol VARCHAR,
+          horizonMin INTEGER,
+          futureTsMs BIGINT,
+          entryMid DOUBLE,
+          futureMid DOUBLE,
+          grossReturn DOUBLE,
+          realizedDelayMs BIGINT,
+          labeledAt TIMESTAMP DEFAULT current_timestamp,
+          PRIMARY KEY(tsMs, symbol, horizonMin)
+        )
+    """)
+    store.con.execute("CREATE INDEX IF NOT EXISTS idx_micro_labels_symbol_ts ON microstructure_forward_labels(symbol, tsMs)")
+
+
+def update_forward_labels(store: core.Store) -> dict:
+    """Label mature snapshots from later stored futures-mid observations.
+
+    The future observation must be at or just after the requested horizon and
+    within LABEL_TOLERANCE_MS. This measures conditional forward return only;
+    it is not a trade simulation and does not estimate intrahorizon MFE/MAE.
+    """
+    before = int(store.con.execute("SELECT count(*) FROM microstructure_forward_labels").fetchone()[0] or 0)
+    for horizon in LABEL_HORIZONS_MIN:
+        target_ms = horizon * 60_000
+        store.con.execute(
+            f"""
+            INSERT OR IGNORE INTO microstructure_forward_labels
+              (tsMs, symbol, horizonMin, futureTsMs, entryMid, futureMid, grossReturn, realizedDelayMs)
+            SELECT tsMs, symbol, {horizon}, futureTsMs, entryMid, futureMid,
+                   CASE WHEN entryMid > 0 THEN futureMid / entryMid - 1.0 ELSE NULL END,
+                   futureTsMs - (tsMs + {target_ms})
+            FROM (
+              SELECT a.tsMs AS tsMs,
+                     a.symbol AS symbol,
+                     a.mid AS entryMid,
+                     b.tsMs AS futureTsMs,
+                     b.mid AS futureMid,
+                     row_number() OVER (
+                       PARTITION BY a.tsMs, a.symbol
+                       ORDER BY b.tsMs ASC
+                     ) AS rn
+              FROM microstructure a
+              JOIN microstructure b
+                ON b.symbol = a.symbol
+               AND b.tsMs >= a.tsMs + {target_ms}
+               AND b.tsMs <= a.tsMs + {target_ms + LABEL_TOLERANCE_MS}
+              LEFT JOIN microstructure_forward_labels l
+                ON l.tsMs = a.tsMs
+               AND l.symbol = a.symbol
+               AND l.horizonMin = {horizon}
+              WHERE l.tsMs IS NULL
+                AND a.mid IS NOT NULL AND a.mid > 0
+                AND b.mid IS NOT NULL AND b.mid > 0
+            ) q
+            WHERE rn = 1
+            """
+        )
+    after = int(store.con.execute("SELECT count(*) FROM microstructure_forward_labels").fetchone()[0] or 0)
+    by_horizon = {
+        str(int(h)): int(n)
+        for h, n in store.con.execute(
+            "SELECT horizonMin, count(*) FROM microstructure_forward_labels GROUP BY horizonMin ORDER BY horizonMin"
+        ).fetchall()
+    }
+    return {"labels": after, "newLabels": after - before, "labelsByHorizon": by_horizon}
+
+
+def export_labels(store: core.Store) -> None:
+    out = core.DATA_DIR / "forward-labels.parquet"
+    tmp = core.DATA_DIR / "forward-labels.tmp.parquet"
+    safe_tmp = str(tmp).replace("'", "''")
+    store.con.execute(
+        f"COPY (SELECT * FROM microstructure_forward_labels ORDER BY tsMs, symbol, horizonMin) TO '{safe_tmp}' (FORMAT PARQUET, COMPRESSION ZSTD)"
+    )
+    tmp.replace(out)
 
 
 async def send_sub(ws, streams: list[str], action: str, req_id: int) -> None:
@@ -67,6 +152,7 @@ async def receiver(name: str, ws, state: core.State) -> None:
 
 async def run(stop: asyncio.Event) -> None:
     store = core.Store()
+    ensure_label_table(store)
     eligible, eligible_meta = await asyncio.to_thread(core.discover_eligible_markets)
     state = core.State(eligible, eligible_meta)
     last_export_day = None
@@ -82,6 +168,7 @@ async def run(stop: asyncio.Event) -> None:
         minQuoteVolume24h=core.MIN_QUOTE_VOLUME,
         pollSeconds=core.POLL_SECONDS,
         warmupSeconds=WARMUP_SECONDS,
+        labelHorizonsMin=list(LABEL_HORIZONS_MIN),
         eligibleMeta=eligible_meta,
     )
 
@@ -147,12 +234,15 @@ async def run(stop: asyncio.Event) -> None:
                         state.oi_errors += 1
                         state.last_error = f"oi: {oi_error}"
                     rows, row_errors = core.build_rows(state, oi_usd, ts)
+                    label_stats = {"labels": 0, "newLabels": 0, "labelsByHorizon": {}}
                     try:
                         store.insert_many(rows)
+                        label_stats = update_forward_labels(store)
                         store.checkpoint()
                         today = core.dt.datetime.fromtimestamp(ts / 1000, tz=core.dt.timezone.utc).date().isoformat()
                         if rows and (last_export_day != today or state.cycles % 10 == 0):
                             store.export_day(today)
+                            export_labels(store)
                             last_export_day = today
                     except Exception as exc:
                         state.storage_errors += 1
@@ -182,6 +272,7 @@ async def run(stop: asyncio.Event) -> None:
                         "rowErrorsSample": row_errors[:10],
                         "oiCoverage": len(oi_usd),
                         "eligibleMeta": eligible_meta,
+                        **label_stats,
                         **stats,
                     }
                     core.write_health(health)
