@@ -1,0 +1,76 @@
+name: Historical Flow Discovery Gate V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/historical_flow_discovery_gate_v1.py"
+      - ".github/workflows/historical-flow-discovery-gate-v1.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: historical-flow-discovery-gate-v1
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas pyarrow scipy
+
+      - name: Download frozen multi-pair historical artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34484596841
+          pattern: historical-flow-*-2025w01
+          path: artifacts/historical-flow-input
+          merge-multiple: true
+
+      - name: Run discovery-only gate
+        run: |
+          python research/historical_flow_discovery_gate_v1.py \
+            --input "artifacts/historical-flow-input/**/*.parquet" \
+            --output validation/edges/historical-flow-discovery-gate-v1.json
+
+      - name: Enforce fail-closed research contract
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/historical-flow-discovery-gate-v1.json'
+          d=json.load(open(p))
+          assert d['engine']=='HISTORICAL_FLOW_DISCOVERY_GATE_V1'
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          assert d['researchStage']=='DISCOVERY_ONLY'
+          assert d['multipleTesting']['method']=='Benjamini-Hochberg'
+          assert abs(d['dataSplit']['trainFraction']-0.60) < 1e-12
+          assert d['frozenQuantiles']=={'high':0.9,'low':0.1}
+          assert len(d['symbols'])==6
+          assert d['testCount'] > 0
+          print(json.dumps({
+            'symbols':[x['symbol'] for x in d['symbols']],
+            'tests':d['testCount'],
+            'survivors':d['survivorCount'],
+            'top':d['survivors'][:10]
+          },indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-flow-discovery-gate-v1-report
+          path: validation/edges/historical-flow-discovery-gate-v1.json
+          retention-days: 14
