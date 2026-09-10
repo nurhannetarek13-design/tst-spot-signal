@@ -1,0 +1,17 @@
+name: L2 Clean Source Probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/l2_clean_source_probe.py'
+      - '.github/workflows/l2-clean-source-probe.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe September clean L2 files
+        run: python research/l2_clean_source_probe.py
