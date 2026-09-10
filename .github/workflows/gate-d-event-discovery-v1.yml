@@ -1,0 +1,33 @@
+name: Gate D Event Discovery V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_d_event_discovery_v1.py'
+      - '.github/workflows/gate-d-event-discovery-v1.yml'
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - name: Run frozen raw event discovery
+        run: PYTHONPATH=. python research/gate_d_event_discovery_v1.py --days 90
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-d-event-discovery-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['usesML'] is False and x['usesSizing'] is False
+          assert x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-d-event-discovery-v1
+          path: validation/edges/gate-d-event-discovery-v1.json
