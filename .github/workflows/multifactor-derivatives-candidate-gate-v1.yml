@@ -1,0 +1,38 @@
+name: Multifactor Derivatives Candidate Gate V1
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - research/multifactor_derivatives_candidate_gate_v1.py
+      - .github/workflows/multifactor-derivatives-candidate-gate-v1.yml
+permissions: {contents: read}
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - run: python -m py_compile research/multifactor_derivatives_candidate_gate_v1.py
+      - name: Run frozen multi-factor gate
+        run: PYTHONPATH=. python research/multifactor_derivatives_candidate_gate_v1.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/multifactor-derivatives-candidate-gate-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['automaticPromotion'] is False
+          assert x['costs']['normalRoundTrip']==0.0028 and x['costs']['stressRoundTrip']==0.005
+          assert x['productionCandidate'] is False
+          print(json.dumps({'survivorCount':x['survivorCount'],'survivors':x['survivors']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multifactor-derivatives-candidate-gate-v1
+          path: validation/edges/multifactor-derivatives-candidate-gate-v1.json
+          retention-days: 14
