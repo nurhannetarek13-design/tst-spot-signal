@@ -1,0 +1,60 @@
+name: Gate E Residual Discovery V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_e_residual_chunk_v1.py'
+      - 'research/gate_e_residual_aggregate_v1.py'
+      - '.github/workflows/gate-e-residual-discovery-v1.yml'
+jobs:
+  chunk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        symbol: [ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT, ADAUSDT]
+        offset: [0,30,60]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - name: Build 30-day residual chunk
+        run: |
+          mkdir -p gate-e-chunks
+          PYTHONPATH=. python research/gate_e_residual_chunk_v1.py --symbol ${{ matrix.symbol }} --offset-days ${{ matrix.offset }} --core-days 30 --out gate-e-chunks/${{ matrix.symbol }}-${{ matrix.offset }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-e-v1-${{ matrix.symbol }}-${{ matrix.offset }}
+          path: gate-e-chunks/${{ matrix.symbol }}-${{ matrix.offset }}.json
+  aggregate:
+    needs: chunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-e-v1-*
+          path: gate-e-chunks
+          merge-multiple: true
+      - name: Aggregate residual discovery and symbol holdout
+        run: PYTHONPATH=. python research/gate_e_residual_aggregate_v1.py --glob 'gate-e-chunks/*.json' --out validation/edges/gate-e-residual-v1.json
+      - name: Enforce research contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-e-residual-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['usesML'] is False and x['usesSizing'] is False and x['thresholdsFrozen'] is True
+          assert x['chunkCount']>=18
+          print({'winners':x['winners'],'next':x['next'],'period':x['period']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-e-residual-v1
+          path: validation/edges/gate-e-residual-v1.json
