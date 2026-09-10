@@ -3,7 +3,8 @@
 Research-only diagnostic. No trading actions.
 """
 from __future__ import annotations
-import argparse, hashlib, json, math, pathlib, urllib.request
+import argparse, hashlib, json, pathlib, urllib.request
+from bisect import bisect_left
 from decimal import Decimal
 import pyarrow.parquet as pq
 
@@ -15,7 +16,7 @@ MAX_DEPTH=1000
 def dl(url,path):
     p=pathlib.Path(path); p.parent.mkdir(parents=True,exist_ok=True)
     if p.exists() and p.stat().st_size: return p
-    req=urllib.request.Request(url,headers={'User-Agent':'tst-l2-diff/1.0'})
+    req=urllib.request.Request(url,headers={'User-Agent':'tst-l2-diff/1.1'})
     with urllib.request.urlopen(req,timeout=240) as r,p.open('wb') as f:
         while True:
             b=r.read(8*1024*1024)
@@ -39,7 +40,6 @@ def apply(book, side, price, qty):
 
 
 def state_hash(bids,asks):
-    # Canonical decimal-string state hash avoids Float64/ordering ambiguity.
     parts=[]
     for p in sorted(bids,reverse=True): parts.append(f'b|{p}|{bids[p]}')
     for p in sorted(asks): parts.append(f'a|{p}|{asks[p]}')
@@ -70,14 +70,15 @@ def load_groups(path):
     pf=pq.ParquetFile(path)
     groups=[]; cur=None; rows=[]
     for batch in pf.iter_batches(batch_size=250000,columns=['timestamp_ms','side','price','quantity','first_update_id','last_update_id']):
-        d=batch.to_pylist()
-        for r in d:
+        for r in batch.to_pylist():
             key=(int(r['timestamp_ms']),int(r['first_update_id']),int(r['last_update_id']))
             if cur is None: cur=key
             if key!=cur:
                 groups.append((cur,rows)); cur=key; rows=[]
             rows.append(r)
     if cur is not None: groups.append((cur,rows))
+    # Canonical sequence ordering. Timestamp is diagnostic only.
+    groups.sort(key=lambda g:(g[0][2],g[0][1],g[0][0]))
     return groups
 
 
@@ -91,9 +92,6 @@ def build_from_snapshot(rows):
 
 
 def replay_reference(snapshot, groups, limit):
-    """Binance/pfei-sa rules: discard u<=snapshot; first event must bridge lastUpdateId+1;
-    then require exact U == prev_u+1. Quantity zero deletes; otherwise absolute replace.
-    """
     _,sid,srows=snapshot
     bids,asks=build_from_snapshot(srows)
     want=sid+1; started=False; prev_u=None; trace=[]
@@ -119,7 +117,6 @@ def replay_reference(snapshot, groups, limit):
 
 
 def replay_candidate(snapshot, groups, limit):
-    # Mirrors intended local semantics; kept separate so first divergence is explicit.
     _,sid,srows=snapshot
     bids,asks=build_from_snapshot(srows); anchor=sid; trace=[]; prev_u=None; started=False
     for (ts,U,u),rows in groups:
@@ -148,10 +145,12 @@ def main():
     dp=dl(BASE+f'depth/binance/{a.symbol}/{MONTH}.parquet',root/f'{a.symbol}-depth.parquet')
     sp=dl(BASE+f'snapshots/binance/{a.symbol}/{MONTH}.parquet',root/f'{a.symbol}-snap.parquet')
     snaps=load_snapshots(sp); groups=load_groups(dp)
+    uvals=[g[0][2] for g in groups]
     results=[]
     for si,snap in enumerate(snaps):
-        # Compare against the stream from this snapshot time onward only.
-        subset=[g for g in groups if g[0][0]>=snap[0]]
+        # Binance alignment is ID-based: find first diff whose u can cover lastUpdateId+1.
+        start=max(0,bisect_left(uvals,snap[1]+1)-1)
+        subset=groups[start:]
         ref,rs=replay_reference(snap,subset,a.limit); cand,cs=replay_candidate(snap,subset,a.limit)
         div=None
         for i,(x,y) in enumerate(zip(ref,cand)):
@@ -162,7 +161,8 @@ def main():
         results.append({'snapshotIndex':si,'snapshotTs':snap[0],'snapshotId':snap[1],'referenceStatus':rs,'candidateStatus':cs,'compared':min(len(ref),len(cand)),'firstDivergence':div})
     out={'symbol':a.symbol,'month':MONTH,'snapshots':len(snaps),'groups':len(groups),'limitPerSnapshot':a.limit,'results':results}
     bad=[r for r in results if r['firstDivergence']]
-    out['divergenceCount']=len(bad)
+    valid=[r for r in results if r['compared']>0 and r['referenceStatus']['status'] in ('OK','SEQUENCE_GAP')]
+    out['divergenceCount']=len(bad); out['validSnapshotCount']=len(valid); out['comparedEvents']=sum(r['compared'] for r in results)
     out['firstDivergence']=bad[0] if bad else None
     print(json.dumps(out,indent=2))
 
