@@ -1,0 +1,16 @@
+name: Kaggle L2 Inspect
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/kaggle_l2_inspect.py'
+      - '.github/workflows/kaggle-l2-inspect.yml'
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python research/kaggle_l2_inspect.py
