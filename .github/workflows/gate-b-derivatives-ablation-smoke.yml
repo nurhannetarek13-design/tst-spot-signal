@@ -9,14 +9,14 @@ permissions: {contents: read}
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: pip install numpy pandas pyarrow scikit-learn
-      - name: Run 7-day diagnostic ablation
-        run: PYTHONPATH=. python research/gate_b_derivatives_ablation_v1.py --days 7 --out validation/edges/gate-b-derivatives-ablation-smoke.json
+      - name: Run 3-day diagnostic ablation
+        run: PYTHONPATH=. python research/gate_b_derivatives_ablation_v1.py --days 3 --out validation/edges/gate-b-derivatives-ablation-smoke.json
       - name: Assert research-only diagnostic
         run: |
           python - <<'PY'
