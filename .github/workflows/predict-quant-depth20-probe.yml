@@ -1,0 +1,28 @@
+name: PredictQuant Depth20 Probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/predict_quant_depth20_probe.py'
+      - '.github/workflows/predict-quant-depth20-probe.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install huggingface_hub pyarrow
+      - run: python research/predict_quant_depth20_probe.py | tee /tmp/probe.json
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/probe.json'))
+          assert d['fileCount']>0
+          assert d['chosen'] is not None
+          assert d['numRows']>0
+          assert 'schema' in d and d['schema']
+          print(json.dumps({'fileCount':d['fileCount'],'chosen':d['chosen'],'numRows':d['numRows'],'timestampColumn':d.get('timestampColumn'),'medianPositiveDeltaRaw':d.get('medianPositiveDeltaRaw')},indent=2))
+          PY
