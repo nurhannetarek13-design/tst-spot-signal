@@ -16,7 +16,7 @@ from research.binance_vision_historical_feature_layer import build
 
 AUTHORIZATION='RESEARCH_ONLY'
 BASE='https://data.binance.vision/data/futures/um/daily/metrics'
-UA='tst-historical-derivatives-metrics-raw-edge/1.0'
+UA='tst-historical-derivatives-metrics-raw-edge/1.1'
 ZSCORE_WINDOW=288
 ZSCORE_MIN=144
 Z_TAIL=2.0
@@ -59,6 +59,11 @@ def load_metrics(symbol:str,start:date,end:date)->pd.DataFrame:
  miss=[c for c in required if c not in x.columns]
  if miss: raise RuntimeError(f'missing metrics columns {miss}')
  x=x[required].copy(); x['ts']=pd.to_datetime(x['create_time'],utc=True,errors='coerce')
+ # Pandas 3 may preserve microsecond datetime resolution from strings while
+ # Binance trade archives normalize to millisecond/nanosecond resolution.
+ # Force a common ns UTC dtype before merge_asof so timestamp resolution is
+ # never a hidden source of failure or silent mismatch.
+ x['ts']=pd.DatetimeIndex(x['ts']).as_unit('ns')
  for c in required[2:]: x[c]=pd.to_numeric(x[c],errors='coerce')
  return x.dropna(subset=['ts']).sort_values('ts')
 
@@ -79,7 +84,8 @@ def prepare(metrics_df,price_df):
   ('sum_taker_long_short_vol_ratio','taker_long_short_log')]:
   m[dst]=np.log(pd.to_numeric(m[src],errors='coerce').where(lambda s:s>0))
  for f in FEATURES: m[f+'__z']=rolling_z(m[f].astype(float))
- p=price_df[['ts','trade_close']].copy(); p['ts']=pd.to_datetime(p['ts'],utc=True)
+ p=price_df[['ts','trade_close']].copy(); p['ts']=pd.DatetimeIndex(pd.to_datetime(p['ts'],utc=True)).as_unit('ns')
+ m['ts']=pd.DatetimeIndex(pd.to_datetime(m['ts'],utc=True)).as_unit('ns')
  x=pd.merge_asof(m.sort_values('ts'),p.sort_values('ts'),on='ts',direction='nearest',tolerance=pd.Timedelta('2min'))
  for h,b in HORIZONS.items(): x['fwd_'+h]=x['trade_close'].shift(-b)/x['trade_close']-1.0
  return x
