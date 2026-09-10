@@ -1,0 +1,23 @@
+name: Cryptolake H2 Frozen Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/cryptolake_h2_frozen_validate.py'
+      - '.github/workflows/cryptolake-h2-frozen.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas pyarrow
+      - run: PYTHONPATH=. python research/cryptolake_h2_frozen_validate.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cryptolake-h2-frozen
+          path: artifacts/cryptolake-h2-frozen
+          retention-days: 14
