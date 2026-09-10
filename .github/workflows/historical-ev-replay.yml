@@ -40,6 +40,17 @@ jobs:
           HIST_EV_EXTRA_STRESS_PCT: "0.28"
         run: |
           python research/historical_ev_replay.py
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path("freqtrade/historical_ev_evidence.json")
+          x=json.loads(p.read_text())
+          # V1 is intentionally labelled approximation-only because the live
+          # Spot Sniper also uses 1m ignition and runtime microstructure logic.
+          # This evidence may inform research but can never authorize capital.
+          x["runtime_parity"]="APPROXIMATION_ONLY"
+          x["promotion_eligible"]=False
+          p.write_text(json.dumps(x,indent=2,sort_keys=True),encoding="utf-8")
+          PY
           cp freqtrade/historical_ev_evidence.json freqtrade/user_data/historical_ev_evidence.json
 
       - name: Validate evidence package is research-only
@@ -50,10 +61,12 @@ jobs:
           x=json.loads(p.read_text())
           assert x.get("authorization")=="RESEARCH_ONLY"
           assert x.get("liveTrading") is False
+          assert x.get("runtime_parity")=="APPROXIMATION_ONLY"
+          assert x.get("promotion_eligible") is False
           assert x.get("status") in {"APPROVED","NOT_APPROVED","INSUFFICIENT_HISTORICAL_SAMPLE"}
           assert "feature_version" in x
           assert "ruleset_hash" in x
-          print({"status":x.get("status"),"path_labeled_events":x.get("path_labeled_events"),"ruleset_hash":x.get("ruleset_hash")})
+          print({"status":x.get("status"),"runtime_parity":x.get("runtime_parity"),"path_labeled_events":x.get("path_labeled_events"),"ruleset_hash":x.get("ruleset_hash")})
           PY
 
       - name: Commit historical evidence snapshot safely
