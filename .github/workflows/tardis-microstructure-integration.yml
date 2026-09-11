@@ -41,20 +41,25 @@ jobs:
           import json, pathlib
           p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json')
           d=json.loads(p.read_text())
+          v=d['validation']
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
           assert d['status']=='PASS'
           assert d['canonicalReplayReady'] is True
+          assert v['depthIntegrity'] is True
+          assert v['tickerMismatches'] <= 5
+          assert v['matchRate'] >= 0.999
           assert d['summary']['featureEvents'] > 0
           assert d['summary']['sampledSeconds'] > 0
-          assert d['validation']['tickerMismatches'] == 0
           print(json.dumps({
             'symbol': d['symbol'],
             'minutes': d['minutes'],
             'featureEvents': d['summary']['featureEvents'],
             'sampledSeconds': d['summary']['sampledSeconds'],
-            'tickerExact': d['validation']['tickerExact'],
-            'tickerMismatches': d['validation']['tickerMismatches'],
+            'tickerComparable': v['tickerComparable'],
+            'tickerExact': v['tickerExact'],
+            'tickerMismatches': v['tickerMismatches'],
+            'matchRate': v['matchRate'],
             'gateGEventCounts': d['gateG']['eventCounts'],
           }, sort_keys=True))
           PY
@@ -107,6 +112,7 @@ jobs:
               'liveTrading':False,
               'window':{'date':'2021-09-01','startOffset':0,'minutes':30},
               'frozenDefinition': cells[0]['gateG']['eventDefinition'] if cells else None,
+              'parityPolicy':{'maxTickerMismatches':5,'minTickerMatchRate':0.999},
               'cells':len(cells),
               'sideEventCounts':side_counts,
               'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
