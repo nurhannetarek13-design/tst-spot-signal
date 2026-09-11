@@ -43,6 +43,7 @@ class Settings:
     paper_fee_rate: float = _float("V2_PAPER_FEE_RATE", 0.001)
     telegram_bot_token: str = os.getenv("V2_TELEGRAM_BOT_TOKEN", "").strip()
     telegram_chat_id: str = os.getenv("V2_TELEGRAM_CHAT_ID", "").strip()
+    startup_alert: bool = _bool("V2_STARTUP_ALERT", False)
     state_db: str = os.getenv("V2_STATE_DB", "v2_state.sqlite3")
 
     def validate(self) -> None:
