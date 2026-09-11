@@ -46,6 +46,8 @@ class ShadowOutcomeLedgerTests(unittest.TestCase):
         self.assertEqual(stats["wins"], 1)
         self.assertEqual(stats["losses"], 0)
         self.assertEqual(stats["win_rate"], 1.0)
+        self.assertGreater(stats["expectancy_usdt"], 0)
+        self.assertEqual(stats["gross_loss_abs_usdt"], 0.0)
 
     def test_sl_closes_with_fee_aware_negative_pnl(self):
         trade = self.open()
@@ -59,6 +61,8 @@ class ShadowOutcomeLedgerTests(unittest.TestCase):
         self.assertEqual(stats["wins"], 0)
         self.assertEqual(stats["losses"], 1)
         self.assertEqual(stats["win_rate"], 0.0)
+        self.assertLess(stats["expectancy_usdt"], 0)
+        self.assertEqual(stats["gross_profit_usdt"], 0.0)
 
     def test_both_tp_and_sl_same_candle_is_ambiguous_not_a_win(self):
         trade = self.open()
@@ -73,6 +77,7 @@ class ShadowOutcomeLedgerTests(unittest.TestCase):
         self.assertEqual(stats["decisive"], 0)
         self.assertIsNone(stats["win_rate"])
         self.assertEqual(stats["net_pnl_usdt"], 0.0)
+        self.assertEqual(stats["ambiguous_rate"], 1.0)
 
     def test_non_trigger_candle_leaves_trade_open(self):
         trade = self.open()
@@ -96,6 +101,28 @@ class ShadowOutcomeLedgerTests(unittest.TestCase):
         )
         # qty=.1, gross=.09; fees=.01 entry + .01009 exit = .02009
         self.assertAlmostEqual(result.pnl_usdt, 0.06991, places=8)
+
+    def test_stats_expose_fee_aware_profit_factor_and_expectancy(self):
+        winner = self.open(signal_open_time=1000.0)
+        loser = self.open(signal_open_time=3000.0)
+        self.ledger.evaluate_closed_candle(
+            winner,
+            {"open_time": 2000.0, "high": 101.0, "low": 99.8},
+        )
+        self.ledger.evaluate_closed_candle(
+            loser,
+            {"open_time": 4000.0, "high": 100.2, "low": 99.0},
+        )
+
+        stats = self.ledger.stats()
+        self.assertEqual(stats["decisive"], 2)
+        self.assertEqual(stats["wins"], 1)
+        self.assertEqual(stats["losses"], 1)
+        self.assertAlmostEqual(stats["gross_profit_usdt"], 0.06991, places=8)
+        self.assertAlmostEqual(stats["gross_loss_abs_usdt"], 0.081938, places=8)
+        self.assertLess(stats["profit_factor"], 1.0)
+        self.assertLess(stats["expectancy_usdt"], 0.0)
+        self.assertAlmostEqual(stats["net_pnl_usdt"], -0.012028, places=8)
 
 
 if __name__ == "__main__":
