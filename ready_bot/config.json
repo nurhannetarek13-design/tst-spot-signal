@@ -1,18 +1,25 @@
 {
   "mode": "paper",
+  "strategy_name": "TrendFollowingV1_Donor",
   "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-  "interval": "15m",
+  "trend_interval": "4h",
+  "execution_interval": "1h",
   "lookback": 250,
   "starting_cash_usdt": 20.0,
   "trade_size_usdt": 5.0,
   "max_open_positions": 3,
   "max_daily_loss_usdt": 2.0,
-  "take_profit_pct": 0.009,
-  "stop_loss_pct": 0.006,
-  "min_consensus_score": 2,
-  "strategies": {
-    "trend": true,
-    "breakout": true,
-    "mean_reversion": true
-  }
+  "ema_fast": 50,
+  "ema_slow": 200,
+  "ema_pullback": 20,
+  "atr_period": 14,
+  "atr_ma_period": 20,
+  "volume_ma_period": 20,
+  "breakout_lookback": 20,
+  "pullback_proximity_atr": 0.5,
+  "stop_atr_multiplier": 1.5,
+  "partial_take_at_r": 1.0,
+  "partial_take_pct": 0.5,
+  "break_even_at_r": 1.0,
+  "trailing_atr_multiplier": 1.5
 }
