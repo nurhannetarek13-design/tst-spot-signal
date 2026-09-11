@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'ready_bot/**'
+      - 'ready_bot/bot.py'
+      - 'ready_bot/config.json'
+      - 'ready_bot/OPEN_SOURCE_NOTICES.md'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -23,6 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile ready_bot/bot.py
       - name: Run paper bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
