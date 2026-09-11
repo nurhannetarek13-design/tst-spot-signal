@@ -22,7 +22,7 @@
   "results": {
     "BTCUSDT": {
       "events": 1811,
-      "splitTs": 1762974900000,
+      "splitTs": 1762974000000,
       "IS": {
         "1h": {
           "n": 1315,
@@ -82,7 +82,7 @@
     },
     "ETHUSDT": {
       "events": 1716,
-      "splitTs": 1762974900000,
+      "splitTs": 1762974000000,
       "IS": {
         "1h": {
           "n": 1255,
@@ -142,7 +142,7 @@
     },
     "SOLUSDT": {
       "events": 1822,
-      "splitTs": 1762974900000,
+      "splitTs": 1762974000000,
       "IS": {
         "1h": {
           "n": 1330,
@@ -220,5 +220,5 @@
   "nextStep": "DO_NOT_TUNE_L2_OR_EXITS",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-11T17:50:59.927401+00:00"
+  "generatedAt": "2026-09-11T17:51:54.261474+00:00"
 }
