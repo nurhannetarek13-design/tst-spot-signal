@@ -35,7 +35,7 @@ GATE_NAMES = (
     "trend_15m",
     "trend_1h",
     "trend_4h",
-    "breakout",
+    "entry_setup",
     "relative_volume",
     "taker_flow",
     "spread",
@@ -108,8 +108,8 @@ class V2Engine:
             failed.append("trend_1h")
         if not candidate.trend_4h:
             failed.append("trend_4h")
-        if not candidate.breakout:
-            failed.append("breakout")
+        if not (candidate.breakout or candidate.pullback):
+            failed.append("entry_setup")
         if not candidate.rel_volume_ok:
             failed.append("relative_volume")
         if not candidate.taker_flow_ok:
@@ -221,6 +221,7 @@ class V2Engine:
                 top_near_miss = {
                     "symbol": candidate.symbol,
                     "score": candidate.score,
+                    "entry_setup": candidate.entry_setup,
                     "failed_gates": failed_gates,
                 }
                 break
@@ -259,6 +260,7 @@ class V2Engine:
                         action = {"event": "shadow_signal", **best.to_dict()}
                         self.notifier.send(
                             f"V2 SHADOW SIGNAL {best.symbol}\n"
+                            f"Setup: {best.entry_setup}\n"
                             f"Score: {best.score}/100\n"
                             f"Price: {best.price:.8f}\n"
                             f"RelVol: {best.relative_volume:.2f}x\n"
@@ -282,6 +284,7 @@ class V2Engine:
                     action = {
                         "event": "paper_open",
                         "symbol": position.symbol,
+                        "setup": best.entry_setup,
                         "score": best.score,
                         "entry_price": position.entry_price,
                         "quote_size": position.quote_size,
@@ -290,6 +293,7 @@ class V2Engine:
                     }
                     self.notifier.send(
                         f"V2 PAPER BUY {position.symbol}\n"
+                        f"Setup: {best.entry_setup}\n"
                         f"Score: {best.score}/100\n"
                         f"Entry: {position.entry_price:.8f}\n"
                         f"TP: {position.take_profit:.8f}\n"
