@@ -1,22 +1,49 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from collections.abc import Callable
 
-from .config import settings
+import httpx
+
+from .config import Settings, settings
 from .engine import V2Engine
 
 
-def run(once: bool) -> None:
-    settings.validate()
-    engine = V2Engine(settings)
+def run(
+    once: bool,
+    *,
+    runtime_settings: Settings = settings,
+    engine_factory: Callable[[Settings], V2Engine] = V2Engine,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    max_cycles: int | None = None,
+) -> None:
+    runtime_settings.validate()
+    engine = engine_factory(runtime_settings)
+    cycles = 0
     try:
         while True:
-            summary = engine.scan_once()
-            print(engine.dump_summary(summary), flush=True)
-            if once:
+            try:
+                summary = engine.scan_once()
+                print(engine.dump_summary(summary), flush=True)
+            except httpx.HTTPError as exc:
+                error = {
+                    "event": "market_data_error",
+                    "error_type": type(exc).__name__,
+                    "mode": runtime_settings.mode,
+                }
+                print(json.dumps(error, sort_keys=True), flush=True)
+                # One-shot smoke/diagnostic runs must fail loudly. A continuous
+                # worker may survive transient public-market-data outages and
+                # try again on the next normal scan interval.
+                if once:
+                    raise
+
+            cycles += 1
+            if once or (max_cycles is not None and cycles >= max_cycles):
                 return
-            time.sleep(max(15, settings.scan_interval_seconds))
+            sleep_fn(max(15, runtime_settings.scan_interval_seconds))
     finally:
         engine.close()
 
