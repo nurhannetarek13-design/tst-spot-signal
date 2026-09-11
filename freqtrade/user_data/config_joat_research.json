@@ -31,6 +31,5 @@
     "entry": "market", "exit": "market", "emergency_exit": "market",
     "force_entry": "market", "force_exit": "market", "stoploss": "market",
     "stoploss_on_exchange": false
-  },
-  "api_server": {"enabled": false}
+  }
 }
