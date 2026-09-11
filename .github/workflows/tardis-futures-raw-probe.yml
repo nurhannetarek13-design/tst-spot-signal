@@ -21,7 +21,7 @@ jobs:
         run: |
           mkdir -p artifacts/tardis-raw/${{ matrix.symbol }}
           python research/tardis_futures_raw_probe.py --symbol '${{ matrix.symbol }}' \
-            --date '2020-02-01' --offset 0 \
+            --date '2021-09-01' --offset 0 \
             | tee artifacts/tardis-raw/${{ matrix.symbol }}/probe.json
       - name: Validate canonical fields
         env:
