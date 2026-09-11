@@ -14,6 +14,7 @@ This is a clean, isolated V2 implementation. It does **not** import or depend on
 - Stablecoin/fiat base pairs such as USDC/USDT, FDUSD/USDT, and EUR/USDT are excluded from the candidate universe.
 - SHADOW alerts are deduplicated per symbol and closed 15m candle, so the same signal is not emitted every scan minute.
 - Paper positions cannot silently overwrite an existing position, and a symbol closed at TP/SL cannot immediately re-enter in the same scan cycle.
+- A continuous worker retries after transient public-market-data HTTP/network failures; one-shot smoke runs still fail loudly.
 
 ## Current pipeline
 
@@ -54,7 +55,7 @@ Paper PnL is recorded net of modeled entry and exit fees. State is persisted in 
 
 V2 has three independent checks on its isolated branch:
 
-- `V2 CI`: unit/lifecycle tests plus Python compilation.
+- `V2 CI`: unit/lifecycle tests, Python compilation, container build, and fail-closed container-default assertions.
 - `V2 Shadow Smoke`: a read-only end-to-end scan against live public Binance market data with `V2_LIVE_TRADING=false`.
 - repository `Safety gates`: existing fail-closed checks remain green.
 
@@ -78,6 +79,16 @@ Paper mode:
 ```bash
 V2_MODE=paper python -m v2_bot.main
 ```
+
+### Container worker
+
+Build from the repository root:
+
+```bash
+docker build -f v2_bot/Dockerfile -t tst-v2 .
+```
+
+The image defaults to `V2_MODE=shadow`, `V2_LIVE_TRADING=false`, and `V2_STATE_DB=/data/v2_state.sqlite3`. For a persistent SHADOW/Paper worker, mount durable storage at `/data`. Do not deploy Paper with ephemeral storage because open positions, emitted-signal dedupe state, and realized PnL would be lost after a restart.
 
 ## Environment
 
