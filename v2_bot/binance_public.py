@@ -68,6 +68,13 @@ class BinancePublicClient:
                 continue
         return out
 
+    def exchange_info(self, symbol: str | None = None) -> dict[str, Any]:
+        params = {"symbol": symbol} if symbol else None
+        data = self._get("/api/v3/exchangeInfo", params)
+        if not isinstance(data, dict) or not isinstance(data.get("symbols"), list):
+            raise RuntimeError("Unexpected exchangeInfo response")
+        return data
+
     def klines(
         self,
         symbol: str,
