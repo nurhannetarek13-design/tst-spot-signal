@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "research/derivatives_metrics_edge_scanner_v1.py"
+      - "research/run_derivatives_metrics_edge_scanner_v1.py"
       - ".github/workflows/derivatives-metrics-edge-scanner-v1.yml"
 
 permissions:
@@ -27,9 +28,9 @@ jobs:
       - name: Install dependencies
         run: pip install numpy pandas
       - name: Syntax check
-        run: python -m py_compile research/derivatives_metrics_edge_scanner_v1.py
+        run: python -m py_compile research/derivatives_metrics_edge_scanner_v1.py research/run_derivatives_metrics_edge_scanner_v1.py
       - name: Run frozen Round 7 derivatives discovery
-        run: python research/derivatives_metrics_edge_scanner_v1.py
+        run: python research/run_derivatives_metrics_edge_scanner_v1.py
       - name: Assert research-only contract
         run: |
           python - <<'PY'
