@@ -1,0 +1,62 @@
+name: Gate F Breadth Discovery V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_f_breadth_chunk_v1.py'
+      - 'research/gate_f_breadth_aggregate_v1.py'
+      - '.github/workflows/gate-f-breadth-discovery-v1.yml'
+permissions: {contents: read}
+jobs:
+  chunk:
+    strategy:
+      fail-fast: false
+      matrix:
+        offset: [0,10,20,30,40,50,60,70,80]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - name: Build 10-day breadth chunk
+        run: |
+          mkdir -p gate-f-chunks
+          PYTHONPATH=. python research/gate_f_breadth_chunk_v1.py \
+            --offset-days ${{ matrix.offset }} \
+            --core-days 10 \
+            --out gate-f-chunks/gate-f-${{ matrix.offset }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-f-${{ matrix.offset }}
+          path: gate-f-chunks/*.json
+  aggregate:
+    needs: chunk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-f-*
+          path: gate-f-chunks
+          merge-multiple: true
+      - name: Aggregate frozen Gate F
+        run: PYTHONPATH=. python research/gate_f_breadth_aggregate_v1.py --glob 'gate-f-chunks/*.json'
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-f-breadth-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['usesML'] is False and x['usesSizing'] is False and x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next'],'period':x['period']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-f-breadth-v1
+          path: validation/edges/gate-f-breadth-v1.json
