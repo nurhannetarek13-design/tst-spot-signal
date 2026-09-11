@@ -1,0 +1,77 @@
+name: Gate H L2 Persistent Pressure V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_h_l2_persistent_pressure_v1.py'
+      - '.github/workflows/gate-h-l2-persistent-pressure-v1.yml'
+permissions: {contents: read}
+jobs:
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [SOLUSDT, ETHUSDT]
+        date: ['2025-01-15','2025-02-15','2025-03-15']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy
+      - name: Run frozen persistent L2 pressure test
+        run: |
+          mkdir -p gate-h
+          python research/gate_h_l2_persistent_pressure_v1.py \
+            --symbol ${{ matrix.symbol }} \
+            --date ${{ matrix.date }} \
+            --out gate-h/${{ matrix.symbol }}-${{ matrix.date }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-h-${{ matrix.symbol }}-${{ matrix.date }}
+          path: gate-h/${{ matrix.symbol }}-${{ matrix.date }}.json
+  aggregate:
+    needs: sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-h-*
+          path: gate-h
+          merge-multiple: true
+      - name: Evaluate frozen discovery plus temporal OOS gate
+        run: |
+          python - <<'PY'
+          import glob,json,collections
+          xs=[json.load(open(p)) for p in glob.glob('gate-h/*.json')]
+          assert len(xs)==6, len(xs)
+          expected={'persistenceSeconds':5,'obi10AbsMin':0.45,'meanMicropriceDirectionalBpsMin':0.05,'sampleSeconds':1,'eventCooldownSeconds':60}
+          rows=[]
+          for x in xs:
+            assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False and x['thresholdsFrozen'] is True
+            assert x['eventDefinition']==expected
+            passed=False; qualifying=[]
+            for side in ('long','short'):
+              for h in ('10','30','60'):
+                s=x['outcomes'][side][h]
+                ok=s['n']>=20 and s['hitRate'] is not None and s['hitRate']>=0.54 and s['meanDirectionalBps'] is not None and s['meanDirectionalBps']>0
+                if ok: qualifying.append({'side':side,'horizonSec':int(h),**s})
+                passed=passed or ok
+            rows.append({'symbol':x['symbol'],'date':x['date'],'pass':passed,'qualifying':qualifying})
+          discovery={(r['symbol']):r['pass'] for r in rows if r['date']=='2025-01-15'}
+          oos=collections.defaultdict(list)
+          for r in rows:
+            if r['date']!='2025-01-15':oos[r['symbol']].append(r['pass'])
+          oos_stability={s:(len(v)==2 and all(v)) for s,v in oos.items()}
+          final=len(discovery)==2 and all(discovery.values()) and len(oos_stability)==2 and all(oos_stability.values())
+          out={'engine':'GATE_H_L2_PERSISTENT_PRESSURE_AGG_V1','authorization':'RESEARCH_ONLY','liveTrading':False,'thresholdsFrozen':True,'discoveryDate':'2025-01-15','oosDates':['2025-02-15','2025-03-15'],'informationGate':{'nMin':20,'hitRateMin':0.54,'meanDirectionalBpsPositive':True,'requiredDiscoverySymbols':2,'requiredOosDatesPerSymbol':2},'rows':rows,'discovery':discovery,'oosStability':oos_stability,'pass':final,'next':'PROMOTE_H_TO_ENTRY_FILTER_VALIDATION' if final else 'REJECT_GATE_H_V1'}
+          open('gate-h-result.json','w').write(json.dumps(out,indent=2))
+          print(json.dumps({'pass':final,'next':out['next'],'discovery':discovery,'oosStability':oos_stability,'rows':[{'symbol':r['symbol'],'date':r['date'],'pass':r['pass']} for r in rows]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-h-l2-result-v1
+          path: gate-h-result.json
