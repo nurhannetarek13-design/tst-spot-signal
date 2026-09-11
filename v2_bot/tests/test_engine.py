@@ -31,7 +31,9 @@ class FakeNotifier:
         return True
 
 
-def eligible_candidate(signal_open_time=1_000.0):
+def eligible_candidate(signal_open_time=1_000.0, *, setup="breakout"):
+    is_breakout = setup == "breakout"
+    is_pullback = setup == "pullback"
     return Candidate(
         symbol="TESTUSDT",
         score=100,
@@ -46,10 +48,12 @@ def eligible_candidate(signal_open_time=1_000.0):
         trend_15m=True,
         trend_1h=True,
         trend_4h=True,
-        breakout=True,
+        breakout=is_breakout,
         rel_volume_ok=True,
         taker_flow_ok=True,
         eligible=True,
+        pullback=is_pullback,
+        entry_setup=setup,
     )
 
 
@@ -121,6 +125,8 @@ class EngineUniverseTests(unittest.TestCase):
             rel_volume_ok=False,
             taker_flow_ok=False,
             eligible=False,
+            pullback=False,
+            entry_setup="none",
         )
 
         failed = V2Engine._failed_gates(candidate, settings)
@@ -129,7 +135,7 @@ class EngineUniverseTests(unittest.TestCase):
             [
                 "btc_regime",
                 "trend_1h",
-                "breakout",
+                "entry_setup",
                 "relative_volume",
                 "taker_flow",
                 "spread",
@@ -140,11 +146,16 @@ class EngineUniverseTests(unittest.TestCase):
         self.assertEqual(counts["btc_regime"], 1)
         self.assertEqual(counts["trend_15m"], 0)
         self.assertEqual(counts["trend_1h"], 1)
-        self.assertEqual(counts["breakout"], 1)
+        self.assertEqual(counts["entry_setup"], 1)
         self.assertEqual(counts["relative_volume"], 1)
         self.assertEqual(counts["taker_flow"], 1)
         self.assertEqual(counts["spread"], 1)
         self.assertEqual(counts["score"], 1)
+
+    def test_pullback_satisfies_entry_setup_gate(self):
+        settings = Settings(max_spread_bps=15.0, min_score=90)
+        candidate = eligible_candidate(setup="pullback")
+        self.assertNotIn("entry_setup", V2Engine._failed_gates(candidate, settings))
 
 
 class EngineLifecycleTests(unittest.TestCase):
@@ -178,12 +189,16 @@ class EngineLifecycleTests(unittest.TestCase):
         second = engine.scan_once()
 
         self.assertEqual(first["action"]["event"], "shadow_signal")
+        self.assertEqual(first["action"]["entry_setup"], "breakout")
+        self.assertIn("Setup: breakout", engine.notifier.messages[0])
         self.assertEqual(second["action"]["event"], "shadow_duplicate_suppressed")
         self.assertEqual(len(engine.notifier.messages), 1)
 
-        engine.current_candidate = eligible_candidate(signal_open_time=2_000.0)
+        engine.current_candidate = eligible_candidate(signal_open_time=2_000.0, setup="pullback")
         third = engine.scan_once()
         self.assertEqual(third["action"]["event"], "shadow_signal")
+        self.assertEqual(third["action"]["entry_setup"], "pullback")
+        self.assertIn("Setup: pullback", engine.notifier.messages[-1])
         self.assertEqual(len(engine.notifier.messages), 2)
 
     def test_paper_tp_close_does_not_reopen_same_symbol_in_same_cycle(self):
@@ -191,6 +206,7 @@ class EngineLifecycleTests(unittest.TestCase):
 
         opened = engine.scan_once()
         self.assertEqual(opened["action"]["event"], "paper_open")
+        self.assertEqual(opened["action"]["setup"], "breakout")
         self.assertEqual(opened["open_positions"], 1)
 
         engine.market.books["TESTUSDT"] = {"bid": 101.0, "ask": 101.01}
