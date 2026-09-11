@@ -2,14 +2,16 @@
 """Replay a contiguous multi-minute Tardis Binance Futures L2 window.
 
 Research only. The first minute supplies the depth snapshot; subsequent minute
-slices extend the same ordered depth-update chain. No trading actions exist in
-this module.
+slices extend the same ordered depth-update chain. Optional warm-up from minute
+zero rebuilds the book before an isolated evaluation window. No trading actions
+exist in this module.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import pathlib
+from datetime import datetime, timezone
 
 from research.tardis_l2_replay import parse_ordered_raw
 from research.tardis_microstructure_features import (
@@ -25,19 +27,28 @@ RANGE_MAX_TICKER_MISMATCHES = 5
 RANGE_MIN_TICKER_MATCH_RATE = 0.999
 
 
-def fetch_window(symbol: str, date: str, start_offset: int, minutes: int) -> str:
+def fetch_window(symbol: str, date: str, start_offset: int, minutes: int, *, warmup_from_zero: bool = False) -> str:
     if minutes < 1:
         raise ValueError("minutes must be >= 1")
+    first = 0 if warmup_from_zero else start_offset
+    last = start_offset + minutes
     parts: list[str] = []
-    for offset in range(start_offset, start_offset + minutes):
+    for offset in range(first, last):
         body = fetch_combined(symbol, date, offset)
         if body:
             parts.append(body.rstrip("\n"))
     return "\n".join(parts) + ("\n" if parts else "")
 
 
-def scan_range(symbol: str, date: str, start_offset: int, minutes: int) -> dict:
-    body = fetch_window(symbol, date, start_offset, minutes)
+def _slice_eval_samples(samples: list[dict], date: str, start_offset: int, minutes: int) -> list[dict]:
+    day0 = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
+    start_ms = int(day0.timestamp() * 1000) + start_offset * 60_000
+    end_ms = start_ms + minutes * 60_000
+    return [s for s in samples if s.get("timestamp_ms") is not None and start_ms <= int(s["timestamp_ms"]) < end_ms]
+
+
+def scan_range(symbol: str, date: str, start_offset: int, minutes: int, *, warmup_from_zero: bool = False) -> dict:
+    body = fetch_window(symbol, date, start_offset, minutes, warmup_from_zero=warmup_from_zero)
     rows = parse_ordered_raw(body)
     extracted = extract_microstructure_rows(
         rows,
@@ -48,7 +59,8 @@ def scan_range(symbol: str, date: str, start_offset: int, minutes: int) -> dict:
         replay_min_ticker_match_rate=RANGE_MIN_TICKER_MATCH_RATE,
     )
     features = extracted.get("features", [])
-    samples = sample_last_per_second(features)
+    all_samples = sample_last_per_second(features)
+    samples = _slice_eval_samples(all_samples, date, start_offset, minutes) if warmup_from_zero else all_samples
     diagnostic = frozen_gate_g_diagnostic(samples)
     validation = extracted.get("validation", {})
     ready = bool(
@@ -59,19 +71,21 @@ def scan_range(symbol: str, date: str, start_offset: int, minutes: int) -> dict:
         and samples
     )
     return {
-        "engine": "TARDIS_CANONICAL_MICROSTRUCTURE_RANGE_V1",
+        "engine": "TARDIS_CANONICAL_MICROSTRUCTURE_RANGE_V2",
         "authorization": AUTHORIZATION,
         "liveTrading": False,
         "symbol": symbol,
         "date": date,
         "startOffset": start_offset,
         "minutes": minutes,
+        "warmupFromZero": warmup_from_zero,
         "rawBytes": len(body.encode("utf-8")),
         "rawRows": len(rows),
         "status": "PASS" if ready else "FAIL",
         "canonicalReplayReady": bool(validation.get("canonicalReplayReady")),
         "validation": validation,
         "summary": summarize_features(features, samples),
+        "evaluationSampledSeconds": len(samples),
         "gateG": diagnostic,
     }
 
@@ -82,10 +96,11 @@ def main() -> None:
     p.add_argument("--date", default="2021-09-01")
     p.add_argument("--start-offset", type=int, default=0)
     p.add_argument("--minutes", type=int, default=30)
+    p.add_argument("--warmup-from-zero", action="store_true")
     p.add_argument("--output")
     p.add_argument("--assert-ready", action="store_true")
     a = p.parse_args()
-    result = scan_range(a.symbol, a.date, a.start_offset, a.minutes)
+    result = scan_range(a.symbol, a.date, a.start_offset, a.minutes, warmup_from_zero=a.warmup_from_zero)
     text = json.dumps(result, indent=2, sort_keys=True)
     if a.output:
         path = pathlib.Path(a.output)
