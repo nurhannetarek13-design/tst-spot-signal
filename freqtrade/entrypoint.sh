@@ -90,9 +90,13 @@ python -u /freqtrade/dynamic_exit_manager.py &
 DYNAMIC_EXIT_PID=$!
 echo "[entrypoint] ownership-safe dynamic exit manager started pid=${DYNAMIC_EXIT_PID}"
 
-python -u /freqtrade/sol_buy_zone_watch.py &
-SOL_MONITOR_PID=$!
-echo "[entrypoint] SOL buy-zone Telegram monitor started pid=${SOL_MONITOR_PID}"
+if [[ "${SOL_BUY_ZONE_ALERTS_ENABLED:-0}" == "1" ]]; then
+  python -u /freqtrade/sol_buy_zone_watch.py &
+  SOL_MONITOR_PID=$!
+  echo "[entrypoint] SOL buy-zone Telegram monitor started pid=${SOL_MONITOR_PID}"
+else
+  echo "[entrypoint] SOL buy-zone monitor disabled"
+fi
 
 if [[ -n "${NEW_LISTING_SYMBOL:-}" && -n "${NEW_LISTING_START_UTC:-}" ]]; then
   python -u /freqtrade/new_listing_watcher.py &
