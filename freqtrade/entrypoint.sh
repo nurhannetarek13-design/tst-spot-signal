@@ -72,16 +72,17 @@ python -u /freqtrade/execution_recovery.py &
 RECOVERY_PID=$!
 echo "[entrypoint] exact-once execution recovery started pid=${RECOVERY_PID}"
 
-if python -u /freqtrade/market_context.py --once; then
-  echo "[entrypoint] initial market-context snapshot ready"
-else
-  echo "[entrypoint] market-context preflight unavailable; continuing in EV warmup mode" >&2
-fi
+# Market context is useful for the final fail-closed Spot Sniper gate, but public
+# Binance context collection can occasionally be slow. Never block the primary
+# scanner startup on it: start collection asynchronously. Until a fresh snapshot
+# exists, the gate itself rejects context-dependent candidates rather than
+# authorizing them with missing data.
 python -u /freqtrade/market_context.py &
 MARKET_CONTEXT_PID=$!
-echo "[entrypoint] market-context collector started pid=${MARKET_CONTEXT_PID}"
+echo "[entrypoint] market-context collector started async pid=${MARKET_CONTEXT_PID}"
 
-# This is the primary production workload. Start it before all research workers.
+# This is the primary production workload. Start it immediately after the hard
+# reconciliation/recovery services; it must not wait on research/context I/O.
 python -u /freqtrade/fast_entry_engine.py &
 FAST_PID=$!
 echo "[entrypoint] Spot Sniper fast entry engine started pid=${FAST_PID}"
