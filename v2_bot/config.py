@@ -30,6 +30,7 @@ class Settings:
     mode: str = os.getenv("V2_MODE", "shadow").strip().lower()
     live_trading: bool = _bool("V2_LIVE_TRADING", False)
     persistent_state: bool = _bool("V2_PERSISTENT_STATE", False)
+    deploy_revision: str = os.getenv("V2_DEPLOY_REV", "").strip()
     quote_asset: str = os.getenv("V2_QUOTE_ASSET", "USDT").upper()
     min_quote_volume_24h: float = _float("V2_MIN_QUOTE_VOLUME_24H", 20_000_000.0)
     max_spread_bps: float = _float("V2_MAX_SPREAD_BPS", 15.0)
@@ -55,6 +56,10 @@ class Settings:
         if self.mode in {"paper", "live"} and not self.persistent_state:
             raise RuntimeError(
                 f"{self.mode.upper()} mode requires V2_PERSISTENT_STATE=true"
+            )
+        if self.mode in {"paper", "live"} and not self.deploy_revision:
+            raise RuntimeError(
+                f"{self.mode.upper()} mode requires V2_DEPLOY_REV for cross-deploy persistence proof"
             )
         if not self.quote_asset:
             raise ValueError("V2_QUOTE_ASSET must not be empty")
