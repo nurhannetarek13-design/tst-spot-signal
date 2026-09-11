@@ -5,6 +5,7 @@ on:
     branches:
       - bot-v2-standalone
     paths:
+      - 'v2_bot/**'
       - '.github/workflows/v2-shadow-smoke.yml'
   workflow_dispatch:
 
