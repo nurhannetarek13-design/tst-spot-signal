@@ -40,11 +40,27 @@ class BinancePublicClient:
                 continue
         return out
 
-    def klines(self, symbol: str, interval: str, limit: int = 120) -> list[dict[str, float]]:
+    def klines(
+        self,
+        symbol: str,
+        interval: str,
+        limit: int = 120,
+        *,
+        closed_only: bool = True,
+    ) -> list[dict[str, float]]:
         rows = self._get(
             "/api/v3/klines",
             {"symbol": symbol, "interval": interval, "limit": limit},
         )
+        if not isinstance(rows, list):
+            raise RuntimeError("Unexpected klines response")
+
+        # Binance includes the currently-forming candle as the last kline.
+        # V2 deliberately ignores it so signals are based only on closed bars
+        # and cannot repaint as the live candle changes.
+        if closed_only and rows:
+            rows = rows[:-1]
+
         parsed: list[dict[str, float]] = []
         for row in rows:
             parsed.append(
@@ -55,6 +71,7 @@ class BinancePublicClient:
                     "low": float(row[3]),
                     "close": float(row[4]),
                     "volume": float(row[5]),
+                    "close_time": float(row[6]),
                     "quote_volume": float(row[7]),
                     "trades": float(row[8]),
                     "taker_buy_base": float(row[9]),
