@@ -20,6 +20,6 @@ def _merge_asof_same_datetime_unit(left, right, *args, **kwargs):
 
 pd.merge_asof = _merge_asof_same_datetime_unit
 
-from research import derivatives_metrics_edge_scanner_v1 as scanner
+import derivatives_metrics_edge_scanner_v1 as scanner
 
 scanner.main()
