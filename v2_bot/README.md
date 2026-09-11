@@ -8,22 +8,28 @@ This is a clean, isolated V2 implementation. It does **not** import or depend on
 - `V2_LIVE_TRADING=false` by default
 - Live execution is intentionally hard-locked until the protective Binance Spot exit-order adapter is implemented and tested.
 - No withdrawals, futures, leverage, martingale, or dependency on Make/Railway execution logic.
+- Strategy decisions use **closed Binance candles only**; the currently-forming kline is ignored to avoid repainting.
+- Telegram failures are isolated from the scanner and cannot stop a scan cycle.
 
 ## Current pipeline
 
-`Binance public market data -> V2 scanner -> strategy score -> risk gates -> shadow/paper action -> optional Telegram alert`
+`Binance public market data -> V2 scanner -> strategy score -> mandatory entry gates -> risk gates -> shadow/paper action -> optional Telegram alert`
 
 ### Current signal gates
+
+All of these must pass for a candidate to be eligible:
 
 - USDT market
 - 24h quote volume >= 20M USDT
 - spread <= 15 bps
 - BTC 1h bullish regime
 - target trend bullish on 15m + 1h + 4h
-- 15m breakout above previous 20-candle high
-- relative 15m quote volume >= 1.5x
-- taker-buy quote ratio >= 56%
-- minimum score >= 90/100
+- closed 15m candle breaks above the previous 20 closed-candle highs
+- relative closed-15m quote volume >= 1.5x
+- closed-15m taker-buy quote ratio >= 56%
+- score >= 90/100
+
+The score is still retained for ranking and diagnostics, but it cannot compensate for a failed mandatory gate. For example, a 90/100 candidate with a failed 4h trend is **not eligible**.
 
 These are baseline deterministic rules for testing, **not evidence of a profitable edge**. They must pass paper/OOS validation before live trading is considered.
 
@@ -36,7 +42,7 @@ These are baseline deterministic rules for testing, **not evidence of a profitab
 - Paper SL: -0.62%
 - Paper fee model: 0.10% per side by default
 
-All are configurable through environment variables.
+All are configurable through environment variables. Invalid safety-sensitive values fail validation instead of silently running.
 
 ## Run
 
