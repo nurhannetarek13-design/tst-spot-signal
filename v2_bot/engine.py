@@ -138,6 +138,7 @@ class V2Engine:
         tickers = self.market.ticker_24h()
         books = self.market.book_tickers()
         paper_events = self._manage_paper_exits(books)
+        closed_symbols_this_cycle = {event["symbol"] for event in paper_events}
         universe = self._build_universe(tickers)
         btc_1h = self.market.klines("BTCUSDT", "1h", 120)
 
@@ -160,65 +161,84 @@ class V2Engine:
         action: dict[str, Any] | None = None
 
         if eligible:
-            best = eligible[0]
             open_positions = self.state.list_open_positions()
             open_symbols = {p.symbol for p in open_positions}
-            realized_pnl = self.state.realized_pnl_today()
-            decision = check_risk(
-                settings=self.settings,
-                candidate=best,
-                realized_pnl_today=realized_pnl,
-                open_positions=len(open_positions),
-            )
+            excluded_symbols = open_symbols | closed_symbols_this_cycle
+            actionable = [c for c in eligible if c.symbol not in excluded_symbols]
 
-            if best.symbol in open_symbols:
-                decision = type(decision)(False, "symbol_already_open")
-
-            if decision.allowed and self.settings.mode == "shadow":
-                action = {"event": "shadow_signal", **best.to_dict()}
-                self.notifier.send(
-                    f"V2 SHADOW SIGNAL {best.symbol}\n"
-                    f"Score: {best.score}/100\n"
-                    f"Price: {best.price:.8f}\n"
-                    f"RelVol: {best.relative_volume:.2f}x\n"
-                    f"Taker buy: {best.taker_buy_ratio:.1%}"
-                )
-            elif decision.allowed and self.settings.mode == "paper":
-                entry_price = books.get(best.symbol, {}).get("ask", best.price)
-                position = self.state.open_position(
-                    symbol=best.symbol,
-                    entry_price=entry_price,
-                    quote_size=self.settings.trade_size_usdt,
-                    take_profit_pct=self.settings.take_profit_pct,
-                    stop_loss_pct=self.settings.stop_loss_pct,
-                )
-                action = {
-                    "event": "paper_open",
-                    "symbol": position.symbol,
-                    "score": best.score,
-                    "entry_price": position.entry_price,
-                    "quote_size": position.quote_size,
-                    "take_profit": position.take_profit,
-                    "stop_loss": position.stop_loss,
-                }
-                self.notifier.send(
-                    f"V2 PAPER BUY {position.symbol}\n"
-                    f"Score: {best.score}/100\n"
-                    f"Entry: {position.entry_price:.8f}\n"
-                    f"TP: {position.take_profit:.8f}\n"
-                    f"SL: {position.stop_loss:.8f}"
-                )
-            elif decision.allowed and self.settings.mode == "live":
-                raise RuntimeError(
-                    "LIVE_EXECUTION_LOCKED: protective Spot exit-order adapter is not implemented yet"
-                )
-            else:
+            if not actionable:
                 action = {
                     "event": "blocked",
-                    "symbol": best.symbol,
-                    "score": best.score,
-                    "reason": decision.reason,
+                    "reason": "eligible_symbols_already_open_or_just_closed",
+                    "symbols": [c.symbol for c in eligible],
                 }
+            else:
+                best = actionable[0]
+                realized_pnl = self.state.realized_pnl_today()
+                decision = check_risk(
+                    settings=self.settings,
+                    candidate=best,
+                    realized_pnl_today=realized_pnl,
+                    open_positions=len(open_positions),
+                )
+
+                if decision.allowed and self.settings.mode == "shadow":
+                    is_new = self.state.claim_signal(
+                        symbol=best.symbol,
+                        signal_open_time=best.signal_open_time,
+                        kind="shadow",
+                    )
+                    if is_new:
+                        action = {"event": "shadow_signal", **best.to_dict()}
+                        self.notifier.send(
+                            f"V2 SHADOW SIGNAL {best.symbol}\n"
+                            f"Score: {best.score}/100\n"
+                            f"Price: {best.price:.8f}\n"
+                            f"RelVol: {best.relative_volume:.2f}x\n"
+                            f"Taker buy: {best.taker_buy_ratio:.1%}"
+                        )
+                    else:
+                        action = {
+                            "event": "shadow_duplicate_suppressed",
+                            "symbol": best.symbol,
+                            "signal_open_time": best.signal_open_time,
+                        }
+                elif decision.allowed and self.settings.mode == "paper":
+                    entry_price = books.get(best.symbol, {}).get("ask", best.price)
+                    position = self.state.open_position(
+                        symbol=best.symbol,
+                        entry_price=entry_price,
+                        quote_size=self.settings.trade_size_usdt,
+                        take_profit_pct=self.settings.take_profit_pct,
+                        stop_loss_pct=self.settings.stop_loss_pct,
+                    )
+                    action = {
+                        "event": "paper_open",
+                        "symbol": position.symbol,
+                        "score": best.score,
+                        "entry_price": position.entry_price,
+                        "quote_size": position.quote_size,
+                        "take_profit": position.take_profit,
+                        "stop_loss": position.stop_loss,
+                    }
+                    self.notifier.send(
+                        f"V2 PAPER BUY {position.symbol}\n"
+                        f"Score: {best.score}/100\n"
+                        f"Entry: {position.entry_price:.8f}\n"
+                        f"TP: {position.take_profit:.8f}\n"
+                        f"SL: {position.stop_loss:.8f}"
+                    )
+                elif decision.allowed and self.settings.mode == "live":
+                    raise RuntimeError(
+                        "LIVE_EXECUTION_LOCKED: protective Spot exit-order adapter is not implemented yet"
+                    )
+                else:
+                    action = {
+                        "event": "blocked",
+                        "symbol": best.symbol,
+                        "score": best.score,
+                        "reason": decision.reason,
+                    }
 
         summary = {
             "mode": self.settings.mode,
