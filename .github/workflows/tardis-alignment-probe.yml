@@ -1,0 +1,35 @@
+name: Tardis Raw Alignment Probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/tardis_alignment_probe.py'
+      - '.github/workflows/tardis-alignment-probe.yml'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe combined raw stream alignment
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/tardis-alignment/${{ matrix.symbol }}
+          python research/tardis_alignment_probe.py \
+            --symbol '${{ matrix.symbol }}' \
+            --date '2021-09-01' \
+            --offset 0 \
+            | tee artifacts/tardis-alignment/${{ matrix.symbol }}/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tardis-alignment-${{ matrix.symbol }}
+          path: artifacts/tardis-alignment/${{ matrix.symbol }}
+          retention-days: 14
