@@ -1,0 +1,35 @@
+name: Shadow L2 Ablation Selftest V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/bybit_l2_live_feature.py'
+      - 'research/shadow_l2_ablation.py'
+      - '.github/workflows/shadow-l2-ablation-selftest-v1.yml'
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m py_compile research/bybit_l2_live_feature.py research/shadow_l2_ablation.py
+      - run: PYTHONPATH=. python research/bybit_l2_live_feature.py
+      - run: PYTHONPATH=. python research/shadow_l2_ablation.py --selftest
+      - name: Probe public L2 without credentials
+        run: |
+          PYTHONPATH=. python - <<'PY'
+          import json
+          from research.bybit_l2_live_feature import snapshot
+          rows=[]
+          for s in ('ETHUSDT','SOLUSDT'):
+            x=snapshot(s); rows.append(x)
+            assert -1 <= x['obi10'] <= 1
+            assert x['spread_bps'] > 0
+          print(json.dumps(rows,indent=2))
+          PY
+      - name: Prove no live execution imports
+        run: |
+          ! grep -E 'binance\.client|create_order|place_order|submit_order|api_key|api_secret' research/bybit_l2_live_feature.py research/shadow_l2_ablation.py
