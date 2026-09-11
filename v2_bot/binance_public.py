@@ -1,23 +1,51 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 import httpx
 
-BASE_URL = "https://api.binance.com"
+BASE_URLS = (
+    "https://api.binance.com",
+    "https://data-api.binance.vision",
+)
+FALLBACK_HTTP_STATUSES = {403, 451, 500, 502, 503, 504}
 
 
 class BinancePublicClient:
-    def __init__(self, timeout: float = 10.0) -> None:
-        self._client = httpx.Client(base_url=BASE_URL, timeout=timeout)
+    def __init__(
+        self,
+        timeout: float = 10.0,
+        base_urls: Iterable[str] | None = None,
+    ) -> None:
+        self._client = httpx.Client(timeout=timeout)
+        self._base_urls = tuple(base_urls or BASE_URLS)
+        if not self._base_urls:
+            raise ValueError("At least one Binance public base URL is required")
 
     def close(self) -> None:
         self._client.close()
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        response = self._client.get(path, params=params)
-        response.raise_for_status()
-        return response.json()
+        last_error: Exception | None = None
+        for index, base_url in enumerate(self._base_urls):
+            try:
+                response = self._client.get(f"{base_url.rstrip('/')}{path}", params=params)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                status = exc.response.status_code
+                has_fallback = index < len(self._base_urls) - 1
+                if not has_fallback or status not in FALLBACK_HTTP_STATUSES:
+                    raise
+            except httpx.RequestError as exc:
+                last_error = exc
+                if index >= len(self._base_urls) - 1:
+                    raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("No Binance public endpoint available")
 
     def ticker_24h(self) -> list[dict[str, Any]]:
         data = self._get("/api/v3/ticker/24hr")
