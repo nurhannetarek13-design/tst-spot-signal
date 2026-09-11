@@ -1,5 +1,6 @@
 name: Event Driven Edge Scanner V1
 
+# Research rerun marker: 2026-09-11
 on:
   workflow_dispatch:
   push:
