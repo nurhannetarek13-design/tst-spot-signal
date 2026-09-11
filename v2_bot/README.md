@@ -1,101 +1,108 @@
-# TST Spot Bot V2 — Standalone
+# TST Spot Bot V2
 
-This is a clean, isolated V2 implementation. It does **not** import or depend on the legacy bot.
+Standalone Binance Spot research/execution engine, isolated from the legacy V1 execution chain.
 
-## Safety state
+## Current operating state
 
-- Default mode: `shadow`
+- Default mode: `SHADOW`
 - `V2_LIVE_TRADING=false` by default
-- Live execution is intentionally hard-locked until the protective Binance Spot exit-order adapter is implemented and tested.
-- No withdrawals, futures, leverage, martingale, or dependency on Make/Railway execution logic.
-- Strategy decisions use **closed Binance candles only**; the currently-forming kline is ignored to avoid repainting.
-- Telegram failures are isolated from the scanner and cannot stop a scan cycle.
-- Binance public market data automatically falls back to `data-api.binance.vision` if the primary public endpoint is unavailable or region-blocked; HTTP 429 is not bypassed.
-- Stablecoin/fiat base pairs such as USDC/USDT, FDUSD/USDT, and EUR/USDT are excluded from the candidate universe.
-- SHADOW alerts are deduplicated per symbol and closed 15m candle, so the same signal is not emitted every scan minute.
-- Paper positions cannot silently overwrite an existing position, and a symbol closed at TP/SL cannot immediately re-enter in the same scan cycle.
-- A continuous worker retries after transient public-market-data HTTP/network failures; one-shot smoke runs still fail loudly.
+- Paper and Live require proven persistent state across different deployment revisions
+- Live startup also blocks if the execution journal contains an unresolved execution
+- No Binance private API credentials are required for SHADOW
+- No Futures, leverage, withdrawals, or martingale
 
-## Current pipeline
+## Signal rules
 
-`Binance public market data -> V2 scanner -> strategy score -> mandatory entry gates -> risk gates -> shadow/paper action -> optional Telegram alert`
+A candidate is actionable only when every mandatory gate passes. Score cannot compensate for a failed gate.
 
-### Current signal gates
-
-All of these must pass for a candidate to be eligible:
-
-- USDT market
+- USDT Spot pair
 - 24h quote volume >= 20M USDT
-- spread <= 15 bps
+- spread <= configured limit
 - BTC 1h bullish regime
-- target trend bullish on 15m + 1h + 4h
-- closed 15m candle breaks above the previous 20 closed-candle highs
-- relative closed-15m quote volume >= 1.5x
-- closed-15m taker-buy quote ratio >= 56%
-- score >= 90/100
+- target 15m + 1h + 4h bullish structure
+- entry setup is either confirmed Breakout + Retest or confirmed EMA20 Pullback + Reclaim
+- raw breakout alone is PRE-ALERT only and explicitly means NO ENTRY
+- relative quote volume >= 1.5x
+- taker-buy quote ratio >= 56%
+- score >= 90
+- closed candles only
 
-The score is retained for ranking and diagnostics, but it cannot compensate for a failed mandatory gate. For example, a 90/100 candidate with a failed 4h trend is **not eligible**.
+Stablecoin/fiat bases (including RLUSD) and non-ASCII/noisy symbols are excluded from the universe.
 
-These are baseline deterministic rules for testing, **not evidence of a profitable edge**. They must pass paper/OOS validation before live trading is considered.
+## Execution safety layers
+
+Before any action that could become executable, V2 applies Binance Spot preflight to entry and protective exits using exchange filters including `PRICE_FILTER`, `LOT_SIZE`, and `NOTIONAL`.
+
+A private Spot adapter now exists for test coverage only. It is **not wired into `V2Engine` and cannot be enabled by setting environment variables alone**. Its design is fail-closed:
+
+1. Create a durable execution journal intent before the first private request.
+2. Place MARKET BUY using a deterministic `newClientOrderId`.
+3. If BUY returns a transport error or potentially-unknown 5xx result, query the same client order ID instead of retrying blindly.
+4. Subtract commissions paid in the base asset and round quantity down to the symbol step size.
+5. Re-check post-fill quantity/min-notional viability.
+6. Place SELL OCO protection using TAKE_PROFIT + STOP_LOSS market-triggered legs.
+7. If OCO result is uncertain, reconcile the order list by deterministic list client ID and do not place a replacement blindly.
+8. If OCO is definitively rejected, attempt an emergency MARKET SELL to flatten.
+9. Any unresolved BUY/OCO/unprotected execution remains pending in the journal and blocks future Live startup.
+
+The private adapter remains deliberately disconnected until durable storage, account reconciliation, isolated deployment, and explicit Live authorization are complete.
+
+## State and persistence
+
+SQLite stores:
+
+- Paper open positions
+- Paper trades and fee-aware PnL
+- emitted signal dedupe keys
+- cross-deploy persistence marker
+- future Live execution recovery journal
+
+Paper/Live are fail-closed unless `V2_PERSISTENT_STATE=true`, `V2_DEPLOY_REV` is set, and the state database proves that it survived a different deployment revision. A merely writable file is not considered proof of persistence.
 
 ## Risk defaults
 
-- Trade size: 10 USDT
-- Daily realized loss cap: 2 USDT
-- Max simultaneous paper positions: 1
-- Paper TP: +0.90%
-- Paper SL: -0.62%
-- Paper fee model: 0.10% per side by default
+- trade size: 10 USDT
+- max daily realized loss: 2 USDT
+- max open positions: 1
+- TP: +0.90%
+- SL: -0.62%
+- modeled Paper fee: 0.10% each side
 
-All are configurable through environment variables. Invalid safety-sensitive values fail validation instead of silently running.
+These are safety/configuration defaults, not claims of profitability.
 
-Paper PnL is recorded net of modeled entry and exit fees. State is persisted in SQLite; a persistent deployment must therefore use persistent storage rather than an ephemeral CI filesystem.
+## Telegram
 
-## Verification
+Telegram is optional. SHADOW can send:
 
-V2 has three independent checks on its isolated branch:
+- strict breakout PRE-ALERT (`NO ENTRY — waiting retest`)
+- confirmed SHADOW signal after all strategy/risk/exchange-preflight gates pass
 
-- `V2 CI`: unit/lifecycle tests, Python compilation, container build, and fail-closed container-default assertions.
-- `V2 Shadow Smoke`: a read-only end-to-end scan against live public Binance market data with `V2_LIVE_TRADING=false`.
-- repository `Safety gates`: existing fail-closed checks remain green.
+Telegram failures do not crash the market scanner.
 
-The smoke workflow does not use Binance credentials and cannot place orders.
+## Running
 
-## Run
+One cycle:
 
 ```bash
-pip install -r v2_bot/requirements.txt
 python -m v2_bot.main --once
 ```
 
-Continuous SHADOW scan:
+Continuous SHADOW worker:
 
 ```bash
-python -m v2_bot.main
+V2_MODE=shadow V2_LIVE_TRADING=false python -m v2_bot.main
 ```
 
-Paper mode:
+## Container defaults
 
-```bash
-V2_MODE=paper python -m v2_bot.main
-```
+`v2_bot/Dockerfile` defaults to:
 
-### Container worker
+- `V2_MODE=shadow`
+- `V2_LIVE_TRADING=false`
+- `V2_STATE_DB=/data/v2_state.sqlite3`
 
-Build from the repository root:
+Attach persistent storage at `/data` before considering Paper. Do not consider Live until the persistence probe passes across deployments and the private adapter is intentionally wired after review.
 
-```bash
-docker build -f v2_bot/Dockerfile -t tst-v2 .
-```
+## What green CI means
 
-The image defaults to `V2_MODE=shadow`, `V2_LIVE_TRADING=false`, and `V2_STATE_DB=/data/v2_state.sqlite3`. For a persistent SHADOW/Paper worker, mount durable storage at `/data`. Do not deploy Paper with ephemeral storage because open positions, emitted-signal dedupe state, and realized PnL would be lost after a restart.
-
-## Environment
-
-Copy values from `v2_bot/.env.example` into the deployment environment. The program reads environment variables directly; it does not load `.env` files itself.
-
-Telegram is optional. Set `V2_TELEGRAM_BOT_TOKEN` and `V2_TELEGRAM_CHAT_ID` only for the new V2 bot/channel.
-
-## Live gate
-
-Even if `V2_MODE=live` and `V2_LIVE_TRADING=true` are set, V2 will refuse to place a trade today because protected live execution is not implemented yet. This is deliberate: no unprotected market buy is allowed.
+Green CI means the software mechanics, safety gates, tests, compilation, container build, and fail-closed defaults passed. It does **not** mean the strategy has a proven profitable edge or that Live trading is authorized.
