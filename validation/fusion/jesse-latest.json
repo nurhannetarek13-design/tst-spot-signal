@@ -16,7 +16,7 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-11T17:22:45.340311+00:00",
+  "generatedAt": "2026-09-11T17:51:07.328493+00:00",
   "notes": "Independent Jesse validation of frozen parity candidate on the exact fixture dataset window; long-only; 5.5 USDT stake. Profit factor is derived from Jesse gross_profit/gross_loss; PnL and expectancy use Jesse native USD metrics.",
   "base": {
     "trades": 179,
