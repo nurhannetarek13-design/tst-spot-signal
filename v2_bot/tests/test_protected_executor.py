@@ -32,7 +32,7 @@ class FakeSignedClient:
             "listOrderStatus": "EXECUTING",
         }
         self.query_list_exc: Exception | None = None
-        self.sell_result = {"orderId": 9, "status": "FILLED"}
+        self.sell_result = {"orderId": 9, "status": "FILLED", "executedQty": "1.000"}
         self.sell_exc: Exception | None = None
         self.calls: list[tuple[str, dict]] = []
 
@@ -151,6 +151,24 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
         self.assertEqual(self.journal.get(result.client_order_id).stage, "FLATTENED")
         self.assertIn("sell", [name for name, _ in self.client.calls])
 
+    def test_emergency_sell_must_be_confirmed_filled(self) -> None:
+        self.client.oco_exc = BinanceAPIError(
+            status_code=400,
+            code=-1013,
+            message="Filter failure",
+        )
+        self.client.sell_result = {
+            "orderId": 9,
+            "status": "EXPIRED",
+            "executedQty": "0",
+        }
+        with self.assertRaises(RecoveryRequired):
+            self.execute()
+        pending = self.journal.pending()
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].stage, "UNPROTECTED")
+        self.assertEqual(pending[0].details["flatten_status"], "EXPIRED")
+
     def test_oco_timeout_reconciles_and_does_not_flatten_when_found(self) -> None:
         self.client.oco_exc = httpx.ReadTimeout(
             "timeout",
@@ -188,6 +206,7 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
             "executedQty": "0.050",
             "fills": [],
         }
+        self.client.sell_result["executedQty"] = "0.050"
         result = self.execute(min_notional=Decimal("6"))
         self.assertEqual(result.status, "FLATTENED")
         self.assertNotIn("oco", [name for name, _ in self.client.calls])
