@@ -24,6 +24,16 @@
     "longOnly": true,
     "spotOnly": true
   },
+  "validation": {
+    "historicalScope": "CORE_TRIGGER_ONLY",
+    "forwardScope": "FULL_STRATEGY_L2",
+    "historicalValidators": ["freqtrade", "jesse"],
+    "forwardValidators": ["forward"],
+    "historicalIncludes": ["MACD_BULLISH_CROSS", "CLOSE_ABOVE_EMA200", "MACD_BELOW_ZERO_IF_REQUIRED"],
+    "historicalExcludes": ["L2_ORDER_BOOK", "L2_BID_SHARE", "TAKER_BUY_SHARE", "RELATIVE_VOLUME_CONFIRMATION", "SPREAD_BPS", "VISIBLE_DEPTH_USDT", "LIVE_BTC_REGIME_CONFIRMATION"],
+    "promotionRule": "Historical CORE_TRIGGER_ONLY validation can qualify the candidate for forward-paper collection only. It cannot approve FULL_STRATEGY_L2 or live trading.",
+    "reason": "No canonical historical L2 replay is available in this repository for the full confirmation stack. Microstructure confirmation must be validated with forward paper evidence rather than candle-derived proxies."
+  },
   "researchEvidence": {
     "source": "TRADINGVIEW_CANDIDATE_SIGNAL_DIAGNOSTICS_V1",
     "rawOosSignal": {
