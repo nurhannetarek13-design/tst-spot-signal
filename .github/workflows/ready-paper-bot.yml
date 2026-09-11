@@ -38,9 +38,12 @@ jobs:
             echo "No state change"
             exit 0
           fi
+          cp ready_bot/state.json /tmp/ready-bot-state.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/ready-bot-state.json ready_bot/state.json
           git config user.name "ready-paper-bot"
           git config user.email "ready-paper-bot@users.noreply.github.com"
           git add ready_bot/state.json
           git commit -m "Update ready paper bot state" || exit 0
-          git pull --rebase origin main || true
-          git push
+          git push origin HEAD:main
