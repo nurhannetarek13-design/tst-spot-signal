@@ -29,7 +29,8 @@ class ShadowOutcomeLedger:
 
     It never places orders. Outcomes are evaluated from CLOSED 15m candles.
     If TP and SL are both crossed in the same candle, order is unknowable from
-    OHLC data, so the result is marked AMBIGUOUS and excluded from win-rate/PnL.
+    OHLC data, so the result is marked AMBIGUOUS and excluded from performance
+    metrics instead of being counted optimistically.
     """
 
     TERMINAL = frozenset({"TP", "SL", "AMBIGUOUS"})
@@ -225,21 +226,48 @@ class ShadowOutcomeLedger:
             rows = conn.execute(
                 "SELECT status, pnl_usdt FROM shadow_outcomes"
             ).fetchall()
+
         counts = {"OPEN": 0, "TP": 0, "SL": 0, "AMBIGUOUS": 0}
-        resolved_pnl = 0.0
+        winning_pnls: list[float] = []
+        losing_pnls: list[float] = []
         for row in rows:
             status = str(row["status"])
             counts[status] = counts.get(status, 0) + 1
-            if status in {"TP", "SL"} and row["pnl_usdt"] is not None:
-                resolved_pnl += float(row["pnl_usdt"])
-        decisive = counts.get("TP", 0) + counts.get("SL", 0)
+            if status not in {"TP", "SL"} or row["pnl_usdt"] is None:
+                continue
+            pnl = float(row["pnl_usdt"])
+            if pnl > 0:
+                winning_pnls.append(pnl)
+            elif pnl < 0:
+                losing_pnls.append(pnl)
+
+        wins = counts.get("TP", 0)
+        losses = counts.get("SL", 0)
+        decisive = wins + losses
+        gross_profit = sum(winning_pnls)
+        gross_loss_abs = abs(sum(losing_pnls))
+        net_pnl = gross_profit - gross_loss_abs
+        profit_factor = (gross_profit / gross_loss_abs) if gross_loss_abs > 0 else (float("inf") if gross_profit > 0 else None)
+        expectancy = (net_pnl / decisive) if decisive else None
+        avg_win = (gross_profit / len(winning_pnls)) if winning_pnls else None
+        avg_loss = (sum(losing_pnls) / len(losing_pnls)) if losing_pnls else None
+        terminal = decisive + counts.get("AMBIGUOUS", 0)
+        ambiguous_rate = (counts.get("AMBIGUOUS", 0) / terminal) if terminal else None
+
         return {
             "total": len(rows),
             "open": counts.get("OPEN", 0),
-            "wins": counts.get("TP", 0),
-            "losses": counts.get("SL", 0),
+            "wins": wins,
+            "losses": losses,
             "ambiguous": counts.get("AMBIGUOUS", 0),
             "decisive": decisive,
-            "win_rate": (counts.get("TP", 0) / decisive) if decisive else None,
-            "net_pnl_usdt": round(resolved_pnl, 8),
+            "win_rate": (wins / decisive) if decisive else None,
+            "ambiguous_rate": ambiguous_rate,
+            "gross_profit_usdt": round(gross_profit, 8),
+            "gross_loss_abs_usdt": round(gross_loss_abs, 8),
+            "net_pnl_usdt": round(net_pnl, 8),
+            "expectancy_usdt": round(expectancy, 8) if expectancy is not None else None,
+            "avg_win_usdt": round(avg_win, 8) if avg_win is not None else None,
+            "avg_loss_usdt": round(avg_loss, 8) if avg_loss is not None else None,
+            "profit_factor": round(profit_factor, 8) if profit_factor not in {None, float("inf")} else profit_factor,
         }
