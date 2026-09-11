@@ -1,0 +1,85 @@
+name: Bastion JOAT OOS V1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'freqtrade/user_data/strategies/BastionJOATSpotV1.py'
+      - 'freqtrade/user_data/strategies/BastionJOATSpotV2.py'
+      - 'freqtrade/user_data/config_joat_research.json'
+      - '.github/workflows/bastion-joat-oos-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare directories
+        run: mkdir -p freqtrade/user_data/data/binance freqtrade/user_data/backtest_results/joat
+      - name: Download Binance Spot 15m data
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            download-data \
+            --config /freqtrade/user_data/config_joat_research.json \
+            --timeframes 15m \
+            --timerange 20250101-20260901
+      - name: Discovery 2025 baseline cost
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            backtesting \
+            --config /freqtrade/user_data/config_joat_research.json \
+            --strategy BastionJOATSpotV2 \
+            --strategy-path /freqtrade/user_data/strategies \
+            --timerange 20250101-20260101 \
+            --fee 0.0014 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/joat/discovery.json \
+            | tee freqtrade/user_data/backtest_results/joat/discovery.txt
+      - name: OOS 2026 baseline cost
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            backtesting \
+            --config /freqtrade/user_data/config_joat_research.json \
+            --strategy BastionJOATSpotV2 \
+            --strategy-path /freqtrade/user_data/strategies \
+            --timerange 20260101-20260901 \
+            --fee 0.0014 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/joat/oos.json \
+            | tee freqtrade/user_data/backtest_results/joat/oos.txt
+      - name: OOS 2026 stress cost 0.80 percent round trip
+        run: |
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            backtesting \
+            --config /freqtrade/user_data/config_joat_research.json \
+            --strategy BastionJOATSpotV2 \
+            --strategy-path /freqtrade/user_data/strategies \
+            --timerange 20260101-20260901 \
+            --fee 0.004 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/joat/oos_stress.json \
+            | tee freqtrade/user_data/backtest_results/joat/oos_stress.txt
+      - name: Research-only contract
+        run: |
+          grep -q '"dry_run": true' freqtrade/user_data/config_joat_research.json
+          grep -q '"trading_mode": "spot"' freqtrade/user_data/config_joat_research.json
+          grep -q '"max_open_trades": 3' freqtrade/user_data/config_joat_research.json
+          grep -q '"stake_amount": 10' freqtrade/user_data/config_joat_research.json
+          ! grep -R -q 'enter_short' freqtrade/user_data/strategies/BastionJOATSpotV*.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bastion-joat-oos-v1
+          path: freqtrade/user_data/backtest_results/joat/
+          retention-days: 14
