@@ -247,7 +247,7 @@ class ShadowOutcomeLedger:
         gross_profit = sum(winning_pnls)
         gross_loss_abs = abs(sum(losing_pnls))
         net_pnl = gross_profit - gross_loss_abs
-        profit_factor = (gross_profit / gross_loss_abs) if gross_loss_abs > 0 else (float("inf") if gross_profit > 0 else None)
+        profit_factor = (gross_profit / gross_loss_abs) if gross_loss_abs > 0 else None
         expectancy = (net_pnl / decisive) if decisive else None
         avg_win = (gross_profit / len(winning_pnls)) if winning_pnls else None
         avg_loss = (sum(losing_pnls) / len(losing_pnls)) if losing_pnls else None
@@ -269,5 +269,5 @@ class ShadowOutcomeLedger:
             "expectancy_usdt": round(expectancy, 8) if expectancy is not None else None,
             "avg_win_usdt": round(avg_win, 8) if avg_win is not None else None,
             "avg_loss_usdt": round(avg_loss, 8) if avg_loss is not None else None,
-            "profit_factor": round(profit_factor, 8) if profit_factor not in {None, float("inf")} else profit_factor,
+            "profit_factor": round(profit_factor, 8) if profit_factor is not None else None,
         }
