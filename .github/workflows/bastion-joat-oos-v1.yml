@@ -41,8 +41,8 @@ jobs:
             --timerange 20250101-20260101 \
             --fee 0.0014 \
             --export trades \
-            --export-filename /freqtrade/user_data/backtest_results/joat/discovery.json \
-            | tee freqtrade/user_data/backtest_results/joat/discovery.txt
+            --backtest-directory /freqtrade/user_data/backtest_results/joat \
+            --notes JOAT_DISCOVERY_2025
       - name: OOS 2026 baseline cost
         run: |
           docker run --rm \
@@ -55,8 +55,8 @@ jobs:
             --timerange 20260101-20260901 \
             --fee 0.0014 \
             --export trades \
-            --export-filename /freqtrade/user_data/backtest_results/joat/oos.json \
-            | tee freqtrade/user_data/backtest_results/joat/oos.txt
+            --backtest-directory /freqtrade/user_data/backtest_results/joat \
+            --notes JOAT_OOS_2026
       - name: OOS 2026 stress cost 0.80 percent round trip
         run: |
           docker run --rm \
@@ -69,8 +69,8 @@ jobs:
             --timerange 20260101-20260901 \
             --fee 0.004 \
             --export trades \
-            --export-filename /freqtrade/user_data/backtest_results/joat/oos_stress.json \
-            | tee freqtrade/user_data/backtest_results/joat/oos_stress.txt
+            --backtest-directory /freqtrade/user_data/backtest_results/joat \
+            --notes JOAT_OOS_STRESS_2026
       - name: Research-only contract
         run: |
           grep -q '"dry_run": true' freqtrade/user_data/config_joat_research.json
