@@ -21,35 +21,72 @@ def run(
 ) -> None:
     runtime_settings.validate()
     engine = engine_factory(runtime_settings)
-    notifier = getattr(engine, "notifier", None)
-    telegram_enabled = bool(getattr(notifier, "enabled", False))
-    startup_alert_sent = False
-    if runtime_settings.startup_alert and notifier is not None:
-        startup_alert_sent = bool(
-            notifier.send(
-                f"V2 {runtime_settings.mode.upper()} ONLINE\n"
-                f"Live trading: {'ON' if runtime_settings.live_trading else 'OFF'}"
+
+    try:
+        notifier = getattr(engine, "notifier", None)
+        telegram_enabled = bool(getattr(notifier, "enabled", False))
+        persistence_proven: bool | None = None
+        persistence_reason: str | None = None
+        persistence_previous_revision: str | None = None
+
+        if runtime_settings.persistent_state:
+            state = getattr(engine, "state", None)
+            if state is None or not hasattr(state, "verify_persistence"):
+                raise RuntimeError("PERSISTENT_STATE_BACKEND_MISSING")
+            probe = state.verify_persistence(runtime_settings.deploy_revision)
+            persistence_proven = bool(probe.proven)
+            persistence_reason = probe.reason
+            persistence_previous_revision = probe.previous_revision
+
+            if runtime_settings.mode in {"paper", "live"} and not probe.proven:
+                print(
+                    json.dumps(
+                        {
+                            "event": "persistence_gate_blocked",
+                            "mode": runtime_settings.mode,
+                            "deploy_revision": runtime_settings.deploy_revision,
+                            "persistent_state": runtime_settings.persistent_state,
+                            "persistence_proven": False,
+                            "persistence_reason": probe.reason,
+                            "persistence_previous_revision": probe.previous_revision,
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
+                raise RuntimeError(
+                    "PERSISTENCE_NOT_PROVEN: state must survive a different deployment revision before Paper/Live can start"
+                )
+
+        startup_alert_sent = False
+        if runtime_settings.startup_alert and notifier is not None:
+            startup_alert_sent = bool(
+                notifier.send(
+                    f"V2 {runtime_settings.mode.upper()} ONLINE\n"
+                    f"Live trading: {'ON' if runtime_settings.live_trading else 'OFF'}"
+                )
             )
+
+        print(
+            json.dumps(
+                {
+                    "event": "startup",
+                    "mode": runtime_settings.mode,
+                    "live_trading": runtime_settings.live_trading,
+                    "persistent_state": runtime_settings.persistent_state,
+                    "persistence_proven": persistence_proven,
+                    "persistence_reason": persistence_reason,
+                    "persistence_previous_revision": persistence_previous_revision,
+                    "telegram_enabled": telegram_enabled,
+                    "startup_alert_requested": runtime_settings.startup_alert,
+                    "startup_alert_sent": startup_alert_sent,
+                },
+                sort_keys=True,
+            ),
+            flush=True,
         )
 
-    print(
-        json.dumps(
-            {
-                "event": "startup",
-                "mode": runtime_settings.mode,
-                "live_trading": runtime_settings.live_trading,
-                "persistent_state": runtime_settings.persistent_state,
-                "telegram_enabled": telegram_enabled,
-                "startup_alert_requested": runtime_settings.startup_alert,
-                "startup_alert_sent": startup_alert_sent,
-            },
-            sort_keys=True,
-        ),
-        flush=True,
-    )
-
-    cycles = 0
-    try:
+        cycles = 0
         while True:
             try:
                 summary = engine.scan_once()
