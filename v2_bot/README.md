@@ -45,7 +45,48 @@ A private Spot adapter now exists for test coverage only. It is **not wired into
 8. If OCO is definitively rejected, attempt an emergency MARKET SELL to flatten.
 9. Any unresolved BUY/OCO/unprotected execution remains pending in the journal and blocks future Live startup.
 
-The private adapter remains deliberately disconnected until durable storage, account reconciliation, isolated deployment, and explicit Live authorization are complete.
+The private adapter remains deliberately disconnected until durable storage, account reconciliation, isolated deployment, explicit Live authorization, and forward strategy evidence are complete.
+
+## SHADOW forward evidence
+
+Confirmed SHADOW signals can be tracked in a research-only outcome ledger. It never places orders.
+
+- entry uses executable-side ask rather than candle close
+- only later closed 15m candles may resolve the outcome
+- the signal candle cannot determine its own result
+- TP/SL PnL includes modeled entry + exit fees
+- if TP and SL are crossed in the same closed candle, the outcome is `AMBIGUOUS` rather than optimistically counted as a win
+- ambiguous outcomes are excluded from decisive PnL/win-rate metrics and measured separately
+
+The ledger reports decisive sample size, wins/losses, win rate, ambiguity rate, gross profit, gross loss, net PnL, fee-aware expectancy, average win/loss and profit factor. If no losing observation has occurred yet, profit factor remains **unproven (`None`)**, not infinity.
+
+## Promotion gates
+
+Paper and Live are intentionally different stages.
+
+### Paper readiness
+
+Paper is a testing mode. It does **not** require prior profitability evidence, but it does require safe mechanics:
+
+- durable state enabled
+- cross-deployment persistence proven
+- deployment revision present
+- Binance execution preflight available
+
+### Live readiness
+
+Live requires all Paper infrastructure gates plus execution/recovery readiness and independent SHADOW evidence.
+
+The default strategy-evidence promotion guardrail requires:
+
+- at least **60 decisive** forward outcomes
+- **profit factor >= 1.20**
+- **expectancy > 0 USDT/trade** after modeled fees
+- **ambiguous outcome rate <= 10%**
+
+These thresholds are a conservative promotion guardrail, not a guarantee of future profitability.
+
+Live also requires zero unresolved execution-journal records, private API credentials, an intentionally wired private adapter, explicit Live authorization, deliberate removal of the engine hard-lock, and verified emergency-flatten behavior.
 
 ## State and persistence
 
@@ -55,6 +96,7 @@ SQLite stores:
 - Paper trades and fee-aware PnL
 - emitted signal dedupe keys
 - cross-deploy persistence marker
+- SHADOW forward outcomes
 - future Live execution recovery journal
 
 Paper/Live are fail-closed unless `V2_PERSISTENT_STATE=true`, `V2_DEPLOY_REV` is set, and the state database proves that it survived a different deployment revision. A merely writable file is not considered proof of persistence.
@@ -101,7 +143,7 @@ V2_MODE=shadow V2_LIVE_TRADING=false python -m v2_bot.main
 - `V2_LIVE_TRADING=false`
 - `V2_STATE_DB=/data/v2_state.sqlite3`
 
-Attach persistent storage at `/data` before considering Paper. Do not consider Live until the persistence probe passes across deployments and the private adapter is intentionally wired after review.
+Attach persistent storage at `/data` before considering Paper. Do not consider Live until the persistence probe, execution/recovery gates and strategy-evidence promotion gate all pass.
 
 ## What green CI means
 
