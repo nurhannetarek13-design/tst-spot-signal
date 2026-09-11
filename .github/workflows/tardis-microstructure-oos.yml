@@ -1,0 +1,175 @@
+name: Tardis Microstructure OOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/tardis-microstructure-oos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  oos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {symbol: BTCUSDT, slot: M0060, offset: 60}
+          - {symbol: ETHUSDT, slot: M0060, offset: 60}
+          - {symbol: SOLUSDT, slot: M0060, offset: 60}
+          - {symbol: BTCUSDT, slot: M0360, offset: 360}
+          - {symbol: ETHUSDT, slot: M0360, offset: 360}
+          - {symbol: SOLUSDT, slot: M0360, offset: 360}
+          - {symbol: BTCUSDT, slot: M0720, offset: 720}
+          - {symbol: ETHUSDT, slot: M0720, offset: 720}
+          - {symbol: SOLUSDT, slot: M0720, offset: 720}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay frozen five-minute OOS window
+        run: |
+          mkdir -p research/results/tardis_microstructure_oos
+          python -m research.tardis_microstructure_range \
+            --symbol '${{ matrix.symbol }}' \
+            --date '2021-09-01' \
+            --start-offset '${{ matrix.offset }}' \
+            --minutes 5 \
+            --output 'research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
+            --assert-ready
+      - name: Enforce replay integrity only
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json')
+          d=json.loads(p.read_text())
+          v=d['validation']
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['status']=='PASS'
+          assert d['canonicalReplayReady'] is True
+          assert v['depthIntegrity'] is True
+          assert v['tickerMismatches'] <= 5
+          assert v['matchRate'] >= 0.999
+          assert d['summary']['featureEvents'] > 0
+          assert d['summary']['sampledSeconds'] > 0
+          print(json.dumps({
+            'symbol':d['symbol'],
+            'offset':d['startOffset'],
+            'sampledSeconds':d['summary']['sampledSeconds'],
+            'events':d['gateG']['eventCounts'],
+            'matchRate':v['matchRate'],
+          },sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-oos-${{ matrix.symbol }}-${{ matrix.slot }}
+          path: research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json
+          if-no-files-found: error
+
+  aggregate:
+    needs: oos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tardis-oos-*
+          path: downloaded
+          merge-multiple: true
+      - name: Frozen OOS decision
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          files=sorted(pathlib.Path('downloaded').glob('*.json'))
+          cells=[json.loads(p.read_text()) for p in files]
+          assert len(cells)==9, len(cells)
+          horizons=('10','30','60')
+          windows=(60,360,720)
+          sides=('long','short')
+
+          def agg(subset, side, h):
+              n=0; s=0.0; hits=0.0
+              for c in subset:
+                  o=c['gateG']['outcomes'][side][h]
+                  k=int(o['n'])
+                  if k:
+                      n += k
+                      s += float(o['meanDirectionalBps']) * k
+                      hits += float(o['hitRate']) * k
+              return {
+                  'n':n,
+                  'meanDirectionalBps':(s/n if n else None),
+                  'hitRate':(hits/n if n else None),
+              }
+
+          overall={side:{h:agg(cells,side,h) for h in horizons} for side in sides}
+          by_window={}
+          for w in windows:
+              subset=[c for c in cells if int(c['startOffset'])==w]
+              by_window[str(w)]={side:{h:agg(subset,side,h) for h in horizons} for side in sides}
+
+          total_events={side:sum(int(c['gateG']['eventCounts'][side]) for c in cells) for side in sides}
+
+          # Candidate discovered on short 10-30s horizon. Require fresh OOS
+          # evidence rather than promoting from the original 00:00 window.
+          short10=overall['short']['10']
+          short30=overall['short']['30']
+          evaluable=(short10['n']>=20 and short30['n']>=20)
+          positive_windows_10=sum(
+              1 for w in windows
+              if by_window[str(w)]['short']['10']['n']>=3
+              and by_window[str(w)]['short']['10']['meanDirectionalBps']>0
+              and by_window[str(w)]['short']['10']['hitRate']>=0.55
+          )
+          positive_windows_30=sum(
+              1 for w in windows
+              if by_window[str(w)]['short']['30']['n']>=3
+              and by_window[str(w)]['short']['30']['meanDirectionalBps']>0
+              and by_window[str(w)]['short']['30']['hitRate']>=0.55
+          )
+          survives=bool(
+              evaluable
+              and short10['meanDirectionalBps'] is not None and short10['meanDirectionalBps']>0
+              and short10['hitRate']>=0.55
+              and short30['meanDirectionalBps'] is not None and short30['meanDirectionalBps']>0
+              and short30['hitRate']>=0.55
+              and positive_windows_10>=2
+              and positive_windows_30>=2
+          )
+          payload={
+              'authorization':'RESEARCH_ONLY',
+              'liveTrading':False,
+              'candidate':'FROZEN_GATE_G_SHORT_10_30S',
+              'discoveryWindowExcluded':{'date':'2021-09-01','startOffset':0,'minutes':30},
+              'oosWindows':[{'date':'2021-09-01','startOffset':w,'minutes':5} for w in windows],
+              'frozenDefinition':cells[0]['gateG']['eventDefinition'],
+              'cells':len(cells),
+              'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
+              'totalFeatureEvents':sum(int(c['summary']['featureEvents']) for c in cells),
+              'eventCounts':total_events,
+              'overall':overall,
+              'byWindow':by_window,
+              'gate':{
+                  'minimumNPerHorizon':20,
+                  'minimumHitRate':0.55,
+                  'minimumPositiveWindows':2,
+                  'evaluable':evaluable,
+                  'positiveWindows10s':positive_windows_10,
+                  'positiveWindows30s':positive_windows_30,
+              },
+              'decision':'OOS_SURVIVOR' if survives else ('REJECT_OOS' if evaluable else 'INSUFFICIENT_OOS'),
+              'liveReady':False,
+          }
+          pathlib.Path('tardis-microstructure-oos-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
+          print(json.dumps(payload,indent=2,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-microstructure-oos-aggregate
+          path: tardis-microstructure-oos-aggregate.json
+          if-no-files-found: error
