@@ -38,6 +38,7 @@ def run(
                 "event": "startup",
                 "mode": runtime_settings.mode,
                 "live_trading": runtime_settings.live_trading,
+                "persistent_state": runtime_settings.persistent_state,
                 "telegram_enabled": telegram_enabled,
                 "startup_alert_requested": runtime_settings.startup_alert,
                 "startup_alert_sent": startup_alert_sent,
