@@ -12,6 +12,9 @@ on:
       - research/shadow_labeler.py
       - research/shadow_performance_gate.py
       - research/shadow_forward_state.py
+      - research/shadow_l2_ablation.py
+      - research/shadow_l2_cycle_adapter.py
+      - research/bybit_l2_live_feature.py
       - research/spot_baseline_gate_a.json
       - .github/workflows/shadow-forward-cycle-v1.yml
 permissions: {contents: read}
@@ -49,7 +52,7 @@ jobs:
       - name: Assert candle finality
         run: |
           python - <<'PY'
-          import json,time
+          import json
           x=json.load(open('validation/pro_stack/feature_store.json'))
           assert x['engine']=='PRO_STACK_FEATURE_STORE_V2_CLOSED_CANDLES'
           for r in x['rows']:
@@ -61,6 +64,19 @@ jobs:
         run: python research/pro_stack_edge_model.py
       - name: Produce shadow decisions only
         run: python research/pro_stack_shadow_trader.py
+      - name: Gate G L2 shadow A/B treatment
+        run: PYTHONPATH=. python research/shadow_l2_cycle_adapter.py
+      - name: Assert L2 treatment cannot originate trades
+        run: |
+          python - <<'PY'
+          import csv,json
+          rows=list(csv.DictReader(open('validation/pro_stack/shadow_l2_ablation.csv')))
+          assert all(not (r['base_decision']!='SHADOW_BUY' and r['treatment_decision']=='SHADOW_BUY') for r in rows)
+          s=json.load(open('validation/pro_stack/shadow_l2_ablation_summary.json'))
+          assert s['authorization']=='RESEARCH_ONLY' and s['liveTrading'] is False
+          assert s['illegalPromotions']==0 and s['invariantPass'] is True
+          print(json.dumps(s,indent=2))
+          PY
       - name: Update persistent Gate A V2 trades and labels
         run: PYTHONPATH=. python research/shadow_forward_state.py
       - name: Labeler and performance-gate contracts
