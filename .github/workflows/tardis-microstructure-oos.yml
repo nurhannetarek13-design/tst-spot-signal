@@ -13,26 +13,26 @@ permissions:
 jobs:
   oos:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, slot: M0005, offset: 5}
-          - {symbol: ETHUSDT, slot: M0005, offset: 5}
-          - {symbol: SOLUSDT, slot: M0005, offset: 5}
-          - {symbol: BTCUSDT, slot: M0010, offset: 10}
-          - {symbol: ETHUSDT, slot: M0010, offset: 10}
-          - {symbol: SOLUSDT, slot: M0010, offset: 10}
-          - {symbol: BTCUSDT, slot: M0015, offset: 15}
-          - {symbol: ETHUSDT, slot: M0015, offset: 15}
-          - {symbol: SOLUSDT, slot: M0015, offset: 15}
+          - {symbol: BTCUSDT, slot: M0030, offset: 30}
+          - {symbol: ETHUSDT, slot: M0030, offset: 30}
+          - {symbol: SOLUSDT, slot: M0030, offset: 30}
+          - {symbol: BTCUSDT, slot: M0035, offset: 35}
+          - {symbol: ETHUSDT, slot: M0035, offset: 35}
+          - {symbol: SOLUSDT, slot: M0035, offset: 35}
+          - {symbol: BTCUSDT, slot: M0040, offset: 40}
+          - {symbol: ETHUSDT, slot: M0040, offset: 40}
+          - {symbol: SOLUSDT, slot: M0040, offset: 40}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay warm-up plus isolated five-minute OOS window
+      - name: Replay warm-up plus isolated five-minute true OOS window
         run: |
           mkdir -p research/results/tardis_microstructure_oos
           python -m research.tardis_microstructure_range \
@@ -53,7 +53,7 @@ jobs:
           assert d['status']=='PASS' and d['canonicalReplayReady'] is True
           assert d['warmupFromZero'] is True and v['depthIntegrity'] is True
           assert v['tickerMismatches'] <= 5 and v['matchRate'] >= 0.999
-          assert d['evaluationSampledSeconds'] > 0
+          assert d['evaluationSampledSeconds'] > 0 and int(d['startOffset']) >= 30
           print(json.dumps({'symbol':d['symbol'],'offset':d['startOffset'],'sampledSeconds':d['evaluationSampledSeconds'],'events':d['gateG']['eventCounts']},sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
@@ -78,7 +78,7 @@ jobs:
           import json, pathlib
           cells=[json.loads(p.read_text()) for p in sorted(pathlib.Path('downloaded').glob('*.json'))]
           assert len(cells)==9, len(cells)
-          horizons=('10','30','60'); windows=(5,10,15); sides=('long','short')
+          horizons=('10','30','60'); windows=(30,35,40); sides=('long','short')
           def agg(subset,side,h):
               n=s=hits=0.0
               for c in subset:
@@ -92,7 +92,7 @@ jobs:
           p10=sum(1 for w in windows if by_window[str(w)]['short']['10']['n']>=3 and by_window[str(w)]['short']['10']['meanDirectionalBps']>0 and by_window[str(w)]['short']['10']['hitRate']>=0.55)
           p30=sum(1 for w in windows if by_window[str(w)]['short']['30']['n']>=3 and by_window[str(w)]['short']['30']['meanDirectionalBps']>0 and by_window[str(w)]['short']['30']['hitRate']>=0.55)
           survives=bool(evaluable and short10['meanDirectionalBps']>0 and short10['hitRate']>=0.55 and short30['meanDirectionalBps']>0 and short30['hitRate']>=0.55 and p10>=2 and p30>=2)
-          payload={'authorization':'RESEARCH_ONLY','liveTrading':False,'candidate':'FROZEN_GATE_G_SHORT_10_30S','discoveryWindowExcluded':{'date':'2021-09-01','startOffset':0,'minutes':5},'oosWindows':[{'date':'2021-09-01','startOffset':w,'minutes':5} for w in windows],'frozenDefinition':cells[0]['gateG']['eventDefinition'],'cells':len(cells),'overall':overall,'byWindow':by_window,'gate':{'minimumNPerHorizon':20,'minimumHitRate':0.55,'minimumPositiveWindows':2,'evaluable':evaluable,'positiveWindows10s':p10,'positiveWindows30s':p30},'decision':'OOS_SURVIVOR' if survives else ('REJECT_OOS' if evaluable else 'INSUFFICIENT_OOS'),'liveReady':False}
+          payload={'authorization':'RESEARCH_ONLY','liveTrading':False,'candidate':'FROZEN_GATE_G_SHORT_10_30S','discoveryWindowExcluded':{'date':'2021-09-01','startOffset':0,'minutes':30},'oosWindows':[{'date':'2021-09-01','startOffset':w,'minutes':5} for w in windows],'frozenDefinition':cells[0]['gateG']['eventDefinition'],'cells':len(cells),'overall':overall,'byWindow':by_window,'gate':{'minimumNPerHorizon':20,'minimumHitRate':0.55,'minimumPositiveWindows':2,'evaluable':evaluable,'positiveWindows10s':p10,'positiveWindows30s':p30},'decision':'OOS_SURVIVOR' if survives else ('REJECT_OOS' if evaluable else 'INSUFFICIENT_OOS'),'liveReady':False}
           pathlib.Path('tardis-microstructure-oos-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
           print(json.dumps(payload,indent=2,sort_keys=True))
           PY
