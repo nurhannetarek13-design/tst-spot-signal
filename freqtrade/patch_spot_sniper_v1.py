@@ -32,8 +32,14 @@ context_path.write_text(c, encoding='utf-8')
 # ---------------------------------------------------------------------------
 # 2) Central Spot Sniper gate immediately before the existing execution path.
 #    Existing portfolio/API/OCO hard gates remain hard and cannot be rescued.
-#    IMPORTANT: fail closed. Only an explicit LIVE_SNIPER_PASS + live_authorized
-#    + ENFORCED_PASS may proceed. WARMUP/OBSERVE/OFF can never become live.
+#
+#    Two explicit contracts are accepted:
+#    - LIVE_SNIPER_PASS: approved/enforced EV + rank/evidence contract.
+#    - LIVE_RULES_FALLBACK_PASS: research is NOT promoted, therefore EV/L2/Gate
+#      A remain shadow-only and the production gate uses regime-adjusted score
+#      after the existing quality/BTC/HTF/microstructure checks.
+#
+#    An ENFORCED EV reject can never be rescued by the fallback path.
 # ---------------------------------------------------------------------------
 import_marker = 'import market_context\n'
 if 'import spot_sniper_gate\n' not in s:
@@ -75,25 +81,35 @@ def _expert_pre_ingest(payload: dict) -> bool:
         'expected_holding_min': ev.get('expected_holding_min'),
         'ev_gate_status': ev.get('status'),
         'sniper_gate_status': decision.get('status'),
+        'authorization_basis': decision.get('authorization_basis'),
+        'fallback_score_required': decision.get('fallback_score_required'),
     }
 
-    # Defense in depth: do not trust a generic passed=True. Real execution
-    # requires the explicit live authorization contract from spot_sniper_gate.
-    live_contract_ok = (
-        bool(decision.get('passed'))
-        and bool(decision.get('live_authorized'))
-        and str(decision.get('status') or '') == 'LIVE_SNIPER_PASS'
+    approved_ev_contract = (
+        str(decision.get('status') or '') == 'LIVE_SNIPER_PASS'
+        and str(decision.get('authorization_basis') or '') == 'VALIDATED_EV'
         and bool(ev.get('enforced'))
         and bool(ev.get('passed'))
         and str(ev.get('status') or '') == 'ENFORCED_PASS'
         and decision.get('opportunity_rank') is not None
+    )
+    production_fallback_contract = (
+        str(decision.get('status') or '') == 'LIVE_RULES_FALLBACK_PASS'
+        and str(decision.get('authorization_basis') or '') == 'PRODUCTION_GATES_RESEARCH_SHADOW'
+        and not bool(ev.get('enforced'))
+    )
+    live_contract_ok = (
+        bool(decision.get('passed'))
+        and bool(decision.get('live_authorized'))
+        and (approved_ev_contract or production_fallback_contract)
     )
     if not live_contract_ok:
         why = 'sniper-live-contract-reject:' + str(decision.get('reason') or decision.get('status') or 'reject')
         print(
             f"[spot-sniper] {symbol} BLOCKED lane={lane} reason={why} "
             f"status={decision.get('status')} live={decision.get('live_authorized')} "
-            f"ev_status={ev.get('status')} ev_enforced={ev.get('enforced')} rank={decision.get('opportunity_rank')}",
+            f"basis={decision.get('authorization_basis')} ev_status={ev.get('status')} "
+            f"ev_enforced={ev.get('enforced')} rank={decision.get('opportunity_rank')}",
             flush=True,
         )
         _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)
@@ -108,8 +124,10 @@ def _expert_pre_ingest(payload: dict) -> bool:
     _record_candidate(symbol, lane, score, price, 'READY', 'spot-sniper-pass|' + str(why), **telemetry)
     print(
         f"[spot-sniper] {symbol} PASS lane={lane} regime={decision.get('regime')} "
+        f"score={score:.0f} required={decision.get('fallback_score_required')} "
         f"rank={decision.get('opportunity_rank')} ev={ev.get('expected_net_pct')} "
-        f"p={ev.get('prob_tp_before_sl')} mode={decision.get('status')} {why}", flush=True
+        f"p={ev.get('prob_tp_before_sl')} mode={decision.get('status')} "
+        f"basis={decision.get('authorization_basis')} {why}", flush=True
     )
     return True
 
@@ -148,7 +166,6 @@ for old, new in replacements:
         else:
             print(f'[spot-sniper-v1] telemetry marker absent (lane may be build-patched differently): {old[:45]}', flush=True)
 
-# Capture major post-score context failures explicitly when the exact markers exist.
 optional = [
     (
         "        print(f'[explosive-context] {symbol} BLOCKED reason={why}'); return False\n",
@@ -164,7 +181,7 @@ for old, new in optional:
         s = s.replace(old, new, 1)
 
 startup_marker = "    last_chat_retry = 0.0\n"
-startup = "    print(f'[spot-sniper-v1] ONLINE fail_closed=True top_n={spot_sniper_gate.TOP_N} panic_block={spot_sniper_gate.PANIC_BLOCK} ev_mode={spot_sniper_gate.live_ev_gate.MODE} forward_validation=REQUIRED')\n"
+startup = "    print(f'[spot-sniper-v1] ONLINE fail_closed=True top_n={spot_sniper_gate.TOP_N} panic_block={spot_sniper_gate.PANIC_BLOCK} sideways_block={spot_sniper_gate.SIDEWAYS_BLOCK} ev_mode={spot_sniper_gate.live_ev_gate.MODE} research_fallback={spot_sniper_gate.RESEARCH_FALLBACK_ENABLED} fallback_scores=strong:{spot_sniper_gate.FALLBACK_STRONG_BULL_SCORE:.0f}/weak:{spot_sniper_gate.FALLBACK_WEAK_BULL_SCORE:.0f}/recovery:{spot_sniper_gate.FALLBACK_POST_CRASH_SCORE:.0f}')\n"
 if '[spot-sniper-v1] ONLINE' not in s:
     if startup_marker not in s:
         raise SystemExit('spot-sniper-v1: startup marker missing')
@@ -176,7 +193,9 @@ for required in [
     'def _expert_pre_ingest(payload: dict)',
     "payload['sniperGate'] = decision",
     "decision.get('live_authorized')",
-    "str(ev.get('status') or '') == 'ENFORCED_PASS'",
+    'approved_ev_contract',
+    'production_fallback_contract',
+    'LIVE_RULES_FALLBACK_PASS',
     'sniper-live-contract-reject',
     '[spot-sniper-v1] ONLINE',
 ]:
@@ -185,4 +204,4 @@ for required in [
 
 compile(s, str(engine_path), 'exec')
 engine_path.write_text(s, encoding='utf-8')
-print('[spot-sniper-v1-patch] OK fail-closed live contract + regime/rank/EV gate + audit telemetry wired')
+print('[spot-sniper-v1-patch] OK validated-EV contract + research-shadow production fallback + audit telemetry wired')
