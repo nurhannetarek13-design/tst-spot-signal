@@ -29,6 +29,17 @@ class ReadinessTests(unittest.TestCase):
         self.assertTrue(report.ready)
         self.assertEqual(report.blockers, ())
 
+    def test_paper_does_not_require_strategy_profitability_evidence(self):
+        paper = evaluate_paper_readiness(
+            persistent_state_enabled=True,
+            persistence_proven=True,
+            deploy_revision_present=True,
+            exchange_preflight_available=True,
+        )
+        evidence = evaluate_strategy_evidence({})
+        self.assertTrue(paper.ready)
+        self.assertFalse(evidence.ready)
+
     def test_strategy_evidence_requires_sample_pf_expectancy_and_low_ambiguity(self):
         report = evaluate_strategy_evidence(
             {
@@ -68,6 +79,18 @@ class ReadinessTests(unittest.TestCase):
         self.assertIn("shadow_profit_factor_unproven", report.blockers)
         self.assertIn("shadow_expectancy_nonpositive", report.blockers)
         self.assertIn("shadow_ambiguity_too_high", report.blockers)
+
+    def test_all_wins_without_observed_losses_does_not_prove_profit_factor(self):
+        report = evaluate_strategy_evidence(
+            {
+                "decisive": 80,
+                "profit_factor": None,
+                "expectancy_usdt": 0.05,
+                "ambiguous_rate": 0.0,
+            }
+        )
+        self.assertFalse(report.ready)
+        self.assertEqual(report.blockers, ("shadow_profit_factor_unproven",))
 
     def test_live_remains_blocked_even_if_storage_is_ready(self):
         report = evaluate_live_readiness(
