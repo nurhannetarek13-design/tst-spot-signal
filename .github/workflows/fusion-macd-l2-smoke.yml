@@ -1,0 +1,70 @@
+name: Fusion MACD L2 Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fusion/policy.json"
+      - "fusion/server.mjs"
+      - ".github/workflows/fusion-macd-l2-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install express only
+        run: npm install --no-save express
+      - name: Start fusion server
+        env:
+          FUSION_INGEST_TOKEN: smoke-token
+          PORT: 8787
+        run: |
+          node fusion/server.mjs > /tmp/fusion.log 2>&1 &
+          for i in {1..20}; do
+            curl -fsS http://127.0.0.1:8787/health && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/health | tee /tmp/health.json
+      - name: Assert fail-closed without confirmations
+        run: |
+          curl -fsS -X POST http://127.0.0.1:8787/candidate/hummingbot \
+            -H 'content-type: application/json' -H 'x-fusion-token: smoke-token' \
+            -d '{"symbol":"SOLUSDT","side":"BUY","score":100,"notionalUSDT":5,"riskUSDT":0.1}' > /tmp/reject.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/reject.json'))
+          assert x['decision']=='NO_TRADE', x
+          r=set(x['reasons'])
+          for key in ['MACD_TRIGGER_REQUIRED','L2_CONFIRMATION_REQUIRED','BTC_REGIME_BLOCK','LIQUIDITY_BLOCK','TAKER_BUY_TOO_LOW','RELATIVE_VOLUME_TOO_LOW']:
+              assert key in r, (key,x)
+          assert x['liveTrading'] is False
+          assert x['executorAllowed'] is False
+          print(json.dumps(x,indent=2))
+          PY
+      - name: Assert signal gates pass but validators still block
+        run: |
+          curl -fsS -X POST http://127.0.0.1:8787/candidate/hummingbot \
+            -H 'content-type: application/json' -H 'x-fusion-token: smoke-token' \
+            -d '{"symbol":"SOLUSDT","side":"BUY","score":100,"notionalUSDT":5,"riskUSDT":0.1,"macdTrigger":true,"l2Confirmed":true,"btcRegimeOk":true,"liquidityOk":true,"takerBuyShare":0.60,"relativeVolume":1.8,"spreadBps":5}' > /tmp/gated.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/gated.json'))
+          assert x['decision']=='NO_TRADE', x
+          r=set(x['reasons'])
+          assert 'MACD_TRIGGER_REQUIRED' not in r
+          assert 'L2_CONFIRMATION_REQUIRED' not in r
+          assert 'BTC_REGIME_BLOCK' not in r
+          assert 'LIQUIDITY_BLOCK' not in r
+          assert 'FREQTRADE_MISSING' in r and 'JESSE_MISSING' in r, x
+          assert x['liveTrading'] is False and x['executorAllowed'] is False
+          print(json.dumps(x,indent=2))
+          PY
+      - name: Dump server log
+        if: always()
+        run: cat /tmp/fusion.log || true
