@@ -9,6 +9,7 @@ import httpx
 
 from .config import Settings, settings
 from .engine import V2Engine
+from .execution_journal import ExecutionJournal
 
 
 def run(
@@ -56,6 +57,33 @@ def run(
                 )
                 raise RuntimeError(
                     "PERSISTENCE_NOT_PROVEN: state must survive a different deployment revision before Paper/Live can start"
+                )
+
+        if runtime_settings.mode == "live":
+            journal = ExecutionJournal(runtime_settings.state_db)
+            pending = journal.pending()
+            if pending:
+                print(
+                    json.dumps(
+                        {
+                            "event": "live_recovery_gate_blocked",
+                            "mode": runtime_settings.mode,
+                            "pending_count": len(pending),
+                            "pending": [
+                                {
+                                    "client_order_id": row.client_order_id,
+                                    "symbol": row.symbol,
+                                    "stage": row.stage,
+                                }
+                                for row in pending
+                            ],
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
+                raise RuntimeError(
+                    "LIVE_RECOVERY_REQUIRED: unresolved execution journal entries must be reconciled before Live can start"
                 )
 
         startup_alert_sent = False
