@@ -1,0 +1,46 @@
+name: Tardis Futures Raw Probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/tardis_futures_raw_probe.py'
+      - '.github/workflows/tardis-futures-raw-probe.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe one free raw minute
+        run: |
+          mkdir -p artifacts/tardis-raw/${{ matrix.symbol }}
+          python research/tardis_futures_raw_probe.py --symbol '${{ matrix.symbol }}' \
+            --from-ts '2024-01-01T00:00:00' --to-ts '2024-01-01T00:01:00' \
+            | tee artifacts/tardis-raw/${{ matrix.symbol }}/probe.json
+      - name: Validate canonical fields
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          python - <<'PY'
+          import json, os
+          p=f"artifacts/tardis-raw/{os.environ['SYMBOL']}/probe.json"
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['depthMessages']>0, d
+          assert d['depthWithPu']==d['depthMessages'], d
+          assert d['snapshotMessages']>0, d
+          assert d['canonicalReady'] is True, d
+          print(json.dumps({k:d[k] for k in ['symbol','depthMessages','snapshotMessages','puCoverage','continuityChecks','continuityPassRate','canonicalReady']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tardis-raw-probe-${{ matrix.symbol }}
+          path: artifacts/tardis-raw/${{ matrix.symbol }}
+          retention-days: 14
