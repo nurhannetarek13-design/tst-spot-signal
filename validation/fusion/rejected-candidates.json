@@ -172,6 +172,17 @@
         "freqtrade"
       ],
       "rejectedAt": "2026-09-09T07:32:39.408255+00:00"
+    },
+    {
+      "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
+      "candidateFingerprint": "ae0299f52aa7a9708aa9",
+      "symbol": "BTCUSDT",
+      "family": "MACD_EMA200_L2_CONFIRMATION",
+      "hardFailValidators": [
+        "freqtrade",
+        "jesse"
+      ],
+      "rejectedAt": "2026-09-11T17:14:52.041935+00:00"
     }
   ],
   "ttlDays": 7,

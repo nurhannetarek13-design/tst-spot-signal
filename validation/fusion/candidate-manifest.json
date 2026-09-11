@@ -1,53 +1,30 @@
 {
-  "strategyId": "TST_MACD_EMA200_L2_V1",
-  "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
-  "candidateFingerprint": "ae0299f52aa7a9708aa9",
-  "status": "VALIDATION_PENDING",
-  "family": "MACD_EMA200_L2_CONFIRMATION",
-  "symbol": "BTCUSDT",
-  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-  "timeframe": "15m",
-  "params": {
-    "macdFast": 12,
-    "macdSlow": 26,
-    "macdSignal": 9,
-    "requireMacdBelowZero": true,
-    "emaLength": 200,
-    "minL2BidShare": 0.52,
-    "minTakerBuyShare": 0.56,
-    "minRelativeVolume": 1.5,
-    "maxSpreadBps": 20,
-    "minVisibleDepthUSDT": 25000,
-    "btcRegime": "CLOSE_ABOVE_EMA200",
-    "stopAtr": 2.0,
-    "targetR": 2.0,
-    "longOnly": true,
-    "spotOnly": true
-  },
-  "validation": {
-    "historicalScope": "CORE_TRIGGER_ONLY",
-    "forwardScope": "FULL_STRATEGY_L2",
-    "historicalValidators": ["freqtrade", "jesse"],
-    "forwardValidators": ["forward"],
-    "historicalIncludes": ["MACD_BULLISH_CROSS", "CLOSE_ABOVE_EMA200", "MACD_BELOW_ZERO_IF_REQUIRED"],
-    "historicalExcludes": ["L2_ORDER_BOOK", "L2_BID_SHARE", "TAKER_BUY_SHARE", "RELATIVE_VOLUME_CONFIRMATION", "SPREAD_BPS", "VISIBLE_DEPTH_USDT", "LIVE_BTC_REGIME_CONFIRMATION"],
-    "promotionRule": "Historical CORE_TRIGGER_ONLY validation can qualify the candidate for forward-paper collection only. It cannot approve FULL_STRATEGY_L2 or live trading.",
-    "reason": "No canonical historical L2 replay is available in this repository for the full confirmation stack. Microstructure confirmation must be validated with forward paper evidence rather than candle-derived proxies."
-  },
-  "researchEvidence": {
-    "source": "TRADINGVIEW_CANDIDATE_SIGNAL_DIAGNOSTICS_V1",
-    "rawOosSignal": {
-      "1hMeanReturnPct": 0.061,
-      "1hMedianReturnPct": 0.012,
-      "1hHitRatePct": 52.3,
-      "2hMeanReturnPct": 0.038,
-      "4hMeanReturnPct": 0.021,
-      "8hMeanReturnPct": 0.021
-    },
-    "note": "Raw MACD+EMA200 signal showed positive OOS forward-return diagnostics; full MACD-only execution candidate did not pass the earlier strategy gate. L2 confirmation is therefore a new candidate requiring fresh validation, not an approved edge."
-  },
+  "strategyId": "TST_UNIFIED_CANDIDATE_V1",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "candidatePool": [],
+  "poolSize": 0,
+  "recentRejectedFingerprints": [
+    "1240a5c4024ad81ee1e2",
+    "1b7dc1733caf8b96d86e",
+    "355f478a8b669d789baf",
+    "46ad824ea85b257ae59f",
+    "5a8be2536ed727aaa38e",
+    "62e620408a8cb85cc7c2",
+    "82bc01511e155b64e664",
+    "ae0299f52aa7a9708aa9",
+    "bf01f22fc60141ca16b1",
+    "cba53276448a08d4eebc"
+  ],
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "validatorsRequired": ["freqtrade", "jesse", "forward"],
-  "generatedAt": "2026-09-11T16:00:00Z"
+  "validatorsRequired": [
+    "vectorbt",
+    "freqtrade",
+    "jesse",
+    "nautilus",
+    "forward"
+  ],
+  "generatedAt": "2026-09-11T17:14:52.041935+00:00"
 }

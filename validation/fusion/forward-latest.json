@@ -1,13 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "COLLECTING",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
-  "candidateFingerprint": "ae0299f52aa7a9708aa9",
-  "symbol": "BTCUSDT",
-  "family": "MACD_EMA200_L2_CONFIRMATION",
-  "timeframe": "15m",
+  "candidateId": null,
+  "candidateFingerprint": null,
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -20,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-11T16:25:26.852Z",
-  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
+  "generatedAt": "2026-09-11T17:14:52.041935+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }
