@@ -20,9 +20,11 @@ def parse_lines(body):
         if not line: continue
         i=line.find('{')
         if i<0: continue
-        payload=line[i:]
-        try: out.append(json.loads(payload))
-        except Exception: pass
+        try: obj=json.loads(line[i:])
+        except Exception: continue
+        if isinstance(obj,dict) and isinstance(obj.get('data'),dict):
+            obj=obj['data']
+        out.append(obj)
     return out
 
 def main():
@@ -45,8 +47,6 @@ def main():
       'continuityChecks':len(checks),'continuityPassRate':sum(checks)/len(checks) if checks else None,
       'sampleDepthKeys':sorted(sd.keys()) if sd else None,'sampleSnapshotKeys':sorted(ss.keys()) if ss else None,
       'sampleDepth':sd,'sampleSnapshot':ss,
-      'firstDepthRawPrefix':(db.splitlines()[0][:180] if db.splitlines() else None),
-      'firstSnapshotRawPrefix':(sb.splitlines()[0][:180] if sb.splitlines() else None),
       'canonicalReady':bool(depth and snaps and pu==len(depth) and (not checks or all(checks)))
     },indent=2))
 
