@@ -13,13 +13,19 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.token and self.chat_id)
 
-    def send(self, text: str) -> None:
+    def send(self, text: str) -> bool:
         if not self.enabled:
-            return
+            return False
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        response = httpx.post(
-            url,
-            json={"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
+        try:
+            response = httpx.post(
+                url,
+                json={"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError:
+            # Notifications are secondary. A Telegram outage must never stop
+            # market scanning or paper-state management.
+            return False
+        return True
