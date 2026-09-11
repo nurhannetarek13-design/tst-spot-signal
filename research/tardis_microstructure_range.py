@@ -21,6 +21,8 @@ from research.tardis_microstructure_features import (
 from research.tardis_microstructure_scan import fetch_combined
 
 AUTHORIZATION = "RESEARCH_ONLY"
+RANGE_MAX_TICKER_MISMATCHES = 5
+RANGE_MIN_TICKER_MATCH_RATE = 0.999
 
 
 def fetch_window(symbol: str, date: str, start_offset: int, minutes: int) -> str:
@@ -42,6 +44,8 @@ def scan_range(symbol: str, date: str, start_offset: int, minutes: int) -> dict:
         symbol=symbol,
         date=date,
         offset=start_offset,
+        replay_max_ticker_mismatches=RANGE_MAX_TICKER_MISMATCHES,
+        replay_min_ticker_match_rate=RANGE_MIN_TICKER_MATCH_RATE,
     )
     features = extracted.get("features", [])
     samples = sample_last_per_second(features)
@@ -50,6 +54,7 @@ def scan_range(symbol: str, date: str, start_offset: int, minutes: int) -> dict:
     ready = bool(
         extracted.get("status") == "PASS"
         and validation.get("canonicalReplayReady")
+        and validation.get("depthIntegrity")
         and features
         and samples
     )
