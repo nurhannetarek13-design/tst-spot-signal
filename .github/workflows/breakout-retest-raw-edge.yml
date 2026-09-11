@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --disable-pip-version-check numpy
-      - name: Run raw edge diagnostic
+      - name: Run raw edge diagnostic (parallel Binance fetch)
         run: python research/breakout_retest_raw_edge.py
       - name: Commit research snapshot
         run: |
