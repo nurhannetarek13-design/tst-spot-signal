@@ -1,0 +1,88 @@
+name: Gate A x L2 Ablation V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_a_l2_ablation_v1.py'
+      - '.github/workflows/gate-a-l2-ablation-v1.yml'
+permissions: {contents: read}
+jobs:
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [SOLUSDT, ETHUSDT]
+        date: ['2025-01-15','2025-02-15','2025-03-15']
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas
+      - name: Run frozen Gate A x L2 ablation
+        run: |
+          mkdir -p gate-a-l2
+          python research/gate_a_l2_ablation_v1.py \
+            --symbol ${{ matrix.symbol }} \
+            --date ${{ matrix.date }} \
+            --out gate-a-l2/${{ matrix.symbol }}-${{ matrix.date }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-a-l2-${{ matrix.symbol }}-${{ matrix.date }}
+          path: gate-a-l2/${{ matrix.symbol }}-${{ matrix.date }}.json
+  aggregate:
+    needs: sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-a-l2-*
+          path: gate-a-l2
+          merge-multiple: true
+      - name: Aggregate ablation without retuning
+        run: |
+          python - <<'PY'
+          import glob,json,math
+          xs=[json.load(open(p)) for p in glob.glob('gate-a-l2/*.json')]
+          assert len(xs)==6, len(xs)
+          for x in xs:
+            assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+            assert x['thresholdsFrozen'] is True and x['countsTowardForwardGateA'] is False
+          def merge(key):
+            rows=[]
+            for x in xs:
+              if key=='baseline': rows += x['trades']
+              elif key=='l2Confirmed': rows += [t for t in x['trades'] if t['l2']['supportive']]
+              else: rows += [t for t in x['trades'] if not t['l2']['supportive']]
+            vals=[float(t['netPct']) for t in rows]
+            if not vals:return {'n':0,'profitFactor':0,'hitRate':0,'meanNetPct':0,'medianNetPct':0,'totalNetPct':0,'maxDrawdownPct':0}
+            wins=sum(v for v in vals if v>0); losses=-sum(v for v in vals if v<0)
+            eq=[];s=0
+            for v in vals:s+=v;eq.append(s)
+            peak=-1e99;dd=0
+            for v in eq:peak=max(peak,v,0);dd=max(dd,peak-v)
+            sv=sorted(vals);n=len(vals);med=sv[n//2] if n%2 else (sv[n//2-1]+sv[n//2])/2
+            return {'n':n,'profitFactor':wins/losses if losses>0 else (99 if wins>0 else 0),'hitRate':sum(v>0 for v in vals)/n,'meanNetPct':sum(vals)/n,'medianNetPct':med,'totalNetPct':sum(vals),'maxDrawdownPct':dd}
+          base=merge('baseline'); conf=merge('l2Confirmed'); veto=merge('l2Vetoed')
+          sufficient=base['n']>=20 and conf['n']>=10
+          improves=sufficient and conf['profitFactor']>base['profitFactor'] and conf['meanNetPct']>base['meanNetPct'] and conf['maxDrawdownPct']<=base['maxDrawdownPct']
+          stable=[]
+          for x in xs:
+            stable.append({'symbol':x['symbol'],'date':x['date'],'baselineN':x['baseline']['n'],'confirmedN':x['l2Confirmed']['n'],'improves':x['improvesBaseline']})
+          positive_cells=sum(bool(r['improves']) for r in stable)
+          promote=bool(improves and positive_cells>=4)
+          out={'engine':'GATE_A_X_L2_ABLATION_AGG_V1','authorization':'RESEARCH_ONLY','liveTrading':False,'thresholdsFrozen':True,
+               'cells':stable,'baseline':base,'l2Confirmed':conf,'l2Vetoed':veto,
+               'informationGate':{'baselineNMin':20,'confirmedNMin':10,'positiveCellsMin':4},
+               'informationSufficient':sufficient,'aggregateImproves':improves,'positiveCells':positive_cells,
+               'pass':promote,'next':'PROMOTE_L2_VETO_TO_FORWARD_SHADOW_AB' if promote else 'KEEP_GATE_A_UNCHANGED'}
+          open('gate-a-l2-result.json','w').write(json.dumps(out,indent=2))
+          print(json.dumps(out))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-a-l2-ablation-result-v1
+          path: gate-a-l2-result.json
