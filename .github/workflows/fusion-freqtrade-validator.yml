@@ -43,12 +43,14 @@ jobs:
               print("No unified candidate; fail-closed snapshot written")
           else:
               pair=m["symbol"][:-4]+"/USDT"
+              pairs=list(dict.fromkeys([pair,"BTC/USDT","ETH/USDT","SOL/USDT"]))
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
                   f.write(f"PAIR={pair}\n")
+                  f.write(f"PAIRS={' '.join(pairs)}\n")
                   f.write(f"TF={m['timeframe']}\n")
               pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
-              print(m["candidateId"], pair, m["timeframe"])
+              print(m["candidateId"], pair, m["timeframe"], pairs)
           PY
 
       - name: Pull official Freqtrade image
@@ -58,7 +60,14 @@ jobs:
       - name: Download candidate Binance Spot data
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data"             freqtradeorg/freqtrade:stable             download-data             --exchange binance             --days 365             --timeframes "$TF"             --pairs "$PAIR" BTC/USDT ETH/USDT SOL/USDT
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            download-data \
+            --exchange binance \
+            --days 365 \
+            --timeframes "$TF" \
+            --pairs $PAIRS
 
       - name: Prepare writable result folders
         if: env.HAS_CANDIDATE == 'true'
@@ -69,13 +78,39 @@ jobs:
       - name: Base-cost unified backtest
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-base-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy UnifiedCandidateStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe "$TF"             --pairs "$PAIR"             --fee 0.0015             --cache none             --export trades             --backtest-directory /results
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" \
+            -v "/tmp/ft-base-$GITHUB_RUN_ID:/results" \
+            freqtradeorg/freqtrade:stable \
+            backtesting \
+            --config /freqtrade/user_data/config.json \
+            --strategy UnifiedCandidateStrategy \
+            --strategy-path /freqtrade/user_data/strategies \
+            --timeframe "$TF" \
+            --pairs "$PAIR" \
+            --fee 0.0015 \
+            --cache none \
+            --export trades \
+            --backtest-directory /results
           cp "$(ls -1t /tmp/ft-base-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-base.zip
 
       - name: Double-friction unified backtest
         if: env.HAS_CANDIDATE == 'true'
         run: |
-          docker run --rm             -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro"             -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results"             freqtradeorg/freqtrade:stable             backtesting             --config /freqtrade/user_data/config.json             --strategy UnifiedCandidateStrategy             --strategy-path /freqtrade/user_data/strategies             --timeframe "$TF"             --pairs "$PAIR"             --fee 0.003             --cache none             --export trades             --backtest-directory /results
+          docker run --rm \
+            -v "$PWD/freqtrade/user_data:/freqtrade/user_data:ro" \
+            -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results" \
+            freqtradeorg/freqtrade:stable \
+            backtesting \
+            --config /freqtrade/user_data/config.json \
+            --strategy UnifiedCandidateStrategy \
+            --strategy-path /freqtrade/user_data/strategies \
+            --timeframe "$TF" \
+            --pairs "$PAIR" \
+            --fee 0.003 \
+            --cache none \
+            --export trades \
+            --backtest-directory /results
           cp "$(ls -1t /tmp/ft-stress-$GITHUB_RUN_ID/*.zip | head -1)" /tmp/freqtrade-stress.zip
 
       - name: Build unified validator report
