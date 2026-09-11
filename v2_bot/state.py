@@ -101,8 +101,18 @@ class StateStore:
             )
         return position
 
-    def close_position(self, position: OpenPosition, *, exit_price: float, reason: str) -> float:
-        pnl = (exit_price - position.entry_price) * position.quantity
+    def close_position(
+        self,
+        position: OpenPosition,
+        *,
+        exit_price: float,
+        reason: str,
+        fee_rate: float,
+    ) -> float:
+        gross_pnl = (exit_price - position.entry_price) * position.quantity
+        entry_fee = position.entry_price * position.quantity * fee_rate
+        exit_fee = exit_price * position.quantity * fee_rate
+        pnl = gross_pnl - entry_fee - exit_fee
         closed_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             conn.execute("DELETE FROM positions WHERE symbol = ?", (position.symbol,))
