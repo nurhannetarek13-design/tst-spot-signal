@@ -1,0 +1,50 @@
+name: Bastion JOAT Spot V1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'freqtrade/user_data/strategies/BastionJOATSpotV1.py'
+      - 'research/candidates/BastionJOAT_source_review.md'
+      - '.github/workflows/bastion-joat-spot-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: python -m py_compile freqtrade/user_data/strategies/BastionJOATSpotV1.py
+      - name: Enforce Spot-only research contract
+        run: |
+          python - <<'PY'
+          import ast, pathlib
+          p=pathlib.Path('freqtrade/user_data/strategies/BastionJOATSpotV1.py')
+          src=p.read_text()
+          tree=ast.parse(src)
+          assert 'class BastionJOATSpotV1' in src
+          assert 'can_short = False' in src
+          assert 'timeframe = "15m"' in src
+          assert 'JOAT_LONG' in src
+          assert 'strategy.short' not in src
+          assert 'enter_short' not in src
+          assert 'position_adjustment_enable' not in src
+          assert 'adjust_trade_position' not in src
+          assert 'live' not in src.lower() or 'not live ready' in src.lower()
+          # Pine default features that must be represented in the port.
+          required=['regime_bull','struct_trend','mom_bull','cvd_bull','bull_pattern','bull_disp','session_ok','is_squeeze','atr']
+          missing=[x for x in required if x not in src]
+          assert not missing, missing
+          print({'candidate':'BastionJOATSpotV1','spotOnly':True,'shorts':False,'dca':False,'liveReady':False,'requiredFeatures':len(required)})
+          PY
+      - name: License/source intake check
+        run: |
+          grep -q 'MPL-2.0' research/candidates/BastionJOAT_source_review.md
+          grep -q 'ACCEPT_SOURCE_FOR_PORTING_ONLY' research/candidates/BastionJOAT_source_review.md
