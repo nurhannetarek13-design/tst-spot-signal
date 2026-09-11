@@ -10,6 +10,10 @@ This is a clean, isolated V2 implementation. It does **not** import or depend on
 - No withdrawals, futures, leverage, martingale, or dependency on Make/Railway execution logic.
 - Strategy decisions use **closed Binance candles only**; the currently-forming kline is ignored to avoid repainting.
 - Telegram failures are isolated from the scanner and cannot stop a scan cycle.
+- Binance public market data automatically falls back to `data-api.binance.vision` if the primary public endpoint is unavailable or region-blocked; HTTP 429 is not bypassed.
+- Stablecoin/fiat base pairs such as USDC/USDT, FDUSD/USDT, and EUR/USDT are excluded from the candidate universe.
+- SHADOW alerts are deduplicated per symbol and closed 15m candle, so the same signal is not emitted every scan minute.
+- Paper positions cannot silently overwrite an existing position, and a symbol closed at TP/SL cannot immediately re-enter in the same scan cycle.
 
 ## Current pipeline
 
@@ -29,7 +33,7 @@ All of these must pass for a candidate to be eligible:
 - closed-15m taker-buy quote ratio >= 56%
 - score >= 90/100
 
-The score is still retained for ranking and diagnostics, but it cannot compensate for a failed mandatory gate. For example, a 90/100 candidate with a failed 4h trend is **not eligible**.
+The score is retained for ranking and diagnostics, but it cannot compensate for a failed mandatory gate. For example, a 90/100 candidate with a failed 4h trend is **not eligible**.
 
 These are baseline deterministic rules for testing, **not evidence of a profitable edge**. They must pass paper/OOS validation before live trading is considered.
 
@@ -44,6 +48,18 @@ These are baseline deterministic rules for testing, **not evidence of a profitab
 
 All are configurable through environment variables. Invalid safety-sensitive values fail validation instead of silently running.
 
+Paper PnL is recorded net of modeled entry and exit fees. State is persisted in SQLite; a persistent deployment must therefore use persistent storage rather than an ephemeral CI filesystem.
+
+## Verification
+
+V2 has three independent checks on its isolated branch:
+
+- `V2 CI`: unit/lifecycle tests plus Python compilation.
+- `V2 Shadow Smoke`: a read-only end-to-end scan against live public Binance market data with `V2_LIVE_TRADING=false`.
+- repository `Safety gates`: existing fail-closed checks remain green.
+
+The smoke workflow does not use Binance credentials and cannot place orders.
+
 ## Run
 
 ```bash
@@ -51,7 +67,7 @@ pip install -r v2_bot/requirements.txt
 python -m v2_bot.main --once
 ```
 
-Continuous scan:
+Continuous SHADOW scan:
 
 ```bash
 python -m v2_bot.main
