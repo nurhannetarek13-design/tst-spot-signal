@@ -9,24 +9,39 @@
   "symbol": "SAHARAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
-  "base": {
-    "trades": 174,
-    "winRate": 0.39080459770114945,
-    "profitFactor": 0.0,
-    "expectancyUSDT": 0.005565147734348607,
-    "netPnlUSDT": 0.9683357057766576,
-    "maxDrawdown": -12.08605747182554
-  },
-  "stress2x": {
-    "trades": 174,
-    "winRate": 0.3620689655172414,
-    "profitFactor": 0.0,
-    "expectancyUSDT": -0.010967999708417076,
-    "netPnlUSDT": -1.9084319492645712,
-    "maxDrawdown": -17.018535680419756
+  "dataset": {
+    "firstTs": "2025-09-05T17:00:00+00:00",
+    "lastTs": "2026-09-05T16:00:00+00:00",
+    "sha256": "7cf2fb11185dbf7568b346f1ad31580ac8e46978a79783adc7db1107414dee41"
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-05T15:14:00.838560+00:00",
-  "notes": "Independent Jesse validation of exact unified candidate; long-only; 1x simulator only for bracket exits."
+  "generatedAt": "2026-09-11T17:22:45.340311+00:00",
+  "notes": "Independent Jesse validation of frozen parity candidate on the exact fixture dataset window; long-only; 5.5 USDT stake. Profit factor is derived from Jesse gross_profit/gross_loss; PnL and expectancy use Jesse native USD metrics.",
+  "base": {
+    "trades": 179,
+    "winRate": 0.3463687150837989,
+    "profitFactor": 0.8770524151684373,
+    "expectancyUSDT": -0.013418057273488077,
+    "netPnlUSDT": -2.4018322519543727,
+    "grossProfitUSDT": 17.133584041459297,
+    "grossLossUSDT": -19.535416293413665,
+    "maxDrawdown": -20.501296660043156
+  },
+  "stress2x": {
+    "trades": 179,
+    "winRate": 0.329608938547486,
+    "profitFactor": 0.7506077790290655,
+    "expectancyUSDT": -0.02988552278092825,
+    "netPnlUSDT": -5.349508577786154,
+    "grossProfitUSDT": 16.100673616988946,
+    "grossLossUSDT": -21.450182194775103,
+    "maxDrawdown": -29.2780174021646
+  },
+  "dataQuality": {
+    "actual1mCandles": 525600,
+    "expected1mCandles": 525600,
+    "coverage": 1.0,
+    "requiredCoverage": 0.995
+  }
 }
