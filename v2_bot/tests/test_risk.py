@@ -10,6 +10,7 @@ def candidate(score=100, eligible=True):
         symbol="TESTUSDT",
         score=score,
         price=1.0,
+        signal_open_time=1_000.0,
         previous_20_high=0.99,
         relative_volume=2.0,
         taker_buy_ratio=0.60,
