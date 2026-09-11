@@ -16,7 +16,7 @@ permissions:
 jobs:
   integration:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -26,21 +26,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay contiguous 30-minute canonical window
+      - name: Replay bounded 5-minute canonical smoke window
         run: |
           mkdir -p research/results/tardis_microstructure
           python -m research.tardis_microstructure_range \
             --symbol '${{ matrix.symbol }}' \
             --date '2021-09-01' \
             --start-offset 0 \
-            --minutes 30 \
-            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json' \
+            --minutes 5 \
+            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0004.json' \
             --assert-ready
-      - name: Enforce research-only invariants
+      - name: Enforce research-only integrity invariants
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json')
+          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0004.json')
           d=json.loads(p.read_text())
           v=d['validation']
           assert d['authorization']=='RESEARCH_ONLY'
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tardis-microstructure-${{ matrix.symbol }}
-          path: research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json
+          path: research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0004.json
           if-no-files-found: error
 
   aggregate:
@@ -80,7 +80,7 @@ jobs:
           pattern: tardis-microstructure-*
           path: downloaded
           merge-multiple: true
-      - name: Aggregate frozen Gate G evidence
+      - name: Aggregate diagnostics without edge promotion
         run: |
           python - <<'PY'
           import json, pathlib
@@ -88,7 +88,6 @@ jobs:
           cells=[json.loads(p.read_text()) for p in files]
           horizons=('10','30','60')
           side_counts={side:sum(int(c['gateG']['eventCounts'][side]) for c in cells) for side in ('long','short')}
-          total_events=sum(side_counts.values())
           aggregate={}
           for side in ('long','short'):
               aggregate[side]={}
@@ -108,22 +107,19 @@ jobs:
                       'meanDirectionalBps': (weighted_sum/n if n else None),
                       'hitRate': (positive_weight/n if n else None),
                   }
-          information_sufficient = total_events >= 30 and side_counts['long'] >= 10 and side_counts['short'] >= 10
           payload={
               'authorization':'RESEARCH_ONLY',
               'liveTrading':False,
-              'window':{'date':'2021-09-01','startOffset':0,'minutes':30},
+              'purpose':'CI_INTEGRITY_SMOKE_ONLY',
+              'window':{'date':'2021-09-01','startOffset':0,'minutes':5},
               'frozenDefinition': cells[0]['gateG']['eventDefinition'] if cells else None,
               'parityPolicy':{'maxTickerMismatches':5,'minTickerMatchRate':0.999},
               'cells':len(cells),
               'sideEventCounts':side_counts,
               'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
               'totalFeatureEvents':sum(int(c['summary']['featureEvents']) for c in cells),
-              'totalGateGEvents':total_events,
-              'informationGate':{'totalMin':30,'perSideMin':10},
-              'informationSufficient': information_sufficient,
-              'aggregate':aggregate,
-              'decision':'EVALUATE_EDGE' if information_sufficient else 'INSUFFICIENT_INFORMATION',
+              'aggregateDiagnostics':aggregate,
+              'decision':'DIAGNOSTIC_ONLY_NOT_EDGE_APPROVAL',
           }
           pathlib.Path('tardis-microstructure-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
           print(json.dumps(payload,indent=2,sort_keys=True))
