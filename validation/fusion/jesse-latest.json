@@ -10,23 +10,35 @@
   "family": "MACD_EMA200_L2_CONFIRMATION",
   "timeframe": "15m",
   "base": {
-    "trades": 0,
-    "winRate": 0.0,
+    "trades": 194,
+    "winRate": 0.32989690721649484,
     "profitFactor": 0.0,
-    "expectancyUSDT": 0,
-    "netPnlUSDT": 0.0,
-    "maxDrawdown": 0.0
+    "expectancyUSDT": -0.018503125026423473,
+    "netPnlUSDT": -3.589606255126154,
+    "maxDrawdown": -17.873599924574524
   },
   "stress2x": {
-    "trades": 0,
-    "winRate": 0.0,
+    "trades": 194,
+    "winRate": 0.26288659793814434,
     "profitFactor": 0.0,
-    "expectancyUSDT": 0,
-    "netPnlUSDT": 0.0,
-    "maxDrawdown": 0.0
+    "expectancyUSDT": -0.03496298586655107,
+    "netPnlUSDT": -6.782819258110908,
+    "maxDrawdown": -33.773129868366524
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-11T16:20:53.650494+00:00",
-  "notes": "Independent Jesse validation of exact unified candidate using long-only Binance Spot semantics."
+  "generatedAt": "2026-09-11T17:13:12.861560+00:00",
+  "notes": "Historical Jesse validation is explicitly limited to the candle-derived core trigger when validationScope=CORE_TRIGGER_ONLY. It does not validate L2/order-book confirmation and cannot authorize live trading.",
+  "validationScope": "CORE_TRIGGER_ONLY",
+  "fullStrategyValidated": false,
+  "excludedConfirmations": [
+    "L2_ORDER_BOOK",
+    "L2_BID_SHARE",
+    "TAKER_BUY_SHARE",
+    "RELATIVE_VOLUME_CONFIRMATION",
+    "SPREAD_BPS",
+    "VISIBLE_DEPTH_USDT",
+    "LIVE_BTC_REGIME_CONFIRMATION"
+  ],
+  "eligibleOutcome": "FORWARD_PAPER_COLLECTION_ONLY"
 }
