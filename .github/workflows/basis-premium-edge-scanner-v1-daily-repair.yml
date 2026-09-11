@@ -1,0 +1,57 @@
+name: Basis Premium Edge Scanner V1 Daily Repair
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/basis_premium_edge_scanner_v1.py'
+      - 'research/basis_premium_edge_scanner_v1_daily_repair.py'
+      - '.github/workflows/basis-premium-edge-scanner-v1-daily-repair.yml'
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check frozen scanner and repair wrapper
+        run: |
+          python -m py_compile research/basis_premium_edge_scanner_v1.py
+          python -m py_compile research/basis_premium_edge_scanner_v1_daily_repair.py
+      - name: Run frozen Round 8 with data-only daily repair
+        run: python research/basis_premium_edge_scanner_v1_daily_repair.py
+      - name: Assert frozen research contract
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/basis-premium-edge-scanner-v1-latest.json'
+          x=json.load(open(p))
+          assert x['engine']=='BASIS_PREMIUM_EDGE_SCANNER_V1'
+          assert x['round']==8
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['liveReady'] is False
+          assert len(x['families'])==3
+          assert x['frozenDefinitions']['PREMIUM_TS_REVERSION_V1']['zLookbackBars5m']==2016
+          assert x['frozenDefinitions']['PREMIUM_TS_REVERSION_V1']['absZ']==2.25
+          assert x['frozenDefinitions']['PREMIUM_OI_SQUEEZE_V1']['absZ']==2.0
+          assert x['frozenDefinitions']['PREMIUM_OI_SQUEEZE_V1']['oiRise4hMin']==0.03
+          assert x['rawGate']['minimumEvents']==40
+          assert x['rawGate']['meanMin']==0.015
+          assert x['rawGate']['hitRateMinExclusive']==0.55
+          assert x['rawGate']['mfeMaeMin']==2.0
+          assert x['robustnessGate']['positiveSymbolsMin']==4
+          assert x['robustnessGate']['maxEventShare']==0.40
+          assert x['multipleTesting']['method']=='Benjamini-Hochberg'
+          assert len(x['tests']) > 0, 'Round 8 did not actually execute any tests'
+          print({'decision':x['decision'],'tests':len(x['tests']),'survivorCount':x['survivorCount']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basis-premium-edge-scanner-v1-daily-repair-report
+          path: validation/edges/basis-premium-edge-scanner-v1-latest.json
+          retention-days: 14
