@@ -19,6 +19,17 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "V2_LIVE_TRADING=false"):
             Settings(mode="live", live_trading=False).validate()
 
+    def test_paper_mode_requires_persistent_state(self):
+        with self.assertRaisesRegex(RuntimeError, "V2_PERSISTENT_STATE=true"):
+            Settings(mode="paper", persistent_state=False).validate()
+
+    def test_paper_mode_allows_explicit_persistent_state(self):
+        Settings(mode="paper", persistent_state=True).validate()
+
+    def test_live_mode_with_live_flag_still_requires_persistent_state(self):
+        with self.assertRaisesRegex(RuntimeError, "V2_PERSISTENT_STATE=true"):
+            Settings(mode="live", live_trading=True, persistent_state=False).validate()
+
 
 if __name__ == "__main__":
     unittest.main()
