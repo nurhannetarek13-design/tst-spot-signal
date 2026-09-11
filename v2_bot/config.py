@@ -40,6 +40,7 @@ class Settings:
     max_open_positions: int = _int("V2_MAX_OPEN_POSITIONS", 1)
     take_profit_pct: float = _float("V2_TAKE_PROFIT_PCT", 0.009)
     stop_loss_pct: float = _float("V2_STOP_LOSS_PCT", 0.0062)
+    paper_fee_rate: float = _float("V2_PAPER_FEE_RATE", 0.001)
     telegram_bot_token: str = os.getenv("V2_TELEGRAM_BOT_TOKEN", "").strip()
     telegram_chat_id: str = os.getenv("V2_TELEGRAM_CHAT_ID", "").strip()
     state_db: str = os.getenv("V2_STATE_DB", "v2_state.sqlite3")
@@ -53,6 +54,8 @@ class Settings:
             raise ValueError("V2_TRADE_SIZE_USDT must be > 0")
         if self.max_daily_loss_usdt <= 0:
             raise ValueError("V2_MAX_DAILY_LOSS_USDT must be > 0")
+        if not 0 <= self.paper_fee_rate < 0.02:
+            raise ValueError("V2_PAPER_FEE_RATE must be between 0 and 0.02")
 
 
 settings = Settings()
