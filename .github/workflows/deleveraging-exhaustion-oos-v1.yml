@@ -1,0 +1,49 @@
+name: Deleveraging Exhaustion OOS V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/deleveraging_exhaustion_oos_v1.py"
+      - ".github/workflows/deleveraging-exhaustion-oos-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/deleveraging_exhaustion_oos_v1.py
+      - name: Run untouched pre-period OOS
+        run: python research/deleveraging_exhaustion_oos_v1.py
+      - name: Enforce frozen research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/deleveraging-exhaustion-oos-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['liveReady'] is False
+          assert x['frozenDefinition']=={
+            'declusterBars5m':144,
+            'horizonBars5m':48,
+            'oiValueReturn1hLTE':-0.05,
+            'priceReturn1hLTE':-0.02,
+            'taker15LTE':0.75,
+          }
+          assert x['discoveryPeriodExcluded']=={'start':'2026-03-01','endExclusive':'2026-09-01'}
+          print({'decision':x['decision'],'result':x['result']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deleveraging-exhaustion-oos-v1
+          path: validation/edges/deleveraging-exhaustion-oos-v1.json
+          retention-days: 14
