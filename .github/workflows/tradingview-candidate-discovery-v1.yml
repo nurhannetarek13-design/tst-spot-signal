@@ -1,0 +1,47 @@
+name: TradingView Candidate Discovery V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/tradingview_candidate_discovery_v1.py"
+      - ".github/workflows/tradingview-candidate-discovery-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tradingview-candidate-discovery-v1
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Run frozen Spot Long-only 15m candidate discovery
+        run: |
+          python research/tradingview_candidate_discovery_v1.py \
+            --start 2024-01-01 \
+            --end 2026-09-01 \
+            --symbols BTCUSDT ETHUSDT SOLUSDT \
+            --fee-side 0.001 \
+            --slippage-bps 2.0 \
+            --out artifacts/tradingview_candidate_discovery_v1.json
+      - name: Print ranking
+        if: always()
+        run: |
+          test -f artifacts/tradingview_candidate_discovery_v1.json && cat artifacts/tradingview_candidate_discovery_v1.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tradingview-candidate-discovery-v1
+          path: artifacts/tradingview_candidate_discovery_v1.json
+          retention-days: 30
