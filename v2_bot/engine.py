@@ -21,6 +21,7 @@ STABLE_OR_FIAT_BASE_ASSETS = {
     "DAI",
     "BUSD",
     "USDE",
+    "RLUSD",
     "USD1",
     "PYUSD",
     "EUR",
