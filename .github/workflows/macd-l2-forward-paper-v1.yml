@@ -1,0 +1,49 @@
+name: MACD L2 Forward Paper V1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '2,17,32,47 * * * *'
+  push:
+    paths:
+      - 'research/macd_l2_forward_paper.py'
+      - '.github/workflows/macd-l2-forward-paper-v1.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macd-l2-forward-paper-v1
+  cancel-in-progress: true
+
+jobs:
+  forward-paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run paper observer
+        run: python research/macd_l2_forward_paper.py
+      - name: Commit paper state safely
+        run: |
+          mkdir -p /tmp/macd-l2-v1
+          cp -a validation/forward/macd-l2-v1/. /tmp/macd-l2-v1/
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/forward/macd-l2-v1
+            cp -a /tmp/macd-l2-v1/. validation/forward/macd-l2-v1/
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add validation/forward/macd-l2-v1
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update MACD L2 forward paper snapshot [skip ci]'
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
