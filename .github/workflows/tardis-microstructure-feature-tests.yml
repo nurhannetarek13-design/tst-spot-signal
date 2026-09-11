@@ -1,0 +1,24 @@
+name: Tardis Microstructure Feature Tests
+
+on:
+  push:
+    paths:
+      - 'research/tardis_l2_replay.py'
+      - 'research/tardis_microstructure_features.py'
+      - 'tests/test_tardis_microstructure_features.py'
+      - '.github/workflows/tardis-microstructure-feature-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run canonical microstructure feature tests
+        run: python -m unittest -v tests/test_tardis_microstructure_features.py
