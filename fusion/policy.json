@@ -26,12 +26,9 @@
     "dailyLossCapUSDT": 0.5
   },
   "universe": {
-    "scanner": "LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",
-    "focusMaxPriceUSDT": 3,
-    "focusMinVolume24hUSDT": 20000000,
-    "focusMaxVolume24hUSDT": 150000000,
-    "majorsAsMarketFilterOnly": true,
-    "newListingsPaperOnly": true
+    "mode": "FIXED_VALIDATED_V1",
+    "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "marketFilterSymbol": "BTCUSDT"
   },
   "signalGate": {
     "timeframe": "15m",
