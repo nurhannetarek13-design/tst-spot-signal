@@ -1,13 +1,46 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "independentEnginePass": false,
+  "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
+  "candidateFingerprint": "ae0299f52aa7a9708aa9",
+  "symbol": "BTCUSDT",
+  "family": "MACD_EMA200_L2_CONFIRMATION",
+  "timeframe": "15m",
+  "validationScope": "CORE_TRIGGER_ONLY",
+  "fullStrategyValidated": false,
+  "excludedConfirmations": [
+    "L2_ORDER_BOOK",
+    "L2_BID_SHARE",
+    "TAKER_BUY_SHARE",
+    "RELATIVE_VOLUME_CONFIRMATION",
+    "SPREAD_BPS",
+    "VISIBLE_DEPTH_USDT",
+    "LIVE_BTC_REGIME_CONFIRMATION"
+  ],
+  "eligibleOutcome": "FORWARD_PAPER_COLLECTION_ONLY",
+  "base": {
+    "trades": 50,
+    "wins": 13,
+    "winRate": 0.26,
+    "profitFactor": 0.6404427315153919,
+    "expectancyUSDT": -0.0451780858,
+    "netPnlUSDT": -2.25890429,
+    "maxDrawdownUSDT": 2.85591058
+  },
+  "stress2x": {
+    "trades": 51,
+    "wins": 13,
+    "winRate": 0.2549019607843137,
+    "profitFactor": 0.5731799850881172,
+    "expectancyUSDT": -0.05883604196078431,
+    "netPnlUSDT": -3.00063814,
+    "maxDrawdownUSDT": 3.5582912400000004
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-11T15:31:17.334313+00:00",
-  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
+  "generatedAt": "2026-09-11T16:35:18.885967+00:00",
+  "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
