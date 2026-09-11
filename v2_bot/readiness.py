@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
+
+
+DEFAULT_MIN_SHADOW_DECISIVE = 60
+DEFAULT_MIN_SHADOW_PROFIT_FACTOR = 1.20
+DEFAULT_MIN_SHADOW_EXPECTANCY_USDT = 0.0
+DEFAULT_MAX_SHADOW_AMBIGUOUS_RATE = 0.10
 
 
 @dataclass(frozen=True)
@@ -16,6 +22,61 @@ class ReadinessReport:
 def _report(blockers: Iterable[str]) -> ReadinessReport:
     unique = tuple(dict.fromkeys(str(item) for item in blockers if item))
     return ReadinessReport(ready=not unique, blockers=unique)
+
+
+def evaluate_strategy_evidence(
+    stats: Mapping[str, object],
+    *,
+    min_decisive: int = DEFAULT_MIN_SHADOW_DECISIVE,
+    min_profit_factor: float = DEFAULT_MIN_SHADOW_PROFIT_FACTOR,
+    min_expectancy_usdt: float = DEFAULT_MIN_SHADOW_EXPECTANCY_USDT,
+    max_ambiguous_rate: float = DEFAULT_MAX_SHADOW_AMBIGUOUS_RATE,
+) -> ReadinessReport:
+    """Conservative SHADOW-evidence gate for future real-money promotion.
+
+    This is a promotion guardrail, not a claim of profitability. AMBIGUOUS
+    outcomes are excluded from PnL metrics and separately capped so coarse
+    candle resolution cannot make the evidence look better than it is.
+    """
+
+    blockers: list[str] = []
+    if min_decisive <= 0 or min_profit_factor <= 0 or min_expectancy_usdt < 0:
+        return _report(["invalid_strategy_evidence_thresholds"])
+    if not 0 <= max_ambiguous_rate <= 1:
+        return _report(["invalid_strategy_evidence_thresholds"])
+
+    try:
+        decisive = int(stats.get("decisive", 0) or 0)
+    except (TypeError, ValueError):
+        decisive = -1
+    if decisive < min_decisive:
+        blockers.append("shadow_sample_insufficient")
+
+    profit_factor_raw = stats.get("profit_factor")
+    try:
+        profit_factor = float(profit_factor_raw) if profit_factor_raw is not None else None
+    except (TypeError, ValueError):
+        profit_factor = None
+    if profit_factor is None or profit_factor < min_profit_factor:
+        blockers.append("shadow_profit_factor_unproven")
+
+    expectancy_raw = stats.get("expectancy_usdt")
+    try:
+        expectancy = float(expectancy_raw) if expectancy_raw is not None else None
+    except (TypeError, ValueError):
+        expectancy = None
+    if expectancy is None or expectancy <= min_expectancy_usdt:
+        blockers.append("shadow_expectancy_nonpositive")
+
+    ambiguity_raw = stats.get("ambiguous_rate")
+    try:
+        ambiguity = float(ambiguity_raw) if ambiguity_raw is not None else None
+    except (TypeError, ValueError):
+        ambiguity = None
+    if ambiguity is None or ambiguity > max_ambiguous_rate:
+        blockers.append("shadow_ambiguity_too_high")
+
+    return _report(blockers)
 
 
 def evaluate_paper_readiness(
@@ -49,6 +110,7 @@ def evaluate_live_readiness(
     explicit_live_authorization: bool,
     live_engine_lock_removed: bool,
     emergency_flatten_verified: bool,
+    strategy_evidence_ready: bool = False,
 ) -> ReadinessReport:
     blockers = list(
         evaluate_paper_readiness(
@@ -59,6 +121,8 @@ def evaluate_live_readiness(
         ).blockers
     )
 
+    if not strategy_evidence_ready:
+        blockers.append("strategy_evidence_not_proven")
     if pending_execution_count < 0:
         blockers.append("invalid_pending_execution_count")
     elif pending_execution_count:
