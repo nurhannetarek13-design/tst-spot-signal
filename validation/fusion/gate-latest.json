@@ -5,12 +5,29 @@
   "candidateFingerprint": "ae0299f52aa7a9708aa9",
   "symbol": "BTCUSDT",
   "family": "MACD_EMA200_L2_CONFIRMATION",
+  "historicalScope": "CORE_TRIGGER_ONLY",
+  "forwardScope": "FULL_STRATEGY_L2",
+  "requiredValidators": [
+    "freqtrade",
+    "jesse",
+    "forward"
+  ],
+  "historicalValidatorsRequired": [
+    "freqtrade",
+    "jesse"
+  ],
+  "forwardValidatorsRequired": [
+    "forward"
+  ],
+  "historicalCorePass": false,
+  "fullStrategyValidated": false,
+  "eligibleForForwardPaperCollection": false,
   "allValidatorsCurrentCandidate": false,
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "CORE_TRIGGER_ONLY:CANNOT_AUTHORIZE_SMALL_LIVE_REVIEW",
+    "FULL_STRATEGY_L2:FORWARD_VALIDATION_REQUIRED",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:LT_30_TRADES",
@@ -18,26 +35,23 @@
     "jesse:BASE_EXPECTANCY_NONPOSITIVE",
     "jesse:STRESS_PF_LT_1_0",
     "jesse:STRESS_EXPECTANCY_NONPOSITIVE",
-    "nautilus:CANDIDATE_ID_MISMATCH",
-    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
-    "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
+    "HISTORICAL:LT_2_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
-    "purpose": "Manual review for a tiny capped live trial only; never auto-enables execution.",
+    "purpose": "Manual review only after the complete strategy scope is independently validated; never auto-enables execution.",
     "historicalValidatorsRequired": [
-      "vectorbt",
       "freqtrade",
-      "jesse",
-      "nautilus"
+      "jesse"
     ],
     "sameCandidateIdAndFingerprintRequired": true,
     "minTradesPerEngine": 30,
-    "minIndependentEnginePasses": 3,
+    "minIndependentEnginePasses": 2,
     "baseProfitFactorMin": 1.15,
     "baseExpectancyPositive": true,
     "stressProfitFactorMin": 1.0,
     "stressExpectancyPositive": true,
-    "forwardTradesRequired": 0,
+    "forwardTradesRequired": 50,
+    "coreTriggerOnlyCannotAuthorizeLive": true,
     "suggestedMaxPositionUSDT": 7,
     "suggestedMaxConcurrentPositions": 1,
     "suggestedDailyLossCapUSDT": 0.5
@@ -45,26 +59,22 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
-    "vectorbt:FAIL",
-    "vectorbt:LT_100_TRADES",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_ID_MISMATCH",
-    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
-    "nautilus:FAIL",
     "forward:FAIL",
-    "forward:LT_50_FORWARD_TRADES"
+    "forward:LT_50_FORWARD_TRADES",
+    "FULL_STRATEGY_L2:NOT_HISTORICALLY_VALIDATED"
   ],
   "validatorSummary": {
     "vectorbt": {
       "status": "NO_CANDIDATE",
       "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
       "candidateId": null,
       "candidateFingerprint": null,
       "candidateIdMatch": false,
@@ -80,6 +90,8 @@
     "freqtrade": {
       "status": "NO_CANDIDATE",
       "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
       "candidateId": null,
       "candidateFingerprint": null,
       "candidateIdMatch": false,
@@ -95,6 +107,8 @@
     "jesse": {
       "status": "FAIL",
       "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
       "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
       "candidateFingerprint": "ae0299f52aa7a9708aa9",
       "candidateIdMatch": true,
@@ -110,6 +124,8 @@
     "nautilus": {
       "status": "FAIL",
       "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
       "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
       "candidateFingerprint": "46ad824ea85b257ae59f",
       "candidateIdMatch": false,
@@ -125,6 +141,8 @@
     "forward": {
       "status": "COLLECTING",
       "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
       "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
       "candidateFingerprint": "ae0299f52aa7a9708aa9",
       "candidateIdMatch": true,
@@ -138,6 +156,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-11T16:31:30.368182+00:00",
-  "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
+  "generatedAt": "2026-09-11T16:32:02.756015+00:00",
+  "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
