@@ -1,0 +1,42 @@
+name: Top Gainers RS Raw Edge
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/top_gainers_rs_raw_edge.py"
+      - ".github/workflows/top-gainers-rs-raw-edge.yml"
+permissions:
+  contents: write
+concurrency:
+  group: top-gainers-rs-raw-edge
+  cancel-in-progress: true
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install --disable-pip-version-check numpy
+      - name: Run top gainers raw edge research
+        run: python research/top_gainers_rs_raw_edge.py
+      - name: Commit snapshot
+        run: |
+          cp validation/research/top-gainers-rs-raw-edge.json /tmp/top.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/research
+            cp /tmp/top.json validation/research/top-gainers-rs-raw-edge.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/research/top-gainers-rs-raw-edge.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update top-gainers raw edge snapshot [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
