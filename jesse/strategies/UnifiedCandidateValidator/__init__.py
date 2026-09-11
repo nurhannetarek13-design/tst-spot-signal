@@ -34,6 +34,23 @@ def ema(values,n):
     for v in x[1:]:e=a*v+(1-a)*e
     return float(e)
 
+def ema_series(values,n):
+    x=np.asarray(values,dtype=float)
+    if len(x)==0:return np.asarray([],dtype=float)
+    a=2/(n+1);out=np.empty(len(x),dtype=float);out[0]=x[0]
+    for i in range(1,len(x)):out[i]=a*x[i]+(1-a)*out[i-1]
+    return out
+
+def macd_core_trigger(closes,p):
+    fast=int(p.get("macdFast",12));slow=int(p.get("macdSlow",26));signal_n=int(p.get("macdSignal",9));ema_n=int(p.get("emaLength",200))
+    required=max(ema_n+2,slow+signal_n+3)
+    if len(closes)<required:return False
+    ef=ema_series(closes,fast);es=ema_series(closes,slow);macd=ef-es;sig=ema_series(macd,signal_n);trend=ema_series(closes,ema_n)
+    prev_macd=float(macd[-2]);cur_macd=float(macd[-1]);prev_sig=float(sig[-2]);cur_sig=float(sig[-1]);close=float(closes[-1]);ema200=float(trend[-1])
+    bullish_cross=prev_macd<=prev_sig and cur_macd>cur_sig
+    below_zero=(cur_macd<0.0) if bool(p.get("requireMacdBelowZero",False)) else True
+    return bool(bullish_cross and below_zero and close>ema200)
+
 def rsi(values,n=14):
     x=np.asarray(values,dtype=float)
     if len(x)<n+1:return 50.0
@@ -55,12 +72,20 @@ class UnifiedCandidateValidator(Strategy):
 
     def should_long(self)->bool:
         p=PARAMS;c=self.candles
-        if len(c)<max(160,int(p.get("zLookback",0))+10):return False
+        min_history=max(160,int(p.get("zLookback",0))+10)
+        if FAMILY=="MACD_EMA200_L2_CONFIRMATION":min_history=max(min_history,int(p.get("emaLength",200))+20)
+        if len(c)<min_history:return False
         closes=c[:,2].astype(float);highs=c[:,3].astype(float);volumes=c[:,5].astype(float)
         close=float(closes[-1]);R=rsi(closes)
         qv=volumes*closes
         med=float(np.median(qv[-25:-1])) if len(qv)>=25 else 0.0
         rel=float(qv[-1]/med) if med>0 else 0.0
+
+        if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
+            # Historical engines validate only the candle-derived core trigger.
+            # L2/order-book, taker flow, spread/depth and live BTC-regime confirmation
+            # are deliberately excluded and must be validated by FULL_STRATEGY_L2 forward paper.
+            return macd_core_trigger(closes,p)
 
         if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
             lead=leader_value(self.current_candle[0])
@@ -127,12 +152,14 @@ class UnifiedCandidateValidator(Strategy):
         except Exception:pass
 
     def on_open_position(self, order):
-        # Jesse Spot only supports contingent exits after the entry has opened.
-        # Use the actual filled position rather than the signal price so the
-        # stop/target are attached to real Spot execution semantics.
         qty=abs(float(self.position.qty))
         entry=float(self.position.entry_price)
-        sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
+        if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
+            # Risk exits are execution-test scaffolding only; historical validator scope
+            # remains CORE_TRIGGER_ONLY and cannot certify the full L2 strategy.
+            sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
+        else:
+            sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
         self.stop_loss=qty,entry*(1-sl)
         self.take_profit=qty,entry*(1+tp)
         try:self.vars["entry_ts"]=float(self.current_candle[0])
