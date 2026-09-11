@@ -6,6 +6,7 @@ book features suitable for historical diagnostics.
 """
 from __future__ import annotations
 
+import heapq
 from decimal import Decimal
 from statistics import median
 from typing import Any, Iterable
@@ -31,7 +32,8 @@ def _update(book: dict[Decimal, Decimal], rows: Iterable[Iterable[Any]]) -> None
 
 
 def _top(book: dict[Decimal, Decimal], *, bid: bool, n: int):
-    return sorted(book.items(), key=lambda x: x[0], reverse=bid)[:n]
+    selector = heapq.nlargest if bid else heapq.nsmallest
+    return selector(n, book.items(), key=lambda x: x[0])
 
 
 def _timestamp_ms(event: dict[str, Any], prefix: str) -> int | None:
