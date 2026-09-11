@@ -26,3 +26,10 @@ jobs:
         run: python -m unittest discover -s v2_bot/tests -v
       - name: Compile V2 package
         run: python -m compileall -q v2_bot
+      - name: Build isolated V2 worker image
+        run: docker build -f v2_bot/Dockerfile -t tst-v2-ci .
+      - name: Assert container defaults remain fail-closed
+        run: |
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_MODE=' | cut -d= -f2)" = "shadow"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_LIVE_TRADING=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_STATE_DB=' | cut -d= -f2)" = "/data/v2_state.sqlite3"
