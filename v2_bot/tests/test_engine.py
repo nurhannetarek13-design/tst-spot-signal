@@ -101,6 +101,51 @@ class EngineUniverseTests(unittest.TestCase):
         universe = engine._build_universe(tickers)
         self.assertEqual(universe, [("ETHUSDT", 1_000_000_000.0), ("SOLUSDT", 600_000_000.0)])
 
+    def test_gate_failure_diagnostics_are_explicit(self):
+        settings = Settings(max_spread_bps=15.0, min_score=90)
+        candidate = Candidate(
+            symbol="TESTUSDT",
+            score=70,
+            price=100.0,
+            signal_open_time=1_000.0,
+            previous_20_high=101.0,
+            relative_volume=1.0,
+            taker_buy_ratio=0.50,
+            spread_bps=20.0,
+            quote_volume_24h=100_000_000.0,
+            btc_regime_ok=False,
+            trend_15m=True,
+            trend_1h=False,
+            trend_4h=True,
+            breakout=False,
+            rel_volume_ok=False,
+            taker_flow_ok=False,
+            eligible=False,
+        )
+
+        failed = V2Engine._failed_gates(candidate, settings)
+        self.assertEqual(
+            failed,
+            [
+                "btc_regime",
+                "trend_1h",
+                "breakout",
+                "relative_volume",
+                "taker_flow",
+                "spread",
+                "score",
+            ],
+        )
+        counts = V2Engine._gate_failure_counts([candidate], settings)
+        self.assertEqual(counts["btc_regime"], 1)
+        self.assertEqual(counts["trend_15m"], 0)
+        self.assertEqual(counts["trend_1h"], 1)
+        self.assertEqual(counts["breakout"], 1)
+        self.assertEqual(counts["relative_volume"], 1)
+        self.assertEqual(counts["taker_flow"], 1)
+        self.assertEqual(counts["spread"], 1)
+        self.assertEqual(counts["score"], 1)
+
 
 class EngineLifecycleTests(unittest.TestCase):
     def setUp(self):
