@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Validate Binance USD-M L2 reconstruction from one Tardis initial snapshot.
+"""Validate Binance USD-M L2 reconstruction from ordered Tardis raw data.
 
-Ground truth used here:
-- depthSnapshot: initial REST snapshot exposed by Tardis raw feed
-- depth: exchange-native incremental U/u/pu messages
-- bookTicker: independent exchange-native best bid/ask stream
+Canonical invariants:
+- Fetch depthSnapshot + depth + bookTicker in ONE raw request so capture order is preserved.
+- Start from the snapshot state.
+- The first depth event after the snapshot must link with pu == snapshot.lastUpdateId.
+- Every later depth event must satisfy pu == previous depth u.
+- Reconstructed book must never cross.
+- Where bookTicker and depth share the same update id, best bid/ask price+qty must match exactly.
 
 Research-only. No trading actions.
 """
@@ -20,11 +23,18 @@ BASE = "https://api.tardis.dev/v1/data-feeds/binance-futures"
 AUTHORIZATION = "RESEARCH_ONLY"
 
 
-def fetch(symbol: str, date: str, offset: int, channel: str) -> str:
-    filters = json.dumps([{"channel": channel, "symbols": [symbol.lower()]}], separators=(",", ":"))
+def fetch_combined(symbol: str, date: str, offset: int) -> str:
+    filters = [
+        {"channel": "depthSnapshot", "symbols": [symbol.lower()]},
+        {"channel": "depth", "symbols": [symbol.lower()]},
+        {"channel": "bookTicker", "symbols": [symbol.lower()]},
+    ]
+    encoded = urllib.parse.quote(
+        json.dumps(filters, separators=(",", ":")), safe='[]{}\":,'
+    )
     url = (
         f"{BASE}?from={urllib.parse.quote(date, safe=':-TZ')}"
-        f"&filters={urllib.parse.quote(filters, safe='[]{}\":,')}&offset={offset}"
+        f"&filters={encoded}&offset={offset}"
     )
     p = subprocess.run(
         ["curl", "--compressed", "-sS", "-g", url],
@@ -34,46 +44,36 @@ def fetch(symbol: str, date: str, offset: int, channel: str) -> str:
     return p.stdout.decode("utf-8", "replace")
 
 
-def parse(body: str) -> list[dict]:
+def parse_ordered(body: str) -> list[dict]:
     out: list[dict] = []
-    for raw in body.splitlines():
+    for line_no, raw in enumerate(body.splitlines()):
         raw = raw.strip()
         if not raw:
             continue
         i = raw.find("{")
         if i < 0:
             continue
+        prefix = raw[:i].strip()
         try:
-            obj = json.loads(raw[i:])
+            wrapper = json.loads(raw[i:])
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict) and isinstance(obj.get("data"), dict):
-            obj = obj["data"]
-        if isinstance(obj, dict):
-            out.append(obj)
+        stream = wrapper.get("stream") if isinstance(wrapper, dict) else None
+        data = (
+            wrapper.get("data")
+            if isinstance(wrapper, dict) and isinstance(wrapper.get("data"), dict)
+            else wrapper
+        )
+        if isinstance(data, dict):
+            out.append(
+                {
+                    "line": line_no,
+                    "prefix": prefix,
+                    "stream": stream,
+                    "data": data,
+                }
+            )
     return out
-
-
-def depth_messages(symbol: str, date: str, offset: int) -> list[dict]:
-    return [
-        x for x in parse(fetch(symbol, date, offset, "depth"))
-        if x.get("e") == "depthUpdate" or {"U", "u"}.issubset(x)
-    ]
-
-
-def book_tickers(symbol: str, date: str, offset: int) -> list[dict]:
-    xs = parse(fetch(symbol, date, offset, "bookTicker"))
-    return [x for x in xs if {"u", "b", "B", "a", "A"}.issubset(x)]
-
-
-def snapshot(symbol: str, date: str, offset: int) -> dict:
-    xs = [
-        x for x in parse(fetch(symbol, date, offset, "depthSnapshot"))
-        if "lastUpdateId" in x and "bids" in x and "asks" in x
-    ]
-    if not xs:
-        raise RuntimeError(f"no depthSnapshot for offset={offset}")
-    return xs[0]
 
 
 def build_snapshot(s: dict) -> tuple[dict[Decimal, Decimal], dict[Decimal, Decimal]]:
@@ -103,73 +103,94 @@ def best(book: dict[Decimal, Decimal], side: str) -> tuple[Decimal, Decimal]:
     return price, book[price]
 
 
-def as_pair(price: Decimal, qty: Decimal) -> list[str]:
+def pair(price: Decimal, qty: Decimal) -> list[str]:
     return [str(price), str(qty)]
 
 
 def validate(symbol: str, date: str, offset: int) -> dict:
-    s0 = snapshot(symbol, date, offset)
+    rows = parse_ordered(fetch_combined(symbol, date, offset))
+    snapshots = [
+        r for r in rows
+        if "lastUpdateId" in r["data"] and "bids" in r["data"] and "asks" in r["data"]
+    ]
+    if not snapshots:
+        return {
+            "status": "NO_SNAPSHOT",
+            "symbol": symbol,
+            "canonicalReplayReady": False,
+        }
+
+    snap_row = snapshots[0]
+    snap_line = int(snap_row["line"])
+    s0 = snap_row["data"]
     sid0 = int(s0["lastUpdateId"])
-    depth = depth_messages(symbol, date, offset)
-    tickers = book_tickers(symbol, date, offset)
+
+    depth_rows = [
+        r for r in rows
+        if r["line"] > snap_line and {"U", "u", "pu"}.issubset(r["data"])
+    ]
+    ticker_rows = [
+        r for r in rows
+        if r["line"] > snap_line and {"u", "b", "B", "a", "A"}.issubset(r["data"])
+    ]
+
+    if not depth_rows:
+        return {
+            "status": "NO_DEPTH_AFTER_SNAPSHOT",
+            "symbol": symbol,
+            "startSnapshotId": sid0,
+            "snapshotLine": snap_line,
+            "canonicalReplayReady": False,
+        }
+
+    first = depth_rows[0]["data"]
+    first_pu = int(first["pu"])
+    if first_pu != sid0:
+        return {
+            "status": "SNAPSHOT_PU_BRIDGE_FAIL",
+            "symbol": symbol,
+            "startSnapshotId": sid0,
+            "snapshotLine": snap_line,
+            "firstDepthLine": depth_rows[0]["line"],
+            "firstDepth": {
+                "U": int(first["U"]),
+                "u": int(first["u"]),
+                "pu": first_pu,
+            },
+            "canonicalReplayReady": False,
+        }
 
     bids, asks = build_snapshot(s0)
-    started = False
-    prev_u: int | None = None
-    first_bridge = None
+    prev_u = sid0
     events_applied = 0
     continuity_checks = 0
     replay_by_u: dict[int, dict] = {}
+    first_bridge = {
+        "snapshotId": sid0,
+        "U": int(first["U"]),
+        "u": int(first["u"]),
+        "pu": first_pu,
+        "snapshotLine": snap_line,
+        "depthLine": depth_rows[0]["line"],
+    }
 
-    for e in depth:
-        U = int(e["U"])
-        u = int(e["u"])
-        if u <= sid0:
-            continue
-
-        if not started:
-            wanted = sid0 + 1
-            if U <= wanted <= u:
-                started = True
-                first_bridge = {
-                    "U": U,
-                    "u": u,
-                    "pu": int(e["pu"]) if "pu" in e else None,
-                }
-            elif U > wanted:
-                return {
-                    "status": "FIRST_EVENT_GAP",
-                    "symbol": symbol,
-                    "startSnapshotId": sid0,
-                    "expected": wanted,
-                    "U": U,
-                    "u": u,
-                    "canonicalReplayReady": False,
-                }
-            else:
-                continue
-        else:
-            if "pu" not in e:
-                return {
-                    "status": "MISSING_PU",
-                    "symbol": symbol,
-                    "U": U,
-                    "u": u,
-                    "canonicalReplayReady": False,
-                }
-            continuity_checks += 1
-            if int(e["pu"]) != int(prev_u):
-                return {
-                    "status": "PU_GAP",
-                    "symbol": symbol,
-                    "prev_u": prev_u,
-                    "pu": int(e["pu"]),
-                    "U": U,
-                    "u": u,
-                    "eventsApplied": events_applied,
-                    "continuityChecks": continuity_checks,
-                    "canonicalReplayReady": False,
-                }
+    for r in depth_rows:
+        e = r["data"]
+        U, u, pu = int(e["U"]), int(e["u"]), int(e["pu"])
+        continuity_checks += 1
+        if pu != prev_u:
+            return {
+                "status": "PU_GAP",
+                "symbol": symbol,
+                "line": r["line"],
+                "prev_u": prev_u,
+                "pu": pu,
+                "U": U,
+                "u": u,
+                "eventsApplied": events_applied,
+                "continuityChecks": continuity_checks,
+                "canonicalReplayReady": False,
+            }
 
         update_side(bids, e.get("b", []))
         update_side(asks, e.get("a", []))
@@ -182,6 +203,7 @@ def validate(symbol: str, date: str, offset: int) -> dict:
             return {
                 "status": "CROSSED_BOOK",
                 "symbol": symbol,
+                "line": r["line"],
                 "U": U,
                 "u": u,
                 "bestBid": str(bid_p),
@@ -192,27 +214,16 @@ def validate(symbol: str, date: str, offset: int) -> dict:
             }
 
         replay_by_u[u] = {
-            "bid": as_pair(bid_p, bid_q),
-            "ask": as_pair(ask_p, ask_q),
-        }
-
-    if not started:
-        return {
-            "status": "NO_BRIDGE",
-            "symbol": symbol,
-            "startSnapshotId": sid0,
-            "depthRecords": len(depth),
-            "canonicalReplayReady": False,
+            "bid": pair(bid_p, bid_q),
+            "ask": pair(ask_p, ask_q),
         }
 
     ticker_comparable = 0
     ticker_exact = 0
     first_mismatch = None
-    ticker_ids_seen = set()
-
-    for t in tickers:
+    for r in ticker_rows:
+        t = r["data"]
         tu = int(t["u"])
-        ticker_ids_seen.add(tu)
         replay = replay_by_u.get(tu)
         if replay is None:
             continue
@@ -225,16 +236,17 @@ def validate(symbol: str, date: str, offset: int) -> dict:
             ticker_exact += 1
         elif first_mismatch is None:
             first_mismatch = {
+                "line": r["line"],
                 "u": tu,
                 "replayed": replay,
                 "bookTicker": ticker_state,
             }
 
     ticker_mismatches = ticker_comparable - ticker_exact
-    match_rate = (ticker_exact / ticker_comparable) if ticker_comparable else 0.0
+    match_rate = ticker_exact / ticker_comparable if ticker_comparable else 0.0
     ready = (
         events_applied > 0
-        and continuity_checks > 0
+        and continuity_checks == events_applied
         and ticker_comparable > 0
         and ticker_mismatches == 0
     )
@@ -244,14 +256,16 @@ def validate(symbol: str, date: str, offset: int) -> dict:
         "symbol": symbol,
         "date": date,
         "offset": offset,
+        "rawRows": len(rows),
+        "snapshotLine": snap_line,
+        "snapshotPrefix": snap_row["prefix"],
         "startSnapshotId": sid0,
         "firstBridge": first_bridge,
-        "depthRecords": len(depth),
+        "depthAfterSnapshot": len(depth_rows),
         "eventsApplied": events_applied,
         "continuityChecks": continuity_checks,
-        "replayStates": len(replay_by_u),
-        "tickerRecords": len(tickers),
-        "tickerUniqueUpdateIds": len(ticker_ids_seen),
+        "finalDepthU": prev_u,
+        "tickerAfterSnapshot": len(ticker_rows),
         "tickerComparable": ticker_comparable,
         "tickerExact": ticker_exact,
         "tickerMismatches": ticker_mismatches,
@@ -268,8 +282,7 @@ def main() -> None:
     p.add_argument("--offset", type=int, default=0)
     a = p.parse_args()
     result = validate(a.symbol, a.date, a.offset)
-    out = {"authorization": AUTHORIZATION, "liveTrading": False, **result}
-    print(json.dumps(out, indent=2))
+    print(json.dumps({"authorization": AUTHORIZATION, "liveTrading": False, **result}, indent=2))
 
 
 if __name__ == "__main__":
