@@ -50,10 +50,28 @@ class Settings:
             raise ValueError("V2_MODE must be shadow, paper, or live")
         if self.mode == "live" and not self.live_trading:
             raise RuntimeError("LIVE mode requested while V2_LIVE_TRADING=false")
+        if not self.quote_asset:
+            raise ValueError("V2_QUOTE_ASSET must not be empty")
+        if self.min_quote_volume_24h <= 0:
+            raise ValueError("V2_MIN_QUOTE_VOLUME_24H must be > 0")
+        if self.max_spread_bps < 0:
+            raise ValueError("V2_MAX_SPREAD_BPS must be >= 0")
+        if not 0 <= self.min_score <= 100:
+            raise ValueError("V2_MIN_SCORE must be between 0 and 100")
+        if self.universe_limit <= 0:
+            raise ValueError("V2_UNIVERSE_LIMIT must be > 0")
+        if self.scan_interval_seconds <= 0:
+            raise ValueError("V2_SCAN_INTERVAL_SECONDS must be > 0")
         if self.trade_size_usdt <= 0:
             raise ValueError("V2_TRADE_SIZE_USDT must be > 0")
         if self.max_daily_loss_usdt <= 0:
             raise ValueError("V2_MAX_DAILY_LOSS_USDT must be > 0")
+        if self.max_open_positions <= 0:
+            raise ValueError("V2_MAX_OPEN_POSITIONS must be > 0")
+        if not 0 < self.take_profit_pct < 0.20:
+            raise ValueError("V2_TAKE_PROFIT_PCT must be between 0 and 0.20")
+        if not 0 < self.stop_loss_pct < 0.20:
+            raise ValueError("V2_STOP_LOSS_PCT must be between 0 and 0.20")
         if not 0 <= self.paper_fee_rate < 0.02:
             raise ValueError("V2_PAPER_FEE_RATE must be between 0 and 0.02")
 
