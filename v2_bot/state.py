@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -35,7 +36,7 @@ class StateStore:
         return conn
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS positions (
@@ -97,7 +98,7 @@ class StateStore:
 
         now = datetime.now(timezone.utc).isoformat()
         key = "persistence_probe_revision"
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             row = conn.execute(
                 "SELECT value FROM runtime_meta WHERE key = ?",
                 (key,),
@@ -136,7 +137,7 @@ class StateStore:
             )
 
     def list_open_positions(self) -> list[OpenPosition]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute("SELECT * FROM positions ORDER BY opened_at ASC").fetchall()
         return [OpenPosition(**dict(row)) for row in rows]
 
@@ -172,7 +173,7 @@ class StateStore:
             opened_at=opened_at,
         )
         try:
-            with self._connect() as conn:
+            with closing(self._connect()) as conn, conn:
                 conn.execute(
                     """
                     INSERT INTO positions
@@ -213,7 +214,7 @@ class StateStore:
         exit_fee = exit_price * position.quantity * fee_rate
         pnl = gross_pnl - entry_fee - exit_fee
         closed_at = datetime.now(timezone.utc).isoformat()
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.execute(
                 "DELETE FROM positions WHERE symbol = ? AND opened_at = ?",
                 (position.symbol, position.opened_at),
@@ -244,7 +245,7 @@ class StateStore:
             raise ValueError("symbol and kind must not be empty")
         created_at = datetime.now(timezone.utc).isoformat()
         try:
-            with self._connect() as conn:
+            with closing(self._connect()) as conn, conn:
                 conn.execute(
                     """
                     INSERT INTO emitted_signals (symbol, signal_open_time, kind, created_at)
@@ -258,7 +259,7 @@ class StateStore:
 
     def realized_pnl_today(self) -> float:
         day_prefix = datetime.now(timezone.utc).date().isoformat() + "%"
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT COALESCE(SUM(pnl_usdt), 0.0) AS pnl FROM trades WHERE closed_at LIKE ?",
                 (day_prefix,),
