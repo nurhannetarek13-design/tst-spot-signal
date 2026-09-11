@@ -1,0 +1,93 @@
+name: HftBacktest Execution Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/execution/**"
+      - "validation/execution/**"
+      - ".github/workflows/hftbacktest-execution-gate.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hftbacktest-execution-gate
+  cancel-in-progress: true
+
+jobs:
+  execution-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARDIS_KEY: ${{ secrets.TARDIS_KEY }}
+      TARDIS_API_KEY: ${{ secrets.TARDIS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned hftbacktest
+        run: |
+          python -m pip install --disable-pip-version-check "hftbacktest==2.4.4" numpy
+      - name: Verify official APIs used by integration
+        run: |
+          python - <<'PY'
+          from hftbacktest import BacktestAsset
+          from hftbacktest.data.utils import tardis
+          assert hasattr(tardis, 'convert')
+          assert hasattr(tardis, 'convert_fuse')
+          a=BacktestAsset()
+          for name in ['partial_fill_exchange','power_prob_queue_model','risk_adverse_queue_model','constant_order_latency']:
+              assert hasattr(a,name), name
+          print('HFTBACKTEST_API_OK')
+          PY
+      - name: Compile research scripts
+        run: |
+          python -m py_compile research/execution/*.py
+      - name: Run fail-closed preflight
+        run: |
+          python research/execution/execution_preflight.py
+      - name: Contract-test scenario comparator
+        run: |
+          mkdir -p /tmp/hftgate
+          python - <<'PY'
+          import json,itertools
+          rows=[]
+          for sym,feed,q,l in itertools.product(
+              ['BTCUSDT','ETHUSDT','SOLUSDT'],
+              ['L2_ONLY','L2_PLUS_BOOKTICKER'],
+              ['PROB_QUEUE_N1','PROB_QUEUE_N2','PROB_QUEUE_N3','RISK_AVERSE'],
+              [1,2,3]):
+              rows.append({'symbol':sym,'feed':feed,'queueModel':q,'latencyMultiplier':l,
+                           'fillRate':0.8,'netExpectancy':0.001,'profitFactor':1.4,'slippageBps':2.0})
+          json.dump(rows,open('/tmp/hftgate/fixture.json','w'))
+          PY
+          python research/execution/compare_hft_scenarios.py /tmp/hftgate/fixture.json /tmp/hftgate/result.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/hftgate/result.json'))
+          assert x['pass'] is True
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          print('COMPARATOR_CONTRACT_OK')
+          PY
+      - name: Commit preflight snapshot
+        run: |
+          cp validation/execution/preflight-latest.json /tmp/preflight.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/execution
+            cp /tmp/preflight.json validation/execution/preflight-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/execution/preflight-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update hftbacktest execution preflight [skip ci]"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
