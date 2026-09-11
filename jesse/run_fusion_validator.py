@@ -80,9 +80,17 @@ def run(candles,fee):
     cd={jh.key(EXCHANGE,SYMBOL):{"exchange":EXCHANGE,"symbol":SYMBOL,"candles":candles}}
     result=backtest(cfg,routes,[],candles=cd,generate_equity_curve=True,fast_mode=True)
     m=result.get("metrics") or {}
-    n=int(metric(m,"total","total_trades","trades","count"));win=metric(m,"win_rate","winrate");netpct=metric(m,"net_profit_percentage","net_profit","total_profit");pf=metric(m,"profit_factor");maxdd=metric(m,"max_drawdown","max_drawdown_percentage")
-    netusdt=(netpct/100*20.08) if abs(netpct)>1 else (netpct*20.08);ex=netusdt/n if n else 0
-    return {"trades":n,"winRate":win,"profitFactor":pf,"expectancyUSDT":ex,"netPnlUSDT":netusdt,"maxDrawdown":maxdd}
+    n=int(metric(m,"total","total_trades","trades","count"))
+    win=metric(m,"win_rate","winrate")
+    netusdt=metric(m,"net_profit")
+    gross_profit=metric(m,"gross_profit")
+    gross_loss=metric(m,"gross_loss")
+    pf=(gross_profit/abs(gross_loss)) if gross_loss != 0 else (999.0 if gross_profit>0 else 0.0)
+    ex=metric(m,"expectancy")
+    if ex == 0.0 and n:
+        ex=netusdt/n
+    maxdd=metric(m,"max_drawdown","max_drawdown_percentage")
+    return {"trades":n,"winRate":win,"profitFactor":pf,"expectancyUSDT":ex,"netPnlUSDT":netusdt,"grossProfitUSDT":gross_profit,"grossLossUSDT":gross_loss,"maxDrawdown":maxdd}
 
 build_leader_map()
 candles=fetch_1m()
@@ -91,5 +99,5 @@ if len(candles)<expected_minutes*0.995:raise RuntimeError(f"insufficient frozen-
 base=run(candles,0.0015);stress=run(candles,0.003)
 independent=base["trades"]>=30 and stress["trades"]>=30 and base["profitFactor"]>=1.15 and stress["profitFactor"]>=1.0 and base["expectancyUSDT"]>0 and stress["expectancyUSDT"]>0
 passed=independent and base["trades"]>=100 and stress["trades"]>=100
-report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"dataset":{"firstTs":FIXTURE["dataset"]["firstTs"],"lastTs":FIXTURE["dataset"]["lastTs"],"sha256":FIXTURE["dataset"]["sha256"]},"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of frozen parity candidate on the exact fixture dataset window; long-only; 5.5 USDT stake."}
+report={"engine":"JESSE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":MANIFEST.get("candidateId"),"candidateFingerprint":MANIFEST.get("candidateFingerprint"),"symbol":SYMBOL_API,"family":MANIFEST.get("family"),"timeframe":TF,"dataset":{"firstTs":FIXTURE["dataset"]["firstTs"],"lastTs":FIXTURE["dataset"]["lastTs"],"sha256":FIXTURE["dataset"]["sha256"]},"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Independent Jesse validation of frozen parity candidate on the exact fixture dataset window; long-only; 5.5 USDT stake. Profit factor is derived from Jesse gross_profit/gross_loss; PnL and expectancy use Jesse native USD metrics."}
 pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
