@@ -8,10 +8,21 @@ from v2_bot.config import Settings
 from v2_bot.main import run
 
 
+class FakeNotifier:
+    def __init__(self):
+        self.messages = []
+        self.enabled = True
+
+    def send(self, text):
+        self.messages.append(text)
+        return True
+
+
 class FakeEngine:
     def __init__(self, _settings, outcomes):
         self.outcomes = list(outcomes)
         self.closed = False
+        self.notifier = FakeNotifier()
 
     def scan_once(self):
         outcome = self.outcomes.pop(0)
@@ -73,6 +84,30 @@ class MainLoopTests(unittest.TestCase):
                     engine_factory=factory,
                     sleep_fn=lambda _seconds: None,
                 )
+        self.assertTrue(holder["engine"].closed)
+
+    def test_startup_alert_is_sent_when_requested(self):
+        holder = {}
+
+        def factory(settings):
+            engine = FakeEngine(settings, [{"mode": "shadow", "ok": True}])
+            holder["engine"] = engine
+            return engine
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            run(
+                True,
+                runtime_settings=Settings(mode="shadow", live_trading=False, startup_alert=True),
+                engine_factory=factory,
+                sleep_fn=lambda _seconds: None,
+            )
+
+        self.assertEqual(
+            holder["engine"].notifier.messages,
+            ["V2 SHADOW ONLINE\nLive trading: OFF"],
+        )
+        self.assertIn('"startup_alert_sent": true', output.getvalue())
         self.assertTrue(holder["engine"].closed)
 
 
