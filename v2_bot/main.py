@@ -21,6 +21,32 @@ def run(
 ) -> None:
     runtime_settings.validate()
     engine = engine_factory(runtime_settings)
+    notifier = getattr(engine, "notifier", None)
+    telegram_enabled = bool(getattr(notifier, "enabled", False))
+    startup_alert_sent = False
+    if runtime_settings.startup_alert and notifier is not None:
+        startup_alert_sent = bool(
+            notifier.send(
+                f"V2 {runtime_settings.mode.upper()} ONLINE\n"
+                f"Live trading: {'ON' if runtime_settings.live_trading else 'OFF'}"
+            )
+        )
+
+    print(
+        json.dumps(
+            {
+                "event": "startup",
+                "mode": runtime_settings.mode,
+                "live_trading": runtime_settings.live_trading,
+                "telegram_enabled": telegram_enabled,
+                "startup_alert_requested": runtime_settings.startup_alert,
+                "startup_alert_sent": startup_alert_sent,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+
     cycles = 0
     try:
         while True:
