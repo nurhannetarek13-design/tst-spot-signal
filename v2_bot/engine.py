@@ -7,6 +7,7 @@ from .binance_public import BinancePublicClient
 from .config import Settings
 from .notifier import TelegramNotifier
 from .risk import check_risk
+from .spot_preflight import SpotSymbolRules, validate_protected_spot_trade
 from .state import StateStore
 from .strategy import Candidate, evaluate_candidate
 
@@ -138,6 +139,63 @@ class V2Engine:
             for gate in cls._failed_gates(candidate, settings):
                 counts[gate] += 1
         return counts
+
+    def _execution_preflight(
+        self,
+        *,
+        candidate: Candidate,
+        books: dict[str, dict[str, float]],
+    ) -> dict[str, Any]:
+        book = books.get(candidate.symbol, {})
+        entry_price = float(book.get("ask", 0.0)) or candidate.price
+        take_profit_price = entry_price * (1.0 + self.settings.take_profit_pct)
+        stop_loss_price = entry_price * (1.0 - self.settings.stop_loss_pct)
+
+        try:
+            exchange_info = self.market.exchange_info(candidate.symbol)
+            symbol_rows = exchange_info.get("symbols", [])
+            symbol_info = next(
+                (
+                    row
+                    for row in symbol_rows
+                    if isinstance(row, dict) and str(row.get("symbol", "")) == candidate.symbol
+                ),
+                None,
+            )
+            if symbol_info is None:
+                raise RuntimeError("symbol_missing_from_exchange_info")
+
+            rules = SpotSymbolRules.from_exchange_info(symbol_info)
+            result = validate_protected_spot_trade(
+                rules=rules,
+                quote_size=self.settings.trade_size_usdt,
+                entry_price=entry_price,
+                take_profit_price=take_profit_price,
+                stop_loss_price=stop_loss_price,
+            )
+            return {
+                "allowed": result.allowed,
+                "reasons": list(result.reasons),
+                "symbol": result.symbol,
+                "quote_size_usdt": str(self.settings.trade_size_usdt),
+                "quantity": format(result.quantity, "f"),
+                "entry_price": format(result.entry_price, "f"),
+                "take_profit_price": format(result.take_profit_price, "f"),
+                "stop_loss_price": format(result.stop_loss_price, "f"),
+                "entry_notional": format(result.entry_notional, "f"),
+                "take_profit_notional": format(result.take_profit_notional, "f"),
+                "stop_loss_notional": format(result.stop_loss_notional, "f"),
+                "min_notional": format(result.min_notional, "f"),
+            }
+        except Exception as exc:
+            return {
+                "allowed": False,
+                "reasons": ["exchange_preflight_error"],
+                "symbol": candidate.symbol,
+                "quote_size_usdt": str(self.settings.trade_size_usdt),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
 
     def _manage_paper_exits(self, books: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
@@ -276,6 +334,7 @@ class V2Engine:
                     }
 
         action: dict[str, Any] | None = None
+        execution_preflight: dict[str, Any] | None = None
         if eligible:
             open_positions = self.state.list_open_positions()
             open_symbols = {p.symbol for p in open_positions}
@@ -298,7 +357,21 @@ class V2Engine:
                     open_positions=len(open_positions),
                 )
 
-                if decision.allowed and self.settings.mode == "shadow":
+                if decision.allowed:
+                    execution_preflight = self._execution_preflight(
+                        candidate=best,
+                        books=books,
+                    )
+
+                if decision.allowed and execution_preflight and not execution_preflight["allowed"]:
+                    action = {
+                        "event": "blocked",
+                        "symbol": best.symbol,
+                        "score": best.score,
+                        "reason": "exchange_preflight_failed",
+                        "preflight_reasons": execution_preflight.get("reasons", []),
+                    }
+                elif decision.allowed and self.settings.mode == "shadow":
                     is_new = self.state.claim_signal(
                         symbol=best.symbol,
                         signal_open_time=best.signal_open_time,
@@ -312,7 +385,8 @@ class V2Engine:
                             f"Score: {best.score}/100\n"
                             f"Price: {best.price:.8f}\n"
                             f"RelVol: {best.relative_volume:.2f}x\n"
-                            f"Taker buy: {best.taker_buy_ratio:.1%}"
+                            f"Taker buy: {best.taker_buy_ratio:.1%}\n"
+                            f"Execution preflight: PASS"
                         )
                     else:
                         action = {
@@ -345,7 +419,8 @@ class V2Engine:
                         f"Score: {best.score}/100\n"
                         f"Entry: {position.entry_price:.8f}\n"
                         f"TP: {position.take_profit:.8f}\n"
-                        f"SL: {position.stop_loss:.8f}"
+                        f"SL: {position.stop_loss:.8f}\n"
+                        f"Execution preflight: PASS"
                     )
                 elif decision.allowed and self.settings.mode == "live":
                     raise RuntimeError(
@@ -367,6 +442,7 @@ class V2Engine:
             "gate_failure_counts": gate_failure_counts,
             "top_near_miss": top_near_miss,
             "pre_alert": pre_alert,
+            "execution_preflight": execution_preflight,
             "top": [c.to_dict() for c in candidates[:5]],
             "paper_events": paper_events,
             "action": action,
