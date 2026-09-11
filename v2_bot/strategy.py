@@ -24,6 +24,8 @@ class Candidate:
     rel_volume_ok: bool
     taker_flow_ok: bool
     eligible: bool
+    pullback: bool = False
+    entry_setup: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -47,6 +49,31 @@ def _trend(candles: list[dict[str, float]]) -> bool:
     ema20 = ema(closes, 20)
     ema50 = ema(closes, 50)
     return ema20 > ema50 and closes[-1] > ema20
+
+
+def _confirmed_pullback(candles: list[dict[str, float]]) -> bool:
+    """Require a two-candle EMA20 pullback/reclaim confirmation.
+
+    The previous closed candle must touch the current 15m EMA20 zone without
+    materially closing below it. The newest closed candle must then close
+    bullish above the previous candle high and above EMA20. Multi-timeframe
+    trend, relative-volume and taker-flow requirements are enforced separately.
+    """
+    if len(candles) < 50:
+        return False
+    closes = [c["close"] for c in candles]
+    ema20 = ema(closes, 20)
+    previous = candles[-2]
+    last = candles[-1]
+
+    touched_ema_zone = previous["low"] <= ema20 * 1.0025
+    held_structure = previous["close"] >= ema20 * 0.995
+    bullish_confirmation = (
+        last["close"] > previous["high"]
+        and last["close"] > last["open"]
+        and last["close"] > ema20
+    )
+    return touched_ema_zone and held_structure and bullish_confirmation
 
 
 def evaluate_candidate(
@@ -83,6 +110,9 @@ def evaluate_candidate(
     trend_1h = _trend(candles_1h)
     trend_4h = _trend(candles_4h)
     breakout = price > previous_20_high
+    pullback = _confirmed_pullback(candles_15m)
+    entry_setup_ok = breakout or pullback
+    entry_setup = "breakout" if breakout else "pullback" if pullback else "none"
     rel_volume_ok = relative_volume >= 1.5
     taker_flow_ok = taker_buy_ratio >= 0.56
 
@@ -93,13 +123,13 @@ def evaluate_candidate(
     score += 10 if trend_15m else 0
     score += 10 if trend_1h else 0
     score += 10 if trend_4h else 0
-    score += 15 if breakout else 0
+    score += 15 if entry_setup_ok else 0
     score += 15 if rel_volume_ok else 0
     score += 10 if taker_flow_ok else 0
 
     # Score is used for ranking/diagnostics. Eligibility is stricter: every
-    # entry gate must pass. This prevents a 90/100 candidate from becoming
-    # tradable while one critical trend/flow/breakout condition is missing.
+    # entry gate must pass. A confirmed pullback is an alternative entry setup,
+    # not a relaxation of trend, flow, liquidity, spread, BTC or score gates.
     all_entry_gates_ok = all(
         (
             liquidity_ok,
@@ -108,7 +138,7 @@ def evaluate_candidate(
             trend_15m,
             trend_1h,
             trend_4h,
-            breakout,
+            entry_setup_ok,
             rel_volume_ok,
             taker_flow_ok,
         )
@@ -133,4 +163,6 @@ def evaluate_candidate(
         rel_volume_ok=rel_volume_ok,
         taker_flow_ok=taker_flow_ok,
         eligible=eligible,
+        pullback=pullback,
+        entry_setup=entry_setup,
     )
