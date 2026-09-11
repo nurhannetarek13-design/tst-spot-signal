@@ -1,0 +1,64 @@
+name: Gate G L2 Microstructure V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_g_l2_microstructure_v1.py'
+      - '.github/workflows/gate-g-l2-microstructure-v1.yml'
+permissions: {contents: read}
+jobs:
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [SOLUSDT, ETHUSDT]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run true L2 sampler
+        run: |
+          mkdir -p gate-g
+          python research/gate_g_l2_microstructure_v1.py \
+            --symbol ${{ matrix.symbol }} \
+            --date 2025-01-15 \
+            --out gate-g/${{ matrix.symbol }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-g-${{ matrix.symbol }}
+          path: gate-g/${{ matrix.symbol }}.json
+  aggregate:
+    needs: sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-g-*
+          path: gate-g
+          merge-multiple: true
+      - name: Evaluate frozen feature gate
+        run: |
+          python - <<'PY'
+          import glob,json
+          xs=[json.load(open(p)) for p in glob.glob('gate-g/*.json')]
+          assert len(xs)==2
+          rows=[]
+          for x in xs:
+            assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False and x['thresholdsFrozen'] is True
+            best=False
+            for side in ('long','short'):
+              for h in ('10','30','60'):
+                s=x['outcomes'][side][h]
+                if s['n']>=20 and s['hitRate'] is not None and s['hitRate']>=0.54 and s['meanDirectionalBps'] is not None and s['meanDirectionalBps']>0:
+                  best=True
+            rows.append({'symbol':x['symbol'],'passesInformationGate':best,'sampleCount':x['sampleCount'],'outcomes':x['outcomes']})
+          cross=sum(r['passesInformationGate'] for r in rows)>=2
+          out={'engine':'GATE_G_L2_MICROSTRUCTURE_AGG_V1','authorization':'RESEARCH_ONLY','liveTrading':False,'thresholdsFrozen':True,'informationGate':{'nMin':20,'hitRateMin':0.54,'meanDirectionalBpsPositive':True,'crossSymbolMin':2},'symbols':rows,'pass':cross,'next':'EXPAND_L2_TIME_OOS' if cross else 'REJECT_GATE_G_V1'}
+          open('gate-g-result.json','w').write(json.dumps(out,indent=2))
+          print(json.dumps({'pass':cross,'next':out['next'],'symbols':[{'symbol':r['symbol'],'pass':r['passesInformationGate']} for r in rows]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-g-l2-result-v1
+          path: gate-g-result.json
