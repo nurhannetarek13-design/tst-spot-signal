@@ -71,3 +71,5 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+# 2026-09-11: retrigger after spot TP/SL lifecycle fix
