@@ -11,6 +11,7 @@ from v2_bot.strategy import Candidate
 class FakeMarket:
     def __init__(self):
         self.books = {"TESTUSDT": {"bid": 99.99, "ask": 100.0}}
+        self.min_notional = 5.0
 
     def ticker_24h(self):
         return [{"symbol": "TESTUSDT", "quoteVolume": "100000000"}]
@@ -20,6 +21,35 @@ class FakeMarket:
 
     def klines(self, _symbol, _interval, _limit):
         return []
+
+    def exchange_info(self, symbol):
+        return {
+            "symbols": [
+                {
+                    "symbol": symbol,
+                    "status": "TRADING",
+                    "isSpotTradingAllowed": True,
+                    "filters": [
+                        {
+                            "filterType": "PRICE_FILTER",
+                            "minPrice": "0.01",
+                            "maxPrice": "1000000",
+                            "tickSize": "0.01",
+                        },
+                        {
+                            "filterType": "LOT_SIZE",
+                            "minQty": "0.001",
+                            "maxQty": "100000",
+                            "stepSize": "0.001",
+                        },
+                        {
+                            "filterType": "MIN_NOTIONAL",
+                            "minNotional": str(self.min_notional),
+                        },
+                    ],
+                }
+            ]
+        }
 
 
 class FakeNotifier:
@@ -224,7 +254,7 @@ class EngineLifecycleTests(unittest.TestCase):
         engine._evaluate_symbol = lambda **_kwargs: engine.current_candidate
         return engine
 
-    def test_shadow_signal_is_emitted_once_per_closed_candle(self):
+    def test_shadow_signal_is_emitted_once_per_closed_candle_after_preflight_pass(self):
         engine = self.make_engine("shadow")
 
         first = engine.scan_once()
@@ -232,17 +262,34 @@ class EngineLifecycleTests(unittest.TestCase):
 
         self.assertEqual(first["action"]["event"], "shadow_signal")
         self.assertIsNone(first["pre_alert"])
+        self.assertTrue(first["execution_preflight"]["allowed"])
         self.assertEqual(first["action"]["entry_setup"], "breakout_retest")
         self.assertIn("Setup: breakout_retest", engine.notifier.messages[0])
+        self.assertIn("Execution preflight: PASS", engine.notifier.messages[0])
         self.assertEqual(second["action"]["event"], "shadow_duplicate_suppressed")
         self.assertEqual(len(engine.notifier.messages), 1)
 
         engine.current_candidate = eligible_candidate(signal_open_time=2_000.0, setup="pullback")
         third = engine.scan_once()
         self.assertEqual(third["action"]["event"], "shadow_signal")
+        self.assertTrue(third["execution_preflight"]["allowed"])
         self.assertEqual(third["action"]["entry_setup"], "pullback")
         self.assertIn("Setup: pullback", engine.notifier.messages[-1])
         self.assertEqual(len(engine.notifier.messages), 2)
+
+    def test_eligible_signal_is_blocked_when_exchange_preflight_fails(self):
+        engine = self.make_engine("shadow")
+        engine.market.min_notional = 20.0
+
+        result = engine.scan_once()
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertFalse(result["execution_preflight"]["allowed"])
+        self.assertIn("entry_notional_below_min", result["execution_preflight"]["reasons"])
+        self.assertIn("stop_loss_notional_below_min", result["execution_preflight"]["reasons"])
+        self.assertEqual(result["action"]["event"], "blocked")
+        self.assertEqual(result["action"]["reason"], "exchange_preflight_failed")
+        self.assertEqual(engine.notifier.messages, [])
 
     def test_breakout_prealert_is_no_entry_and_deduplicated(self):
         engine = self.make_engine("shadow")
@@ -252,6 +299,7 @@ class EngineLifecycleTests(unittest.TestCase):
         second = engine.scan_once()
 
         self.assertIsNone(first["action"])
+        self.assertIsNone(first["execution_preflight"])
         self.assertEqual(first["eligible"], 0)
         self.assertEqual(first["pre_alert"]["event"], "breakout_prealert")
         self.assertIn("NO ENTRY", engine.notifier.messages[0])
@@ -263,6 +311,7 @@ class EngineLifecycleTests(unittest.TestCase):
 
         opened = engine.scan_once()
         self.assertEqual(opened["action"]["event"], "paper_open")
+        self.assertTrue(opened["execution_preflight"]["allowed"])
         self.assertEqual(opened["action"]["setup"], "breakout_retest")
         self.assertEqual(opened["open_positions"], 1)
 
