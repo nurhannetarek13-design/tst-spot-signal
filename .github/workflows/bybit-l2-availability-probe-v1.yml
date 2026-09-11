@@ -1,0 +1,19 @@
+name: Bybit L2 Availability Probe V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/bybit-l2-availability-probe-v1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe historical L2 archive
+        run: python research/bybit_l2_availability_probe.py | tee bybit-l2-probe.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bybit-l2-availability-probe-v1
+          path: bybit-l2-probe.json
