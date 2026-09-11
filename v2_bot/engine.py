@@ -7,6 +7,7 @@ from .binance_public import BinancePublicClient
 from .config import Settings
 from .notifier import TelegramNotifier
 from .risk import check_risk
+from .shadow_outcomes import ShadowOutcomeLedger
 from .spot_preflight import SpotSymbolRules, validate_protected_spot_trade
 from .state import StateStore
 from .strategy import Candidate, evaluate_candidate
@@ -50,6 +51,7 @@ class V2Engine:
         self.settings = settings
         self.market = BinancePublicClient()
         self.state = StateStore(settings.state_db)
+        self.shadow_outcomes = ShadowOutcomeLedger(settings.state_db)
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
 
     def close(self) -> None:
@@ -237,6 +239,78 @@ class V2Engine:
             )
         return events
 
+    def _manage_shadow_outcomes(self) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        if self.settings.mode != "shadow":
+            return events
+        ledger = getattr(self, "shadow_outcomes", None)
+        if ledger is None:
+            return events
+
+        for outcome in ledger.open_outcomes():
+            try:
+                candles = self.market.klines(outcome.symbol, "15m", 8)
+                updated = outcome
+                for candle in sorted(candles, key=lambda row: float(row.get("open_time", 0) or 0)):
+                    updated = ledger.evaluate_closed_candle(updated, candle)
+                    if updated.status != "OPEN":
+                        events.append(
+                            {
+                                "event": "shadow_outcome_closed",
+                                "symbol": updated.symbol,
+                                "signal_open_time": updated.signal_open_time,
+                                "status": updated.status,
+                                "reason": updated.reason,
+                                "exit_price": updated.exit_price,
+                                "pnl_usdt_net_fees": updated.pnl_usdt,
+                            }
+                        )
+                        break
+            except Exception as exc:
+                events.append(
+                    {
+                        "event": "shadow_outcome_error",
+                        "symbol": outcome.symbol,
+                        "signal_open_time": outcome.signal_open_time,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    }
+                )
+        return events
+
+    def _track_shadow_signal(
+        self,
+        *,
+        candidate: Candidate,
+        books: dict[str, dict[str, float]],
+    ) -> dict[str, Any]:
+        ledger = getattr(self, "shadow_outcomes", None)
+        if ledger is None:
+            return {"tracked": False, "reason": "shadow_outcome_ledger_unavailable"}
+        entry_price = float(books.get(candidate.symbol, {}).get("ask", 0.0)) or candidate.price
+        try:
+            outcome = ledger.open_signal(
+                symbol=candidate.symbol,
+                signal_open_time=candidate.signal_open_time,
+                entry_price=entry_price,
+                quote_size=self.settings.trade_size_usdt,
+                take_profit_pct=self.settings.take_profit_pct,
+                stop_loss_pct=self.settings.stop_loss_pct,
+                fee_rate=self.settings.paper_fee_rate,
+            )
+            return {
+                "tracked": True,
+                "entry_price": outcome.entry_price,
+                "take_profit": outcome.take_profit,
+                "stop_loss": outcome.stop_loss,
+            }
+        except Exception as exc:
+            return {
+                "tracked": False,
+                "reason": str(exc),
+                "error_type": type(exc).__name__,
+            }
+
     def _evaluate_symbol(
         self,
         *,
@@ -263,6 +337,7 @@ class V2Engine:
         tickers = self.market.ticker_24h()
         books = self.market.book_tickers()
         paper_events = self._manage_paper_exits(books)
+        shadow_events = self._manage_shadow_outcomes()
         closed_symbols_this_cycle = {event["symbol"] for event in paper_events}
         universe = self._build_universe(tickers)
         btc_1h = self.market.klines("BTCUSDT", "1h", 120)
@@ -379,7 +454,15 @@ class V2Engine:
                         kind="shadow",
                     )
                     if is_new:
-                        action = {"event": "shadow_signal", **best.to_dict()}
+                        shadow_tracking = self._track_shadow_signal(
+                            candidate=best,
+                            books=books,
+                        )
+                        action = {
+                            "event": "shadow_signal",
+                            **best.to_dict(),
+                            "shadow_tracking": shadow_tracking,
+                        }
                         self.notifier.send(
                             f"V2 SHADOW SIGNAL {best.symbol}\n"
                             f"Setup: {best.entry_setup}\n"
@@ -435,6 +518,11 @@ class V2Engine:
                         "reason": decision.reason,
                     }
 
+        shadow_stats = None
+        ledger = getattr(self, "shadow_outcomes", None)
+        if self.settings.mode == "shadow" and ledger is not None:
+            shadow_stats = ledger.stats()
+
         summary = {
             "mode": self.settings.mode,
             "universe_size": len(universe),
@@ -446,6 +534,8 @@ class V2Engine:
             "execution_preflight": execution_preflight,
             "top": [c.to_dict() for c in candidates[:5]],
             "paper_events": paper_events,
+            "shadow_events": shadow_events,
+            "shadow_stats": shadow_stats,
             "action": action,
             "errors": errors,
             "realized_pnl_today": self.state.realized_pnl_today(),
