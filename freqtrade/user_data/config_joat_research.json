@@ -32,6 +32,5 @@
     "force_entry": "market", "force_exit": "market", "stoploss": "market",
     "stoploss_on_exchange": false
   },
-  "telegram": {"enabled": false},
   "api_server": {"enabled": false}
 }
