@@ -4,7 +4,8 @@ from pathlib import Path
 import pandas as pd
 import talib.abstract as ta
 from pandas import DataFrame
-from freqtrade.strategy import IStrategy
+from freqtrade.exchange import timeframe_to_prev_date
+from freqtrade.strategy import IStrategy, stoploss_from_absolute
 
 CANDIDATE_PATHS=[
     Path("/freqtrade/user_data/candidate-manifest.json"),
@@ -23,6 +24,7 @@ for _p in CANDIDATE_PATHS:
 FAMILY=_manifest.get("family","TS_MOMENTUM")
 PARAMS=_manifest.get("params") or {}
 TIMEFRAME=_manifest.get("timeframe","1h")
+ATR_RISK_FAMILY=FAMILY=="MACD_EMA200_L2_CONFIRMATION"
 
 
 class UnifiedCandidateStrategy(IStrategy):
@@ -32,10 +34,12 @@ class UnifiedCandidateStrategy(IStrategy):
     process_only_new_candles=True
     startup_candle_count=max(800, int(PARAMS.get("emaLength", 0)) + 50)
 
-    # For CORE_TRIGGER_ONLY candidates these exits are validation scaffolding,
-    # not proof that the full L2 strategy has been reproduced historically.
-    stoploss=-float(PARAMS.get("sl",0.03))
-    minimal_roi={"0": float(PARAMS.get("tp",0.06))}
+    # Historical validation reproduces the core trigger and the manifest's
+    # ATR/R exit geometry. It still does NOT reproduce L2/order-book filters.
+    stoploss=-0.20 if ATR_RISK_FAMILY else -float(PARAMS.get("sl",0.03))
+    minimal_roi={} if ATR_RISK_FAMILY else {"0": float(PARAMS.get("tp",0.06))}
+    use_custom_stoploss=ATR_RISK_FAMILY
+    use_custom_roi=ATR_RISK_FAMILY
     trailing_stop=False
     use_exit_signal=True
     exit_profit_only=False
@@ -192,6 +196,48 @@ class UnifiedCandidateStrategy(IStrategy):
             cond=(dataframe["close"]<dataframe["ema20"])|(dataframe["rsi"]<45)
             dataframe.loc[cond,["exit_long","exit_tag"]]=(1,"vol_failure")
         return dataframe
+
+    def _entry_atr(self,pair,trade):
+        if not self.dp:
+            return None
+        try:
+            dataframe,_=self.dp.get_analyzed_dataframe(pair,self.timeframe)
+            trade_candle=timeframe_to_prev_date(self.timeframe,trade.open_date_utc)
+            prior=dataframe.loc[dataframe["date"]<trade_candle]
+            if prior.empty:
+                prior=dataframe.loc[dataframe["date"]<=trade_candle]
+            if prior.empty:
+                return None
+            value=float(prior.iloc[-1]["atr"])
+            return value if value>0 else None
+        except Exception:
+            return None
+
+    def custom_stoploss(self,pair,trade,current_time:datetime,current_rate,current_profit,after_fill=False,**kwargs):
+        if not ATR_RISK_FAMILY:
+            return None
+        entry_atr=self._entry_atr(pair,trade)
+        if not entry_atr:
+            return None
+        stop_atr=float(PARAMS.get("stopAtr",2.0))
+        stop_price=float(trade.open_rate)-(entry_atr*stop_atr)
+        return stoploss_from_absolute(
+            stop_price,
+            current_rate=current_rate,
+            is_short=trade.is_short,
+            leverage=trade.leverage,
+        )
+
+    def custom_roi(self,pair,trade,current_time:datetime,trade_duration:int,entry_tag,side,**kwargs):
+        if not ATR_RISK_FAMILY:
+            return None
+        entry_atr=self._entry_atr(pair,trade)
+        if not entry_atr or float(trade.open_rate)<=0:
+            return None
+        stop_atr=float(PARAMS.get("stopAtr",2.0))
+        target_r=float(PARAMS.get("targetR",2.0))
+        risk_abs=entry_atr*stop_atr
+        return (risk_abs*target_r)/float(trade.open_rate)
 
     def custom_exit(self,pair,trade,current_time:datetime,current_rate,current_profit,**kwargs):
         hold=int(PARAMS.get("holdBars",0))
