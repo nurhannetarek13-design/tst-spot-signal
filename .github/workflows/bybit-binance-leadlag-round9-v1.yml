@@ -1,0 +1,51 @@
+name: Bybit Binance LeadLag Round9 V1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/bybit_binance_leadlag_round9_v1.py'
+      - '.github/workflows/bybit-binance-leadlag-round9-v1.yml'
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install numpy pandas msgspec sortedcontainers
+      - name: Syntax check
+        run: python -m py_compile research/bybit_binance_leadlag_round9_v1.py research/bybit_binance_leadlag_v1.py
+      - name: Run frozen Round 9 cross-exchange discovery
+        run: python research/bybit_binance_leadlag_round9_v1.py
+      - name: Assert research-only contract and real execution
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/bybit-binance-leadlag-round9-v1-latest.json'
+          x=json.load(open(p))
+          assert x['engine']=='BYBIT_BINANCE_LEADLAG_ROUND9_V1'
+          assert x['round']==9
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['liveReady'] is False
+          assert len(x['families'])==3
+          assert x['rawGate']['minimumEvents']==40
+          assert x['rawGate']['meanMin']==0.015
+          assert x['rawGate']['hitRateMinExclusive']==0.55
+          assert x['rawGate']['mfeMaeMin']==2.0
+          assert x['robustnessGate']['positiveSymbolsMin']==4
+          assert x['robustnessGate']['maxEventShare']==0.40
+          assert x['multipleTesting']['method']=='Benjamini-Hochberg'
+          assert len(x['symbolsLoaded'])>=4, 'fewer than four symbols passed data quality'
+          assert len(x['tests'])>0, 'no Round 9 tests executed'
+          print({'decision':x['decision'],'symbolsLoaded':x['symbolsLoaded'],'eventCounts':x['eventCounts'],'tests':len(x['tests']),'survivorCount':x['survivorCount']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bybit-binance-leadlag-round9-v1-report
+          path: validation/edges/bybit-binance-leadlag-round9-v1-latest.json
+          retention-days: 14
