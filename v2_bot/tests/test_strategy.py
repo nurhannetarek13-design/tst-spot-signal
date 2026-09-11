@@ -37,10 +37,11 @@ def make_confirmed_pullback_candles():
     # Preserve a prior swing high so the confirmation is not also a breakout.
     candles[-10]["high"] = 132.0
 
-    # Previous candle pulls back into the current EMA20 zone and holds it.
+    # Previous candle clearly trades through the current EMA20 zone but closes
+    # back above it, avoiding a borderline fixture that depends on rounding.
     candles[-2]["open"] = 126.0
     candles[-2]["high"] = 126.0
-    candles[-2]["low"] = 124.5
+    candles[-2]["low"] = 123.0
     candles[-2]["close"] = 125.0
 
     # Latest closed candle confirms the reclaim above the previous candle high.
