@@ -68,16 +68,16 @@ class SpotPreflightTests(unittest.TestCase):
         )
         result = validate_protected_spot_trade(
             rules=rules,
-            quote_size=5.05,
+            quote_size=5.049,
             entry_price=101,
             take_profit_price=102,
             stop_loss_price=100,
         )
 
-        self.assertEqual(result.quantity, Decimal("0.05"))
-        self.assertTrue(
-            any(reason.endswith("notional_below_min") for reason in result.reasons)
-        )
+        self.assertEqual(result.quantity, Decimal("0.04"))
+        self.assertIn("entry_notional_below_min", result.reasons)
+        self.assertIn("take_profit_notional_below_min", result.reasons)
+        self.assertIn("stop_loss_notional_below_min", result.reasons)
         self.assertFalse(result.allowed)
 
     def test_notional_filter_uses_stricter_minimum(self):
