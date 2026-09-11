@@ -76,6 +76,8 @@ class LiveRecoveryGateTests(unittest.TestCase):
     def test_terminal_execution_does_not_trigger_recovery_gate(self):
         journal = ExecutionJournal(self.db_path)
         journal.begin(client_order_id="v2-SOLUSDT-done", symbol="SOLUSDT")
+        journal.transition("v2-SOLUSDT-done", "BUY_FILLED")
+        journal.transition("v2-SOLUSDT-done", "OCO_INTENT")
         journal.transition("v2-SOLUSDT-done", "PROTECTED")
         settings = Settings(
             mode="live",
