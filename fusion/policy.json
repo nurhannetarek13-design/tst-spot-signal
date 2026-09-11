@@ -1,8 +1,8 @@
 {
-  "release": "TST_FUSION_V2",
+  "release": "TST_FUSION_V3_MACD_L2",
   "mode": "PAPER_ONLY",
   "liveTrading": false,
-  "strategyId": "TST_UNIFIED_CANDIDATE_V1",
+  "strategyId": "TST_MACD_EMA200_L2_V1",
   "candidateManifest": "validation/fusion/candidate-manifest.json",
   "engines": {
     "scanner": "CLOUDFLARE_ORDERBOOK_MICROSTRUCTURE",
@@ -33,19 +33,26 @@
     "majorsAsMarketFilterOnly": true,
     "newListingsPaperOnly": true
   },
+  "signalGate": {
+    "timeframe": "15m",
+    "trigger": "MACD_12_26_9_BULLISH_CROSS_WHILE_MACD_BELOW_ZERO_AND_CLOSE_ABOVE_EMA200",
+    "requireMacdTrigger": true,
+    "requireL2Confirmation": true,
+    "requireBtcRegimeOk": true,
+    "requireLiquidityOk": true,
+    "minTakerBuyShare": 0.56,
+    "minRelativeVolume": 1.5,
+    "maxSpreadBps": 20,
+    "missingDataPolicy": "NO_TRADE"
+  },
   "decisionGate": {
-    "validatorsRequired": [
-      "vectorbt",
-      "freqtrade",
-      "jesse",
-      "nautilus",
-      "forward"
-    ],
+    "validatorsRequired": ["freqtrade", "jesse"],
     "requireSameCandidateFingerprint": true,
     "validatorMaxAgeHours": 48,
-    "minHistoricalTradesPerValidator": 100,
+    "minTrades": 100,
     "minForwardClosedTrades": 50,
     "minProfitFactor": 1.15,
+    "minCandidateScore": 90,
     "requirePositiveExpectancy": true,
     "requireStressPass": true,
     "maxForwardDrawdownUSDT": 1,
