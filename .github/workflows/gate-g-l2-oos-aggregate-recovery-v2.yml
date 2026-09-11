@@ -1,0 +1,91 @@
+name: Gate G L2 OOS Aggregate Recovery V2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/gate-g-l2-oos-aggregate-recovery-v2.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download April/July OOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 34596763351
+          github-token: ${{ github.token }}
+          pattern: gate-g-oos-*
+          path: gate-g-oos
+          merge-multiple: true
+      - name: Download February OOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 34596828344
+          github-token: ${{ github.token }}
+          pattern: gate-g-feb-*
+          path: gate-g-oos
+          merge-multiple: true
+      - name: Evaluate frozen 10-second symmetric OOS gate
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          DATES=['2025-02-15','2025-04-15','2025-07-15']
+          SYMS=['SOLUSDT','ETHUSDT']
+          files=glob.glob('gate-g-oos/*.json')
+          xs=[]
+          for p in files:
+            x=json.load(open(p))
+            if x.get('date') in DATES and x.get('symbol') in SYMS:
+              xs.append(x)
+          by={(x['symbol'],x['date']):x for x in xs}
+          expected={(s,d) for s in SYMS for d in DATES}
+          assert set(by)==expected, (set(by), expected, files)
+          def combine(items):
+            n=sum(x['n'] for x in items)
+            if n==0:return {'n':0,'meanDirectionalBps':None,'hitRate':None}
+            return {
+              'n':n,
+              'meanDirectionalBps':sum(x['n']*x['meanDirectionalBps'] for x in items)/n,
+              'hitRate':sum(x['n']*x['hitRate'] for x in items)/n,
+            }
+          rows=[]
+          for d in DATES:
+            symrows=[]
+            for s in SYMS:
+              x=by[(s,d)]
+              assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False and x['thresholdsFrozen'] is True
+              st=combine([x['outcomes']['long']['10'],x['outcomes']['short']['10']])
+              symrows.append({'symbol':s,**st})
+            pooled=combine(symrows)
+            date_pass=(pooled['n']>=40 and pooled['meanDirectionalBps']>0 and pooled['hitRate']>=0.54 and all(r['meanDirectionalBps'] is not None and r['meanDirectionalBps']>0 for r in symrows))
+            rows.append({'date':d,'symbols':symrows,'pooled':pooled,'pass':date_pass})
+          allstats=combine([r['pooled'] for r in rows])
+          symagg=[]
+          for s in SYMS:
+            vals=[]
+            for d in DATES:
+              x=by[(s,d)]
+              vals += [x['outcomes']['long']['10'],x['outcomes']['short']['10']]
+            symagg.append({'symbol':s,**combine(vals)})
+          passed_dates=sum(r['pass'] for r in rows)
+          overall=(passed_dates>=2 and allstats['n']>=120 and allstats['meanDirectionalBps']>0 and allstats['hitRate']>=0.54 and all(r['meanDirectionalBps']>0 and r['hitRate']>=0.52 for r in symagg))
+          out={
+            'engine':'GATE_G_L2_TIME_OOS_RECOVERY_V2',
+            'authorization':'RESEARCH_ONLY','liveTrading':False,'usesML':False,'usesSizing':False,'thresholdsFrozen':True,
+            'discoveryDateExcluded':'2025-01-15',
+            'frozenFeature':{'obi10AbsMin':0.60,'micropriceDirectionalBpsMin':0.08,'horizonSeconds':10,'eventCooldownSeconds':60,'sides':'symmetric'},
+            'oosDates':DATES,
+            'gate':{'datePooledNMin':40,'dateHitRateMin':0.54,'dateMeanDirectionalBpsPositive':True,'bothSymbolMeanPositive':True,'datesPassMin':2,'overallNMin':120,'overallHitRateMin':0.54,'eachSymbolAggregateHitRateMin':0.52},
+            'dates':rows,'symbolAggregate':symagg,'overall':allstats,'pass':overall,
+            'next':'PROMOTE_L2_TO_SHADOW_FEATURE_ABLATION' if overall else 'REJECT_GATE_G_TIME_OOS_V2'
+          }
+          open('gate-g-time-oos-recovery-v2.json','w').write(json.dumps(out,indent=2))
+          print(json.dumps({'pass':overall,'next':out['next'],'passedDates':passed_dates,'dates':rows,'overall':allstats,'symbols':symagg}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-g-time-oos-recovery-v2
+          path: gate-g-time-oos-recovery-v2.json
