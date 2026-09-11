@@ -23,6 +23,8 @@ jobs:
       - name: Install V2 dependencies
         run: pip install -r v2_bot/requirements.txt
       - name: Run V2 unit tests
+        env:
+          PYTHONWARNINGS: error::ResourceWarning
         run: python -m unittest discover -s v2_bot/tests -v
       - name: Compile V2 package
         run: python -m compileall -q v2_bot
