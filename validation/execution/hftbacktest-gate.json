@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "name": "HFTBACKTEST_EXECUTION_VALIDATION_V1",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "executorAllowed": false,
+  "prerequisite": {
+    "primaryEdgeGate": "PASS_REQUIRED",
+    "canonicalMarketData": "TARDIS_L2",
+    "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+  },
+  "feedSanity": {
+    "required": true,
+    "variants": ["L2_ONLY", "L2_PLUS_BOOKTICKER"],
+    "compare": ["fill_rate", "net_expectancy", "profit_factor", "slippage_bps"],
+    "failClosedOnMaterialSensitivity": true
+  },
+  "fillSimulation": {
+    "exchangeModel": "PARTIAL_FILL",
+    "queueStress": [
+      {"model": "PROB_QUEUE", "powerN": 1},
+      {"model": "PROB_QUEUE", "powerN": 2},
+      {"model": "PROB_QUEUE", "powerN": 3},
+      {"model": "RISK_AVERSE"}
+    ],
+    "latency": {
+      "base": "MEASURED_IF_AVAILABLE_ELSE_CONSERVATIVE_CONSTANT",
+      "stressMultipliers": [1, 2, 3]
+    },
+    "fees": "BINANCE_SPOT_ACTUAL_OR_CONSERVATIVE",
+    "marketImpact": "NOT_MODELED"
+  },
+  "acceptance": {
+    "allRequiredScenariosMustRemainNetPositive": true,
+    "rejectIfOnlyOptimisticQueuePasses": true,
+    "rejectIfFeedSensitive": true,
+    "rejectIfLatencyStressDestroysEdge": true,
+    "paperOnlyAfterPass": true
+  },
+  "resizePolicy": {
+    "executionRevalidationRequired": true,
+    "reason": "hftbacktest assumes the simulated order does not materially alter the historical book; position-size changes can invalidate that assumption"
+  }
+}
