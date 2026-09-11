@@ -62,7 +62,6 @@
   "executorAutoEnable": false,
   "reasons": [
     "freqtrade:FAIL",
-    "freqtrade:LT_100_TRADES",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
     "forward:FAIL",
@@ -97,12 +96,12 @@
       "candidateIdMatch": true,
       "candidateFingerprintMatch": true,
       "candidateMatch": true,
-      "trades": 50,
+      "trades": 189,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.6404427315153919,
-      "baseExpectancyUSDT": -0.0451780858,
-      "stressProfitFactor": 0.5731799850881172,
-      "stressExpectancyUSDT": -0.05883604196078431
+      "baseProfitFactor": 0.3775842916138183,
+      "baseExpectancyUSDT": -0.02159379544973545,
+      "stressProfitFactor": 0.2234446623519394,
+      "stressExpectancyUSDT": -0.0381372867403315
     },
     "jesse": {
       "status": "FAIL",
@@ -156,6 +155,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-11T16:35:30.627033+00:00",
+  "generatedAt": "2026-09-11T16:37:20.853383+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
