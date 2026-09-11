@@ -29,6 +29,7 @@ def _int(name: str, default: int) -> int:
 class Settings:
     mode: str = os.getenv("V2_MODE", "shadow").strip().lower()
     live_trading: bool = _bool("V2_LIVE_TRADING", False)
+    persistent_state: bool = _bool("V2_PERSISTENT_STATE", False)
     quote_asset: str = os.getenv("V2_QUOTE_ASSET", "USDT").upper()
     min_quote_volume_24h: float = _float("V2_MIN_QUOTE_VOLUME_24H", 20_000_000.0)
     max_spread_bps: float = _float("V2_MAX_SPREAD_BPS", 15.0)
@@ -51,6 +52,10 @@ class Settings:
             raise ValueError("V2_MODE must be shadow, paper, or live")
         if self.mode == "live" and not self.live_trading:
             raise RuntimeError("LIVE mode requested while V2_LIVE_TRADING=false")
+        if self.mode in {"paper", "live"} and not self.persistent_state:
+            raise RuntimeError(
+                f"{self.mode.upper()} mode requires V2_PERSISTENT_STATE=true"
+            )
         if not self.quote_asset:
             raise ValueError("V2_QUOTE_ASSET must not be empty")
         if self.min_quote_volume_24h <= 0:
