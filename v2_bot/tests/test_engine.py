@@ -77,6 +77,20 @@ class EngineUniverseTests(unittest.TestCase):
         self.assertNotIn("FDUSDUSDT", symbols)
         self.assertNotIn("EURUSDT", symbols)
 
+    def test_excludes_non_ascii_symbols_but_keeps_numeric_assets(self):
+        engine = self.make_engine()
+        tickers = [
+            {"symbol": "牛来USDT", "quoteVolume": "2000000000"},
+            {"symbol": "1000PEPEUSDT", "quoteVolume": "1000000000"},
+            {"symbol": "BTCUSDT", "quoteVolume": "900000000"},
+        ]
+        universe = engine._build_universe(tickers)
+        symbols = [symbol for symbol, _ in universe]
+
+        self.assertNotIn("牛来USDT", symbols)
+        self.assertIn("1000PEPEUSDT", symbols)
+        self.assertIn("BTCUSDT", symbols)
+
     def test_keeps_volume_filter_and_ranking(self):
         engine = self.make_engine()
         tickers = [
