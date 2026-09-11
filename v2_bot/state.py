@@ -16,6 +16,14 @@ class OpenPosition:
     opened_at: str
 
 
+@dataclass(frozen=True)
+class PersistenceProbe:
+    proven: bool
+    reason: str
+    previous_revision: str | None
+    current_revision: str
+
+
 class StateStore:
     def __init__(self, path: str) -> None:
         self.path = path
@@ -66,6 +74,65 @@ class StateStore:
                     PRIMARY KEY (symbol, signal_open_time, kind)
                 )
                 """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runtime_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def verify_persistence(self, current_revision: str) -> PersistenceProbe:
+        revision = current_revision.strip()
+        if not revision:
+            return PersistenceProbe(
+                proven=False,
+                reason="deploy_revision_missing",
+                previous_revision=None,
+                current_revision="",
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        key = "persistence_probe_revision"
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM runtime_meta WHERE key = ?",
+                (key,),
+            ).fetchone()
+            previous = str(row["value"]) if row else None
+
+            if previous is None:
+                conn.execute(
+                    "INSERT INTO runtime_meta (key, value, updated_at) VALUES (?, ?, ?)",
+                    (key, revision, now),
+                )
+                return PersistenceProbe(
+                    proven=False,
+                    reason="first_deploy_marker_created",
+                    previous_revision=None,
+                    current_revision=revision,
+                )
+
+            if previous == revision:
+                return PersistenceProbe(
+                    proven=False,
+                    reason="same_deploy_revision_not_cross_deploy_proof",
+                    previous_revision=previous,
+                    current_revision=revision,
+                )
+
+            conn.execute(
+                "UPDATE runtime_meta SET value = ?, updated_at = ? WHERE key = ?",
+                (revision, now, key),
+            )
+            return PersistenceProbe(
+                proven=True,
+                reason="survived_prior_deployment",
+                previous_revision=previous,
+                current_revision=revision,
             )
 
     def list_open_positions(self) -> list[OpenPosition]:
