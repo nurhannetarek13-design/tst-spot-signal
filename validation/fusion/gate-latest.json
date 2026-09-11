@@ -13,8 +13,11 @@
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
+    "jesse:LT_30_TRADES",
+    "jesse:BASE_PF_LT_1_15",
+    "jesse:BASE_EXPECTANCY_NONPOSITIVE",
+    "jesse:STRESS_PF_LT_1_0",
+    "jesse:STRESS_EXPECTANCY_NONPOSITIVE",
     "nautilus:CANDIDATE_ID_MISMATCH",
     "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
@@ -50,8 +53,6 @@
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:FAIL",
     "freqtrade:LT_100_TRADES",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -92,13 +93,13 @@
       "stressExpectancyUSDT": 0.0
     },
     "jesse": {
-      "status": "ERROR",
+      "status": "FAIL",
       "pass": false,
-      "candidateId": "PUBLIC_EDGE_LAB:XLMUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "46ad824ea85b257ae59f",
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
+      "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
+      "candidateFingerprint": "ae0299f52aa7a9708aa9",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 0,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
@@ -137,6 +138,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-11T16:10:51.144802+00:00",
+  "generatedAt": "2026-09-11T16:21:05.707319+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
