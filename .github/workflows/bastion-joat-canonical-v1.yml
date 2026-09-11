@@ -1,0 +1,49 @@
+name: Bastion JOAT Canonical V1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/bastion_joat_canonical_backtest_v1.py'
+      - '.github/workflows/bastion-joat-canonical-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  canonical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install research dependencies
+        run: pip install --disable-pip-version-check numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/bastion_joat_canonical_backtest_v1.py
+      - name: Run frozen JOAT discovery OOS stress
+        run: |
+          set -euo pipefail
+          python research/bastion_joat_canonical_backtest_v1.py
+      - name: Enforce research contract and show decision
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/bastion-joat-canonical-v1.json'
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['parametersFrozen'] is True
+          assert d['decision'] in {'PAPER_CANDIDATE','REJECT_JOAT_V1'}
+          for k in ('discovery2025','oos2026','oos2026Stress'):
+              assert d['results'][k]['trades'] >= 0
+          print({'decision':d['decision'],'discovery':d['results']['discovery2025'],'oos':d['results']['oos2026'],'stress':d['results']['oos2026Stress']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bastion-joat-canonical-v1
+          path: validation/edges/bastion-joat-canonical-v1.json
+          if-no-files-found: error
+          retention-days: 14
