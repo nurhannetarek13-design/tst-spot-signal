@@ -55,13 +55,6 @@ class V2Engine:
 
     @staticmethod
     def _is_plain_spot_symbol(symbol: str) -> bool:
-        """Keep the scanner on conventional Binance symbols only.
-
-        Binance can occasionally surface promotional or newly-created symbols
-        whose base asset contains non-ASCII characters. Those pairs may have
-        incomplete candle history and are outside V2's intended research
-        universe. Digits remain allowed so assets such as 1000PEPE are kept.
-        """
         return bool(symbol) and symbol.isascii() and symbol.isalnum() and symbol == symbol.upper()
 
     def _build_universe(self, tickers: list[dict[str, Any]]) -> list[tuple[str, float]]:
@@ -119,6 +112,24 @@ class V2Engine:
         if candidate.score < settings.min_score:
             failed.append("score")
         return failed
+
+    @staticmethod
+    def _is_breakout_prealert(candidate: Candidate, settings: Settings) -> bool:
+        """Raw breakout warning only when every pre-entry quality gate passes."""
+        return all(
+            (
+                candidate.breakout,
+                not candidate.breakout_retest,
+                not candidate.pullback,
+                candidate.btc_regime_ok,
+                candidate.trend_15m,
+                candidate.trend_1h,
+                candidate.trend_4h,
+                candidate.rel_volume_ok,
+                candidate.taker_flow_ok,
+                0 <= candidate.spread_bps <= settings.max_spread_bps,
+            )
+        )
 
     @classmethod
     def _gate_failure_counts(cls, candidates: list[Candidate], settings: Settings) -> dict[str, int]:
@@ -208,7 +219,7 @@ class V2Engine:
                     btc_1h=btc_1h,
                 )
                 candidates.append(candidate)
-            except Exception as exc:  # isolate one bad symbol from the cycle
+            except Exception as exc:
                 errors.append({"symbol": symbol, "error": str(exc)})
 
         candidates.sort(key=lambda c: (c.score, c.relative_volume), reverse=True)
@@ -226,8 +237,45 @@ class V2Engine:
                 }
                 break
 
-        action: dict[str, Any] | None = None
+        pre_alert: dict[str, Any] | None = None
+        if self.settings.mode == "shadow" and not eligible:
+            prealert_candidates = [
+                candidate
+                for candidate in candidates
+                if self._is_breakout_prealert(candidate, self.settings)
+            ]
+            if prealert_candidates:
+                watch = prealert_candidates[0]
+                is_new = self.state.claim_signal(
+                    symbol=watch.symbol,
+                    signal_open_time=watch.signal_open_time,
+                    kind="breakout_prealert",
+                )
+                if is_new:
+                    pre_alert = {
+                        "event": "breakout_prealert",
+                        "symbol": watch.symbol,
+                        "price": watch.price,
+                        "breakout_level": watch.previous_20_high,
+                        "score": watch.score,
+                        "signal_open_time": watch.signal_open_time,
+                    }
+                    self.notifier.send(
+                        f"V2 PRE-ALERT {watch.symbol}\n"
+                        f"Breakout closed. NO ENTRY — waiting retest.\n"
+                        f"Price: {watch.price:.8f}\n"
+                        f"Breakout level: {watch.previous_20_high:.8f}\n"
+                        f"RelVol: {watch.relative_volume:.2f}x\n"
+                        f"Taker buy: {watch.taker_buy_ratio:.1%}"
+                    )
+                else:
+                    pre_alert = {
+                        "event": "breakout_prealert_duplicate_suppressed",
+                        "symbol": watch.symbol,
+                        "signal_open_time": watch.signal_open_time,
+                    }
 
+        action: dict[str, Any] | None = None
         if eligible:
             open_positions = self.state.list_open_positions()
             open_symbols = {p.symbol for p in open_positions}
@@ -318,6 +366,7 @@ class V2Engine:
             "eligible": len(eligible),
             "gate_failure_counts": gate_failure_counts,
             "top_near_miss": top_near_miss,
+            "pre_alert": pre_alert,
             "top": [c.to_dict() for c in candidates[:5]],
             "paper_events": paper_events,
             "action": action,
