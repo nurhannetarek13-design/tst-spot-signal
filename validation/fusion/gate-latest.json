@@ -32,7 +32,6 @@
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
     "freqtrade:STRESS_EXPECTANCY_NONPOSITIVE",
-    "jesse:LT_30_TRADES",
     "jesse:BASE_PF_LT_1_15",
     "jesse:BASE_EXPECTANCY_NONPOSITIVE",
     "jesse:STRESS_PF_LT_1_0",
@@ -63,7 +62,6 @@
   "reasons": [
     "freqtrade:FAIL",
     "jesse:FAIL",
-    "jesse:LT_100_TRADES",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES",
     "FULL_STRATEGY_L2:NOT_HISTORICALLY_VALIDATED"
@@ -106,19 +104,19 @@
     "jesse": {
       "status": "FAIL",
       "pass": false,
-      "validationScope": null,
-      "fullStrategyValidated": null,
+      "validationScope": "CORE_TRIGGER_ONLY",
+      "fullStrategyValidated": false,
       "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
       "candidateFingerprint": "ae0299f52aa7a9708aa9",
       "candidateIdMatch": true,
       "candidateFingerprintMatch": true,
       "candidateMatch": true,
-      "trades": 0,
+      "trades": 194,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
+      "baseExpectancyUSDT": -0.018503125026423473,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "stressExpectancyUSDT": -0.03496298586655107
     },
     "nautilus": {
       "status": "FAIL",
@@ -155,6 +153,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-11T17:03:22.685008+00:00",
+  "generatedAt": "2026-09-11T17:14:38.111109+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
