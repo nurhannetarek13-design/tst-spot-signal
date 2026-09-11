@@ -17,35 +17,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, slot: M0060, offset: 60}
-          - {symbol: ETHUSDT, slot: M0060, offset: 60}
-          - {symbol: SOLUSDT, slot: M0060, offset: 60}
-          - {symbol: BTCUSDT, slot: M0360, offset: 360}
-          - {symbol: ETHUSDT, slot: M0360, offset: 360}
-          - {symbol: SOLUSDT, slot: M0360, offset: 360}
-          - {symbol: BTCUSDT, slot: M0720, offset: 720}
-          - {symbol: ETHUSDT, slot: M0720, offset: 720}
-          - {symbol: SOLUSDT, slot: M0720, offset: 720}
+          - {symbol: BTCUSDT, day: D0902, date: '2021-09-02'}
+          - {symbol: ETHUSDT, day: D0902, date: '2021-09-02'}
+          - {symbol: SOLUSDT, day: D0902, date: '2021-09-02'}
+          - {symbol: BTCUSDT, day: D0903, date: '2021-09-03'}
+          - {symbol: ETHUSDT, day: D0903, date: '2021-09-03'}
+          - {symbol: SOLUSDT, day: D0903, date: '2021-09-03'}
+          - {symbol: BTCUSDT, day: D0904, date: '2021-09-04'}
+          - {symbol: ETHUSDT, day: D0904, date: '2021-09-04'}
+          - {symbol: SOLUSDT, day: D0904, date: '2021-09-04'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay frozen five-minute OOS window
+      - name: Replay frozen five-minute OOS day
         run: |
           mkdir -p research/results/tardis_microstructure_oos
           python -m research.tardis_microstructure_range \
             --symbol '${{ matrix.symbol }}' \
-            --date '2021-09-01' \
-            --start-offset '${{ matrix.offset }}' \
+            --date '${{ matrix.date }}' \
+            --start-offset 0 \
             --minutes 5 \
-            --output 'research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
+            --output 'research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.day }}.json' \
             --assert-ready
       - name: Enforce replay integrity only
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json')
+          p=pathlib.Path('research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.day }}.json')
           d=json.loads(p.read_text())
           v=d['validation']
           assert d['authorization']=='RESEARCH_ONLY'
@@ -59,7 +59,7 @@ jobs:
           assert d['summary']['sampledSeconds'] > 0
           print(json.dumps({
             'symbol':d['symbol'],
-            'offset':d['startOffset'],
+            'date':d['date'],
             'sampledSeconds':d['summary']['sampledSeconds'],
             'events':d['gateG']['eventCounts'],
             'matchRate':v['matchRate'],
@@ -67,8 +67,8 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: tardis-oos-${{ matrix.symbol }}-${{ matrix.slot }}
-          path: research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.slot }}.json
+          name: tardis-oos-${{ matrix.symbol }}-${{ matrix.day }}
+          path: research/results/tardis_microstructure_oos/${{ matrix.symbol }}-${{ matrix.day }}.json
           if-no-files-found: error
 
   aggregate:
@@ -89,7 +89,7 @@ jobs:
           cells=[json.loads(p.read_text()) for p in files]
           assert len(cells)==9, len(cells)
           horizons=('10','30','60')
-          windows=(60,360,720)
+          dates=('2021-09-02','2021-09-03','2021-09-04')
           sides=('long','short')
 
           def agg(subset, side, h):
@@ -108,29 +108,26 @@ jobs:
               }
 
           overall={side:{h:agg(cells,side,h) for h in horizons} for side in sides}
-          by_window={}
-          for w in windows:
-              subset=[c for c in cells if int(c['startOffset'])==w]
-              by_window[str(w)]={side:{h:agg(subset,side,h) for h in horizons} for side in sides}
+          by_date={}
+          for day in dates:
+              subset=[c for c in cells if c['date']==day]
+              by_date[day]={side:{h:agg(subset,side,h) for h in horizons} for side in sides}
 
           total_events={side:sum(int(c['gateG']['eventCounts'][side]) for c in cells) for side in sides}
-
-          # Candidate discovered on short 10-30s horizon. Require fresh OOS
-          # evidence rather than promoting from the original 00:00 window.
           short10=overall['short']['10']
           short30=overall['short']['30']
           evaluable=(short10['n']>=20 and short30['n']>=20)
-          positive_windows_10=sum(
-              1 for w in windows
-              if by_window[str(w)]['short']['10']['n']>=3
-              and by_window[str(w)]['short']['10']['meanDirectionalBps']>0
-              and by_window[str(w)]['short']['10']['hitRate']>=0.55
+          positive_dates_10=sum(
+              1 for day in dates
+              if by_date[day]['short']['10']['n']>=3
+              and by_date[day]['short']['10']['meanDirectionalBps']>0
+              and by_date[day]['short']['10']['hitRate']>=0.55
           )
-          positive_windows_30=sum(
-              1 for w in windows
-              if by_window[str(w)]['short']['30']['n']>=3
-              and by_window[str(w)]['short']['30']['meanDirectionalBps']>0
-              and by_window[str(w)]['short']['30']['hitRate']>=0.55
+          positive_dates_30=sum(
+              1 for day in dates
+              if by_date[day]['short']['30']['n']>=3
+              and by_date[day]['short']['30']['meanDirectionalBps']>0
+              and by_date[day]['short']['30']['hitRate']>=0.55
           )
           survives=bool(
               evaluable
@@ -138,29 +135,29 @@ jobs:
               and short10['hitRate']>=0.55
               and short30['meanDirectionalBps'] is not None and short30['meanDirectionalBps']>0
               and short30['hitRate']>=0.55
-              and positive_windows_10>=2
-              and positive_windows_30>=2
+              and positive_dates_10>=2
+              and positive_dates_30>=2
           )
           payload={
               'authorization':'RESEARCH_ONLY',
               'liveTrading':False,
               'candidate':'FROZEN_GATE_G_SHORT_10_30S',
               'discoveryWindowExcluded':{'date':'2021-09-01','startOffset':0,'minutes':30},
-              'oosWindows':[{'date':'2021-09-01','startOffset':w,'minutes':5} for w in windows],
+              'oosWindows':[{'date':day,'startOffset':0,'minutes':5} for day in dates],
               'frozenDefinition':cells[0]['gateG']['eventDefinition'],
               'cells':len(cells),
               'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
               'totalFeatureEvents':sum(int(c['summary']['featureEvents']) for c in cells),
               'eventCounts':total_events,
               'overall':overall,
-              'byWindow':by_window,
+              'byDate':by_date,
               'gate':{
                   'minimumNPerHorizon':20,
                   'minimumHitRate':0.55,
-                  'minimumPositiveWindows':2,
+                  'minimumPositiveDates':2,
                   'evaluable':evaluable,
-                  'positiveWindows10s':positive_windows_10,
-                  'positiveWindows30s':positive_windows_30,
+                  'positiveDates10s':positive_dates_10,
+                  'positiveDates30s':positive_dates_30,
               },
               'decision':'OOS_SURVIVOR' if survives else ('REJECT_OOS' if evaluable else 'INSUFFICIENT_OOS'),
               'liveReady':False,
