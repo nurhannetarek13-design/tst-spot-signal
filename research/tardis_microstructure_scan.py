@@ -36,9 +36,18 @@ def fetch_combined(symbol: str, date: str, offset: int) -> str:
         f"&filters={encoded}&offset={offset}"
     )
     p = subprocess.run(
-        ["curl", "--compressed", "-sS", "-g", url],
+        [
+            "curl", "--compressed", "-sS", "-g",
+            "--connect-timeout", "15",
+            "--max-time", "90",
+            "--retry", "3",
+            "--retry-all-errors",
+            "--retry-delay", "2",
+            url,
+        ],
         capture_output=True,
         check=True,
+        timeout=300,
     )
     return p.stdout.decode("utf-8", "replace")
 
