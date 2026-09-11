@@ -56,6 +56,17 @@ class StateStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS emitted_signals (
+                    symbol TEXT NOT NULL,
+                    signal_open_time REAL NOT NULL,
+                    kind TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (symbol, signal_open_time, kind)
+                )
+                """
+            )
 
     def list_open_positions(self) -> list[OpenPosition]:
         with self._connect() as conn:
@@ -71,6 +82,17 @@ class StateStore:
         take_profit_pct: float,
         stop_loss_pct: float,
     ) -> OpenPosition:
+        if not symbol:
+            raise ValueError("symbol must not be empty")
+        if entry_price <= 0:
+            raise ValueError("entry_price must be > 0")
+        if quote_size <= 0:
+            raise ValueError("quote_size must be > 0")
+        if not 0 < take_profit_pct < 1:
+            raise ValueError("take_profit_pct must be between 0 and 1")
+        if not 0 < stop_loss_pct < 1:
+            raise ValueError("stop_loss_pct must be between 0 and 1")
+
         quantity = quote_size / entry_price
         opened_at = datetime.now(timezone.utc).isoformat()
         position = OpenPosition(
@@ -82,23 +104,26 @@ class StateStore:
             stop_loss=entry_price * (1.0 - stop_loss_pct),
             opened_at=opened_at,
         )
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO positions
-                (symbol, entry_price, quantity, quote_size, take_profit, stop_loss, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    position.symbol,
-                    position.entry_price,
-                    position.quantity,
-                    position.quote_size,
-                    position.take_profit,
-                    position.stop_loss,
-                    position.opened_at,
-                ),
-            )
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO positions
+                    (symbol, entry_price, quantity, quote_size, take_profit, stop_loss, opened_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        position.symbol,
+                        position.entry_price,
+                        position.quantity,
+                        position.quote_size,
+                        position.take_profit,
+                        position.stop_loss,
+                        position.opened_at,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise RuntimeError("position_already_open") from exc
         return position
 
     def close_position(
@@ -109,13 +134,25 @@ class StateStore:
         reason: str,
         fee_rate: float,
     ) -> float:
+        if exit_price <= 0:
+            raise ValueError("exit_price must be > 0")
+        if not reason:
+            raise ValueError("reason must not be empty")
+        if not 0 <= fee_rate < 0.02:
+            raise ValueError("fee_rate must be between 0 and 0.02")
+
         gross_pnl = (exit_price - position.entry_price) * position.quantity
         entry_fee = position.entry_price * position.quantity * fee_rate
         exit_fee = exit_price * position.quantity * fee_rate
         pnl = gross_pnl - entry_fee - exit_fee
         closed_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            conn.execute("DELETE FROM positions WHERE symbol = ?", (position.symbol,))
+            cursor = conn.execute(
+                "DELETE FROM positions WHERE symbol = ? AND opened_at = ?",
+                (position.symbol, position.opened_at),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("position_not_open_or_stale")
             conn.execute(
                 """
                 INSERT INTO trades
@@ -134,6 +171,23 @@ class StateStore:
                 ),
             )
         return pnl
+
+    def claim_signal(self, *, symbol: str, signal_open_time: float, kind: str) -> bool:
+        if not symbol or not kind:
+            raise ValueError("symbol and kind must not be empty")
+        created_at = datetime.now(timezone.utc).isoformat()
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO emitted_signals (symbol, signal_open_time, kind, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (symbol, signal_open_time, kind, created_at),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
 
     def realized_pnl_today(self) -> float:
         day_prefix = datetime.now(timezone.utc).date().isoformat() + "%"
