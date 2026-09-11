@@ -1,6 +1,7 @@
 import io
 import unittest
 from contextlib import redirect_stdout
+from types import SimpleNamespace
 
 import httpx
 
@@ -18,11 +19,29 @@ class FakeNotifier:
         return True
 
 
+class FakeState:
+    def __init__(self, *, proven=False, reason="first_deploy_marker_created", previous_revision=None):
+        self.proven = proven
+        self.reason = reason
+        self.previous_revision = previous_revision
+        self.revisions = []
+
+    def verify_persistence(self, revision):
+        self.revisions.append(revision)
+        return SimpleNamespace(
+            proven=self.proven,
+            reason=self.reason,
+            previous_revision=self.previous_revision,
+            current_revision=revision,
+        )
+
+
 class FakeEngine:
-    def __init__(self, _settings, outcomes):
+    def __init__(self, _settings, outcomes, *, state=None):
         self.outcomes = list(outcomes)
         self.closed = False
         self.notifier = FakeNotifier()
+        self.state = state if state is not None else FakeState()
 
     def scan_once(self):
         outcome = self.outcomes.pop(0)
@@ -108,6 +127,65 @@ class MainLoopTests(unittest.TestCase):
             ["V2 SHADOW ONLINE\nLive trading: OFF"],
         )
         self.assertIn('"startup_alert_sent": true', output.getvalue())
+        self.assertTrue(holder["engine"].closed)
+
+    def test_paper_mode_fails_closed_when_cross_deploy_persistence_is_unproven(self):
+        holder = {}
+        fake_state = FakeState(proven=False, reason="first_deploy_marker_created")
+
+        def factory(settings):
+            engine = FakeEngine(settings, [{"mode": "paper", "ok": True}], state=fake_state)
+            holder["engine"] = engine
+            return engine
+
+        output = io.StringIO()
+        with self.assertRaisesRegex(RuntimeError, "PERSISTENCE_NOT_PROVEN"):
+            with redirect_stdout(output):
+                run(
+                    True,
+                    runtime_settings=Settings(
+                        mode="paper",
+                        persistent_state=True,
+                        deploy_revision="rev-a",
+                    ),
+                    engine_factory=factory,
+                    sleep_fn=lambda _seconds: None,
+                )
+
+        self.assertEqual(fake_state.revisions, ["rev-a"])
+        self.assertIn('"event": "persistence_gate_blocked"', output.getvalue())
+        self.assertIn('"persistence_proven": false', output.getvalue())
+        self.assertTrue(holder["engine"].closed)
+
+    def test_paper_mode_runs_after_cross_deploy_persistence_is_proven(self):
+        holder = {}
+        fake_state = FakeState(
+            proven=True,
+            reason="survived_prior_deployment",
+            previous_revision="rev-a",
+        )
+
+        def factory(settings):
+            engine = FakeEngine(settings, [{"mode": "paper", "ok": True}], state=fake_state)
+            holder["engine"] = engine
+            return engine
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            run(
+                True,
+                runtime_settings=Settings(
+                    mode="paper",
+                    persistent_state=True,
+                    deploy_revision="rev-b",
+                ),
+                engine_factory=factory,
+                sleep_fn=lambda _seconds: None,
+            )
+
+        text = output.getvalue()
+        self.assertIn('"persistence_proven": true', text)
+        self.assertIn('"persistence_reason": "survived_prior_deployment"', text)
         self.assertTrue(holder["engine"].closed)
 
 
