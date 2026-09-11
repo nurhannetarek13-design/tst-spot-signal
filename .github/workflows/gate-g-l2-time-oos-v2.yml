@@ -1,0 +1,87 @@
+name: Gate G L2 Time OOS V2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/gate-g-l2-time-oos-v2.yml'
+permissions: {contents: read}
+jobs:
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [SOLUSDT, ETHUSDT]
+        date: ['2025-04-15', '2025-07-15', '2025-10-15']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy
+      - name: Run frozen true-L2 OOS sampler
+        run: |
+          mkdir -p gate-g-oos
+          python research/gate_g_l2_microstructure_v1.py \
+            --symbol ${{ matrix.symbol }} \
+            --date ${{ matrix.date }} \
+            --out gate-g-oos/${{ matrix.symbol }}-${{ matrix.date }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-g-oos-${{ matrix.symbol }}-${{ matrix.date }}
+          path: gate-g-oos/*.json
+  aggregate:
+    needs: sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-g-oos-*
+          path: gate-g-oos
+          merge-multiple: true
+      - name: Evaluate pre-frozen 10-second symmetric OOS gate
+        run: |
+          python - <<'PY'
+          import glob,json
+          files=glob.glob('gate-g-oos/*.json')
+          xs=[json.load(open(p)) for p in files]
+          assert len(xs)==6, (len(xs), files)
+          DATES=['2025-04-15','2025-07-15','2025-10-15']
+          SYMS=['SOLUSDT','ETHUSDT']
+          def combine(items):
+            n=sum(x['n'] for x in items)
+            if n==0:return {'n':0,'meanDirectionalBps':None,'hitRate':None}
+            mean=sum(x['n']*x['meanDirectionalBps'] for x in items)/n
+            hit=sum(x['n']*x['hitRate'] for x in items)/n
+            return {'n':n,'meanDirectionalBps':mean,'hitRate':hit}
+          by={(x['symbol'],x['date']):x for x in xs}
+          rows=[]
+          for d in DATES:
+            symrows=[]
+            for s in SYMS:
+              x=by[(s,d)]
+              assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False and x['thresholdsFrozen'] is True
+              # Frozen after discovery: symmetric OBI+microprice event, 10-second horizon only.
+              st=combine([x['outcomes']['long']['10'],x['outcomes']['short']['10']])
+              symrows.append({'symbol':s,**st})
+            pooled=combine(symrows)
+            date_pass=(pooled['n']>=40 and pooled['meanDirectionalBps']>0 and pooled['hitRate']>=0.54 and all(r['meanDirectionalBps'] is not None and r['meanDirectionalBps']>0 for r in symrows))
+            rows.append({'date':d,'symbols':symrows,'pooled':pooled,'pass':date_pass})
+          allstats=combine([r['pooled'] for r in rows])
+          symagg=[]
+          for s in SYMS:
+            vals=[]
+            for d in DATES:
+              x=by[(s,d)];vals += [x['outcomes']['long']['10'],x['outcomes']['short']['10']]
+            symagg.append({'symbol':s,**combine(vals)})
+          passed_dates=sum(r['pass'] for r in rows)
+          overall=(passed_dates>=2 and allstats['n']>=120 and allstats['meanDirectionalBps']>0 and allstats['hitRate']>=0.54 and all(r['meanDirectionalBps']>0 and r['hitRate']>=0.52 for r in symagg))
+          out={'engine':'GATE_G_L2_TIME_OOS_V2','authorization':'RESEARCH_ONLY','liveTrading':False,'usesML':False,'usesSizing':False,'thresholdsFrozen':True,'discoveryDateExcluded':'2025-01-15','frozenFeature':{'obi10AbsMin':0.60,'micropriceDirectionalBpsMin':0.08,'horizonSeconds':10,'eventCooldownSeconds':60,'sides':'symmetric'},'oosDates':DATES,'gate':{'datePooledNMin':40,'dateHitRateMin':0.54,'dateMeanDirectionalBpsPositive':True,'bothSymbolMeanPositive':True,'datesPassMin':2,'overallNMin':120,'overallHitRateMin':0.54,'eachSymbolAggregateHitRateMin':0.52},'dates':rows,'symbolAggregate':symagg,'overall':allstats,'pass':overall,'next':'PROMOTE_L2_TO_SHADOW_FEATURE_ABLATION' if overall else 'REJECT_GATE_G_TIME_OOS_V2'}
+          open('gate-g-time-oos-v2.json','w').write(json.dumps(out,indent=2))
+          print(json.dumps({'pass':overall,'next':out['next'],'passedDates':passed_dates,'overall':allstats,'symbols':symagg}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-g-time-oos-v2
+          path: gate-g-time-oos-v2.json
