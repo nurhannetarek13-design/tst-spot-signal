@@ -1,0 +1,55 @@
+name: Tardis Snapshot Replay Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/tardis_snapshot_replay_validator.py'
+      - '.github/workflows/tardis-snapshot-replay-validation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay snapshot to next authoritative snapshot
+        run: |
+          mkdir -p artifacts/tardis-snapshot-replay/${{ matrix.symbol }}
+          python research/tardis_snapshot_replay_validator.py \
+            --symbol '${{ matrix.symbol }}' \
+            --date '2021-09-01' \
+            --offset 0 \
+            --depth 20 \
+            | tee artifacts/tardis-snapshot-replay/${{ matrix.symbol }}/result.json
+      - name: Enforce canonical replay gate
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          python - <<'PY'
+          import json, os
+          p=f"artifacts/tardis-snapshot-replay/{os.environ['SYMBOL']}/result.json"
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY', d
+          assert d['liveTrading'] is False, d
+          assert d['status']=='PASS', d
+          assert d['bidExact'] is True and d['askExact'] is True, d
+          assert d['canonicalReplayReady'] is True, d
+          assert d['eventsApplied'] > 0, d
+          assert d['continuityChecks'] > 0, d
+          print(json.dumps({k:d[k] for k in [
+            'symbol','status','startSnapshotId','targetSnapshotId','eventsApplied',
+            'continuityChecks','depthCompared','bidExact','askExact','canonicalReplayReady'
+          ]}, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tardis-snapshot-replay-${{ matrix.symbol }}
+          path: artifacts/tardis-snapshot-replay/${{ matrix.symbol }}
+          retention-days: 14
