@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Binance USD-M L2 reconstruction against the next Tardis depthSnapshot.
+"""Validate Binance USD-M L2 reconstruction against the next available Tardis depthSnapshot.
 Research-only. No trading actions.
 """
 from __future__ import annotations
@@ -51,14 +51,29 @@ def depth_messages(symbol: str, date: str, offset: int) -> list[dict]:
     ]
 
 
-def snapshot(symbol: str, date: str, offset: int) -> dict:
+def snapshot_or_none(symbol: str, date: str, offset: int) -> dict | None:
     xs = [
         x for x in parse(fetch(symbol, date, offset, "depthSnapshot"))
         if "lastUpdateId" in x and "bids" in x and "asks" in x
     ]
-    if not xs:
+    return xs[0] if xs else None
+
+
+def require_snapshot(symbol: str, date: str, offset: int) -> dict:
+    s = snapshot_or_none(symbol, date, offset)
+    if s is None:
         raise RuntimeError(f"no depthSnapshot for offset={offset}")
-    return xs[0]
+    return s
+
+
+def find_next_snapshot(symbol: str, date: str, start_offset: int, max_scan: int) -> tuple[int, dict]:
+    for off in range(start_offset + 1, start_offset + max_scan + 1):
+        s = snapshot_or_none(symbol, date, off)
+        if s is not None:
+            return off, s
+    raise RuntimeError(
+        f"no later depthSnapshot found in offsets {start_offset + 1}..{start_offset + max_scan}"
+    )
 
 
 def build_snapshot(s: dict) -> tuple[dict[Decimal, Decimal], dict[Decimal, Decimal]]:
@@ -87,14 +102,17 @@ def normalize_snapshot_top(s: dict, side: str, n: int) -> list[list[str]]:
     return top(b, side, n)
 
 
-def replay(symbol: str, date: str, offset: int, n: int) -> dict:
-    s0 = snapshot(symbol, date, offset)
-    s1 = snapshot(symbol, date, offset + 1)
+def replay(symbol: str, date: str, offset: int, n: int, max_snapshot_scan: int) -> dict:
+    s0 = require_snapshot(symbol, date, offset)
+    target_offset, s1 = find_next_snapshot(symbol, date, offset, max_snapshot_scan)
     sid0, sid1 = int(s0["lastUpdateId"]), int(s1["lastUpdateId"])
     if sid1 <= sid0:
         raise RuntimeError(f"non-increasing snapshots: {sid0} -> {sid1}")
 
-    events = depth_messages(symbol, date, offset) + depth_messages(symbol, date, offset + 1)
+    events: list[dict] = []
+    for off in range(offset, target_offset + 1):
+        events.extend(depth_messages(symbol, date, off))
+
     bids, asks = build_snapshot(s0)
     started = False
     prev_u = None
@@ -107,6 +125,7 @@ def replay(symbol: str, date: str, offset: int, n: int) -> dict:
         U, u = int(e["U"]), int(e["u"])
         if u <= sid0:
             continue
+
         if not started:
             want = sid0 + 1
             if U <= want <= u:
@@ -126,12 +145,13 @@ def replay(symbol: str, date: str, offset: int, n: int) -> dict:
                     "pu": int(e["pu"]), "U": U, "u": u,
                 }
 
-        # A Binance depth event is atomic. Exact comparison is valid only if the
-        # authoritative next snapshot lands on an event boundary.
         if u > sid1:
             return {
-                "status": "TARGET_INSIDE_EVENT", "targetSnapshotId": sid1,
-                "event": {"U": U, "u": u}, "eventsApplied": applied,
+                "status": "TARGET_INSIDE_EVENT",
+                "targetSnapshotId": sid1,
+                "event": {"U": U, "u": u},
+                "eventsApplied": applied,
+                "targetOffset": target_offset,
             }
 
         update_side(bids, e.get("b", []))
@@ -150,11 +170,14 @@ def replay(symbol: str, date: str, offset: int, n: int) -> dict:
             break
 
     if not started:
-        return {"status": "NO_BRIDGE", "snapshotId": sid0}
+        return {"status": "NO_BRIDGE", "snapshotId": sid0, "targetOffset": target_offset}
     if target_event is None:
         return {
-            "status": "TARGET_NOT_REACHED", "targetSnapshotId": sid1,
-            "last_u": prev_u, "eventsApplied": applied,
+            "status": "TARGET_NOT_REACHED",
+            "targetSnapshotId": sid1,
+            "last_u": prev_u,
+            "eventsApplied": applied,
+            "targetOffset": target_offset,
         }
 
     replay_bids, replay_asks = top(bids, "bid", n), top(asks, "ask", n)
@@ -175,7 +198,8 @@ def replay(symbol: str, date: str, offset: int, n: int) -> dict:
         "symbol": symbol,
         "date": date,
         "startOffset": offset,
-        "targetOffset": offset + 1,
+        "targetOffset": target_offset,
+        "snapshotGapMinutes": target_offset - offset,
         "startSnapshotId": sid0,
         "targetSnapshotId": sid1,
         "firstBridge": first_bridge,
@@ -199,8 +223,9 @@ def main() -> None:
     p.add_argument("--date", default="2021-09-01")
     p.add_argument("--offset", type=int, default=0)
     p.add_argument("--depth", type=int, default=20)
+    p.add_argument("--max-snapshot-scan", type=int, default=60)
     a = p.parse_args()
-    result = replay(a.symbol, a.date, a.offset, a.depth)
+    result = replay(a.symbol, a.date, a.offset, a.depth, a.max_snapshot_scan)
     out = {"authorization": AUTHORIZATION, "liveTrading": False, **result}
     print(json.dumps(out, indent=2))
 
