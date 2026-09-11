@@ -58,14 +58,18 @@ def rsi(values,n=14):
     if l<=1e-15:return 100.0
     return float(100-100/(1+g/l))
 
-def atr_pct(candles,n=14):
+def atr_abs(candles,n=14):
     if len(candles)<n+1:return 0.0
     vals=[]
     for i in range(len(candles)-n,len(candles)):
         prev=float(candles[i-1,2]);h=float(candles[i,3]);l=float(candles[i,4])
         vals.append(max(h-l,abs(h-prev),abs(l-prev)))
-    close=float(candles[-1,2])
-    return (sum(vals)/len(vals))/close if close>0 else 0.0
+    return float(sum(vals)/len(vals)) if vals else 0.0
+
+def atr_pct(candles,n=14):
+    close=float(candles[-1,2]) if len(candles) else 0.0
+    a=atr_abs(candles,n)
+    return a/close if close>0 else 0.0
 
 class UnifiedCandidateValidator(Strategy):
     STRATEGY_ID="TST_CANDIDATE_JESSE_VALIDATOR_V1"
@@ -82,9 +86,6 @@ class UnifiedCandidateValidator(Strategy):
         rel=float(qv[-1]/med) if med>0 else 0.0
 
         if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
-            # Historical engines validate only the candle-derived core trigger.
-            # L2/order-book, taker flow, spread/depth and live BTC-regime confirmation
-            # are deliberately excluded and must be validated by FULL_STRATEGY_L2 forward paper.
             return macd_core_trigger(closes,p)
 
         if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
@@ -148,20 +149,30 @@ class UnifiedCandidateValidator(Strategy):
         entry=float(self.price);size_usd=min(5.5,max(0,float(self.balance)))
         qty=max(size_usd/entry,1e-8)
         self.buy=qty,entry
-        try:self.vars["signal_ts"]=float(self.current_candle[0])
+        try:
+            self.vars["signal_ts"]=float(self.current_candle[0])
+            self.vars["entry_atr"]=atr_abs(self.candles,14)
         except Exception:pass
 
     def on_open_position(self, order):
         qty=abs(float(self.position.qty))
         entry=float(self.position.entry_price)
         if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
-            # Risk exits are execution-test scaffolding only; historical validator scope
-            # remains CORE_TRIGGER_ONLY and cannot certify the full L2 strategy.
-            sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
+            entry_atr=float(self.vars.get("entry_atr",0.0) or 0.0)
+            if entry_atr<=0:
+                entry_atr=atr_abs(self.candles,14)
+            stop_atr=float(PARAMS.get("stopAtr",2.0))
+            target_r=float(PARAMS.get("targetR",2.0))
+            risk=max(entry_atr*stop_atr,entry*0.0001)
+            self.stop_loss=qty,max(0.0,entry-risk)
+            self.take_profit=qty,entry+(risk*target_r)
+            try:
+                self.vars["entry_risk_abs"]=risk
+            except Exception:pass
         else:
             sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
-        self.stop_loss=qty,entry*(1-sl)
-        self.take_profit=qty,entry*(1+tp)
+            self.stop_loss=qty,entry*(1-sl)
+            self.take_profit=qty,entry*(1+tp)
         try:self.vars["entry_ts"]=float(self.current_candle[0])
         except Exception:pass
 
