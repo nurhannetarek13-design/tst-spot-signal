@@ -10,6 +10,7 @@ class Candidate:
     symbol: str
     score: int
     price: float
+    signal_open_time: float
     previous_20_high: float
     relative_volume: float
     taker_buy_ratio: float
@@ -68,6 +69,7 @@ def evaluate_candidate(
     previous_20 = candles_15m[-21:-1]
     previous_20_high = max(c["high"] for c in previous_20)
     price = last["close"]
+    signal_open_time = last["open_time"]
 
     prior_quote_volumes = [c["quote_volume"] for c in previous_20]
     avg_prior_quote_volume = fmean(prior_quote_volumes) if prior_quote_volumes else 0.0
@@ -117,6 +119,7 @@ def evaluate_candidate(
         symbol=symbol,
         score=score,
         price=price,
+        signal_open_time=signal_open_time,
         previous_20_high=previous_20_high,
         relative_volume=relative_volume,
         taker_buy_ratio=taker_buy_ratio,
