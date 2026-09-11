@@ -73,6 +73,8 @@ class BinanceSignedSpotClient:
 
     @staticmethod
     def _plain(value: Any) -> str:
+        if isinstance(value, bool):
+            return "true" if value else "false"
         if isinstance(value, Decimal):
             return format(value, "f")
         return str(value)
@@ -133,6 +135,37 @@ class BinanceSignedSpotClient:
                 payload=data,
             )
         return data
+
+    # Read-only USER_DATA methods used by future crash/account reconciliation.
+    def account_information(self, *, omit_zero_balances: bool = True) -> dict[str, Any]:
+        result = self._signed_request(
+            "GET",
+            "/api/v3/account",
+            {"omitZeroBalances": omit_zero_balances},
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("unexpected_account_response")
+        return result
+
+    def open_orders(self, *, symbol: str | None = None) -> list[dict[str, Any]]:
+        result = self._signed_request(
+            "GET",
+            "/api/v3/openOrders",
+            {"symbol": symbol},
+        )
+        if not isinstance(result, list):
+            raise RuntimeError("unexpected_open_orders_response")
+        return [row for row in result if isinstance(row, dict)]
+
+    def open_order_lists(self) -> list[dict[str, Any]]:
+        result = self._signed_request(
+            "GET",
+            "/api/v3/openOrderList",
+            {},
+        )
+        if not isinstance(result, list):
+            raise RuntimeError("unexpected_open_order_lists_response")
+        return [row for row in result if isinstance(row, dict)]
 
     def market_buy_quote(
         self,
