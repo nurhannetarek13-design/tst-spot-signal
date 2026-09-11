@@ -1,0 +1,18 @@
+{
+  "mode": "paper",
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "interval": "15m",
+  "lookback": 250,
+  "starting_cash_usdt": 20.0,
+  "trade_size_usdt": 5.0,
+  "max_open_positions": 3,
+  "max_daily_loss_usdt": 2.0,
+  "take_profit_pct": 0.009,
+  "stop_loss_pct": 0.006,
+  "min_consensus_score": 2,
+  "strategies": {
+    "trend": true,
+    "breakout": true,
+    "mean_reversion": true
+  }
+}
