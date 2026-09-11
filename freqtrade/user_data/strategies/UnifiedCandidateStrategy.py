@@ -30,8 +30,10 @@ class UnifiedCandidateStrategy(IStrategy):
     timeframe=TIMEFRAME
     can_short=False
     process_only_new_candles=True
-    startup_candle_count=800
+    startup_candle_count=max(800, int(PARAMS.get("emaLength", 0)) + 50)
 
+    # For CORE_TRIGGER_ONLY candidates these exits are validation scaffolding,
+    # not proof that the full L2 strategy has been reproduced historically.
     stoploss=-float(PARAMS.get("sl",0.03))
     minimal_roi={"0": float(PARAMS.get("tp",0.06))}
     trailing_stop=False
@@ -53,7 +55,14 @@ class UnifiedCandidateStrategy(IStrategy):
         dataframe["qv_med24"]=dataframe["qv"].rolling(24).median()
         dataframe["relvol"]=dataframe["qv"]/dataframe["qv_med24"]
 
-        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+        if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
+            fast=int(p.get("macdFast",12)); slow=int(p.get("macdSlow",26)); signal=int(p.get("macdSignal",9)); ema_n=int(p.get("emaLength",200))
+            macd=ta.MACD(dataframe,fastperiod=fast,slowperiod=slow,signalperiod=signal)
+            dataframe["macd"]=macd["macd"]
+            dataframe["macdsignal"]=macd["macdsignal"]
+            dataframe["ema_trend"]=ta.EMA(dataframe,timeperiod=ema_n)
+
+        elif FAMILY=="CROSS_CRYPTO_LEAD_LAG":
             leaders=[]
             if self.dp:
                 for pair in ["BTC/USDT","ETH/USDT","SOL/USDT"]:
@@ -111,7 +120,18 @@ class UnifiedCandidateStrategy(IStrategy):
         dataframe["enter_long"]=0
         dataframe["enter_tag"]=None
 
-        if FAMILY=="CROSS_CRYPTO_LEAD_LAG":
+        if FAMILY=="MACD_EMA200_L2_CONFIRMATION":
+            # Historical scope is deliberately CORE_TRIGGER_ONLY. Do not proxy
+            # order-book/L2/taker-flow/spread/depth confirmation from candles.
+            cond=(
+                (dataframe["macd"].shift(1)<=dataframe["macdsignal"].shift(1))
+                &(dataframe["macd"]>dataframe["macdsignal"])
+                &(dataframe["close"]>dataframe["ema_trend"])
+                &(dataframe["volume"]>0)
+            )
+            if bool(p.get("requireMacdBelowZero",False)):
+                cond=cond&(dataframe["macd"]<0)
+        elif FAMILY=="CROSS_CRYPTO_LEAD_LAG":
             cond=(
                 (dataframe["leader3"]>=float(p.get("leaderRetMin",0.012)))
                 &(dataframe["gap"]>=float(p.get("gapMin",0.008)))
