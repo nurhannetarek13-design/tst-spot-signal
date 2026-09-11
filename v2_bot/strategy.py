@@ -26,6 +26,8 @@ class Candidate:
     eligible: bool
     pullback: bool = False
     entry_setup: str = "none"
+    breakout_retest: bool = False
+    breakout_level: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -52,13 +54,7 @@ def _trend(candles: list[dict[str, float]]) -> bool:
 
 
 def _confirmed_pullback(candles: list[dict[str, float]]) -> bool:
-    """Require a two-candle EMA20 pullback/reclaim confirmation.
-
-    The previous closed candle must touch the current 15m EMA20 zone without
-    materially closing below it. The newest closed candle must then close
-    bullish above the previous candle high and above EMA20. Multi-timeframe
-    trend, relative-volume and taker-flow requirements are enforced separately.
-    """
+    """Require a two-candle EMA20 pullback/reclaim confirmation."""
     if len(candles) < 50:
         return False
     closes = [c["close"] for c in candles]
@@ -74,6 +70,40 @@ def _confirmed_pullback(candles: list[dict[str, float]]) -> bool:
         and last["close"] > ema20
     )
     return touched_ema_zone and held_structure and bullish_confirmation
+
+
+def _confirmed_breakout_retest(candles: list[dict[str, float]]) -> tuple[bool, float]:
+    """Require a closed breakout candle followed by a closed retest/hold.
+
+    The penultimate candle must close above the highest high of the 20 candles
+    before it. The newest candle must trade back into that breakout level,
+    close bullish on/above it, and not finish more than 1% above the level.
+    This prevents a raw or already-extended breakout from becoming an entry.
+    """
+    if len(candles) < 23:
+        return False, 0.0
+
+    history = candles[-22:-2]
+    breakout_candle = candles[-2]
+    last = candles[-1]
+    breakout_level = max(c["high"] for c in history)
+
+    breakout_confirmed = breakout_candle["close"] > breakout_level
+    retest_touched = last["low"] <= breakout_level * 1.0025
+    retest_held = last["close"] >= breakout_level
+    bullish_hold = last["close"] > last["open"]
+    not_extended = last["close"] <= breakout_level * 1.01
+
+    confirmed = all(
+        (
+            breakout_confirmed,
+            retest_touched,
+            retest_held,
+            bullish_hold,
+            not_extended,
+        )
+    )
+    return confirmed, breakout_level
 
 
 def evaluate_candidate(
@@ -109,10 +139,14 @@ def evaluate_candidate(
     trend_15m = _trend(candles_15m)
     trend_1h = _trend(candles_1h)
     trend_4h = _trend(candles_4h)
+
+    # Raw breakout is kept for diagnostics/pre-alerts only. It is not an entry.
     breakout = price > previous_20_high
+    breakout_retest, breakout_level = _confirmed_breakout_retest(candles_15m)
     pullback = _confirmed_pullback(candles_15m)
-    entry_setup_ok = breakout or pullback
-    entry_setup = "breakout" if breakout else "pullback" if pullback else "none"
+    entry_setup_ok = breakout_retest or pullback
+    entry_setup = "breakout_retest" if breakout_retest else "pullback" if pullback else "none"
+
     rel_volume_ok = relative_volume >= 1.5
     taker_flow_ok = taker_buy_ratio >= 0.56
 
@@ -127,9 +161,8 @@ def evaluate_candidate(
     score += 15 if rel_volume_ok else 0
     score += 10 if taker_flow_ok else 0
 
-    # Score is used for ranking/diagnostics. Eligibility is stricter: every
-    # entry gate must pass. A confirmed pullback is an alternative entry setup,
-    # not a relaxation of trend, flow, liquidity, spread, BTC or score gates.
+    # Score ranks candidates, but every mandatory gate must pass. A raw
+    # breakout alone is deliberately insufficient; it needs a retest/hold.
     all_entry_gates_ok = all(
         (
             liquidity_ok,
@@ -165,4 +198,6 @@ def evaluate_candidate(
         eligible=eligible,
         pullback=pullback,
         entry_setup=entry_setup,
+        breakout_retest=breakout_retest,
+        breakout_level=breakout_level,
     )
