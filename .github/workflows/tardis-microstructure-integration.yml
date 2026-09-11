@@ -19,24 +19,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
-          - {symbol: BTCUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
-          - {symbol: BTCUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
-          - {symbol: BTCUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
-          - {symbol: BTCUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
-          - {symbol: BTCUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
-          - {symbol: ETHUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
-          - {symbol: ETHUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
-          - {symbol: ETHUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
-          - {symbol: ETHUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
-          - {symbol: ETHUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
-          - {symbol: ETHUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
-          - {symbol: SOLUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
-          - {symbol: SOLUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
-          - {symbol: SOLUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
-          - {symbol: SOLUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
-          - {symbol: SOLUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
-          - {symbol: SOLUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
+          - {symbol: BTCUSDT, slot: M0000, offset: 0}
+          - {symbol: BTCUSDT, slot: M0240, offset: 240}
+          - {symbol: BTCUSDT, slot: M0480, offset: 480}
+          - {symbol: BTCUSDT, slot: M0720, offset: 720}
+          - {symbol: BTCUSDT, slot: M0960, offset: 960}
+          - {symbol: BTCUSDT, slot: M1200, offset: 1200}
+          - {symbol: ETHUSDT, slot: M0000, offset: 0}
+          - {symbol: ETHUSDT, slot: M0240, offset: 240}
+          - {symbol: ETHUSDT, slot: M0480, offset: 480}
+          - {symbol: ETHUSDT, slot: M0720, offset: 720}
+          - {symbol: ETHUSDT, slot: M0960, offset: 960}
+          - {symbol: ETHUSDT, slot: M1200, offset: 1200}
+          - {symbol: SOLUSDT, slot: M0000, offset: 0}
+          - {symbol: SOLUSDT, slot: M0240, offset: 240}
+          - {symbol: SOLUSDT, slot: M0480, offset: 480}
+          - {symbol: SOLUSDT, slot: M0720, offset: 720}
+          - {symbol: SOLUSDT, slot: M0960, offset: 960}
+          - {symbol: SOLUSDT, slot: M1200, offset: 1200}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,8 +47,8 @@ jobs:
           mkdir -p research/results/tardis_microstructure
           python -m research.tardis_microstructure_scan \
             --symbol '${{ matrix.symbol }}' \
-            --date '${{ matrix.from }}' \
-            --offset 0 \
+            --date '2021-09-01' \
+            --offset '${{ matrix.offset }}' \
             --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
             --assert-ready
       - name: Enforce research-only invariants
@@ -66,7 +66,7 @@ jobs:
           assert d['validation']['tickerMismatches'] == 0
           print(json.dumps({
             'symbol': d['symbol'],
-            'from': d['date'],
+            'offset': d['offset'],
             'featureEvents': d['summary']['featureEvents'],
             'sampledSeconds': d['summary']['sampledSeconds'],
             'tickerExact': d['validation']['tickerExact'],
@@ -92,12 +92,9 @@ jobs:
       - name: Aggregate frozen Gate G evidence
         run: |
           python - <<'PY'
-          import json, pathlib, statistics
+          import json, pathlib
           files=sorted(pathlib.Path('downloaded').glob('*.json'))
-          cells=[]
-          for p in files:
-              d=json.loads(p.read_text())
-              cells.append(d)
+          cells=[json.loads(p.read_text()) for p in files]
           horizons=('10','30','60')
           aggregate={}
           total_events=0
@@ -105,20 +102,24 @@ jobs:
               aggregate[side]={}
               total_events += sum(int(c['gateG']['eventCounts'][side]) for c in cells)
               for h in horizons:
-                  weighted=[]
-                  hits=0
+                  weighted_sum=0.0
+                  hits=0.0
                   n=0
+                  medians=[]
                   for c in cells:
                       o=c['gateG']['outcomes'][side][h]
                       k=int(o['n'])
-                      if k and o['meanDirectionalBps'] is not None:
-                          weighted.extend([float(o['meanDirectionalBps'])]*k)
-                          hits += round(float(o['hitRate'])*k)
+                      if k:
+                          weighted_sum += float(o['meanDirectionalBps']) * k
+                          hits += float(o['hitRate']) * k
                           n += k
+                          if o['medianDirectionalBps'] is not None:
+                              medians.extend([float(o['medianDirectionalBps'])] * k)
                   aggregate[side][h]={
                       'n': n,
-                      'meanDirectionalBpsApprox': (sum(weighted)/len(weighted) if weighted else None),
-                      'hitRateApprox': (hits/n if n else None),
+                      'meanDirectionalBps': (weighted_sum/n if n else None),
+                      'hitRate': (hits/n if n else None),
+                      'medianDirectionalBpsApprox': (sorted(medians)[len(medians)//2] if medians else None),
                   }
           payload={
               'authorization':'RESEARCH_ONLY',
