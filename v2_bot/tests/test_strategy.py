@@ -39,9 +39,10 @@ class StrategyTests(unittest.TestCase):
         self.assertGreater(ema(values, 20), ema(values, 50))
 
     def test_full_quality_candidate_scores_100(self):
+        candles_15m = make_candles(breakout=True)
         candidate = evaluate_candidate(
             symbol="TESTUSDT",
-            candles_15m=make_candles(breakout=True),
+            candles_15m=candles_15m,
             candles_1h=make_candles(),
             candles_4h=make_candles(),
             btc_1h=make_candles(),
@@ -54,6 +55,7 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(candidate.score, 100)
         self.assertTrue(candidate.eligible)
         self.assertTrue(candidate.breakout)
+        self.assertEqual(candidate.signal_open_time, candles_15m[-1]["open_time"])
         self.assertGreaterEqual(candidate.relative_volume, 1.5)
         self.assertGreaterEqual(candidate.taker_buy_ratio, 0.56)
 
