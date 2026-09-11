@@ -33,12 +33,8 @@ function writeState(state) {
 }
 
 function ingestAuthorized(req, res, next) {
-  if (!INGEST_TOKEN) {
-    return res.status(503).json({ ok: false, error: "FUSION_INGEST_TOKEN_REQUIRED" });
-  }
-  if (req.get("x-fusion-token") !== INGEST_TOKEN) {
-    return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-  }
+  if (!INGEST_TOKEN) return res.status(503).json({ ok: false, error: "FUSION_INGEST_TOKEN_REQUIRED" });
+  if (req.get("x-fusion-token") !== INGEST_TOKEN) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
   next();
 }
 
@@ -50,9 +46,7 @@ function ageHours(iso) {
 function validatorPass(name, row, strategyId) {
   if (!row) return { ok: false, reason: `${name.toUpperCase()}_MISSING` };
   if (row.strategyId !== strategyId) return { ok: false, reason: `${name.toUpperCase()}_STRATEGY_MISMATCH` };
-  if (ageHours(row.updatedAt) > policy.decisionGate.validatorMaxAgeHours) {
-    return { ok: false, reason: `${name.toUpperCase()}_STALE` };
-  }
+  if (ageHours(row.updatedAt) > policy.decisionGate.validatorMaxAgeHours) return { ok: false, reason: `${name.toUpperCase()}_STALE` };
   const m = row.metrics || {};
   if (row.pass !== true) return { ok: false, reason: `${name.toUpperCase()}_FAILED` };
   if (Number(m.trades || 0) < policy.decisionGate.minTrades) return { ok: false, reason: `${name.toUpperCase()}_TOO_FEW_TRADES` };
@@ -63,7 +57,20 @@ function validatorPass(name, row, strategyId) {
 }
 
 function normalizedSymbol(symbol) {
-  return String(symbol || "").toUpperCase().replace("/", "-").replace("USDT", "USDT");
+  return String(symbol || "").toUpperCase().replace("/", "-");
+}
+
+function signalGateReasons(candidate) {
+  const reasons = [];
+  const g = policy.signalGate || {};
+  if (g.requireMacdTrigger && candidate.macdTrigger !== true) reasons.push("MACD_TRIGGER_REQUIRED");
+  if (g.requireL2Confirmation && candidate.l2Confirmed !== true) reasons.push("L2_CONFIRMATION_REQUIRED");
+  if (g.requireBtcRegimeOk && candidate.btcRegimeOk !== true) reasons.push("BTC_REGIME_BLOCK");
+  if (g.requireLiquidityOk && candidate.liquidityOk !== true) reasons.push("LIQUIDITY_BLOCK");
+  if (!(Number(candidate.takerBuyShare) >= Number(g.minTakerBuyShare || 0))) reasons.push("TAKER_BUY_TOO_LOW");
+  if (!(Number(candidate.relativeVolume) >= Number(g.minRelativeVolume || 0))) reasons.push("RELATIVE_VOLUME_TOO_LOW");
+  if (!(Number(candidate.spreadBps) <= Number(g.maxSpreadBps ?? Infinity))) reasons.push("SPREAD_TOO_WIDE");
+  return reasons;
 }
 
 function decide(candidate, state) {
@@ -73,6 +80,7 @@ function decide(candidate, state) {
 
   if (!["LONG", "BUY"].includes(String(candidate.side || "").toUpperCase())) reasons.push("LONG_ONLY");
   if (!symbol.endsWith("USDT")) reasons.push("USDT_SPOT_ONLY");
+  reasons.push(...signalGateReasons(candidate));
   if (Number(candidate.score || 0) < policy.decisionGate.minCandidateScore) reasons.push("SCORE_TOO_LOW");
   if (!(Number(candidate.notionalUSDT || 0) > 0) || Number(candidate.notionalUSDT) > policy.account.maxPositionUSDT) reasons.push("POSITION_LIMIT");
   if (!(Number(candidate.riskUSDT || 0) > 0) || Number(candidate.riskUSDT) > policy.account.maxRiskUSDT) reasons.push("RISK_LIMIT");
@@ -98,29 +106,21 @@ function decide(candidate, state) {
 }
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "tst-fusion-master", mode: policy.mode, liveTrading: false });
+  res.json({ ok: true, service: "tst-fusion-master", mode: policy.mode, liveTrading: false, strategyId: policy.strategyId });
 });
 
 app.get("/status", (req, res) => {
   const state = readState();
   res.json({
     ok: true,
-    policy: {
-      release: policy.release,
-      mode: policy.mode,
-      strategyId: policy.strategyId,
-      execution: policy.execution
-    },
+    policy: { release: policy.release, mode: policy.mode, strategyId: policy.strategyId, signalGate: policy.signalGate, execution: policy.execution },
     state
   });
 });
 
 app.post("/validators/:engine", ingestAuthorized, (req, res) => {
   const engine = String(req.params.engine || "").toLowerCase();
-  if (!["freqtrade", "jesse"].includes(engine)) {
-    return res.status(400).json({ ok: false, error: "UNKNOWN_VALIDATOR" });
-  }
-
+  if (!["freqtrade", "jesse"].includes(engine)) return res.status(400).json({ ok: false, error: "UNKNOWN_VALIDATOR" });
   const metrics = req.body?.metrics || {};
   const row = {
     engine,
@@ -136,7 +136,6 @@ app.post("/validators/:engine", ingestAuthorized, (req, res) => {
     source: req.body?.source || null,
     updatedAt: new Date().toISOString()
   };
-
   const state = readState();
   state.validators[engine] = row;
   writeState(state);
@@ -155,9 +154,15 @@ app.post("/candidate/hummingbot", ingestAuthorized, (req, res) => {
     target: Number(req.body?.target || 0),
     notionalUSDT: Number(req.body?.notionalUSDT || 0),
     riskUSDT: Number(req.body?.riskUSDT || 0),
+    macdTrigger: req.body?.macdTrigger === true,
+    l2Confirmed: req.body?.l2Confirmed === true,
+    btcRegimeOk: req.body?.btcRegimeOk === true,
+    liquidityOk: req.body?.liquidityOk === true,
+    takerBuyShare: Number(req.body?.takerBuyShare ?? NaN),
+    relativeVolume: Number(req.body?.relativeVolume ?? NaN),
+    spreadBps: Number(req.body?.spreadBps ?? NaN),
     receivedAt: new Date().toISOString()
   };
-
   const state = readState();
   const decision = decide(candidate, state);
   state.lastCandidate = candidate;
@@ -179,6 +184,4 @@ app.post("/paper/close", ingestAuthorized, (req, res) => {
 
 const port = Number(process.env.PORT || 8787);
 const host = process.env.FUSION_BIND || "0.0.0.0";
-app.listen(port, host, () => {
-  console.log(`TST Fusion Master listening on ${host}:${port} in ${policy.mode}`);
-});
+app.listen(port, host, () => console.log(`TST Fusion Master listening on ${host}:${port} in ${policy.mode}`));
