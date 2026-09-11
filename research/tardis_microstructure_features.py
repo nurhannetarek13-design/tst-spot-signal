@@ -17,11 +17,7 @@ DEFAULT_LEVELS = (1, 5, 10)
 
 
 def _side(rows: Iterable[Iterable[Any]]) -> dict[Decimal, Decimal]:
-    return {
-        Decimal(str(p)): Decimal(str(q))
-        for p, q in rows
-        if Decimal(str(q)) > 0
-    }
+    return {Decimal(str(p)): Decimal(str(q)) for p, q in rows if Decimal(str(q)) > 0}
 
 
 def _update(book: dict[Decimal, Decimal], rows: Iterable[Iterable[Any]]) -> None:
@@ -46,8 +42,6 @@ def _timestamp_ms(event: dict[str, Any], prefix: str) -> int | None:
                 return int(value)
             except (TypeError, ValueError):
                 pass
-    # Tardis raw prefixes are timestamps. Keep parsing deliberately tolerant;
-    # event timestamps remain preferred whenever Binance supplies them.
     if prefix:
         try:
             from datetime import datetime
@@ -66,9 +60,18 @@ def extract_microstructure_rows(
     levels: tuple[int, ...] = DEFAULT_LEVELS,
     date: str | None = None,
     offset: int | None = None,
+    replay_max_ticker_mismatches: int = 0,
+    replay_min_ticker_match_rate: float = 1.0,
 ) -> dict[str, Any]:
     """Validate canonical replay and emit an event-level microstructure table."""
-    validation = replay_ordered_rows(rows, symbol=symbol, date=date, offset=offset)
+    validation = replay_ordered_rows(
+        rows,
+        symbol=symbol,
+        date=date,
+        offset=offset,
+        max_ticker_mismatches=replay_max_ticker_mismatches,
+        min_ticker_match_rate=replay_min_ticker_match_rate,
+    )
     if not validation.get("canonicalReplayReady"):
         return {
             "status": "REPLAY_NOT_READY",
@@ -87,10 +90,7 @@ def extract_microstructure_rows(
     previous_depths: dict[int, tuple[Decimal, Decimal]] = {}
     features: list[dict[str, Any]] = []
 
-    depth_rows = [
-        r for r in rows
-        if int(r["line"]) > snap_line and {"U", "u", "pu"}.issubset(r["data"])
-    ]
+    depth_rows = [r for r in rows if int(r["line"]) > snap_line and {"U", "u", "pu"}.issubset(r["data"])]
 
     for r in depth_rows:
         event = r["data"]
@@ -135,10 +135,7 @@ def extract_microstructure_rows(
         spread = best_ask - best_bid
         spread_bps = spread / mid * Decimal("10000")
         touch_total = bid_qty + ask_qty
-        microprice = (
-            (best_ask * bid_qty + best_bid * ask_qty) / touch_total
-            if touch_total > 0 else mid
-        )
+        microprice = ((best_ask * bid_qty + best_bid * ask_qty) / touch_total if touch_total > 0 else mid)
         micro_dev_bps = (microprice / mid - Decimal("1")) * Decimal("10000")
 
         feat: dict[str, Any] = {
