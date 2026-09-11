@@ -32,13 +32,34 @@ def make_candles(count: int = 60, breakout: bool = False, rising: bool = True):
     return candles
 
 
+def make_confirmed_pullback_candles():
+    candles = make_candles()
+    # Preserve a prior swing high so the confirmation is not also a breakout.
+    candles[-10]["high"] = 132.0
+
+    # Previous candle pulls back into the current EMA20 zone and holds it.
+    candles[-2]["open"] = 126.0
+    candles[-2]["high"] = 126.0
+    candles[-2]["low"] = 124.5
+    candles[-2]["close"] = 125.0
+
+    # Latest closed candle confirms the reclaim above the previous candle high.
+    candles[-1]["open"] = 125.8
+    candles[-1]["high"] = 126.8
+    candles[-1]["low"] = 125.5
+    candles[-1]["close"] = 126.5
+    candles[-1]["quote_volume"] = 2000.0
+    candles[-1]["taker_buy_quote"] = 1200.0
+    return candles
+
+
 class StrategyTests(unittest.TestCase):
     def test_ema_trends_up(self):
         values = [float(i) for i in range(1, 80)]
         self.assertGreater(ema(values, 20), 0)
         self.assertGreater(ema(values, 20), ema(values, 50))
 
-    def test_full_quality_candidate_scores_100(self):
+    def test_full_quality_breakout_candidate_scores_100(self):
         candles_15m = make_candles(breakout=True)
         candidate = evaluate_candidate(
             symbol="TESTUSDT",
@@ -55,9 +76,31 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(candidate.score, 100)
         self.assertTrue(candidate.eligible)
         self.assertTrue(candidate.breakout)
+        self.assertEqual(candidate.entry_setup, "breakout")
         self.assertEqual(candidate.signal_open_time, candles_15m[-1]["open_time"])
         self.assertGreaterEqual(candidate.relative_volume, 1.5)
         self.assertGreaterEqual(candidate.taker_buy_ratio, 0.56)
+
+    def test_confirmed_pullback_can_score_100_without_breakout(self):
+        candles_15m = make_confirmed_pullback_candles()
+        candidate = evaluate_candidate(
+            symbol="TESTUSDT",
+            candles_15m=candles_15m,
+            candles_1h=make_candles(),
+            candles_4h=make_candles(),
+            btc_1h=make_candles(),
+            spread_bps=5.0,
+            quote_volume_24h=100_000_000.0,
+            min_quote_volume_24h=20_000_000.0,
+            max_spread_bps=15.0,
+            min_score=90,
+        )
+        self.assertEqual(candidate.score, 100)
+        self.assertTrue(candidate.eligible)
+        self.assertFalse(candidate.breakout)
+        self.assertTrue(candidate.pullback)
+        self.assertEqual(candidate.entry_setup, "pullback")
+        self.assertLess(candidate.price, candidate.previous_20_high)
 
     def test_score_90_is_not_eligible_when_one_mandatory_gate_fails(self):
         candidate = evaluate_candidate(
