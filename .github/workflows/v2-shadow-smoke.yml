@@ -1,0 +1,30 @@
+name: V2 Shadow Smoke
+
+on:
+  push:
+    branches:
+      - bot-v2-standalone
+    paths:
+      - '.github/workflows/v2-shadow-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  shadow-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_UNIVERSE_LIMIT: '6'
+      V2_STATE_DB: /tmp/v2-shadow-smoke.sqlite3
+      V2_TELEGRAM_BOT_TOKEN: ''
+      V2_TELEGRAM_CHAT_ID: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Run one read-only shadow scan
+        run: python -m v2_bot.main --once
