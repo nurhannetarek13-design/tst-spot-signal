@@ -52,7 +52,6 @@ def zip_csv(url, cols=None):
     raw=fetch_bytes(url)
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         name=z.namelist()[0]; b=z.read(name)
-    # Recent metrics/funding usually have headers; kline header behavior varies. Sniff safely.
     txt=b.decode('utf-8-sig',errors='replace')
     first=txt.splitlines()[0] if txt else ''
     has_header=bool(first and any(ch.isalpha() for ch in first.split(',')[0]))
@@ -168,11 +167,12 @@ def main():
         if mq['coverage']<METRICS_MIN_COVERAGE or mq['duplicateRate']>METRICS_MAX_DUP_RATE or pq['coverage']<PRICE_MIN_COVERAGE:
             excluded[sym]='DATA_QUALITY_GATE'; continue
         x=p.join(m,how='left')
-        x['funding']=np.nan
         if len(f):
             # Funding is known only at settlement timestamp; forward-use last known rate, capped implicitly by event availability.
             tmp=pd.merge_asof(x.reset_index().rename(columns={'index':'ts'}).sort_values('ts'),f.reset_index().sort_values('ts'),on='ts',direction='backward',tolerance=pd.Timedelta(hours=9))
             x=tmp.set_index('ts')
+        else:
+            x['funding']=np.nan
         x['r1h']=x.close.pct_change(12,fill_method=None); x['oi1h']=x.sum_open_interest_value.pct_change(12,fill_method=None); x['oi4h']=x.sum_open_interest_value.pct_change(48,fill_method=None)
         x['taker15']=x.sum_taker_long_short_vol_ratio.rolling(3,min_periods=3).mean()
         x['top15']=x.sum_toptrader_long_short_ratio.rolling(3,min_periods=3).mean(); x['crowd15']=x.count_long_short_ratio.rolling(3,min_periods=3).mean()
@@ -203,8 +203,8 @@ def main():
       'frozenDefinitions':{'DELEVERAGING_EXHAUSTION_V1':{'price1hAbs':EXH_PRICE_1H,'oiValueDrop1h':EXH_OI_1H,'takerLow':EXH_TAKER_LOW,'takerHigh':EXH_TAKER_HIGH},
        'LEVERAGED_CONTINUATION_V1':{'price1hAbs':CONT_PRICE_1H,'oiValueRise1h':CONT_OI_1H,'takerLow':CONT_TAKER_LOW,'takerHigh':CONT_TAKER_HIGH},
        'SMART_CROWD_DIVERGENCE_V1':{'topLong':DIV_TOP_LONG,'topShort':DIV_TOP_SHORT,'crowdShort':DIV_CROWD_SHORT,'crowdLong':DIV_CROWD_LONG},
-       'FUNDING_CROWDING_SQUEEZE_V1':{'fundingAbs':FUND_EXTREME,'crowdShort':FUND_CROWD_SHORT,'crowdLong':FUND_CROWD_LONG,'oiValueRise4h':FUND_OI_4H}},
-      'horizons':list(HORIZONS),'declusterBars':MIN_GAP,'rawGate':{'minEvents':MIN_EVENTS,'mean':0.015,'median':'>0','hitRate':'>0.55','mfeMaeRatio':2.0},
-      'multipleTesting':{'method':'Benjamini-Hochberg','q':FDR_Q},'eventCounts':{k:len(v) for k,v in pools.items()},'tests':len(tests),'results':tests,'survivorCount':len(survivors),'survivors':survivors,'liveReady':False,'runtimeSeconds':round(time.time()-t0,1)}
-    OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(report,indent=2,sort_keys=True));print(json.dumps(report,indent=2,sort_keys=True))
+       'FUNDING_CROWDING_SQUEEZE_V1':{'fundingAbs':FUND_EXTREME,'crowdShort':FUND_CROWD_SHORT,'crowdLong':FUND_CROWD_LONG,'oiRise4h':FUND_OI_4H}},
+      'horizons':HORIZONS,'minimumEvents':MIN_EVENTS,'declusterBars':MIN_GAP,'fdrQ':FDR_Q,
+      'tests':tests,'survivors':survivors,'decision':'CANDIDATE_FOUND' if survivors else 'NO_EDGE_FOUND','liveReady':False,'elapsedSec':time.time()-t0}
+    OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(report,indent=2,sort_keys=True)); print(json.dumps(report,indent=2,sort_keys=True))
 if __name__=='__main__':main()
