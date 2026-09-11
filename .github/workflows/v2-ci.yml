@@ -1,0 +1,28 @@
+name: V2 CI
+
+on:
+  push:
+    branches:
+      - bot-v2-standalone
+    paths:
+      - 'v2_bot/**'
+      - '.github/workflows/v2-ci.yml'
+  pull_request:
+    paths:
+      - 'v2_bot/**'
+      - '.github/workflows/v2-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Run V2 unit tests
+        run: python -m unittest discover -s v2_bot/tests -v
+      - name: Compile V2 package
+        run: python -m compileall -q v2_bot
