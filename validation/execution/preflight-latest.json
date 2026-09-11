@@ -1,0 +1,19 @@
+{
+  "engine": "HFTBACKTEST_EXECUTION_PREFLIGHT_V1",
+  "status": "BLOCKED_FAIL_CLOSED",
+  "ready": false,
+  "candidatePath": "validation/fusion/candidate-manifest.json",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "reasons": [
+    "PRIMARY_EDGE_GATE_NOT_PASSED",
+    "NO_TARDIS_CREDENTIAL_IN_CI"
+  ],
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "executorAllowed": false,
+  "meaning": "A blocked result is expected when no independently proven primary edge or canonical Tardis access is present."
+}
