@@ -54,7 +54,7 @@
     "AVAXUSDT:1788451200000",
     "SPCXBUSDT:1788984000000"
   ],
-  "lastRunAt": "2026-09-10T22:37:01.378Z",
+  "lastRunAt": "2026-09-11T04:44:23.531Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -67,7 +67,7 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": -0.007961,
+  "todayRealizedPnLUSDT": 0,
   "dailyLossGateOpen": true,
   "openExposureUSDT": 0,
   "closedTradeCount": 3,
