@@ -30,6 +30,17 @@ STABLE_OR_FIAT_BASE_ASSETS = {
     "BRL",
     "TRY",
 }
+GATE_NAMES = (
+    "btc_regime",
+    "trend_15m",
+    "trend_1h",
+    "trend_4h",
+    "breakout",
+    "relative_volume",
+    "taker_flow",
+    "spread",
+    "score",
+)
 
 
 class V2Engine:
@@ -85,6 +96,37 @@ class V2Engine:
             return float("inf")
         mid = (bid + ask) / 2.0
         return ((ask - bid) / mid) * 10_000.0
+
+    @staticmethod
+    def _failed_gates(candidate: Candidate, settings: Settings) -> list[str]:
+        failed: list[str] = []
+        if not candidate.btc_regime_ok:
+            failed.append("btc_regime")
+        if not candidate.trend_15m:
+            failed.append("trend_15m")
+        if not candidate.trend_1h:
+            failed.append("trend_1h")
+        if not candidate.trend_4h:
+            failed.append("trend_4h")
+        if not candidate.breakout:
+            failed.append("breakout")
+        if not candidate.rel_volume_ok:
+            failed.append("relative_volume")
+        if not candidate.taker_flow_ok:
+            failed.append("taker_flow")
+        if candidate.spread_bps > settings.max_spread_bps:
+            failed.append("spread")
+        if candidate.score < settings.min_score:
+            failed.append("score")
+        return failed
+
+    @classmethod
+    def _gate_failure_counts(cls, candidates: list[Candidate], settings: Settings) -> dict[str, int]:
+        counts = {name: 0 for name in GATE_NAMES}
+        for candidate in candidates:
+            for gate in cls._failed_gates(candidate, settings):
+                counts[gate] += 1
+        return counts
 
     def _manage_paper_exits(self, books: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
@@ -171,6 +213,18 @@ class V2Engine:
 
         candidates.sort(key=lambda c: (c.score, c.relative_volume), reverse=True)
         eligible = [c for c in candidates if c.eligible]
+        gate_failure_counts = self._gate_failure_counts(candidates, self.settings)
+        top_near_miss = None
+        for candidate in candidates:
+            failed_gates = self._failed_gates(candidate, self.settings)
+            if failed_gates:
+                top_near_miss = {
+                    "symbol": candidate.symbol,
+                    "score": candidate.score,
+                    "failed_gates": failed_gates,
+                }
+                break
+
         action: dict[str, Any] | None = None
 
         if eligible:
@@ -258,6 +312,8 @@ class V2Engine:
             "universe_size": len(universe),
             "evaluated": len(candidates),
             "eligible": len(eligible),
+            "gate_failure_counts": gate_failure_counts,
+            "top_near_miss": top_near_miss,
             "top": [c.to_dict() for c in candidates[:5]],
             "paper_events": paper_events,
             "action": action,
