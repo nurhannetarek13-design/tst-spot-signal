@@ -40,14 +40,14 @@ jobs:
           assert d['status']=='PASS', d
           assert d['canonicalReplayReady'] is True, d
           assert d['eventsApplied'] > 0, d
-          assert d['continuityChecks'] > 0, d
+          assert d['continuityChecks'] == d['eventsApplied'], d
           assert d['tickerComparable'] > 0, d
           assert d['tickerMismatches'] == 0, d
           assert d['tickerExact'] == d['tickerComparable'], d
           assert d['matchRate'] == 1.0, d
           print(json.dumps({k:d[k] for k in [
             'symbol','status','startSnapshotId','eventsApplied','continuityChecks',
-            'tickerRecords','tickerComparable','tickerExact','tickerMismatches',
+            'tickerAfterSnapshot','tickerComparable','tickerExact','tickerMismatches',
             'matchRate','canonicalReplayReady'
           ]}, indent=2))
           PY
