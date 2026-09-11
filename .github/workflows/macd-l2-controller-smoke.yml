@@ -1,0 +1,60 @@
+name: MACD L2 Controller Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hummingbot/controllers/directional_trading/tst_fusion_signal.py"
+      - "fusion/policy.json"
+      - "validation/fusion/candidate-manifest.json"
+      - ".github/workflows/macd-l2-controller-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile controller
+        run: python -m py_compile hummingbot/controllers/directional_trading/tst_fusion_signal.py
+      - name: Validate frozen candidate identity
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('fusion/policy.json'))
+          m=json.load(open('validation/fusion/candidate-manifest.json'))
+          assert p['mode']=='PAPER_ONLY' and p['liveTrading'] is False
+          assert p['strategyId']=='TST_MACD_EMA200_L2_V1'
+          assert m['strategyId']==p['strategyId']
+          assert m['candidateFingerprint']=='ae0299f52aa7a9708aa9'
+          assert p['universe']['symbols']==['BTCUSDT','ETHUSDT','SOLUSDT']
+          print('candidate identity OK')
+          PY
+      - name: Probe public Binance L2 and closed-bar flow
+        run: |
+          python - <<'PY'
+          import json, urllib.parse, urllib.request
+          bases=['https://api.binance.com','https://data-api.binance.vision']
+          def get(path,params):
+              last=None
+              for base in bases:
+                  try:
+                      q=urllib.parse.urlencode(params)
+                      req=urllib.request.Request(base+path+'?'+q,headers={'User-Agent':'tst-macd-l2-smoke/1.0'})
+                      with urllib.request.urlopen(req,timeout=15) as r:
+                          return base,json.load(r)
+                  except Exception as e:last=e
+              raise RuntimeError(last)
+          for symbol in ['BTCUSDT','ETHUSDT','SOLUSDT']:
+              b1,depth=get('/api/v3/depth',{'symbol':symbol,'limit':20})
+              b2,k=get('/api/v3/klines',{'symbol':symbol,'interval':'15m','limit':25})
+              assert depth['bids'] and depth['asks'] and len(k)>=22
+              bid=float(depth['bids'][0][0]); ask=float(depth['asks'][0][0]); spread=(ask-bid)/((ask+bid)/2)*10000
+              closed=k[:-1]; qv=float(closed[-1][7]); tb=float(closed[-1][10]); share=tb/qv if qv else 0
+              prior=[float(x[7]) for x in closed[-21:-1]]; rv=qv/(sum(prior)/len(prior))
+              print(json.dumps({'symbol':symbol,'depthBase':b1,'klineBase':b2,'spreadBps':spread,'takerBuyShare':share,'relativeVolume':rv}))
+          PY
