@@ -1,0 +1,55 @@
+name: BTC Shock Underreaction Temporal OOS V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/btc_shock_underreaction_oos_v1.py"
+      - ".github/workflows/btc-shock-underreaction-oos-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: btc-shock-underreaction-oos-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Syntax check
+        run: python -m py_compile research/btc_shock_underreaction_oos_v1.py
+      - name: Run frozen temporal OOS
+        run: python research/btc_shock_underreaction_oos_v1.py
+      - name: Assert frozen research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/edges/btc-shock-underreaction-oos-v1-latest.json'
+          x=json.load(open(p))
+          assert x['engine']=='BTC_SHOCK_UNDERREACTION_TEMPORAL_OOS_V1'
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['candidate']=='BTC_SHOCK_ALT_UNDERREACTION_V1:DOWN'
+          assert x['period']=={'start':'2024-09-11T00:00:00Z','endExclusive':'2025-09-11T00:00:00Z'}
+          assert x['frozenHorizons']==[48,72]
+          assert x['survivorshipBiasCleared'] is False
+          assert x['universePolicy']=='FROZEN_DISCOVERY_SYMBOL_SET_TEMPORAL_OOS_ONLY'
+          assert x['decision'] in ('TEMPORAL_OOS_SURVIVOR_NEEDS_HISTORICAL_UNIVERSE_AUDIT','REJECT_TEMPORAL_OOS')
+          assert x['liveReady'] is False
+          print('Frozen temporal OOS research-only assertions passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-shock-underreaction-oos-v1-report
+          path: validation/edges/btc-shock-underreaction-oos-v1-latest.json
+          retention-days: 14
