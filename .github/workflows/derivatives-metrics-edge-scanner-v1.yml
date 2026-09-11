@@ -41,7 +41,8 @@ jobs:
           assert x['round']==7
           assert x['authorization']=='RESEARCH_ONLY'
           assert x['liveTrading'] is False and x['liveReady'] is False
-          assert x['multipleTesting']['method']=='Benjamini-Hochberg'
+          assert x['fdrQ']==0.05
+          assert all('qValue' in t and 'pass' in t for t in x['tests'])
           assert len(x['families'])==4
           assert x['dataQualityGate']['missingValues']=='NO_SIGNAL_NO_FILL'
           print('Round 7 research-only assertions passed')
