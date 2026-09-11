@@ -1,4 +1,7 @@
 import unittest
+from unittest.mock import patch
+
+import httpx
 
 from v2_bot.binance_public import BinancePublicClient
 
@@ -50,6 +53,36 @@ class BinancePublicClientTests(unittest.TestCase):
 
         self.assertEqual(len(candles), 2)
         self.assertEqual(candles[-1]["close"], 101.0)
+
+    def test_451_falls_back_to_official_market_data_endpoint(self):
+        client = BinancePublicClient(base_urls=("https://api.binance.com", "https://data-api.binance.vision"))
+        request_primary = httpx.Request("GET", "https://api.binance.com/api/v3/ticker/24hr")
+        request_fallback = httpx.Request("GET", "https://data-api.binance.vision/api/v3/ticker/24hr")
+        primary = httpx.Response(451, request=request_primary)
+        fallback = httpx.Response(200, request=request_fallback, json=[{"symbol": "BTCUSDT"}])
+
+        try:
+            with patch.object(client._client, "get", side_effect=[primary, fallback]) as mocked_get:
+                data = client.ticker_24h()
+        finally:
+            client.close()
+
+        self.assertEqual(data, [{"symbol": "BTCUSDT"}])
+        self.assertEqual(mocked_get.call_count, 2)
+
+    def test_rate_limit_does_not_rotate_endpoints(self):
+        client = BinancePublicClient(base_urls=("https://api.binance.com", "https://data-api.binance.vision"))
+        request = httpx.Request("GET", "https://api.binance.com/api/v3/ticker/24hr")
+        response = httpx.Response(429, request=request)
+
+        try:
+            with patch.object(client._client, "get", return_value=response) as mocked_get:
+                with self.assertRaises(httpx.HTTPStatusError):
+                    client.ticker_24h()
+        finally:
+            client.close()
+
+        self.assertEqual(mocked_get.call_count, 1)
 
 
 if __name__ == "__main__":
