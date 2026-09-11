@@ -54,6 +54,31 @@ class BinancePublicClientTests(unittest.TestCase):
         self.assertEqual(len(candles), 2)
         self.assertEqual(candles[-1]["close"], 101.0)
 
+    def test_exchange_info_supports_symbol_scope(self):
+        client = BinancePublicClient()
+        calls = []
+        try:
+            def fake_get(path, params=None):
+                calls.append((path, params))
+                return {"symbols": [{"symbol": "TESTUSDT"}]}
+
+            client._get = fake_get
+            data = client.exchange_info("TESTUSDT")
+        finally:
+            client.close()
+
+        self.assertEqual(data["symbols"][0]["symbol"], "TESTUSDT")
+        self.assertEqual(calls, [("/api/v3/exchangeInfo", {"symbol": "TESTUSDT"})])
+
+    def test_exchange_info_rejects_unexpected_shape(self):
+        client = BinancePublicClient()
+        try:
+            client._get = lambda *_args, **_kwargs: {"symbols": "not-a-list"}
+            with self.assertRaisesRegex(RuntimeError, "Unexpected exchangeInfo"):
+                client.exchange_info("TESTUSDT")
+        finally:
+            client.close()
+
     def test_451_falls_back_to_official_market_data_endpoint(self):
         client = BinancePublicClient(base_urls=("https://api.binance.com", "https://data-api.binance.vision"))
         request_primary = httpx.Request("GET", "https://api.binance.com/api/v3/ticker/24hr")
