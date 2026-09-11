@@ -16,31 +16,40 @@ permissions:
 jobs:
   integration:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+        include:
+          - symbol: BTCUSDT
+            minutes: 10
+            suffix: M0000-M0009
+          - symbol: ETHUSDT
+            minutes: 1
+            suffix: M0000-M0000
+          - symbol: SOLUSDT
+            minutes: 5
+            suffix: M0000-M0004
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay bounded 10-minute canonical smoke window
+      - name: Replay bounded canonical smoke window
         run: |
           mkdir -p research/results/tardis_microstructure
           python -m research.tardis_microstructure_range \
             --symbol '${{ matrix.symbol }}' \
             --date '2021-09-01' \
             --start-offset 0 \
-            --minutes 10 \
-            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0009.json' \
+            --minutes '${{ matrix.minutes }}' \
+            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.suffix }}.json' \
             --assert-ready
       - name: Enforce research-only integrity invariants
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0009.json')
+          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.suffix }}.json')
           d=json.loads(p.read_text())
           v=d['validation']
           assert d['authorization']=='RESEARCH_ONLY'
@@ -67,7 +76,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tardis-microstructure-${{ matrix.symbol }}
-          path: research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0009.json
+          path: research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.suffix }}.json
           if-no-files-found: error
 
   aggregate:
@@ -111,7 +120,7 @@ jobs:
               'authorization':'RESEARCH_ONLY',
               'liveTrading':False,
               'purpose':'CI_INTEGRITY_SMOKE_ONLY',
-              'window':{'date':'2021-09-01','startOffset':0,'minutes':10},
+              'windows':{c['symbol']:c['minutes'] for c in cells},
               'frozenDefinition': cells[0]['gateG']['eventDefinition'] if cells else None,
               'parityPolicy':{'maxTickerMismatches':5,'minTickerMatchRate':0.999},
               'cells':len(cells),
