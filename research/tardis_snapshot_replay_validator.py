@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Validate Binance USD-M L2 reconstruction against the next available Tardis depthSnapshot.
+"""Validate Binance USD-M L2 reconstruction from one Tardis initial snapshot.
+
+Ground truth used here:
+- depthSnapshot: initial REST snapshot exposed by Tardis raw feed
+- depth: exchange-native incremental U/u/pu messages
+- bookTicker: independent exchange-native best bid/ask stream
+
 Research-only. No trading actions.
 """
 from __future__ import annotations
@@ -20,12 +26,16 @@ def fetch(symbol: str, date: str, offset: int, channel: str) -> str:
         f"{BASE}?from={urllib.parse.quote(date, safe=':-TZ')}"
         f"&filters={urllib.parse.quote(filters, safe='[]{}\":,')}&offset={offset}"
     )
-    p = subprocess.run(["curl", "--compressed", "-sS", "-g", url], capture_output=True, check=True)
+    p = subprocess.run(
+        ["curl", "--compressed", "-sS", "-g", url],
+        capture_output=True,
+        check=True,
+    )
     return p.stdout.decode("utf-8", "replace")
 
 
 def parse(body: str) -> list[dict]:
-    out = []
+    out: list[dict] = []
     for raw in body.splitlines():
         raw = raw.strip()
         if not raw:
@@ -51,169 +61,203 @@ def depth_messages(symbol: str, date: str, offset: int) -> list[dict]:
     ]
 
 
-def snapshot_or_none(symbol: str, date: str, offset: int) -> dict | None:
+def book_tickers(symbol: str, date: str, offset: int) -> list[dict]:
+    xs = parse(fetch(symbol, date, offset, "bookTicker"))
+    return [x for x in xs if {"u", "b", "B", "a", "A"}.issubset(x)]
+
+
+def snapshot(symbol: str, date: str, offset: int) -> dict:
     xs = [
         x for x in parse(fetch(symbol, date, offset, "depthSnapshot"))
         if "lastUpdateId" in x and "bids" in x and "asks" in x
     ]
-    return xs[0] if xs else None
-
-
-def require_snapshot(symbol: str, date: str, offset: int) -> dict:
-    s = snapshot_or_none(symbol, date, offset)
-    if s is None:
+    if not xs:
         raise RuntimeError(f"no depthSnapshot for offset={offset}")
-    return s
-
-
-def find_next_snapshot(symbol: str, date: str, start_offset: int, max_scan: int) -> tuple[int, dict]:
-    for off in range(start_offset + 1, start_offset + max_scan + 1):
-        s = snapshot_or_none(symbol, date, off)
-        if s is not None:
-            return off, s
-    raise RuntimeError(
-        f"no later depthSnapshot found in offsets {start_offset + 1}..{start_offset + max_scan}"
-    )
+    return xs[0]
 
 
 def build_snapshot(s: dict) -> tuple[dict[Decimal, Decimal], dict[Decimal, Decimal]]:
     def side(rows):
-        return {Decimal(str(p)): Decimal(str(q)) for p, q in rows if Decimal(str(q)) > 0}
+        return {
+            Decimal(str(p)): Decimal(str(q))
+            for p, q in rows
+            if Decimal(str(q)) > 0
+        }
     return side(s["bids"]), side(s["asks"])
 
 
 def update_side(book: dict[Decimal, Decimal], rows) -> None:
     for p, q in rows:
-        p, q = Decimal(str(p)), Decimal(str(q))
-        if q == 0:
-            book.pop(p, None)
+        price = Decimal(str(p))
+        qty = Decimal(str(q))
+        if qty == 0:
+            book.pop(price, None)
         else:
-            book[p] = q
+            book[price] = qty
 
 
-def top(book: dict[Decimal, Decimal], side: str, n: int) -> list[list[str]]:
-    prices = sorted(book, reverse=(side == "bid"))[:n]
-    return [[str(p), str(book[p])] for p in prices]
+def best(book: dict[Decimal, Decimal], side: str) -> tuple[Decimal, Decimal]:
+    if not book:
+        raise RuntimeError(f"empty {side} book")
+    price = max(book) if side == "bid" else min(book)
+    return price, book[price]
 
 
-def normalize_snapshot_top(s: dict, side: str, n: int) -> list[list[str]]:
-    key = "bids" if side == "bid" else "asks"
-    b = {Decimal(str(p)): Decimal(str(q)) for p, q in s[key] if Decimal(str(q)) > 0}
-    return top(b, side, n)
+def as_pair(price: Decimal, qty: Decimal) -> list[str]:
+    return [str(price), str(qty)]
 
 
-def replay(symbol: str, date: str, offset: int, n: int, max_snapshot_scan: int) -> dict:
-    s0 = require_snapshot(symbol, date, offset)
-    target_offset, s1 = find_next_snapshot(symbol, date, offset, max_snapshot_scan)
-    sid0, sid1 = int(s0["lastUpdateId"]), int(s1["lastUpdateId"])
-    if sid1 <= sid0:
-        raise RuntimeError(f"non-increasing snapshots: {sid0} -> {sid1}")
-
-    events: list[dict] = []
-    for off in range(offset, target_offset + 1):
-        events.extend(depth_messages(symbol, date, off))
+def validate(symbol: str, date: str, offset: int) -> dict:
+    s0 = snapshot(symbol, date, offset)
+    sid0 = int(s0["lastUpdateId"])
+    depth = depth_messages(symbol, date, offset)
+    tickers = book_tickers(symbol, date, offset)
 
     bids, asks = build_snapshot(s0)
     started = False
-    prev_u = None
-    applied = 0
+    prev_u: int | None = None
     first_bridge = None
-    target_event = None
+    events_applied = 0
     continuity_checks = 0
+    replay_by_u: dict[int, dict] = {}
 
-    for e in events:
-        U, u = int(e["U"]), int(e["u"])
+    for e in depth:
+        U = int(e["U"])
+        u = int(e["u"])
         if u <= sid0:
             continue
 
         if not started:
-            want = sid0 + 1
-            if U <= want <= u:
+            wanted = sid0 + 1
+            if U <= wanted <= u:
                 started = True
-                first_bridge = {"U": U, "u": u, "pu": int(e["pu"]) if "pu" in e else None}
-            elif U > want:
-                return {"status": "FIRST_EVENT_GAP", "expected": want, "U": U, "u": u}
+                first_bridge = {
+                    "U": U,
+                    "u": u,
+                    "pu": int(e["pu"]) if "pu" in e else None,
+                }
+            elif U > wanted:
+                return {
+                    "status": "FIRST_EVENT_GAP",
+                    "symbol": symbol,
+                    "startSnapshotId": sid0,
+                    "expected": wanted,
+                    "U": U,
+                    "u": u,
+                    "canonicalReplayReady": False,
+                }
             else:
                 continue
         else:
             if "pu" not in e:
-                return {"status": "MISSING_PU", "U": U, "u": u}
+                return {
+                    "status": "MISSING_PU",
+                    "symbol": symbol,
+                    "U": U,
+                    "u": u,
+                    "canonicalReplayReady": False,
+                }
             continuity_checks += 1
             if int(e["pu"]) != int(prev_u):
                 return {
-                    "status": "PU_GAP", "prev_u": prev_u,
-                    "pu": int(e["pu"]), "U": U, "u": u,
+                    "status": "PU_GAP",
+                    "symbol": symbol,
+                    "prev_u": prev_u,
+                    "pu": int(e["pu"]),
+                    "U": U,
+                    "u": u,
+                    "eventsApplied": events_applied,
+                    "continuityChecks": continuity_checks,
+                    "canonicalReplayReady": False,
                 }
-
-        if u > sid1:
-            return {
-                "status": "TARGET_INSIDE_EVENT",
-                "targetSnapshotId": sid1,
-                "event": {"U": U, "u": u},
-                "eventsApplied": applied,
-                "targetOffset": target_offset,
-            }
 
         update_side(bids, e.get("b", []))
         update_side(asks, e.get("a", []))
         prev_u = u
-        applied += 1
+        events_applied += 1
 
-        if bids and asks and max(bids) >= min(asks):
+        bid_p, bid_q = best(bids, "bid")
+        ask_p, ask_q = best(asks, "ask")
+        if bid_p >= ask_p:
             return {
-                "status": "CROSSED_BOOK", "U": U, "u": u,
-                "bestBid": str(max(bids)), "bestAsk": str(min(asks)),
+                "status": "CROSSED_BOOK",
+                "symbol": symbol,
+                "U": U,
+                "u": u,
+                "bestBid": str(bid_p),
+                "bestAsk": str(ask_p),
+                "eventsApplied": events_applied,
+                "continuityChecks": continuity_checks,
+                "canonicalReplayReady": False,
             }
 
-        if u == sid1:
-            target_event = {"U": U, "u": u, "pu": int(e.get("pu", -1))}
-            break
-
-    if not started:
-        return {"status": "NO_BRIDGE", "snapshotId": sid0, "targetOffset": target_offset}
-    if target_event is None:
-        return {
-            "status": "TARGET_NOT_REACHED",
-            "targetSnapshotId": sid1,
-            "last_u": prev_u,
-            "eventsApplied": applied,
-            "targetOffset": target_offset,
+        replay_by_u[u] = {
+            "bid": as_pair(bid_p, bid_q),
+            "ask": as_pair(ask_p, ask_q),
         }
 
-    replay_bids, replay_asks = top(bids, "bid", n), top(asks, "ask", n)
-    snap_bids = normalize_snapshot_top(s1, "bid", n)
-    snap_asks = normalize_snapshot_top(s1, "ask", n)
-    bid_ok, ask_ok = replay_bids == snap_bids, replay_asks == snap_asks
+    if not started:
+        return {
+            "status": "NO_BRIDGE",
+            "symbol": symbol,
+            "startSnapshotId": sid0,
+            "depthRecords": len(depth),
+            "canonicalReplayReady": False,
+        }
 
-    def first_diff(a, b):
-        for i, (x, y) in enumerate(zip(a, b)):
-            if x != y:
-                return {"index": i, "replayed": x, "snapshot": y}
-        if len(a) != len(b):
-            return {"index": min(len(a), len(b)), "replayedLength": len(a), "snapshotLength": len(b)}
-        return None
+    ticker_comparable = 0
+    ticker_exact = 0
+    first_mismatch = None
+    ticker_ids_seen = set()
+
+    for t in tickers:
+        tu = int(t["u"])
+        ticker_ids_seen.add(tu)
+        replay = replay_by_u.get(tu)
+        if replay is None:
+            continue
+        ticker_comparable += 1
+        ticker_state = {
+            "bid": [str(Decimal(str(t["b"]))), str(Decimal(str(t["B"])))],
+            "ask": [str(Decimal(str(t["a"]))), str(Decimal(str(t["A"])))],
+        }
+        if replay == ticker_state:
+            ticker_exact += 1
+        elif first_mismatch is None:
+            first_mismatch = {
+                "u": tu,
+                "replayed": replay,
+                "bookTicker": ticker_state,
+            }
+
+    ticker_mismatches = ticker_comparable - ticker_exact
+    match_rate = (ticker_exact / ticker_comparable) if ticker_comparable else 0.0
+    ready = (
+        events_applied > 0
+        and continuity_checks > 0
+        and ticker_comparable > 0
+        and ticker_mismatches == 0
+    )
 
     return {
-        "status": "PASS" if bid_ok and ask_ok else "MISMATCH",
+        "status": "PASS" if ready else "BOOK_TICKER_PARITY_FAIL",
         "symbol": symbol,
         "date": date,
-        "startOffset": offset,
-        "targetOffset": target_offset,
-        "snapshotGapMinutes": target_offset - offset,
+        "offset": offset,
         "startSnapshotId": sid0,
-        "targetSnapshotId": sid1,
         "firstBridge": first_bridge,
-        "targetEvent": target_event,
-        "eventsApplied": applied,
+        "depthRecords": len(depth),
+        "eventsApplied": events_applied,
         "continuityChecks": continuity_checks,
-        "depthCompared": n,
-        "bidExact": bid_ok,
-        "askExact": ask_ok,
-        "firstBidDiff": first_diff(replay_bids, snap_bids),
-        "firstAskDiff": first_diff(replay_asks, snap_asks),
-        "replayedTop": {"bids": replay_bids, "asks": replay_asks},
-        "snapshotTop": {"bids": snap_bids, "asks": snap_asks},
-        "canonicalReplayReady": bool(bid_ok and ask_ok),
+        "replayStates": len(replay_by_u),
+        "tickerRecords": len(tickers),
+        "tickerUniqueUpdateIds": len(ticker_ids_seen),
+        "tickerComparable": ticker_comparable,
+        "tickerExact": ticker_exact,
+        "tickerMismatches": ticker_mismatches,
+        "matchRate": match_rate,
+        "firstMismatch": first_mismatch,
+        "canonicalReplayReady": ready,
     }
 
 
@@ -222,10 +266,8 @@ def main() -> None:
     p.add_argument("--symbol", default="BTCUSDT", choices=["BTCUSDT", "ETHUSDT", "SOLUSDT"])
     p.add_argument("--date", default="2021-09-01")
     p.add_argument("--offset", type=int, default=0)
-    p.add_argument("--depth", type=int, default=20)
-    p.add_argument("--max-snapshot-scan", type=int, default=60)
     a = p.parse_args()
-    result = replay(a.symbol, a.date, a.offset, a.depth, a.max_snapshot_scan)
+    result = validate(a.symbol, a.date, a.offset)
     out = {"authorization": AUTHORIZATION, "liveTrading": False, **result}
     print(json.dumps(out, indent=2))
 
