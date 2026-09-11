@@ -1,0 +1,32 @@
+name: Gate F Breadth Fast V2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/gate_f_breadth_fast_v2.py'
+      - '.github/workflows/gate-f-breadth-fast-v2.yml'
+permissions: {contents: read}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas
+      - name: Run frozen 90-day breadth gate
+        run: PYTHONPATH=. python research/gate_f_breadth_fast_v2.py
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-f-breadth-v2.json'))
+          assert x['authorization']=='RESEARCH_ONLY' and x['liveTrading'] is False
+          assert x['usesML'] is False and x['usesSizing'] is False and x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next'],'period':x['period']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-f-breadth-v2
+          path: validation/edges/gate-f-breadth-v2.json
