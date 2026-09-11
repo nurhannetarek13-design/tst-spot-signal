@@ -1,0 +1,48 @@
+name: TradingView Candidate Signal Diagnostics V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/tradingview_candidate_signal_diagnostics_v1.py"
+      - ".github/workflows/tradingview-candidate-signal-diagnostics-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas
+      - name: Run signal-only diagnostics
+        run: |
+          python research/tradingview_candidate_signal_diagnostics_v1.py \
+            --start 2024-01-01 \
+            --end 2026-09-01 \
+            --symbols BTCUSDT ETHUSDT SOLUSDT \
+            --out artifacts/tradingview_candidate_signal_diagnostics_v1.json
+      - name: Print concise OOS summary
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/tradingview_candidate_signal_diagnostics_v1.json'
+          d=json.load(open(p))
+          for n,c in d['candidates'].items():
+              vals=c['OOS']['aggregate']
+              print(n, c['diagnosticGate'])
+              for h,v in vals.items(): print(' ',h,'bars',v)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tradingview-candidate-signal-diagnostics-v1
+          path: artifacts/tradingview_candidate_signal_diagnostics_v1.json
+          retention-days: 30
