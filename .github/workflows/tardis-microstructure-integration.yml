@@ -6,6 +6,7 @@ on:
       - 'research/tardis_l2_replay.py'
       - 'research/tardis_microstructure_features.py'
       - 'research/tardis_microstructure_scan.py'
+      - 'research/tardis_microstructure_range.py'
       - '.github/workflows/tardis-microstructure-integration.yml'
   workflow_dispatch:
 
@@ -18,44 +19,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {symbol: BTCUSDT, slot: M0000, offset: 0}
-          - {symbol: BTCUSDT, slot: M0240, offset: 240}
-          - {symbol: BTCUSDT, slot: M0480, offset: 480}
-          - {symbol: BTCUSDT, slot: M0720, offset: 720}
-          - {symbol: BTCUSDT, slot: M0960, offset: 960}
-          - {symbol: BTCUSDT, slot: M1200, offset: 1200}
-          - {symbol: ETHUSDT, slot: M0000, offset: 0}
-          - {symbol: ETHUSDT, slot: M0240, offset: 240}
-          - {symbol: ETHUSDT, slot: M0480, offset: 480}
-          - {symbol: ETHUSDT, slot: M0720, offset: 720}
-          - {symbol: ETHUSDT, slot: M0960, offset: 960}
-          - {symbol: ETHUSDT, slot: M1200, offset: 1200}
-          - {symbol: SOLUSDT, slot: M0000, offset: 0}
-          - {symbol: SOLUSDT, slot: M0240, offset: 240}
-          - {symbol: SOLUSDT, slot: M0480, offset: 480}
-          - {symbol: SOLUSDT, slot: M0720, offset: 720}
-          - {symbol: SOLUSDT, slot: M0960, offset: 960}
-          - {symbol: SOLUSDT, slot: M1200, offset: 1200}
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run canonical Tardis microstructure scan
+      - name: Replay contiguous 30-minute canonical window
         run: |
           mkdir -p research/results/tardis_microstructure
-          python -m research.tardis_microstructure_scan \
+          python -m research.tardis_microstructure_range \
             --symbol '${{ matrix.symbol }}' \
             --date '2021-09-01' \
-            --offset '${{ matrix.offset }}' \
-            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
+            --start-offset 0 \
+            --minutes 30 \
+            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json' \
             --assert-ready
       - name: Enforce research-only invariants
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json')
+          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json')
           d=json.loads(p.read_text())
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
@@ -66,7 +50,7 @@ jobs:
           assert d['validation']['tickerMismatches'] == 0
           print(json.dumps({
             'symbol': d['symbol'],
-            'offset': d['offset'],
+            'minutes': d['minutes'],
             'featureEvents': d['summary']['featureEvents'],
             'sampledSeconds': d['summary']['sampledSeconds'],
             'tickerExact': d['validation']['tickerExact'],
@@ -76,8 +60,8 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: tardis-microstructure-${{ matrix.symbol }}-${{ matrix.slot }}
-          path: research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json
+          name: tardis-microstructure-${{ matrix.symbol }}
+          path: research/results/tardis_microstructure/${{ matrix.symbol }}-M0000-M0029.json
           if-no-files-found: error
 
   aggregate:
@@ -96,42 +80,42 @@ jobs:
           files=sorted(pathlib.Path('downloaded').glob('*.json'))
           cells=[json.loads(p.read_text()) for p in files]
           horizons=('10','30','60')
+          side_counts={side:sum(int(c['gateG']['eventCounts'][side]) for c in cells) for side in ('long','short')}
+          total_events=sum(side_counts.values())
           aggregate={}
-          total_events=0
           for side in ('long','short'):
               aggregate[side]={}
-              total_events += sum(int(c['gateG']['eventCounts'][side]) for c in cells)
               for h in horizons:
                   weighted_sum=0.0
-                  hits=0.0
+                  positive_weight=0.0
                   n=0
-                  medians=[]
                   for c in cells:
                       o=c['gateG']['outcomes'][side][h]
                       k=int(o['n'])
                       if k:
                           weighted_sum += float(o['meanDirectionalBps']) * k
-                          hits += float(o['hitRate']) * k
+                          positive_weight += float(o['hitRate']) * k
                           n += k
-                          if o['medianDirectionalBps'] is not None:
-                              medians.extend([float(o['medianDirectionalBps'])] * k)
                   aggregate[side][h]={
                       'n': n,
                       'meanDirectionalBps': (weighted_sum/n if n else None),
-                      'hitRate': (hits/n if n else None),
-                      'medianDirectionalBpsApprox': (sorted(medians)[len(medians)//2] if medians else None),
+                      'hitRate': (positive_weight/n if n else None),
                   }
+          information_sufficient = total_events >= 30 and side_counts['long'] >= 10 and side_counts['short'] >= 10
           payload={
               'authorization':'RESEARCH_ONLY',
               'liveTrading':False,
+              'window':{'date':'2021-09-01','startOffset':0,'minutes':30},
               'frozenDefinition': cells[0]['gateG']['eventDefinition'] if cells else None,
               'cells':len(cells),
+              'sideEventCounts':side_counts,
               'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
               'totalFeatureEvents':sum(int(c['summary']['featureEvents']) for c in cells),
               'totalGateGEvents':total_events,
-              'informationSufficient': total_events >= 30,
+              'informationGate':{'totalMin':30,'perSideMin':10},
+              'informationSufficient': information_sufficient,
               'aggregate':aggregate,
-              'decision':'EVALUATE_EDGE' if total_events >= 30 else 'INSUFFICIENT_INFORMATION',
+              'decision':'EVALUATE_EDGE' if information_sufficient else 'INSUFFICIENT_INFORMATION',
           }
           pathlib.Path('tardis-microstructure-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
           print(json.dumps(payload,indent=2,sort_keys=True))
