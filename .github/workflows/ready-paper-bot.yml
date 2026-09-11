@@ -2,6 +2,10 @@ name: Ready Paper Bot
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'ready_bot/**'
+      - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
 
@@ -11,6 +15,9 @@ permissions:
 jobs:
   run-paper-bot:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ready-paper-bot
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,7 +30,7 @@ jobs:
         run: python ready_bot/bot.py
       - name: Persist paper state
         run: |
-          if git diff --quiet ready_bot/state.json 2>/dev/null; then
+          if git diff --quiet -- ready_bot/state.json; then
             echo "No state change"
             exit 0
           fi
@@ -31,4 +38,5 @@ jobs:
           git config user.email "ready-paper-bot@users.noreply.github.com"
           git add ready_bot/state.json
           git commit -m "Update ready paper bot state" || exit 0
+          git pull --rebase origin main || true
           git push
