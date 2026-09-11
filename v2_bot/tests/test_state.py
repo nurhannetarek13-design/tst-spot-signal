@@ -77,6 +77,34 @@ class StateStoreTests(unittest.TestCase):
         self.assertTrue(self.state.claim_signal(symbol="TESTUSDT", signal_open_time=124.0, kind="shadow"))
         self.assertTrue(self.state.claim_signal(symbol="TESTUSDT", signal_open_time=123.0, kind="paper"))
 
+    def test_persistence_probe_first_revision_is_not_proven(self):
+        probe = self.state.verify_persistence("rev-a")
+        self.assertFalse(probe.proven)
+        self.assertEqual(probe.reason, "first_deploy_marker_created")
+        self.assertIsNone(probe.previous_revision)
+        self.assertEqual(probe.current_revision, "rev-a")
+
+    def test_persistence_probe_same_revision_is_not_cross_deploy_proof(self):
+        self.state.verify_persistence("rev-a")
+        probe = self.state.verify_persistence("rev-a")
+        self.assertFalse(probe.proven)
+        self.assertEqual(probe.reason, "same_deploy_revision_not_cross_deploy_proof")
+        self.assertEqual(probe.previous_revision, "rev-a")
+
+    def test_persistence_probe_is_proven_after_reopen_with_new_revision(self):
+        self.state.verify_persistence("rev-a")
+        reopened = StateStore(self.db_path)
+        probe = reopened.verify_persistence("rev-b")
+        self.assertTrue(probe.proven)
+        self.assertEqual(probe.reason, "survived_prior_deployment")
+        self.assertEqual(probe.previous_revision, "rev-a")
+        self.assertEqual(probe.current_revision, "rev-b")
+
+    def test_persistence_probe_rejects_missing_revision(self):
+        probe = self.state.verify_persistence("")
+        self.assertFalse(probe.proven)
+        self.assertEqual(probe.reason, "deploy_revision_missing")
+
 
 if __name__ == "__main__":
     unittest.main()
