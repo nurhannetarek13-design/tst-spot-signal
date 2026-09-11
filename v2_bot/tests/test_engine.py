@@ -31,15 +31,15 @@ class FakeNotifier:
         return True
 
 
-def eligible_candidate(signal_open_time=1_000.0, *, setup="breakout"):
-    is_breakout = setup == "breakout"
+def eligible_candidate(signal_open_time=1_000.0, *, setup="breakout_retest"):
+    is_retest = setup == "breakout_retest"
     is_pullback = setup == "pullback"
     return Candidate(
         symbol="TESTUSDT",
         score=100,
         price=100.0,
         signal_open_time=signal_open_time,
-        previous_20_high=99.0,
+        previous_20_high=101.0,
         relative_volume=2.0,
         taker_buy_ratio=0.60,
         spread_bps=1.0,
@@ -48,12 +48,14 @@ def eligible_candidate(signal_open_time=1_000.0, *, setup="breakout"):
         trend_15m=True,
         trend_1h=True,
         trend_4h=True,
-        breakout=is_breakout,
+        breakout=False,
         rel_volume_ok=True,
         taker_flow_ok=True,
         eligible=True,
         pullback=is_pullback,
         entry_setup=setup,
+        breakout_retest=is_retest,
+        breakout_level=99.5 if is_retest else 0.0,
     )
 
 
@@ -121,12 +123,13 @@ class EngineUniverseTests(unittest.TestCase):
             trend_15m=True,
             trend_1h=False,
             trend_4h=True,
-            breakout=False,
+            breakout=True,
             rel_volume_ok=False,
             taker_flow_ok=False,
             eligible=False,
             pullback=False,
             entry_setup="none",
+            breakout_retest=False,
         )
 
         failed = V2Engine._failed_gates(candidate, settings)
@@ -152,6 +155,11 @@ class EngineUniverseTests(unittest.TestCase):
         self.assertEqual(counts["spread"], 1)
         self.assertEqual(counts["score"], 1)
 
+    def test_breakout_retest_satisfies_entry_setup_gate(self):
+        settings = Settings(max_spread_bps=15.0, min_score=90)
+        candidate = eligible_candidate(setup="breakout_retest")
+        self.assertNotIn("entry_setup", V2Engine._failed_gates(candidate, settings))
+
     def test_pullback_satisfies_entry_setup_gate(self):
         settings = Settings(max_spread_bps=15.0, min_score=90)
         candidate = eligible_candidate(setup="pullback")
@@ -171,6 +179,7 @@ class EngineLifecycleTests(unittest.TestCase):
         engine.settings = Settings(
             mode=mode,
             live_trading=False,
+            persistent_state=True if mode == "paper" else False,
             state_db=self.db_path,
             universe_limit=10,
             min_quote_volume_24h=20_000_000.0,
@@ -189,8 +198,8 @@ class EngineLifecycleTests(unittest.TestCase):
         second = engine.scan_once()
 
         self.assertEqual(first["action"]["event"], "shadow_signal")
-        self.assertEqual(first["action"]["entry_setup"], "breakout")
-        self.assertIn("Setup: breakout", engine.notifier.messages[0])
+        self.assertEqual(first["action"]["entry_setup"], "breakout_retest")
+        self.assertIn("Setup: breakout_retest", engine.notifier.messages[0])
         self.assertEqual(second["action"]["event"], "shadow_duplicate_suppressed")
         self.assertEqual(len(engine.notifier.messages), 1)
 
@@ -206,7 +215,7 @@ class EngineLifecycleTests(unittest.TestCase):
 
         opened = engine.scan_once()
         self.assertEqual(opened["action"]["event"], "paper_open")
-        self.assertEqual(opened["action"]["setup"], "breakout")
+        self.assertEqual(opened["action"]["setup"], "breakout_retest")
         self.assertEqual(opened["open_positions"], 1)
 
         engine.market.books["TESTUSDT"] = {"bid": 101.0, "ask": 101.01}
