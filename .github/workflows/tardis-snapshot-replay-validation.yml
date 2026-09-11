@@ -18,14 +18,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay snapshot to next authoritative snapshot
+      - name: Replay initial snapshot through raw depth and verify bookTicker
         run: |
+          set -o pipefail
           mkdir -p artifacts/tardis-snapshot-replay/${{ matrix.symbol }}
           python research/tardis_snapshot_replay_validator.py \
             --symbol '${{ matrix.symbol }}' \
             --date '2021-09-01' \
             --offset 0 \
-            --depth 20 \
             | tee artifacts/tardis-snapshot-replay/${{ matrix.symbol }}/result.json
       - name: Enforce canonical replay gate
         env:
@@ -38,13 +38,17 @@ jobs:
           assert d['authorization']=='RESEARCH_ONLY', d
           assert d['liveTrading'] is False, d
           assert d['status']=='PASS', d
-          assert d['bidExact'] is True and d['askExact'] is True, d
           assert d['canonicalReplayReady'] is True, d
           assert d['eventsApplied'] > 0, d
           assert d['continuityChecks'] > 0, d
+          assert d['tickerComparable'] > 0, d
+          assert d['tickerMismatches'] == 0, d
+          assert d['tickerExact'] == d['tickerComparable'], d
+          assert d['matchRate'] == 1.0, d
           print(json.dumps({k:d[k] for k in [
-            'symbol','status','startSnapshotId','targetSnapshotId','eventsApplied',
-            'continuityChecks','depthCompared','bidExact','askExact','canonicalReplayReady'
+            'symbol','status','startSnapshotId','eventsApplied','continuityChecks',
+            'tickerRecords','tickerComparable','tickerExact','tickerMismatches',
+            'matchRate','canonicalReplayReady'
           ]}, indent=2))
           PY
       - uses: actions/upload-artifact@v4
