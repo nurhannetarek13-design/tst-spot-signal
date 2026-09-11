@@ -14,6 +14,7 @@ on:
       - research/shadow_forward_state.py
       - research/shadow_l2_ablation.py
       - research/shadow_l2_cycle_adapter.py
+      - research/shadow_l2_forward_state.py
       - research/bybit_l2_live_feature.py
       - research/spot_baseline_gate_a.json
       - .github/workflows/shadow-forward-cycle-v1.yml
@@ -79,6 +80,8 @@ jobs:
           PY
       - name: Update persistent Gate A V2 trades and labels
         run: PYTHONPATH=. python research/shadow_forward_state.py
+      - name: Persist Gate G A/B outcomes
+        run: PYTHONPATH=. python research/shadow_l2_forward_state.py
       - name: Labeler and performance-gate contracts
         run: |
           python research/shadow_labeler.py --selftest
@@ -92,8 +95,11 @@ jobs:
           assert p['experiment']=='SPOT_BASELINE_GATE_A_V2_CLOSED_CANDLES'
           assert p['shadowLabelsRole']=='PURE_VALIDATION' and p['retrainingAllowed'] is False
           assert p['derivativesFeaturesAllowed'] is False and p['gate']['liveAuthorized'] is False
+          l2=json.load(open('validation/pro_stack/state/shadow_l2_ablation_performance.json'))
+          assert l2['authorization']=='RESEARCH_ONLY' and l2['liveTrading'] is False
+          assert l2['promotionCount']==0
           assert abs(p['costModel']['total_roundtrip_pct']-0.28)<1e-12
-          print(json.dumps({'milestone':p['milestone'],'metrics':p['metrics'],'gate':p['gate'],'portfolioRisk':p['portfolioRisk']},indent=2))
+          print(json.dumps({'milestone':p['milestone'],'metrics':p['metrics'],'gate':p['gate'],'portfolioRisk':p['portfolioRisk'],'l2AB':l2},indent=2))
           PY
       - name: Save Gate A V2 state
         uses: actions/cache/save@v4
