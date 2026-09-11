@@ -17,11 +17,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Probe one free raw minute
+      - name: Probe one documented free minute slice
         run: |
           mkdir -p artifacts/tardis-raw/${{ matrix.symbol }}
           python research/tardis_futures_raw_probe.py --symbol '${{ matrix.symbol }}' \
-            --from-ts '2024-01-01T00:00:00' --to-ts '2024-01-01T00:01:00' \
+            --date '2020-02-01' --offset 0 \
             | tee artifacts/tardis-raw/${{ matrix.symbol }}/probe.json
       - name: Validate canonical fields
         env:
