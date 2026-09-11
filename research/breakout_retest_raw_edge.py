@@ -14,28 +14,42 @@ RETEST_TOL_ATR=0.25
 CONT_BUF_ATR=0.10
 HORIZONS={"1h":4,"2h":8,"4h":16,"8h":32}
 OUT=pathlib.Path("validation/research/breakout-retest-raw-edge.json")
+BAR_MS=15*60*1000
+CHUNK_BARS=1000
 
 def ms(s): return int(dt.datetime.fromisoformat(s).timestamp()*1000)
 
-def fetch(symbol):
-    end=ms(END);cur=ms(START);rows=[]
-    while cur<end:
-        q=urllib.parse.urlencode({"symbol":symbol,"interval":INTERVAL,"limit":1000,"startTime":cur,"endTime":end})
-        req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+q,headers={"User-Agent":"tst-breakout-retest/1.1"})
-        with urllib.request.urlopen(req,timeout=30) as r: batch=json.load(r)
-        if not batch: break
-        rows.extend(batch)
-        nxt=int(batch[-1][0])+15*60*1000
-        if nxt<=cur: break
-        cur=nxt
-    print(symbol,"bars",len(rows),flush=True)
-    return rows
+def fetch_chunk(symbol,start_ms,end_ms):
+    q=urllib.parse.urlencode({"symbol":symbol,"interval":INTERVAL,"limit":CHUNK_BARS,"startTime":start_ms,"endTime":end_ms})
+    req=urllib.request.Request("https://data-api.binance.vision/api/v3/klines?"+q,headers={"User-Agent":"tst-breakout-retest/1.2"})
+    with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+
+def fetch_all():
+    start,end=ms(START),ms(END)
+    tasks=[]
+    for symbol in SYMBOLS:
+        cur=start
+        while cur<end:
+            chunk_end=min(end-1,cur+CHUNK_BARS*BAR_MS-1)
+            tasks.append((symbol,cur,chunk_end));cur+=CHUNK_BARS*BAR_MS
+    data={s:[] for s in SYMBOLS}
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        futs={ex.submit(fetch_chunk,*t):t for t in tasks}
+        for f in as_completed(futs):
+            symbol,_,_=futs[f];data[symbol].extend(f.result())
+    for s in SYMBOLS:
+        dedup={int(r[0]):r for r in data[s]}
+        data[s]=[dedup[k] for k in sorted(dedup)]
+        print(s,"bars",len(data[s]),flush=True)
+    return data
 
 def atr(h,l,c,n=14):
     tr=np.full(len(c),np.nan)
     for i in range(1,len(c)): tr[i]=max(h[i]-l[i],abs(h[i]-c[i-1]),abs(l[i]-c[i-1]))
     out=np.full(len(c),np.nan)
-    for i in range(n,len(c)): out[i]=np.nanmean(tr[i-n+1:i+1])
+    kernel=np.ones(n)/n
+    vals=np.convolve(np.nan_to_num(tr,nan=0.0),kernel,mode='valid')
+    out[n-1:n-1+len(vals)]=vals
     return out
 
 def summarize(vals):
@@ -71,11 +85,7 @@ def analyze(symbol,rows):
     print(symbol,"events",len(events),"OOS",out["OOS"]["1h"]["n"],flush=True)
     return out
 
-raw={}
-with ThreadPoolExecutor(max_workers=3) as ex:
-    futs={ex.submit(fetch,s):s for s in SYMBOLS}
-    for f in as_completed(futs): raw[futs[f]]=f.result()
-results={s:analyze(s,raw[s]) for s in SYMBOLS}
+raw=fetch_all();results={s:analyze(s,raw[s]) for s in SYMBOLS}
 qual_symbols=0
 for s,r in results.items():
     good=sum(1 for hn in HORIZONS if r["OOS"][hn]["n"]>=30 and (r["OOS"][hn]["median"] or 0)>0 and (r["OOS"][hn]["hitRate"] or 0)>=0.52)
