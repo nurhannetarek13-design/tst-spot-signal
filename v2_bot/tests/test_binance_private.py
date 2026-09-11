@@ -26,7 +26,7 @@ class FakeHTTPClient:
         pass
 
 
-def response(status: int, payload: dict) -> httpx.Response:
+def response(status: int, payload) -> httpx.Response:
     return httpx.Response(
         status,
         json=payload,
@@ -74,6 +74,46 @@ class BinanceSignedSpotClientTests(unittest.TestCase):
         self.assertEqual(fake.calls[0]["content"], expected)
         self.assertIn("newClientOrderId=abc%2F%2B", expected)
         self.assertEqual(fake.calls[0]["headers"]["X-MBX-APIKEY"], "key")
+
+    def test_account_reconciliation_calls_are_get_only(self) -> None:
+        fake = FakeHTTPClient(
+            [
+                response(200, {"canTrade": True, "balances": []}),
+                response(200, [{"symbol": "BTCUSDT", "clientOrderId": "abc"}]),
+                response(200, [{"symbol": "BTCUSDT", "listClientOrderId": "list1"}]),
+            ]
+        )
+        client = BinanceSignedSpotClient(
+            api_key="key",
+            api_secret="secret",
+            client=fake,
+            clock=lambda: 1700000000,
+        )
+
+        account = client.account_information(omit_zero_balances=True)
+        orders = client.open_orders(symbol="BTCUSDT")
+        order_lists = client.open_order_lists()
+
+        self.assertTrue(account["canTrade"])
+        self.assertEqual(orders[0]["clientOrderId"], "abc")
+        self.assertEqual(order_lists[0]["listClientOrderId"], "list1")
+        self.assertEqual([call["method"] for call in fake.calls], ["GET", "GET", "GET"])
+        self.assertIn("/api/v3/account?", fake.calls[0]["url"])
+        self.assertIn("omitZeroBalances=true", fake.calls[0]["url"])
+        self.assertIn("/api/v3/openOrders?", fake.calls[1]["url"])
+        self.assertIn("symbol=BTCUSDT", fake.calls[1]["url"])
+        self.assertIn("/api/v3/openOrderList?", fake.calls[2]["url"])
+
+    def test_open_orders_omits_symbol_when_not_requested(self) -> None:
+        fake = FakeHTTPClient([response(200, [])])
+        client = BinanceSignedSpotClient(
+            api_key="key",
+            api_secret="secret",
+            client=fake,
+            clock=lambda: 1700000000,
+        )
+        self.assertEqual(client.open_orders(), [])
+        self.assertNotIn("symbol=", fake.calls[0]["url"])
 
     def test_oco_uses_market_triggered_take_profit_and_stop_loss(self) -> None:
         fake = FakeHTTPClient(
