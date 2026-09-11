@@ -59,6 +59,32 @@ def eligible_candidate(signal_open_time=1_000.0, *, setup="breakout_retest"):
     )
 
 
+def raw_breakout_candidate(signal_open_time=3_000.0, *, trend_1h=True):
+    return Candidate(
+        symbol="TESTUSDT",
+        score=85 if trend_1h else 75,
+        price=102.0,
+        signal_open_time=signal_open_time,
+        previous_20_high=101.0,
+        relative_volume=2.0,
+        taker_buy_ratio=0.60,
+        spread_bps=1.0,
+        quote_volume_24h=100_000_000.0,
+        btc_regime_ok=True,
+        trend_15m=True,
+        trend_1h=trend_1h,
+        trend_4h=True,
+        breakout=True,
+        rel_volume_ok=True,
+        taker_flow_ok=True,
+        eligible=False,
+        pullback=False,
+        entry_setup="none",
+        breakout_retest=False,
+        breakout_level=101.0,
+    )
+
+
 class EngineUniverseTests(unittest.TestCase):
     def make_engine(self):
         engine = object.__new__(V2Engine)
@@ -165,6 +191,13 @@ class EngineUniverseTests(unittest.TestCase):
         candidate = eligible_candidate(setup="pullback")
         self.assertNotIn("entry_setup", V2Engine._failed_gates(candidate, settings))
 
+    def test_prealert_requires_every_pre_entry_quality_gate(self):
+        settings = Settings(max_spread_bps=15.0, min_score=90)
+        self.assertTrue(V2Engine._is_breakout_prealert(raw_breakout_candidate(), settings))
+        self.assertFalse(
+            V2Engine._is_breakout_prealert(raw_breakout_candidate(trend_1h=False), settings)
+        )
+
 
 class EngineLifecycleTests(unittest.TestCase):
     def setUp(self):
@@ -198,6 +231,7 @@ class EngineLifecycleTests(unittest.TestCase):
         second = engine.scan_once()
 
         self.assertEqual(first["action"]["event"], "shadow_signal")
+        self.assertIsNone(first["pre_alert"])
         self.assertEqual(first["action"]["entry_setup"], "breakout_retest")
         self.assertIn("Setup: breakout_retest", engine.notifier.messages[0])
         self.assertEqual(second["action"]["event"], "shadow_duplicate_suppressed")
@@ -209,6 +243,20 @@ class EngineLifecycleTests(unittest.TestCase):
         self.assertEqual(third["action"]["entry_setup"], "pullback")
         self.assertIn("Setup: pullback", engine.notifier.messages[-1])
         self.assertEqual(len(engine.notifier.messages), 2)
+
+    def test_breakout_prealert_is_no_entry_and_deduplicated(self):
+        engine = self.make_engine("shadow")
+        engine.current_candidate = raw_breakout_candidate()
+
+        first = engine.scan_once()
+        second = engine.scan_once()
+
+        self.assertIsNone(first["action"])
+        self.assertEqual(first["eligible"], 0)
+        self.assertEqual(first["pre_alert"]["event"], "breakout_prealert")
+        self.assertIn("NO ENTRY", engine.notifier.messages[0])
+        self.assertEqual(second["pre_alert"]["event"], "breakout_prealert_duplicate_suppressed")
+        self.assertEqual(len(engine.notifier.messages), 1)
 
     def test_paper_tp_close_does_not_reopen_same_symbol_in_same_cycle(self):
         engine = self.make_engine("paper")
