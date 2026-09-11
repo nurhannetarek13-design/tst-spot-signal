@@ -18,7 +18,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+        include:
+          - {symbol: BTCUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
+          - {symbol: BTCUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
+          - {symbol: BTCUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
+          - {symbol: BTCUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
+          - {symbol: BTCUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
+          - {symbol: BTCUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
+          - {symbol: ETHUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
+          - {symbol: ETHUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
+          - {symbol: ETHUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
+          - {symbol: ETHUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
+          - {symbol: ETHUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
+          - {symbol: ETHUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
+          - {symbol: SOLUSDT, slot: H00, from: '2021-09-01T00:00:00Z'}
+          - {symbol: SOLUSDT, slot: H04, from: '2021-09-01T04:00:00Z'}
+          - {symbol: SOLUSDT, slot: H08, from: '2021-09-01T08:00:00Z'}
+          - {symbol: SOLUSDT, slot: H12, from: '2021-09-01T12:00:00Z'}
+          - {symbol: SOLUSDT, slot: H16, from: '2021-09-01T16:00:00Z'}
+          - {symbol: SOLUSDT, slot: H20, from: '2021-09-01T20:00:00Z'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,15 +47,15 @@ jobs:
           mkdir -p research/results/tardis_microstructure
           python -m research.tardis_microstructure_scan \
             --symbol '${{ matrix.symbol }}' \
-            --date '2021-09-01' \
+            --date '${{ matrix.from }}' \
             --offset 0 \
-            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}.json' \
+            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
             --assert-ready
       - name: Enforce research-only invariants
         run: |
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}.json')
+          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json')
           d=json.loads(p.read_text())
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
@@ -48,6 +66,7 @@ jobs:
           assert d['validation']['tickerMismatches'] == 0
           print(json.dumps({
             'symbol': d['symbol'],
+            'from': d['date'],
             'featureEvents': d['summary']['featureEvents'],
             'sampledSeconds': d['summary']['sampledSeconds'],
             'tickerExact': d['validation']['tickerExact'],
@@ -57,6 +76,67 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: tardis-microstructure-${{ matrix.symbol }}
-          path: research/results/tardis_microstructure/${{ matrix.symbol }}.json
+          name: tardis-microstructure-${{ matrix.symbol }}-${{ matrix.slot }}
+          path: research/results/tardis_microstructure/${{ matrix.symbol }}-${{ matrix.slot }}.json
+          if-no-files-found: error
+
+  aggregate:
+    needs: integration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tardis-microstructure-*
+          path: downloaded
+          merge-multiple: true
+      - name: Aggregate frozen Gate G evidence
+        run: |
+          python - <<'PY'
+          import json, pathlib, statistics
+          files=sorted(pathlib.Path('downloaded').glob('*.json'))
+          cells=[]
+          for p in files:
+              d=json.loads(p.read_text())
+              cells.append(d)
+          horizons=('10','30','60')
+          aggregate={}
+          total_events=0
+          for side in ('long','short'):
+              aggregate[side]={}
+              total_events += sum(int(c['gateG']['eventCounts'][side]) for c in cells)
+              for h in horizons:
+                  weighted=[]
+                  hits=0
+                  n=0
+                  for c in cells:
+                      o=c['gateG']['outcomes'][side][h]
+                      k=int(o['n'])
+                      if k and o['meanDirectionalBps'] is not None:
+                          weighted.extend([float(o['meanDirectionalBps'])]*k)
+                          hits += round(float(o['hitRate'])*k)
+                          n += k
+                  aggregate[side][h]={
+                      'n': n,
+                      'meanDirectionalBpsApprox': (sum(weighted)/len(weighted) if weighted else None),
+                      'hitRateApprox': (hits/n if n else None),
+                  }
+          payload={
+              'authorization':'RESEARCH_ONLY',
+              'liveTrading':False,
+              'frozenDefinition': cells[0]['gateG']['eventDefinition'] if cells else None,
+              'cells':len(cells),
+              'totalSampledSeconds':sum(int(c['summary']['sampledSeconds']) for c in cells),
+              'totalFeatureEvents':sum(int(c['summary']['featureEvents']) for c in cells),
+              'totalGateGEvents':total_events,
+              'informationSufficient': total_events >= 30,
+              'aggregate':aggregate,
+              'decision':'EVALUATE_EDGE' if total_events >= 30 else 'INSUFFICIENT_INFORMATION',
+          }
+          pathlib.Path('tardis-microstructure-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
+          print(json.dumps(payload,indent=2,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-microstructure-aggregate
+          path: tardis-microstructure-aggregate.json
           if-no-files-found: error
