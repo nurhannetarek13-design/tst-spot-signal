@@ -1,0 +1,20 @@
+name: Bybit L2 Format Probe V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/bybit_l2_format_probe.py'
+      - '.github/workflows/bybit-l2-format-probe-v1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect SOL L2 archive
+        run: python research/bybit_l2_format_probe.py | tee bybit-l2-format.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bybit-l2-format-v1
+          path: bybit-l2-format.json
