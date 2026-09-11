@@ -1,0 +1,123 @@
+name: Tardis Microstructure OOS V2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/tardis-microstructure-oos-v2.yml'
+      - 'research/tardis_microstructure_range.py'
+      - 'research/tardis_microstructure_features.py'
+      - 'research/tardis_l2_replay.py'
+
+permissions:
+  contents: read
+
+jobs:
+  oos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {symbol: BTCUSDT, slot: M0030, offset: 30}
+          - {symbol: ETHUSDT, slot: M0030, offset: 30}
+          - {symbol: SOLUSDT, slot: M0030, offset: 30}
+          - {symbol: BTCUSDT, slot: M0045, offset: 45}
+          - {symbol: ETHUSDT, slot: M0045, offset: 45}
+          - {symbol: SOLUSDT, slot: M0045, offset: 45}
+          - {symbol: BTCUSDT, slot: M0060, offset: 60}
+          - {symbol: ETHUSDT, slot: M0060, offset: 60}
+          - {symbol: SOLUSDT, slot: M0060, offset: 60}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay warm-up plus isolated leakage-free OOS window
+        run: |
+          mkdir -p research/results/tardis_microstructure_oos_v2
+          python -m research.tardis_microstructure_range \
+            --symbol '${{ matrix.symbol }}' \
+            --date '2021-09-01' \
+            --start-offset '${{ matrix.offset }}' \
+            --minutes 5 \
+            --warmup-from-zero \
+            --output 'research/results/tardis_microstructure_oos_v2/${{ matrix.symbol }}-${{ matrix.slot }}.json' \
+            --assert-ready
+      - name: Enforce replay integrity only
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('research/results/tardis_microstructure_oos_v2/${{ matrix.symbol }}-${{ matrix.slot }}.json')
+          d=json.loads(p.read_text()); v=d['validation']
+          assert d['authorization']=='RESEARCH_ONLY' and d['liveTrading'] is False
+          assert d['status']=='PASS' and d['canonicalReplayReady'] is True
+          assert d['warmupFromZero'] is True and v['depthIntegrity'] is True
+          assert v['tickerMismatches'] <= 5 and v['matchRate'] >= 0.999
+          assert d['startOffset'] >= 30
+          assert d['evaluationSampledSeconds'] > 0
+          print(json.dumps({'symbol':d['symbol'],'offset':d['startOffset'],'sampledSeconds':d['evaluationSampledSeconds'],'events':d['gateG']['eventCounts']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-oos-v2-${{ matrix.symbol }}-${{ matrix.slot }}
+          path: research/results/tardis_microstructure_oos_v2/${{ matrix.symbol }}-${{ matrix.slot }}.json
+          if-no-files-found: error
+
+  aggregate:
+    needs: oos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tardis-oos-v2-*
+          path: downloaded
+          merge-multiple: true
+      - name: Frozen leakage-free OOS decision
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          cells=[json.loads(p.read_text()) for p in sorted(pathlib.Path('downloaded').glob('*.json'))]
+          assert len(cells)==9, len(cells)
+          horizons=('10','30','60'); windows=(30,45,60); sides=('long','short')
+          assert all(int(c['startOffset']) >= 30 for c in cells)
+          def agg(subset,side,h):
+              n=0; s=0.0; hits=0.0
+              for c in subset:
+                  o=c['gateG']['outcomes'][side][h]; k=int(o['n'])
+                  if k:
+                      n+=k; s+=float(o['meanDirectionalBps'])*k; hits+=float(o['hitRate'])*k
+              return {'n':n,'meanDirectionalBps':(s/n if n else None),'hitRate':(hits/n if n else None)}
+          overall={side:{h:agg(cells,side,h) for h in horizons} for side in sides}
+          by_window={str(w):{side:{h:agg([c for c in cells if int(c['startOffset'])==w],side,h) for h in horizons} for side in sides} for w in windows}
+          short10=overall['short']['10']; short30=overall['short']['30']
+          evaluable=short10['n']>=20 and short30['n']>=20
+          p10=sum(1 for w in windows if by_window[str(w)]['short']['10']['n']>=3 and by_window[str(w)]['short']['10']['meanDirectionalBps']>0 and by_window[str(w)]['short']['10']['hitRate']>=0.55)
+          p30=sum(1 for w in windows if by_window[str(w)]['short']['30']['n']>=3 and by_window[str(w)]['short']['30']['meanDirectionalBps']>0 and by_window[str(w)]['short']['30']['hitRate']>=0.55)
+          survives=bool(
+              evaluable
+              and short10['meanDirectionalBps'] is not None and short10['meanDirectionalBps']>0 and short10['hitRate']>=0.55
+              and short30['meanDirectionalBps'] is not None and short30['meanDirectionalBps']>0 and short30['hitRate']>=0.55
+              and p10>=2 and p30>=2
+          )
+          payload={
+              'authorization':'RESEARCH_ONLY','liveTrading':False,
+              'candidate':'FROZEN_GATE_G_SHORT_10_30S',
+              'discoveryWindowExcluded':{'date':'2021-09-01','startOffset':0,'minutes':30},
+              'oosWindows':[{'date':'2021-09-01','startOffset':w,'minutes':5} for w in windows],
+              'frozenDefinition':cells[0]['gateG']['eventDefinition'],
+              'cells':len(cells),'overall':overall,'byWindow':by_window,
+              'gate':{'minimumNPerHorizon':20,'minimumHitRate':0.55,'minimumPositiveWindows':2,'evaluable':evaluable,'positiveWindows10s':p10,'positiveWindows30s':p30},
+              'decision':'OOS_SURVIVOR' if survives else ('REJECT_OOS' if evaluable else 'INSUFFICIENT_OOS'),
+              'liveReady':False,
+          }
+          pathlib.Path('tardis-microstructure-oos-v2-aggregate.json').write_text(json.dumps(payload,indent=2,sort_keys=True))
+          print(json.dumps(payload,indent=2,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-microstructure-oos-v2-aggregate
+          path: tardis-microstructure-oos-v2-aggregate.json
+          if-no-files-found: error
