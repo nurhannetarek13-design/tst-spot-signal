@@ -1,0 +1,20 @@
+name: Tardis L2 Replay Unit Tests
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/tardis_l2_replay.py'
+      - 'research/tardis_snapshot_replay_validator.py'
+      - 'tests/test_tardis_l2_replay.py'
+      - '.github/workflows/tardis-l2-unit-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run deterministic replay tests
+        run: python -m unittest -v tests/test_tardis_l2_replay.py
