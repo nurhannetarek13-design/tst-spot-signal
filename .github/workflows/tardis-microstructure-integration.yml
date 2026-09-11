@@ -1,0 +1,62 @@
+name: Tardis Microstructure Integration
+
+on:
+  push:
+    paths:
+      - 'research/tardis_l2_replay.py'
+      - 'research/tardis_microstructure_features.py'
+      - 'research/tardis_microstructure_scan.py'
+      - '.github/workflows/tardis-microstructure-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT, SOLUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run canonical Tardis microstructure scan
+        run: |
+          mkdir -p research/results/tardis_microstructure
+          python research/tardis_microstructure_scan.py \
+            --symbol '${{ matrix.symbol }}' \
+            --date '2021-09-01' \
+            --offset 0 \
+            --output 'research/results/tardis_microstructure/${{ matrix.symbol }}.json' \
+            --assert-ready
+      - name: Enforce research-only invariants
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('research/results/tardis_microstructure/${{ matrix.symbol }}.json')
+          d=json.loads(p.read_text())
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['status']=='PASS'
+          assert d['canonicalReplayReady'] is True
+          assert d['summary']['featureEvents'] > 0
+          assert d['summary']['sampledSeconds'] > 0
+          assert d['validation']['tickerMismatches'] == 0
+          print(json.dumps({
+            'symbol': d['symbol'],
+            'featureEvents': d['summary']['featureEvents'],
+            'sampledSeconds': d['summary']['sampledSeconds'],
+            'tickerExact': d['validation']['tickerExact'],
+            'tickerMismatches': d['validation']['tickerMismatches'],
+            'gateGEventCounts': d['gateG']['eventCounts'],
+          }, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tardis-microstructure-${{ matrix.symbol }}
+          path: research/results/tardis_microstructure/${{ matrix.symbol }}.json
+          if-no-files-found: error
