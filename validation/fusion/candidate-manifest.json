@@ -59,21 +59,14 @@
   "poolSize": 1,
   "recentRejectedFingerprints": [
     "1240a5c4024ad81ee1e2",
-    "16a891b75d998d5f2638",
     "1b7dc1733caf8b96d86e",
     "355f478a8b669d789baf",
-    "385a252d2323f398b13a",
     "46ad824ea85b257ae59f",
-    "491ef3dee6fa939725a4",
-    "4d447ed53b9d56d398d4",
     "5a8be2536ed727aaa38e",
     "62e620408a8cb85cc7c2",
     "82bc01511e155b64e664",
-    "83e561f3d531f1bd9a71",
-    "b7b8fd956817ecaced07",
     "bf01f22fc60141ca16b1",
-    "cba53276448a08d4eebc",
-    "db0561831b32d3a2c528"
+    "cba53276448a08d4eebc"
   ],
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
@@ -84,5 +77,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-10T07:26:17.342068+00:00"
+  "generatedAt": "2026-09-11T06:29:44.291628+00:00"
 }
