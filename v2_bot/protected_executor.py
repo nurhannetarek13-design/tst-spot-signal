@@ -164,6 +164,16 @@ class ProtectedSpotExecutor:
                 "flatten_quantity": format(quantity, "f"),
             },
         )
+        if quantity <= 0:
+            self.journal.transition(
+                client_order_id,
+                "UNPROTECTED",
+                details={"flatten_skipped_reason": "non_positive_sellable_quantity"},
+            )
+            raise RecoveryRequired(
+                "EMERGENCY_FLATTEN_IMPOSSIBLE: no positive rounded sellable quantity"
+            )
+
         try:
             result = self.client.market_sell_quantity(
                 symbol=symbol,
@@ -183,12 +193,29 @@ class ProtectedSpotExecutor:
                 "EMERGENCY_FLATTEN_NOT_CONFIRMED: manual/account reconciliation required"
             ) from exc
 
+        flatten_status = str(result.get("status", "")).upper()
+        flatten_executed_qty = _decimal(result.get("executedQty"))
+        if flatten_status != "FILLED" or flatten_executed_qty <= 0:
+            self.journal.transition(
+                client_order_id,
+                "UNPROTECTED",
+                details={
+                    "flatten_order_id": str(result.get("orderId", "")),
+                    "flatten_status": flatten_status,
+                    "flatten_executed_qty": format(flatten_executed_qty, "f"),
+                },
+            )
+            raise RecoveryRequired(
+                "EMERGENCY_FLATTEN_NOT_FILLED: account reconciliation required"
+            )
+
         self.journal.transition(
             client_order_id,
             "FLATTENED",
             details={
                 "flatten_order_id": str(result.get("orderId", "")),
-                "flatten_status": str(result.get("status", "")),
+                "flatten_status": flatten_status,
+                "flatten_executed_qty": format(flatten_executed_qty, "f"),
             },
         )
 
@@ -281,7 +308,10 @@ class ProtectedSpotExecutor:
                 "BUY_STATUS_NOT_FINAL: reconcile order before continuing"
             )
 
-        if self.journal.get(ids["buy"]).stage != "BUY_FILLED":
+        current = self.journal.get(ids["buy"])
+        if current is None:
+            raise RuntimeError("execution_journal_missing_after_buy")
+        if current.stage != "BUY_FILLED":
             self.journal.transition(
                 ids["buy"],
                 "BUY_FILLED",
