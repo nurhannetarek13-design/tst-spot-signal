@@ -108,7 +108,7 @@ class V2Engine:
             failed.append("trend_1h")
         if not candidate.trend_4h:
             failed.append("trend_4h")
-        if not (candidate.breakout or candidate.pullback):
+        if not (candidate.breakout_retest or candidate.pullback):
             failed.append("entry_setup")
         if not candidate.rel_volume_ok:
             failed.append("relative_volume")
