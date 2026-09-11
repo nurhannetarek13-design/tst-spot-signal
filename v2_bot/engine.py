@@ -42,11 +42,24 @@ class V2Engine:
     def close(self) -> None:
         self.market.close()
 
+    @staticmethod
+    def _is_plain_spot_symbol(symbol: str) -> bool:
+        """Keep the scanner on conventional Binance symbols only.
+
+        Binance can occasionally surface promotional or newly-created symbols
+        whose base asset contains non-ASCII characters. Those pairs may have
+        incomplete candle history and are outside V2's intended research
+        universe. Digits remain allowed so assets such as 1000PEPE are kept.
+        """
+        return bool(symbol) and symbol.isascii() and symbol.isalnum() and symbol == symbol.upper()
+
     def _build_universe(self, tickers: list[dict[str, Any]]) -> list[tuple[str, float]]:
         ranked: list[tuple[str, float]] = []
         quote = self.settings.quote_asset
         for row in tickers:
             symbol = str(row.get("symbol", ""))
+            if not self._is_plain_spot_symbol(symbol):
+                continue
             if not symbol.endswith(quote):
                 continue
             if any(symbol.endswith(marker) for marker in LEVERAGED_TOKEN_MARKERS):
