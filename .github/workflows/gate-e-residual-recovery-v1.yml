@@ -1,0 +1,79 @@
+name: Gate E Residual Recovery V1
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/gate-e-residual-recovery-v1.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  eth_micro:
+    strategy:
+      fail-fast: false
+      matrix:
+        offset: [60, 70, 80]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - name: Build 10-day ETH recovery chunk
+        run: |
+          mkdir -p recovery
+          PYTHONPATH=. python research/gate_e_residual_chunk_v1.py \
+            --symbol ETHUSDT \
+            --offset-days ${{ matrix.offset }} \
+            --core-days 10 \
+            --out recovery/gate-e-v1-ETHUSDT-${{ matrix.offset }}-micro.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-e-recovery-ETHUSDT-${{ matrix.offset }}
+          path: recovery/*.json
+  aggregate:
+    needs: eth_micro
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install numpy pandas pyarrow
+      - name: Download original successful Gate E artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 34511480269
+          github-token: ${{ github.token }}
+          pattern: gate-e-v1-*
+          path: gate-e-recovered
+          merge-multiple: true
+      - name: Remove incomplete/duplicate ETH60 if present
+        run: |
+          rm -f gate-e-recovered/*ETHUSDT-60*.json || true
+      - name: Download ETH micro recovery artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gate-e-recovery-*
+          path: gate-e-recovered
+          merge-multiple: true
+      - name: Aggregate frozen Gate E
+        run: |
+          PYTHONPATH=. python research/gate_e_residual_aggregate_v1.py \
+            --glob 'gate-e-recovered/*.json' \
+            --out validation/edges/gate-e-residual-recovery-v1.json
+      - name: Enforce research contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/edges/gate-e-residual-recovery-v1.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False and x['usesML'] is False and x['usesSizing'] is False
+          assert x['thresholdsFrozen'] is True
+          print({'winners':x['winners'],'next':x['next'],'period':x['period'],'chunkCount':x['chunkCount']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-e-residual-recovery-v1
+          path: validation/edges/gate-e-residual-recovery-v1.json
