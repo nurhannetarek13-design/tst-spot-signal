@@ -1,15 +1,18 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "symbol": null,
-  "family": null,
+  "candidateId": "TST:MACD_EMA200_L2:BTC_ETH_SOL:15M:V1",
+  "candidateFingerprint": "ae0299f52aa7a9708aa9",
+  "symbol": "BTCUSDT",
+  "family": "MACD_EMA200_L2_CONFIRMATION",
   "allValidatorsCurrentCandidate": false,
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "CANDIDATE:MISSING",
+    "vectorbt:CANDIDATE_ID_MISMATCH",
+    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "freqtrade:CANDIDATE_ID_MISMATCH",
+    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -39,7 +42,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "CANDIDATE:MISSING",
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
@@ -137,6 +139,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-11T15:31:29.538919+00:00",
+  "generatedAt": "2026-09-11T16:09:31.460095+00:00",
   "note": "Full live readiness remains strict. Validator identity is exact candidateId+fingerprint. smallLiveReviewReady never enables trading automatically."
 }
