@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, time, math, urllib.request
+import json, os, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,21 +26,32 @@ def save_state(s):
 
 
 def get_json(url):
-    with urllib.request.urlopen(url, timeout=20) as r:
+    req = urllib.request.Request(url, headers={'User-Agent': 'tst-ready-paper-bot/1.0'})
+    with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode())
 
 
 def klines(symbol, interval, limit):
-    url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    rows = get_json(url)
-    out=[]
-    for r in rows:
-        out.append({'t':r[0], 'o':float(r[1]), 'h':float(r[2]), 'l':float(r[3]), 'c':float(r[4]), 'v':float(r[5])})
-    return out
-
-
-def sma(xs, n):
-    return sum(xs[-n:]) / n if len(xs) >= n else None
+    qs = f'/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
+    bases = [
+        'https://data-api.binance.vision',
+        'https://api.binance.com',
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com'
+    ]
+    last_err = None
+    for base in bases:
+        try:
+            rows = get_json(base + qs)
+            out=[]
+            for r in rows:
+                out.append({'t':r[0], 'o':float(r[1]), 'h':float(r[2]), 'l':float(r[3]), 'c':float(r[4]), 'v':float(r[5])})
+            if len(out) >= 210:
+                return out
+        except Exception as e:
+            last_err = e
+    raise RuntimeError(f'All Binance market-data endpoints failed for {symbol}: {last_err}')
 
 
 def ema(xs, n):
@@ -76,23 +87,16 @@ def strategy_score(rows):
     closes=[x['c'] for x in rows]
     price=closes[-1]
     votes=[]
-
-    # Trend continuation: price above EMA50 and EMA50 above EMA200.
     e50=ema(closes,50); e200=ema(closes,200)
     if CFG['strategies'].get('trend') and e50 and e200:
         votes.append(('trend', 1 if price > e50 > e200 else 0))
-
-    # Donchian-style breakout using previous 20 completed bars.
     if CFG['strategies'].get('breakout') and len(rows) >= 22:
         prev_high=max(x['h'] for x in rows[-21:-1])
         vol_avg=sum(x['v'] for x in rows[-21:-1])/20
         votes.append(('breakout', 1 if price > prev_high and rows[-1]['v'] > vol_avg*1.2 else 0))
-
-    # Mean reversion only inside broader uptrend: RSI oversold + price above EMA200.
     rv=rsi(closes,14)
     if CFG['strategies'].get('mean_reversion') and rv is not None and e200:
         votes.append(('mean_reversion', 1 if rv < 32 and price > e200 else 0))
-
     score=sum(v for _,v in votes)
     return score, {k:v for k,v in votes}, {'price':price,'rsi':rv,'ema50':e50,'ema200':e200,'atr':atr(rows)}
 
@@ -141,25 +145,19 @@ def main():
     if CFG.get('mode') != 'paper':
         raise SystemExit('Refusing to run: ready_bot is paper-only. Keep mode=paper.')
     s=load_state(); reset_day(s)
-
     market={}
     for symbol in CFG['symbols']:
         rows=klines(symbol,CFG['interval'],CFG['lookback'])
         market[symbol]=(rows, rows[-1]['c'])
-
-    # exits first
     for symbol in list(s['positions']):
         price=market[symbol][1]
         p=s['positions'][symbol]
         if price >= p['tp']: close_position(s,symbol,price,'TAKE_PROFIT')
         elif price <= p['sl']: close_position(s,symbol,price,'STOP_LOSS')
-
-    # hard daily loss gate
     if s['day_pnl'] <= -abs(CFG['max_daily_loss_usdt']):
         s['last_run']=datetime.now(timezone.utc).isoformat(); save_state(s)
         notify(f"PAPER HALT | daily loss gate reached: {s['day_pnl']:.4f} USDT")
         return
-
     slots=CFG['max_open_positions']-len(s['positions'])
     candidates=[]
     for symbol,(rows,price) in market.items():
@@ -167,12 +165,10 @@ def main():
         score,votes,ind=strategy_score(rows)
         if score >= CFG['min_consensus_score']:
             candidates.append((score,symbol,price,votes,ind))
-
     candidates.sort(reverse=True)
     for score,symbol,price,votes,ind in candidates[:max(0,slots)]:
         if s['cash_usdt'] < CFG['trade_size_usdt']: break
         open_position(s,symbol,price,{'score':score,'votes':votes,'indicators':ind})
-
     s['last_run']=datetime.now(timezone.utc).isoformat()
     save_state(s)
     print(json.dumps({'cash':s['cash_usdt'],'day_pnl':s['day_pnl'],'positions':s['positions'],'last_run':s['last_run']}, indent=2))
