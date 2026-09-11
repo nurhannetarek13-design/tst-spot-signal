@@ -27,7 +27,7 @@ jobs:
       - name: Run canonical Tardis microstructure scan
         run: |
           mkdir -p research/results/tardis_microstructure
-          python research/tardis_microstructure_scan.py \
+          python -m research.tardis_microstructure_scan \
             --symbol '${{ matrix.symbol }}' \
             --date '2021-09-01' \
             --offset 0 \
