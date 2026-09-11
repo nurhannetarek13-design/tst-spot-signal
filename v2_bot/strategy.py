@@ -43,7 +43,9 @@ def _trend(candles: list[dict[str, float]]) -> bool:
     closes = [c["close"] for c in candles]
     if len(closes) < 50:
         return False
-    return ema(closes, 20) > ema(closes, 50) and closes[-1] > ema(closes, 20)
+    ema20 = ema(closes, 20)
+    ema50 = ema(closes, 50)
+    return ema20 > ema50 and closes[-1] > ema20
 
 
 def evaluate_candidate(
@@ -59,8 +61,8 @@ def evaluate_candidate(
     max_spread_bps: float,
     min_score: int,
 ) -> Candidate:
-    if len(candles_15m) < 55 or len(candles_1h) < 55 or len(candles_4h) < 55:
-        raise ValueError("Not enough candles")
+    if len(candles_15m) < 55 or len(candles_1h) < 55 or len(candles_4h) < 55 or len(btc_1h) < 55:
+        raise ValueError("Not enough closed candles")
 
     last = candles_15m[-1]
     previous_20 = candles_15m[-21:-1]
@@ -93,8 +95,23 @@ def evaluate_candidate(
     score += 15 if rel_volume_ok else 0
     score += 10 if taker_flow_ok else 0
 
-    hard_safety_ok = liquidity_ok and spread_ok and btc_regime_ok
-    eligible = hard_safety_ok and score >= min_score
+    # Score is used for ranking/diagnostics. Eligibility is stricter: every
+    # entry gate must pass. This prevents a 90/100 candidate from becoming
+    # tradable while one critical trend/flow/breakout condition is missing.
+    all_entry_gates_ok = all(
+        (
+            liquidity_ok,
+            spread_ok,
+            btc_regime_ok,
+            trend_15m,
+            trend_1h,
+            trend_4h,
+            breakout,
+            rel_volume_ok,
+            taker_flow_ok,
+        )
+    )
+    eligible = all_entry_gates_ok and score >= min_score
 
     return Candidate(
         symbol=symbol,
