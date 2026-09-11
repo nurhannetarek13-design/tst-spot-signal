@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from typing import Any
 
 from .binance_public import BinancePublicClient
@@ -13,6 +12,24 @@ from .strategy import Candidate, evaluate_candidate
 
 
 LEVERAGED_TOKEN_MARKERS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
+STABLE_OR_FIAT_BASE_ASSETS = {
+    "USDC",
+    "FDUSD",
+    "TUSD",
+    "USDP",
+    "DAI",
+    "BUSD",
+    "USDE",
+    "USD1",
+    "PYUSD",
+    "EUR",
+    "AEUR",
+    "EURI",
+    "GBP",
+    "AUD",
+    "BRL",
+    "TRY",
+}
 
 
 class V2Engine:
@@ -27,11 +44,15 @@ class V2Engine:
 
     def _build_universe(self, tickers: list[dict[str, Any]]) -> list[tuple[str, float]]:
         ranked: list[tuple[str, float]] = []
+        quote = self.settings.quote_asset
         for row in tickers:
             symbol = str(row.get("symbol", ""))
-            if not symbol.endswith(self.settings.quote_asset):
+            if not symbol.endswith(quote):
                 continue
             if any(symbol.endswith(marker) for marker in LEVERAGED_TOKEN_MARKERS):
+                continue
+            base_asset = symbol[: -len(quote)] if quote else ""
+            if not base_asset or base_asset in STABLE_OR_FIAT_BASE_ASSETS:
                 continue
             try:
                 quote_volume = float(row.get("quoteVolume", 0.0))
