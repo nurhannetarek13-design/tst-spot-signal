@@ -104,8 +104,16 @@ class UnifiedCandidateValidator(Strategy):
 
     def go_long(self):
         entry=float(self.price);size_usd=min(5.5,max(0,float(self.balance)));qty=max(size_usd/entry,1e-8)
+        self.buy=qty,entry
+        try:self.vars["entry_ts"]=float(self.current_candle[0])
+        except Exception:pass
+
+    def on_open_position(self, order):
+        qty=abs(float(self.position.qty))
+        entry=float(self.position.entry_price)
         sl=float(PARAMS.get("sl",0.03));tp=float(PARAMS.get("tp",0.06))
-        self.buy=qty,entry;self.stop_loss=qty,entry*(1-sl);self.take_profit=qty,entry*(1+tp)
+        self.stop_loss=qty,entry*(1-sl)
+        self.take_profit=qty,entry*(1+tp)
         try:self.vars["entry_ts"]=float(self.current_candle[0])
         except Exception:pass
 
