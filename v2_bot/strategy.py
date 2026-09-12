@@ -28,6 +28,18 @@ class Candidate:
     entry_setup: str = "none"
     breakout_retest: bool = False
     breakout_level: float = 0.0
+    # Runtime V2 may route several independent strategy families. These
+    # defaults preserve backwards compatibility with the original evaluator
+    # and its unit tests while allowing the production runtime to report the
+    # actual strategy selected by the router.
+    strategy_id: str = "strict_current"
+    strategy_family: str = "trend_retest"
+    strategy_status: str = "LEGACY"
+    market_regime: str = "unknown"
+    strategy_signal_ok: bool = False
+    strategy_failed_gates: tuple[str, ...] = ()
+    take_profit_pct: float | None = None
+    stop_loss_pct: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -200,4 +212,5 @@ def evaluate_candidate(
         entry_setup=entry_setup,
         breakout_retest=breakout_retest,
         breakout_level=breakout_level,
+        strategy_signal_ok=eligible,
     )
