@@ -1,0 +1,46 @@
+name: V2 Candidate Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Historical window in days
+        required: false
+        default: '180'
+  push:
+    branches:
+      - bot-v2-standalone
+    paths:
+      - 'v2_bot/candidate_discovery.py'
+      - '.github/workflows/v2-candidate-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Compile discovery module
+        run: python -m py_compile v2_bot/candidate_discovery.py
+      - name: Run frozen-family discovery with chronological OOS
+        env:
+          DISCOVERY_DAYS: ${{ inputs.days || '180' }}
+        run: |
+          python -m v2_bot.candidate_discovery \
+            --days "$DISCOVERY_DAYS" \
+            --output v2_candidate_discovery.json
+      - name: Upload discovery report
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-candidate-discovery
+          path: v2_candidate_discovery.json
+          if-no-files-found: error
+          retention-days: 14
