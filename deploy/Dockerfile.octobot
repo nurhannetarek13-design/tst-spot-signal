@@ -1,0 +1,11 @@
+FROM drakkarsoftware/octobot:stable
+
+WORKDIR /octobot
+
+# Railway supplies its own start command. Drop the inherited ENTRYPOINT so
+# the service can invoke OctoBot's official docker-entrypoint directly.
+ENTRYPOINT []
+
+EXPOSE 5001
+
+CMD ["./docker-entrypoint.sh"]
