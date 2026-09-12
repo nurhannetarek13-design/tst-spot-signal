@@ -33,9 +33,9 @@ def make_execution_journal(settings: Settings) -> Any:
     if settings.state_backend == "sqlite":
         return ExecutionJournal(settings.state_db)
     if settings.state_backend == "postgres":
-        from .postgres_storage import PostgresExecutionJournal
+        from .postgres_journal import ExposureAwarePostgresExecutionJournal
 
-        return PostgresExecutionJournal(settings.database_url)
+        return ExposureAwarePostgresExecutionJournal(settings.database_url)
     raise ValueError(f"unsupported state backend: {settings.state_backend}")
 
 
