@@ -17,6 +17,9 @@ from .storage_backend import (
 class RuntimeV2Engine(V2Engine):
     """Production runtime wiring without changing the strategy engine itself."""
 
+    PAPER_READY_EVENT_SYMBOL = "__V2_SYSTEM__"
+    PAPER_READY_EVENT_KIND = "paper_evidence_ready_v1"
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.market = BinancePublicClient()
@@ -76,6 +79,35 @@ class RuntimeV2Engine(V2Engine):
             f"Max DD: {self._metric(paper_stats['max_drawdown_usdt'])} USDT"
         )
 
+    def _maybe_notify_paper_ready(self, paper_stats, paper_report) -> bool:
+        """Send a one-time promotion-review alert when real Paper evidence passes.
+
+        This never changes mode, credentials, adapter flags, or the Live hard
+        lock. It only tells the operator the evidence gate is ready for review.
+        """
+        if self.settings.mode != "paper" or not paper_report.ready:
+            return False
+
+        already_claimed = not self.state.claim_signal(
+            symbol=self.PAPER_READY_EVENT_SYMBOL,
+            signal_open_time=0.0,
+            kind=self.PAPER_READY_EVENT_KIND,
+        )
+        if already_claimed:
+            return False
+
+        self.notifier.send(
+            "V2 PAPER EVIDENCE READY — REVIEW ONLY\n"
+            f"Closed: {paper_stats['closed']}\n"
+            f"Win rate: {self._metric(paper_stats['win_rate'], percent=True)}\n"
+            f"Net PnL: {self._metric(paper_stats['net_pnl_usdt'])} USDT\n"
+            f"Expectancy: {self._metric(paper_stats['expectancy_usdt'])} USDT/trade\n"
+            f"Profit factor: {self._metric(paper_stats['profit_factor'])}\n"
+            f"Max DD: {self._metric(paper_stats['max_drawdown_usdt'])} USDT\n"
+            "Live remains OFF. Manual review/authorization is still required."
+        )
+        return True
+
     def scan_once(self):
         summary = super().scan_once()
         paper_stats = self.paper_evidence.stats()
@@ -108,4 +140,8 @@ class RuntimeV2Engine(V2Engine):
         }
         if self.settings.mode == "paper" and summary.get("paper_events"):
             self._notify_paper_stats(paper_stats)
+        summary["paper_ready_alert_sent"] = self._maybe_notify_paper_ready(
+            paper_stats,
+            paper_report,
+        )
         return summary
