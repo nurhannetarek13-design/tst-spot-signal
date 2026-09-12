@@ -8,6 +8,7 @@ from .engine import V2Engine
 from .live_adapter import make_live_adapter
 from .notifier import TelegramNotifier
 from .readiness import evaluate_live_readiness, evaluate_paper_evidence
+from .spot_preflight import SpotSymbolRules, validate_protected_spot_trade
 from .storage_backend import (
     make_execution_journal,
     make_paper_evidence,
@@ -15,6 +16,7 @@ from .storage_backend import (
     make_state_store,
 )
 from .strategy_pool import evaluate_pool, registry_snapshot
+from .strategy_state import StrategyAwareStateProxy
 
 
 class RuntimeV2Engine(V2Engine):
@@ -26,7 +28,7 @@ class RuntimeV2Engine(V2Engine):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.market = BinancePublicClient()
-        self.state = make_state_store(settings)
+        self.state = StrategyAwareStateProxy(make_state_store(settings))
         self.shadow_outcomes = make_shadow_outcome_ledger(settings)
         self.paper_evidence = make_paper_evidence(settings)
         self.execution_journal = make_execution_journal(settings)
@@ -84,7 +86,70 @@ class RuntimeV2Engine(V2Engine):
         return V2Engine._is_breakout_prealert(candidate, settings)
 
     def _execution_preflight(self, *, candidate, books):
-        result = super()._execution_preflight(candidate=candidate, books=books)
+        book = books.get(candidate.symbol, {})
+        entry_price = float(book.get("ask", 0.0)) or candidate.price
+        take_profit_pct = (
+            float(candidate.take_profit_pct)
+            if candidate.take_profit_pct is not None
+            else self.settings.take_profit_pct
+        )
+        stop_loss_pct = (
+            float(candidate.stop_loss_pct)
+            if candidate.stop_loss_pct is not None
+            else self.settings.stop_loss_pct
+        )
+        take_profit_price = entry_price * (1.0 + take_profit_pct)
+        stop_loss_price = entry_price * (1.0 - stop_loss_pct)
+
+        try:
+            exchange_info = self.market.exchange_info(candidate.symbol)
+            symbol_rows = exchange_info.get("symbols", [])
+            symbol_info = next(
+                (
+                    row
+                    for row in symbol_rows
+                    if isinstance(row, dict) and str(row.get("symbol", "")) == candidate.symbol
+                ),
+                None,
+            )
+            if symbol_info is None:
+                raise RuntimeError("symbol_missing_from_exchange_info")
+            rules = SpotSymbolRules.from_exchange_info(symbol_info)
+            validation = validate_protected_spot_trade(
+                rules=rules,
+                quote_size=self.settings.trade_size_usdt,
+                entry_price=entry_price,
+                take_profit_price=take_profit_price,
+                stop_loss_price=stop_loss_price,
+            )
+            result = {
+                "allowed": validation.allowed,
+                "reasons": list(validation.reasons),
+                "symbol": validation.symbol,
+                "quote_size_usdt": str(self.settings.trade_size_usdt),
+                "quantity": format(validation.quantity, "f"),
+                "entry_price": format(validation.entry_price, "f"),
+                "take_profit_price": format(validation.take_profit_price, "f"),
+                "stop_loss_price": format(validation.stop_loss_price, "f"),
+                "entry_notional": format(validation.entry_notional, "f"),
+                "take_profit_notional": format(validation.take_profit_notional, "f"),
+                "stop_loss_notional": format(validation.stop_loss_notional, "f"),
+                "min_notional": format(validation.min_notional, "f"),
+                "strategy_id": getattr(candidate, "strategy_id", "strict_current"),
+                "take_profit_pct": take_profit_pct,
+                "stop_loss_pct": stop_loss_pct,
+            }
+        except Exception as exc:
+            self.state.clear_profile(candidate.symbol)
+            return {
+                "allowed": False,
+                "reasons": ["exchange_preflight_error"],
+                "symbol": candidate.symbol,
+                "quote_size_usdt": str(self.settings.trade_size_usdt),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+
         if self.settings.mode == "paper" and result.get("allowed"):
             strategy_id = getattr(candidate, "strategy_id", "strict_current")
             strategy_status = getattr(candidate, "strategy_status", "LEGACY")
@@ -95,13 +160,60 @@ class RuntimeV2Engine(V2Engine):
                 kind=kind,
             )
             if not claimed:
+                self.state.clear_profile(candidate.symbol)
                 result = dict(result)
                 result["allowed"] = False
                 result["reasons"] = [
                     *list(result.get("reasons", [])),
                     "paper_signal_duplicate",
                 ]
+            elif strategy_status != "LEGACY":
+                self.state.prepare_profile(
+                    symbol=candidate.symbol,
+                    strategy_id=strategy_id,
+                    take_profit_pct=take_profit_pct,
+                    stop_loss_pct=stop_loss_pct,
+                )
         return result
+
+    def _track_shadow_signal(self, *, candidate, books):
+        ledger = getattr(self, "shadow_outcomes", None)
+        if ledger is None:
+            return {"tracked": False, "reason": "shadow_outcome_ledger_unavailable"}
+        entry_price = float(books.get(candidate.symbol, {}).get("ask", 0.0)) or candidate.price
+        take_profit_pct = (
+            float(candidate.take_profit_pct)
+            if candidate.take_profit_pct is not None
+            else self.settings.take_profit_pct
+        )
+        stop_loss_pct = (
+            float(candidate.stop_loss_pct)
+            if candidate.stop_loss_pct is not None
+            else self.settings.stop_loss_pct
+        )
+        try:
+            outcome = ledger.open_signal(
+                symbol=candidate.symbol,
+                signal_open_time=candidate.signal_open_time,
+                entry_price=entry_price,
+                quote_size=self.settings.trade_size_usdt,
+                take_profit_pct=take_profit_pct,
+                stop_loss_pct=stop_loss_pct,
+                fee_rate=self.settings.paper_fee_rate,
+            )
+            return {
+                "tracked": True,
+                "strategy_id": getattr(candidate, "strategy_id", "strict_current"),
+                "entry_price": outcome.entry_price,
+                "take_profit": outcome.take_profit,
+                "stop_loss": outcome.stop_loss,
+            }
+        except Exception as exc:
+            return {
+                "tracked": False,
+                "reason": str(exc),
+                "error_type": type(exc).__name__,
+            }
 
     @staticmethod
     def _metric(value, *, percent: bool = False) -> str:
@@ -124,14 +236,8 @@ class RuntimeV2Engine(V2Engine):
         )
 
     def _maybe_notify_paper_ready(self, paper_stats, paper_report) -> bool:
-        """Send a one-time promotion-review alert when real Paper evidence passes.
-
-        This never changes mode, credentials, adapter flags, or the Live hard
-        lock. It only tells the operator the evidence gate is ready for review.
-        """
         if self.settings.mode != "paper" or not paper_report.ready:
             return False
-
         already_claimed = not self.state.claim_signal(
             symbol=self.PAPER_READY_EVENT_SYMBOL,
             signal_open_time=0.0,
@@ -139,7 +245,6 @@ class RuntimeV2Engine(V2Engine):
         )
         if already_claimed:
             return False
-
         self.notifier.send(
             "V2 PAPER EVIDENCE READY — REVIEW ONLY\n"
             f"Closed: {paper_stats['closed']}\n"
