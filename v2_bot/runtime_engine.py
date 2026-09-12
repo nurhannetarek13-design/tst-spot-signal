@@ -87,10 +87,12 @@ class RuntimeV2Engine(V2Engine):
         result = super()._execution_preflight(candidate=candidate, books=books)
         if self.settings.mode == "paper" and result.get("allowed"):
             strategy_id = getattr(candidate, "strategy_id", "strict_current")
+            strategy_status = getattr(candidate, "strategy_status", "LEGACY")
+            kind = "paper" if strategy_status == "LEGACY" else f"paper:{strategy_id}"
             claimed = self.state.claim_signal(
                 symbol=candidate.symbol,
                 signal_open_time=candidate.signal_open_time,
-                kind=f"paper:{strategy_id}",
+                kind=kind,
             )
             if not claimed:
                 result = dict(result)
