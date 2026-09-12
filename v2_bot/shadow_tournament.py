@@ -14,7 +14,7 @@ LEGACY_STRATEGY_ID = "LEGACY"
 
 def encode_shadow_key(symbol: str, strategy_id: str) -> str:
     market_symbol = str(symbol or "").strip().upper()
-    strategy = str(strategy_id or "").strip()
+    strategy = str(strategy_id or "").strip().lower()
     if not market_symbol or KEY_SEPARATOR in market_symbol:
         raise ValueError("invalid shadow market symbol")
     if not strategy or KEY_SEPARATOR in strategy:
@@ -28,7 +28,7 @@ def decode_shadow_key(value: str) -> tuple[str, str | None]:
         return text.upper(), None
     symbol, strategy_id = text.split(KEY_SEPARATOR, 1)
     symbol = symbol.strip().upper()
-    strategy_id = strategy_id.strip()
+    strategy_id = strategy_id.strip().lower()
     return symbol, strategy_id or None
 
 
@@ -93,7 +93,7 @@ def summarize_shadow_rows(rows: Iterable[dict[str, Any]]) -> dict[str, float | i
 class StrategyShadowLedgerAdapter:
     """Adds strategy identity to the existing durable shadow ledger without a schema migration.
 
-    The existing ledger primary key is (symbol, signal_open_time).  The adapter stores
+    The existing ledger primary key is (symbol, signal_open_time). The adapter stores
     the durable key as SYMBOL::strategy_id, allowing every strategy to track the same
     market candle independently while remaining backward-compatible with legacy rows.
     """
@@ -220,9 +220,8 @@ def evaluate_shadow_promotion(
     if decisive < policy.min_decisive:
         blockers.append("shadow_sample_insufficient")
     if pf is None:
-        # A no-loss sample can only pass PF once the minimum sample is met.
-        if decisive < policy.min_decisive or int(stats.get("losses", 0) or 0) == 0:
-            blockers.append("shadow_profit_factor_unproven")
+        # No-loss samples do not establish a finite loss denominator, so PF stays unproven.
+        blockers.append("shadow_profit_factor_unproven")
     elif float(pf) < policy.min_profit_factor:
         blockers.append("shadow_profit_factor_below_gate")
     if expectancy is None or float(expectancy) <= policy.min_expectancy_usdt:
