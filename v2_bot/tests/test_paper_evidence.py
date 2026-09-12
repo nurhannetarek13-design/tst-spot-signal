@@ -3,7 +3,11 @@ import unittest
 from pathlib import Path
 
 from v2_bot.config import Settings
-from v2_bot.paper_evidence import SqlitePaperEvidence, summarize_pnls
+from v2_bot.paper_evidence import (
+    SqlitePaperEvidence,
+    summarize_pnls,
+    summarize_strategy_rows,
+)
 from v2_bot.readiness import evaluate_live_readiness, evaluate_paper_evidence
 from v2_bot.state import StateStore
 
@@ -49,6 +53,57 @@ class PaperEvidenceTests(unittest.TestCase):
             self.assertEqual(stats["wins"], 1)
             self.assertEqual(stats["losses"], 1)
             self.assertEqual(stats["profit_factor"], 1.0)
+
+    def test_strategy_rows_are_never_aggregated_into_one_promotion_sample(self):
+        stats = summarize_strategy_rows(
+            [
+                (0.10, "trend_momentum:take_profit"),
+                (-0.05, "trend_momentum:stop_loss"),
+                (0.20, "range_reversion:take_profit"),
+                (-0.25, "range_reversion:stop_loss"),
+                (0.01, "take_profit"),
+            ]
+        )
+        self.assertEqual(set(stats), {"LEGACY", "range_reversion", "trend_momentum"})
+        self.assertEqual(stats["trend_momentum"]["closed"], 2)
+        self.assertEqual(stats["range_reversion"]["closed"], 2)
+        self.assertEqual(stats["LEGACY"]["closed"], 1)
+        self.assertEqual(stats["trend_momentum"]["profit_factor"], 2.0)
+        self.assertEqual(stats["range_reversion"]["profit_factor"], 0.8)
+
+    def test_sqlite_stats_by_strategy_reads_reason_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "state.sqlite3")
+            store = StateStore(path)
+            first = store.open_position(
+                symbol="BTCUSDT",
+                entry_price=100.0,
+                quote_size=10.0,
+                take_profit_pct=0.01,
+                stop_loss_pct=0.01,
+            )
+            store.close_position(
+                first,
+                exit_price=101.0,
+                reason="trend_momentum:take_profit",
+                fee_rate=0.0,
+            )
+            second = store.open_position(
+                symbol="ETHUSDT",
+                entry_price=100.0,
+                quote_size=10.0,
+                take_profit_pct=0.01,
+                stop_loss_pct=0.01,
+            )
+            store.close_position(
+                second,
+                exit_price=99.0,
+                reason="range_reversion:stop_loss",
+                fee_rate=0.0,
+            )
+            by_strategy = SqlitePaperEvidence(path).stats_by_strategy()
+            self.assertEqual(by_strategy["trend_momentum"]["closed"], 1)
+            self.assertEqual(by_strategy["range_reversion"]["closed"], 1)
 
     def test_paper_gate_requires_sample_pf_and_positive_expectancy(self):
         failing = evaluate_paper_evidence(
