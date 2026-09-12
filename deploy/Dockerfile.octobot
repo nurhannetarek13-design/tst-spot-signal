@@ -6,6 +6,7 @@ WORKDIR /octobot
 # the service can invoke OctoBot's official docker-entrypoint directly.
 ENTRYPOINT []
 
+# OctoBot standalone web UI.
 EXPOSE 5001
 
 CMD ["./docker-entrypoint.sh"]
