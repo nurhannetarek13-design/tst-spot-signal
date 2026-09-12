@@ -183,6 +183,17 @@
         "jesse"
       ],
       "rejectedAt": "2026-09-11T17:14:52.041935+00:00"
+    },
+    {
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "symbol": "HOLOUSDT",
+      "family": "TS_MOMENTUM",
+      "hardFailValidators": [
+        "vectorbt",
+        "freqtrade"
+      ],
+      "rejectedAt": "2026-09-12T07:18:01.464611+00:00"
     }
   ],
   "ttlDays": 7,
