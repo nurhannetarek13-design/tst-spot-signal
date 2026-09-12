@@ -1,0 +1,45 @@
+name: V2 Regime Router OOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bot-v2-standalone]
+    paths:
+      - "v2_bot/regime_oos.py"
+      - "v2_bot/strategy_pool.py"
+      - "v2_bot/multistrategy_discovery.py"
+      - ".github/workflows/v2-regime-oos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Compile regime validator
+        run: python -m py_compile v2_bot/regime_oos.py
+      - name: Run frozen regime Discovery + temporal OOS + stress
+        run: python -m v2_bot.regime_oos --days 180 --output v2_regime_oos.json
+      - name: Assert research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          report=json.load(open('v2_regime_oos.json'))
+          assert report['liveTrading'] is False
+          assert report['verdict'] == 'REGIME_ROUTER_OOS_RESEARCH_ONLY'
+          assert report['acceptance']['thresholds'] == 'FROZEN_BEFORE_REGIME_RESULTS_NO_GRID_SEARCH'
+          print({'promotable_to_paper': report['promotable_to_paper']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-regime-oos
+          path: v2_regime_oos.json
+          retention-days: 14
