@@ -56,6 +56,26 @@ class RuntimeV2Engine(V2Engine):
                 ]
         return result
 
+    @staticmethod
+    def _metric(value, *, percent: bool = False) -> str:
+        if value is None:
+            return "unproven"
+        number = float(value)
+        if percent:
+            return f"{number:.1%}"
+        return f"{number:.4f}"
+
+    def _notify_paper_stats(self, paper_stats) -> None:
+        self.notifier.send(
+            "V2 PAPER CUMULATIVE\n"
+            f"Closed: {paper_stats['closed']}\n"
+            f"Win rate: {self._metric(paper_stats['win_rate'], percent=True)}\n"
+            f"Net PnL: {self._metric(paper_stats['net_pnl_usdt'])} USDT\n"
+            f"Expectancy: {self._metric(paper_stats['expectancy_usdt'])} USDT/trade\n"
+            f"Profit factor: {self._metric(paper_stats['profit_factor'])}\n"
+            f"Max DD: {self._metric(paper_stats['max_drawdown_usdt'])} USDT"
+        )
+
     def scan_once(self):
         summary = super().scan_once()
         paper_stats = self.paper_evidence.stats()
@@ -86,4 +106,6 @@ class RuntimeV2Engine(V2Engine):
             "emergency_flatten_verified": self.settings.emergency_flatten_verified,
             "pending_execution_count": pending_execution_count,
         }
+        if self.settings.mode == "paper" and summary.get("paper_events"):
+            self._notify_paper_stats(paper_stats)
         return summary
