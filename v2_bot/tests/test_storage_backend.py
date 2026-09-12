@@ -45,7 +45,7 @@ class StorageBackendTests(unittest.TestCase):
         with (
             patch("v2_bot.postgres_storage.PostgresStateStore") as state_cls,
             patch("v2_bot.postgres_storage.PostgresShadowOutcomeLedger") as shadow_cls,
-            patch("v2_bot.postgres_storage.PostgresExecutionJournal") as journal_cls,
+            patch("v2_bot.postgres_journal.ExposureAwarePostgresExecutionJournal") as journal_cls,
         ):
             make_state_store(settings)
             make_shadow_outcome_ledger(settings)
