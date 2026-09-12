@@ -15,7 +15,7 @@ from .storage_backend import (
     make_shadow_outcome_ledger,
     make_state_store,
 )
-from .strategy_pool import evaluate_pool, registry_snapshot
+from .strategy_pool import ACTIVE, PAPER, evaluate_pool, registry_snapshot
 from .strategy_state import StrategyAwareStateProxy
 
 
@@ -86,18 +86,28 @@ class RuntimeV2Engine(V2Engine):
         return V2Engine._is_breakout_prealert(candidate, settings)
 
     def _execution_preflight(self, *, candidate, books):
+        strategy_status = getattr(candidate, "strategy_status", "LEGACY")
+        if strategy_status == "LEGACY":
+            result = super()._execution_preflight(candidate=candidate, books=books)
+            if self.settings.mode == "paper" and result.get("allowed"):
+                claimed = self.state.claim_signal(
+                    symbol=candidate.symbol,
+                    signal_open_time=candidate.signal_open_time,
+                    kind="paper",
+                )
+                if not claimed:
+                    result = dict(result)
+                    result["allowed"] = False
+                    result["reasons"] = [
+                        *list(result.get("reasons", [])),
+                        "paper_signal_duplicate",
+                    ]
+            return result
+
         book = books.get(candidate.symbol, {})
         entry_price = float(book.get("ask", 0.0)) or candidate.price
-        take_profit_pct = (
-            float(candidate.take_profit_pct)
-            if candidate.take_profit_pct is not None
-            else self.settings.take_profit_pct
-        )
-        stop_loss_pct = (
-            float(candidate.stop_loss_pct)
-            if candidate.stop_loss_pct is not None
-            else self.settings.stop_loss_pct
-        )
+        take_profit_pct = float(candidate.take_profit_pct)
+        stop_loss_pct = float(candidate.stop_loss_pct)
         take_profit_price = entry_price * (1.0 + take_profit_pct)
         stop_loss_price = entry_price * (1.0 - stop_loss_pct)
 
@@ -135,7 +145,7 @@ class RuntimeV2Engine(V2Engine):
                 "take_profit_notional": format(validation.take_profit_notional, "f"),
                 "stop_loss_notional": format(validation.stop_loss_notional, "f"),
                 "min_notional": format(validation.min_notional, "f"),
-                "strategy_id": getattr(candidate, "strategy_id", "strict_current"),
+                "strategy_id": candidate.strategy_id,
                 "take_profit_pct": take_profit_pct,
                 "stop_loss_pct": stop_loss_pct,
             }
@@ -151,13 +161,10 @@ class RuntimeV2Engine(V2Engine):
             }
 
         if self.settings.mode == "paper" and result.get("allowed"):
-            strategy_id = getattr(candidate, "strategy_id", "strict_current")
-            strategy_status = getattr(candidate, "strategy_status", "LEGACY")
-            kind = "paper" if strategy_status == "LEGACY" else f"paper:{strategy_id}"
             claimed = self.state.claim_signal(
                 symbol=candidate.symbol,
                 signal_open_time=candidate.signal_open_time,
-                kind=kind,
+                kind=f"paper:{candidate.strategy_id}",
             )
             if not claimed:
                 self.state.clear_profile(candidate.symbol)
@@ -167,10 +174,10 @@ class RuntimeV2Engine(V2Engine):
                     *list(result.get("reasons", [])),
                     "paper_signal_duplicate",
                 ]
-            elif strategy_status != "LEGACY":
+            else:
                 self.state.prepare_profile(
                     symbol=candidate.symbol,
-                    strategy_id=strategy_id,
+                    strategy_id=candidate.strategy_id,
                     take_profit_pct=take_profit_pct,
                     stop_loss_pct=stop_loss_pct,
                 )
@@ -235,18 +242,25 @@ class RuntimeV2Engine(V2Engine):
             f"Max DD: {self._metric(paper_stats['max_drawdown_usdt'])} USDT"
         )
 
-    def _maybe_notify_paper_ready(self, paper_stats, paper_report) -> bool:
+    def _maybe_notify_paper_ready(self, paper_stats, paper_report, strategy_id="LEGACY") -> bool:
         if self.settings.mode != "paper" or not paper_report.ready:
             return False
+        kind = (
+            self.PAPER_READY_EVENT_KIND
+            if strategy_id == "LEGACY"
+            else f"paper_evidence_ready_v2:{strategy_id}"
+        )
         already_claimed = not self.state.claim_signal(
             symbol=self.PAPER_READY_EVENT_SYMBOL,
             signal_open_time=0.0,
-            kind=self.PAPER_READY_EVENT_KIND,
+            kind=kind,
         )
         if already_claimed:
             return False
+        strategy_line = "" if strategy_id == "LEGACY" else f"Strategy: {strategy_id}\n"
         self.notifier.send(
             "V2 PAPER EVIDENCE READY — REVIEW ONLY\n"
+            f"{strategy_line}"
             f"Closed: {paper_stats['closed']}\n"
             f"Win rate: {self._metric(paper_stats['win_rate'], percent=True)}\n"
             f"Net PnL: {self._metric(paper_stats['net_pnl_usdt'])} USDT\n"
@@ -296,7 +310,30 @@ class RuntimeV2Engine(V2Engine):
         ]
 
         paper_stats = self.paper_evidence.stats()
-        paper_report = evaluate_paper_evidence(paper_stats)
+        aggregate_paper_report = evaluate_paper_evidence(paper_stats)
+        paper_stats_by_strategy = self.paper_evidence.stats_by_strategy()
+        promoted_ids = {
+            item["strategy_id"]
+            for item in registry
+            if item["status"] in {PAPER, ACTIVE}
+        }
+        strategy_reports = {}
+        paper_strategy_ready = False
+        paper_alert_sent = False
+        for strategy_id in sorted(promoted_ids):
+            stats = paper_stats_by_strategy.get(strategy_id, {})
+            report = evaluate_paper_evidence(stats)
+            strategy_reports[strategy_id] = {
+                "stats": stats,
+                "evidence": report.to_dict(),
+            }
+            if report.ready:
+                paper_strategy_ready = True
+                paper_alert_sent = (
+                    self._maybe_notify_paper_ready(stats, report, strategy_id)
+                    or paper_alert_sent
+                )
+
         pending_execution_count = len(self.execution_journal.pending())
         live_report = evaluate_live_readiness(
             persistent_state_enabled=self.settings.persistent_state,
@@ -309,10 +346,13 @@ class RuntimeV2Engine(V2Engine):
             explicit_live_authorization=self.settings.live_authorized,
             live_engine_lock_removed=self.settings.live_engine_unlock,
             emergency_flatten_verified=self.settings.emergency_flatten_verified,
-            paper_evidence_ready=paper_report.ready,
+            paper_evidence_ready=paper_strategy_ready,
         )
         summary["paper_stats"] = paper_stats
-        summary["paper_evidence"] = paper_report.to_dict()
+        summary["paper_evidence"] = aggregate_paper_report.to_dict()
+        summary["paper_stats_by_strategy"] = paper_stats_by_strategy
+        summary["paper_strategy_evidence"] = strategy_reports
+        summary["paper_strategy_ready"] = paper_strategy_ready
         summary["live_readiness"] = live_report.to_dict()
         summary["private_execution_gates"] = {
             "credentials_present": self.settings.private_credentials_present,
@@ -325,8 +365,5 @@ class RuntimeV2Engine(V2Engine):
         }
         if self.settings.mode == "paper" and summary.get("paper_events"):
             self._notify_paper_stats(paper_stats)
-        summary["paper_ready_alert_sent"] = self._maybe_notify_paper_ready(
-            paper_stats,
-            paper_report,
-        )
+        summary["paper_ready_alert_sent"] = paper_alert_sent
         return summary
