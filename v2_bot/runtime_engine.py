@@ -4,7 +4,12 @@ from .binance_public import BinancePublicClient
 from .config import Settings
 from .engine import V2Engine
 from .notifier import TelegramNotifier
-from .storage_backend import make_shadow_outcome_ledger, make_state_store
+from .readiness import evaluate_paper_evidence
+from .storage_backend import (
+    make_paper_evidence,
+    make_shadow_outcome_ledger,
+    make_state_store,
+)
 
 
 class RuntimeV2Engine(V2Engine):
@@ -15,7 +20,15 @@ class RuntimeV2Engine(V2Engine):
         self.market = BinancePublicClient()
         self.state = make_state_store(settings)
         self.shadow_outcomes = make_shadow_outcome_ledger(settings)
+        self.paper_evidence = make_paper_evidence(settings)
         self.notifier = TelegramNotifier(
             settings.telegram_bot_token,
             settings.telegram_chat_id,
         )
+
+    def scan_once(self):
+        summary = super().scan_once()
+        paper_stats = self.paper_evidence.stats()
+        summary["paper_stats"] = paper_stats
+        summary["paper_evidence"] = evaluate_paper_evidence(paper_stats).to_dict()
+        return summary
