@@ -34,4 +34,6 @@ jobs:
         run: |
           test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_MODE=' | cut -d= -f2)" = "shadow"
           test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_LIVE_TRADING=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_PERSISTENT_STATE=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_STATE_BACKEND=' | cut -d= -f2)" = "sqlite"
           test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_STATE_DB=' | cut -d= -f2)" = "/data/v2_state.sqlite3"
