@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "strategy_id": "liquidity_reversal_unstratified_v1",
+      "family": "LIQUIDITY_REVERSAL",
+      "status": "REJECTED",
+      "reason": "365d global max-1-position portfolio failed Discovery and Validation under base and 2x friction; positive late OOS was regime-dependent and insufficient for promotion.",
+      "evidence_run_id": 34699856182,
+      "evidence_artifact_id": 10300306201,
+      "live_authorized": false,
+      "paper_authorized": false
+    }
+  ]
+}

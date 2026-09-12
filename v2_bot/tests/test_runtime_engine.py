@@ -1,0 +1,144 @@
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from v2_bot.config import Settings
+from v2_bot.engine import V2Engine
+from v2_bot.runtime_engine import RuntimeV2Engine
+
+
+class _State:
+    def __init__(self, claim_result):
+        self.claim_result = claim_result
+        self.calls = []
+
+    def claim_signal(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.claim_result
+
+
+class _Notifier:
+    def __init__(self):
+        self.messages = []
+
+    def send(self, text):
+        self.messages.append(text)
+        return True
+
+
+class RuntimeEnginePaperGuardTests(unittest.TestCase):
+    def _engine(self, claim_result):
+        engine = object.__new__(RuntimeV2Engine)
+        engine.settings = Settings(mode="paper")
+        engine.state = _State(claim_result)
+        engine.notifier = _Notifier()
+        return engine
+
+    def test_first_paper_signal_remains_allowed_after_preflight(self):
+        engine = self._engine(True)
+        candidate = SimpleNamespace(symbol="BTCUSDT", signal_open_time=123.0)
+        with patch.object(
+            V2Engine,
+            "_execution_preflight",
+            return_value={"allowed": True, "reasons": []},
+        ):
+            result = engine._execution_preflight(candidate=candidate, books={})
+        self.assertTrue(result["allowed"])
+        self.assertEqual(
+            engine.state.calls,
+            [{"symbol": "BTCUSDT", "signal_open_time": 123.0, "kind": "paper"}],
+        )
+
+    def test_duplicate_paper_signal_is_blocked_before_open(self):
+        engine = self._engine(False)
+        candidate = SimpleNamespace(symbol="BTCUSDT", signal_open_time=123.0)
+        with patch.object(
+            V2Engine,
+            "_execution_preflight",
+            return_value={"allowed": True, "reasons": []},
+        ):
+            result = engine._execution_preflight(candidate=candidate, books={})
+        self.assertFalse(result["allowed"])
+        self.assertIn("paper_signal_duplicate", result["reasons"])
+
+    def test_failed_exchange_preflight_does_not_burn_signal(self):
+        engine = self._engine(True)
+        candidate = SimpleNamespace(symbol="BTCUSDT", signal_open_time=123.0)
+        with patch.object(
+            V2Engine,
+            "_execution_preflight",
+            return_value={"allowed": False, "reasons": ["min_notional"]},
+        ):
+            result = engine._execution_preflight(candidate=candidate, books={})
+        self.assertFalse(result["allowed"])
+        self.assertEqual(engine.state.calls, [])
+
+    def test_cumulative_paper_message_contains_key_metrics(self):
+        engine = self._engine(True)
+        engine._notify_paper_stats(
+            {
+                "closed": 12,
+                "win_rate": 0.625,
+                "net_pnl_usdt": 1.2345,
+                "expectancy_usdt": 0.102875,
+                "profit_factor": 1.42,
+                "max_drawdown_usdt": 0.88,
+            }
+        )
+        self.assertEqual(len(engine.notifier.messages), 1)
+        message = engine.notifier.messages[0]
+        self.assertIn("V2 PAPER CUMULATIVE", message)
+        self.assertIn("Closed: 12", message)
+        self.assertIn("Win rate: 62.5%", message)
+        self.assertIn("Net PnL: 1.2345 USDT", message)
+        self.assertIn("Profit factor: 1.4200", message)
+        self.assertIn("Max DD: 0.8800 USDT", message)
+
+    def test_paper_ready_alert_is_claimed_and_sent_once(self):
+        engine = self._engine(True)
+        stats = {
+            "closed": 60,
+            "win_rate": 0.60,
+            "net_pnl_usdt": 2.5,
+            "expectancy_usdt": 0.0417,
+            "profit_factor": 1.25,
+            "max_drawdown_usdt": 1.1,
+        }
+        sent = engine._maybe_notify_paper_ready(stats, SimpleNamespace(ready=True))
+        self.assertTrue(sent)
+        self.assertEqual(len(engine.notifier.messages), 1)
+        self.assertIn("PAPER EVIDENCE READY", engine.notifier.messages[0])
+        self.assertIn("Live remains OFF", engine.notifier.messages[0])
+        self.assertEqual(
+            engine.state.calls[-1],
+            {
+                "symbol": "__V2_SYSTEM__",
+                "signal_open_time": 0.0,
+                "kind": "paper_evidence_ready_v1",
+            },
+        )
+
+    def test_paper_ready_alert_does_not_repeat_after_claim_exists(self):
+        engine = self._engine(False)
+        stats = {
+            "closed": 60,
+            "win_rate": 0.60,
+            "net_pnl_usdt": 2.5,
+            "expectancy_usdt": 0.0417,
+            "profit_factor": 1.25,
+            "max_drawdown_usdt": 1.1,
+        }
+        sent = engine._maybe_notify_paper_ready(stats, SimpleNamespace(ready=True))
+        self.assertFalse(sent)
+        self.assertEqual(engine.notifier.messages, [])
+
+    def test_paper_ready_alert_never_fires_before_evidence_passes(self):
+        engine = self._engine(True)
+        sent = engine._maybe_notify_paper_ready({}, SimpleNamespace(ready=False))
+        self.assertFalse(sent)
+        self.assertEqual(engine.state.calls, [])
+        self.assertEqual(engine.notifier.messages, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

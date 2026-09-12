@@ -1,0 +1,45 @@
+name: V2 Liquidity Reversal Portfolio OOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bot-v2-standalone]
+    paths:
+      - "research/v2_liquidity_reversal_portfolio_oos.py"
+      - ".github/workflows/v2-liquidity-reversal-oos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas
+      - name: Compile validator
+        run: python -m py_compile research/v2_liquidity_reversal_portfolio_oos.py
+      - name: Run frozen 365d global-portfolio validation
+        run: python research/v2_liquidity_reversal_portfolio_oos.py --days 365
+      - name: Assert research-only safety contract
+        run: |
+          python - <<'PY'
+          import json
+          path='validation/edges/v2-liquidity-reversal-portfolio-oos.json'
+          report=json.load(open(path))
+          assert report['liveTrading'] is False
+          assert report['authorization'] in {'RESEARCH_ONLY','PAPER_ELIGIBLE_RESEARCH_ONLY'}
+          assert report['portfolio']['maxOpenPositions'] == 1
+          assert report['frozenDefinition']['zLTE'] == -2.0
+          print({'acceptedForPaperConsideration': report['acceptedForPaperConsideration'], 'gates': report['gates']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-liquidity-reversal-portfolio-oos
+          path: validation/edges/v2-liquidity-reversal-portfolio-oos.json
+          retention-days: 14

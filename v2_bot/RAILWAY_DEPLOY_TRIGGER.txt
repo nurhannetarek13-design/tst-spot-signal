@@ -1,0 +1,2 @@
+Isolated V2 deployment trigger.
+Mode remains SHADOW; live trading remains disabled.

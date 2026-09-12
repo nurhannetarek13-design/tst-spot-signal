@@ -1,0 +1,43 @@
+name: V2 CI
+
+on:
+  push:
+    branches:
+      - bot-v2-standalone
+    paths:
+      - 'v2_bot/**'
+      - '.github/workflows/v2-ci.yml'
+  pull_request:
+    paths:
+      - 'v2_bot/**'
+      - '.github/workflows/v2-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Run V2 unit tests
+        env:
+          PYTHONWARNINGS: error::ResourceWarning
+        run: python -m unittest discover -s v2_bot/tests -v
+      - name: Compile V2 package
+        run: python -m compileall -q v2_bot
+      - name: Build isolated V2 worker image
+        run: docker build -f v2_bot/Dockerfile -t tst-v2-ci .
+      - name: Assert container defaults remain fail-closed
+        run: |
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_MODE=' | cut -d= -f2)" = "shadow"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_LIVE_TRADING=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_PERSISTENT_STATE=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_STATE_BACKEND=' | cut -d= -f2)" = "sqlite"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_PRIVATE_ADAPTER_ENABLED=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_LIVE_AUTHORIZED=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_LIVE_ENGINE_UNLOCK=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_EMERGENCY_FLATTEN_VERIFIED=' | cut -d= -f2)" = "false"
+          test "$(docker image inspect tst-v2-ci --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^V2_STATE_DB=' | cut -d= -f2)" = "/data/v2_state.sqlite3"
