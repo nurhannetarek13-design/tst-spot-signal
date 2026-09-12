@@ -30,8 +30,9 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "vectorbt:BASE_PF_LT_1_15",
+    "vectorbt:STRESS_PF_LT_1_0",
+    "vectorbt:STRESS_EXPECTANCY_NONPOSITIVE",
     "freqtrade:BASE_PF_LT_1_15",
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
@@ -66,8 +67,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
@@ -83,21 +82,21 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 48,
+      "independentEnginePass": false,
+      "baseProfitFactor": 1.0967645716797843,
+      "baseExpectancyUSDT": 0.01050811971885362,
+      "stressProfitFactor": 0.9481644890709433,
+      "stressExpectancyUSDT": -0.006032453320283381
     },
     "freqtrade": {
       "status": "FAIL",
@@ -168,6 +167,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-12T07:16:51.374740+00:00",
+  "generatedAt": "2026-09-12T07:17:49.838776+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
