@@ -4,8 +4,8 @@ WORKDIR /octobot
 
 COPY deploy/octobot-paper-bootstrap.py /octobot/octobot-paper-bootstrap.py
 
-# Railway supplies the start command. The first volume initialization run uses
-# the official entrypoint; subsequent runs can apply the paper bootstrap.
+# Persistent user volume is initialized; apply the fail-safe paper bootstrap
+# before every OctoBot start.
 ENTRYPOINT []
 
 # OctoBot standalone web UI.
