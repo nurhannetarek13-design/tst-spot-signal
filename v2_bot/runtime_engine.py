@@ -5,6 +5,12 @@ from collections import Counter
 from .binance_public import BinancePublicClient
 from .config import Settings
 from .engine import V2Engine
+from .forward_paper import (
+    FORWARD_PAPER_STATUS,
+    FORWARD_PAPER_STRATEGY_ID,
+    registry_snapshot_for_mode,
+    runtime_specs,
+)
 from .live_adapter import make_live_adapter
 from .notifier import TelegramNotifier
 from .readiness import evaluate_live_readiness, evaluate_paper_evidence
@@ -15,7 +21,7 @@ from .storage_backend import (
     make_shadow_outcome_ledger,
     make_state_store,
 )
-from .strategy_pool import ACTIVE, PAPER, evaluate_pool, registry_snapshot
+from .strategy_pool import ACTIVE, PAPER, evaluate_pool
 from .strategy_state import StrategyAwareStateProxy
 
 
@@ -60,6 +66,7 @@ class RuntimeV2Engine(V2Engine):
             quote_volume_24h=quote_volume_24h,
             settings=self.settings,
             mode=self.settings.mode,
+            specs=runtime_specs(self.settings.mode),
         )
         if not pool:
             raise RuntimeError("strategy_pool_empty")
@@ -290,7 +297,7 @@ class RuntimeV2Engine(V2Engine):
             key=lambda c: (c.score, c.relative_volume, c.taker_buy_ratio),
             reverse=True,
         )
-        registry = registry_snapshot()
+        registry = registry_snapshot_for_mode(self.settings.mode)
         summary["strategy_router"] = {
             "registered": len(registry),
             "status_counts": dict(Counter(item["status"] for item in registry)),
@@ -308,6 +315,13 @@ class RuntimeV2Engine(V2Engine):
             }
             for item in registry
         ]
+        summary["forward_paper_experiment"] = {
+            "enabled": self.settings.mode == "paper",
+            "strategy_id": FORWARD_PAPER_STRATEGY_ID,
+            "status": FORWARD_PAPER_STATUS if self.settings.mode == "paper" else "INACTIVE",
+            "live_eligible": False,
+            "purpose": "collect isolated forward evidence without historical promotion",
+        }
 
         paper_stats = self.paper_evidence.stats()
         aggregate_paper_report = evaluate_paper_evidence(paper_stats)
@@ -317,17 +331,22 @@ class RuntimeV2Engine(V2Engine):
             for item in registry
             if item["status"] in {PAPER, ACTIVE}
         }
+        evidence_ids = set(promoted_ids)
+        if self.settings.mode == "paper":
+            evidence_ids.add(FORWARD_PAPER_STRATEGY_ID)
+
         strategy_reports = {}
         paper_strategy_ready = False
         paper_alert_sent = False
-        for strategy_id in sorted(promoted_ids):
+        for strategy_id in sorted(evidence_ids):
             stats = paper_stats_by_strategy.get(strategy_id, {})
             report = evaluate_paper_evidence(stats)
             strategy_reports[strategy_id] = {
                 "stats": stats,
                 "evidence": report.to_dict(),
+                "forward_experiment_only": strategy_id == FORWARD_PAPER_STRATEGY_ID,
             }
-            if report.ready:
+            if strategy_id in promoted_ids and report.ready:
                 paper_strategy_ready = True
                 paper_alert_sent = (
                     self._maybe_notify_paper_ready(stats, report, strategy_id)
