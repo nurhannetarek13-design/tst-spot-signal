@@ -8,74 +8,74 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "THEUSDT",
-      "price": 0.0665,
-      "quoteVolume24h": 100226557.73553,
-      "score": 60,
-      "oiChange2h": 0.005034299050440616,
-      "takerBuySellRatio1h": 0.906525,
-      "fundingRate": 5e-05,
-      "basis": 0.0011997971978978672,
-      "paperLongPressure": false
-    },
-    {
       "symbol": "\u725b\u6765USDT",
-      "price": 0.12995,
-      "quoteVolume24h": 54576163.82734,
-      "score": 60,
-      "oiChange2h": -0.01329012076526348,
-      "takerBuySellRatio1h": 1.116925,
+      "price": 0.1342,
+      "quoteVolume24h": 50802399.14901,
+      "score": 100,
+      "oiChange2h": 0.021225528191427534,
+      "takerBuySellRatio1h": 1.2157,
       "fundingRate": 5e-05,
-      "basis": 0.000430517082179227,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "NEARUSDT",
-      "price": 2.357,
-      "quoteVolume24h": 45829375.4403,
-      "score": 60,
-      "oiChange2h": -0.0209315923988882,
-      "takerBuySellRatio1h": 1.0822,
-      "fundingRate": -1.181e-05,
-      "basis": -0.0008896527285404687,
-      "paperLongPressure": false
+      "basis": 0.0010332572210929314,
+      "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.7223,
-      "quoteVolume24h": 30394193.70566,
-      "score": 40,
-      "oiChange2h": -0.0006001608477920195,
-      "takerBuySellRatio1h": 0.8175749999999999,
-      "fundingRate": 3.695e-05,
-      "basis": -0.0004682665635797889,
+      "price": 0.7219,
+      "quoteVolume24h": 28822823.82076,
+      "score": 90,
+      "oiChange2h": 0.006632642695543645,
+      "takerBuySellRatio1h": 1.23165,
+      "fundingRate": 2.777e-05,
+      "basis": -0.0006130752379094329,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "NEARUSDT",
+      "price": 2.347,
+      "quoteVolume24h": 41800616.3336,
+      "score": 80,
+      "oiChange2h": 0.008660082695639781,
+      "takerBuySellRatio1h": 1.09935,
+      "fundingRate": -6.56e-06,
+      "basis": -0.0005982083647119163,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "REZUSDT",
+      "price": 0.004062,
+      "quoteVolume24h": 42023790.8024833,
+      "score": 65,
+      "oiChange2h": 0.13822638823865896,
+      "takerBuySellRatio1h": 1.021275,
+      "fundingRate": -0.00149981,
+      "basis": -0.0025892325337559807,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "THEUSDT",
+      "price": 0.067,
+      "quoteVolume24h": 100343634.47627,
+      "score": 60,
+      "oiChange2h": 0.013226598023237557,
+      "takerBuySellRatio1h": 0.876125,
+      "fundingRate": 5e-05,
+      "basis": 0.001299240994874662,
       "paperLongPressure": false
     },
     {
       "symbol": "PUMPUSDT",
-      "price": 0.003868,
-      "quoteVolume24h": 21104750.610172,
+      "price": 0.003797,
+      "quoteVolume24h": 22095371.778343,
       "score": 40,
-      "oiChange2h": -0.00041942411324813467,
-      "takerBuySellRatio1h": 0.891875,
-      "fundingRate": 3.135e-05,
-      "basis": -0.0005404524802630206,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "REZUSDT",
-      "price": 0.003868,
-      "quoteVolume24h": 36662217.8894928,
-      "score": 35,
-      "oiChange2h": -0.09989671079170404,
-      "takerBuySellRatio1h": 1.006475,
-      "fundingRate": -0.00123328,
-      "basis": -6.470866863206304e-05,
+      "oiChange2h": -0.022014729271400912,
+      "takerBuySellRatio1h": 0.897275,
+      "fundingRate": 5e-05,
+      "basis": -0.0005609499806432661,
       "paperLongPressure": false
     }
   ],
   "universeCount": 6,
   "usableCount": 6,
   "failures": {},
-  "generatedAt": "2026-09-12T19:32:47.897888+00:00"
+  "generatedAt": "2026-09-12T21:54:16.644380+00:00"
 }
