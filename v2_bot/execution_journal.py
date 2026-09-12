@@ -18,8 +18,11 @@ PENDING_STAGES = frozenset(
         "UNPROTECTED",
     }
 )
-TERMINAL_STAGES = frozenset({"PROTECTED", "FLATTENED", "ABORTED"})
-ALL_STAGES = PENDING_STAGES | TERMINAL_STAGES
+# PROTECTED is intentionally not terminal: the BUY is safely covered by OCO,
+# but real Spot exposure still exists until Binance reports the OCO finished.
+ACTIVE_STAGES = frozenset({"PROTECTED"})
+TERMINAL_STAGES = frozenset({"CLOSED", "FLATTENED", "ABORTED"})
+ALL_STAGES = PENDING_STAGES | ACTIVE_STAGES | TERMINAL_STAGES
 ALLOWED_TRANSITIONS = {
     "INTENT": frozenset({"BUY_UNKNOWN", "BUY_FILLED", "ABORTED"}),
     "BUY_UNKNOWN": frozenset({"BUY_FILLED", "ABORTED"}),
@@ -27,7 +30,8 @@ ALLOWED_TRANSITIONS = {
     "OCO_INTENT": frozenset({"OCO_UNKNOWN", "PROTECTED", "UNPROTECTED", "FLATTENED"}),
     "OCO_UNKNOWN": frozenset({"PROTECTED", "UNPROTECTED", "FLATTENED"}),
     "UNPROTECTED": frozenset({"PROTECTED", "FLATTENED"}),
-    "PROTECTED": frozenset(),
+    "PROTECTED": frozenset({"CLOSED", "UNPROTECTED"}),
+    "CLOSED": frozenset(),
     "FLATTENED": frozenset(),
     "ABORTED": frozenset(),
 }
@@ -44,12 +48,12 @@ class ExecutionRecord:
 
 
 class ExecutionJournal:
-    """Durable crash-recovery journal for future live Spot execution.
+    """Durable crash-recovery and active-exposure journal for Spot execution.
 
-    A record is created before the first private Binance request. Any
-    non-terminal stage blocks a fresh live execution until reconciliation
-    resolves the old attempt. State transitions are monotonic so a terminal
-    execution can never silently become pending again.
+    PENDING stages block new Live execution until reconciliation resolves the
+    uncertain attempt. PROTECTED is a safe-but-still-open exposure and is
+    tracked separately until the OCO order list reaches ALL_DONE, then it moves
+    to CLOSED. Terminal records can never silently become active again.
     """
 
     def __init__(self, path: str) -> None:
@@ -187,14 +191,23 @@ class ExecutionJournal:
             ).fetchone()
         return self._row_to_record(row) if row else None
 
-    def pending(self) -> list[ExecutionRecord]:
-        placeholders = ",".join("?" for _ in PENDING_STAGES)
+    def _by_stages(self, stages: frozenset[str]) -> list[ExecutionRecord]:
+        placeholders = ",".join("?" for _ in stages)
         with closing(self._connect()) as conn:
             rows = conn.execute(
                 f"SELECT * FROM execution_journal WHERE stage IN ({placeholders}) ORDER BY created_at ASC",
-                tuple(sorted(PENDING_STAGES)),
+                tuple(sorted(stages)),
             ).fetchall()
         return [self._row_to_record(row) for row in rows]
 
+    def pending(self) -> list[ExecutionRecord]:
+        return self._by_stages(PENDING_STAGES)
+
+    def active_protected(self) -> list[ExecutionRecord]:
+        return self._by_stages(ACTIVE_STAGES)
+
     def has_pending(self) -> bool:
         return bool(self.pending())
+
+    def has_active_protected(self) -> bool:
+        return bool(self.active_protected())
