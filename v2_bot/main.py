@@ -9,15 +9,15 @@ import httpx
 
 from .config import Settings, settings
 from .engine import V2Engine
-from .runtime_engine import RuntimeV2Engine
 from .storage_backend import make_execution_journal
+from .tournament_engine import TournamentRuntimeV2Engine
 
 
 def run(
     once: bool,
     *,
     runtime_settings: Settings = settings,
-    engine_factory: Callable[[Settings], V2Engine] = RuntimeV2Engine,
+    engine_factory: Callable[[Settings], V2Engine] = TournamentRuntimeV2Engine,
     sleep_fn: Callable[[float], None] = time.sleep,
     max_cycles: int | None = None,
 ) -> None:
