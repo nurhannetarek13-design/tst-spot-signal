@@ -1,0 +1,48 @@
+name: V2 Multi-Strategy Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bot-v2-standalone]
+    paths:
+      - "v2_bot/strategy_pool.py"
+      - "v2_bot/multistrategy_discovery.py"
+      - "v2_bot/tests/test_strategy_pool.py"
+      - ".github/workflows/v2-multistrategy-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Compile multi-strategy modules
+        run: |
+          python -m py_compile v2_bot/strategy_pool.py
+          python -m py_compile v2_bot/multistrategy_discovery.py
+      - name: Run frozen 180d Discovery + temporal OOS + stress
+        run: python -m v2_bot.multistrategy_discovery --days 180 --output v2_multistrategy_discovery.json
+      - name: Assert research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          report = json.load(open('v2_multistrategy_discovery.json'))
+          assert report['verdict'] == 'MULTI_STRATEGY_DISCOVERY_DIAGNOSTIC_NOT_LIVE_APPROVAL'
+          assert report['assumptions']['thresholds'] == 'FROZEN_NO_POST_HOC_GRID_SEARCH'
+          assert report['acceptance']['base_profit_factor_min'] == 1.20
+          assert report['acceptance']['stress_profit_factor_min'] == 1.00
+          print({'promotable_to_paper': report['promotable_to_paper']})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-multistrategy-discovery
+          path: v2_multistrategy_discovery.json
+          retention-days: 14
