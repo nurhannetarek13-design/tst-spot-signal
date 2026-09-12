@@ -4,6 +4,8 @@ Standalone Binance Spot research/trading engine. V2 is intentionally fail-closed
 
 ## Current runtime state
 
+The Railway Paper worker is currently pinned to tested runtime commit `da428a70042045362fd8f3fa3fd49cf1a121aee1`. Documentation-only commits after that runtime revision do not automatically change the running worker.
+
 - Mode: `paper`
 - Live trading: `false`
 - State backend: Neon/Postgres
