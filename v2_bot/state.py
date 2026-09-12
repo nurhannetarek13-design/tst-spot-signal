@@ -86,6 +86,39 @@ class StateStore:
                 """
             )
 
+    def get_meta(self, key: str) -> str | None:
+        key = str(key).strip()
+        if not key:
+            raise ValueError("meta key must not be empty")
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT value FROM runtime_meta WHERE key = ?",
+                (key,),
+            ).fetchone()
+        return str(row["value"]) if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        key = str(key).strip()
+        if not key:
+            raise ValueError("meta key must not be empty")
+        now = datetime.now(timezone.utc).isoformat()
+        with closing(self._connect()) as conn, conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_meta (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+                """,
+                (key, str(value), now),
+            )
+
+    def delete_meta(self, key: str) -> None:
+        key = str(key).strip()
+        if not key:
+            raise ValueError("meta key must not be empty")
+        with closing(self._connect()) as conn, conn:
+            conn.execute("DELETE FROM runtime_meta WHERE key = ?", (key,))
+
     def verify_persistence(self, current_revision: str) -> PersistenceProbe:
         revision = current_revision.strip()
         if not revision:
