@@ -2,11 +2,13 @@ FROM drakkarsoftware/octobot:stable
 
 WORKDIR /octobot
 
+COPY deploy/octobot-paper-bootstrap.py /octobot/octobot-paper-bootstrap.py
+
 # Railway supplies its own start command. Drop the inherited ENTRYPOINT so
-# the service can invoke OctoBot's official docker-entrypoint directly.
+# we can apply a fail-safe paper configuration before OctoBot starts.
 ENTRYPOINT []
 
 # OctoBot standalone web UI.
 EXPOSE 5001
 
-CMD ["./docker-entrypoint.sh"]
+CMD ["/bin/bash", "-lc", "python /octobot/octobot-paper-bootstrap.py && exec ./docker-entrypoint.sh"]
