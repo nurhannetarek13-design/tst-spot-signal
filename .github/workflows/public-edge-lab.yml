@@ -2,14 +2,6 @@ name: Public Edge Lab
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "23 2 * * *"
-  push:
-    branches: [main]
-    paths:
-      - "research/public_edge_lab.py"
-      - "scripts/build_candidate_manifest.py"
-      - ".github/workflows/public-edge-lab.yml"
 
 permissions:
   contents: write
