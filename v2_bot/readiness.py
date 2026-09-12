@@ -9,6 +9,10 @@ DEFAULT_MIN_SHADOW_PROFIT_FACTOR = 1.20
 DEFAULT_MIN_SHADOW_EXPECTANCY_USDT = 0.0
 DEFAULT_MAX_SHADOW_AMBIGUOUS_RATE = 0.10
 
+DEFAULT_MIN_PAPER_CLOSED = 60
+DEFAULT_MIN_PAPER_PROFIT_FACTOR = 1.20
+DEFAULT_MIN_PAPER_EXPECTANCY_USDT = 0.0
+
 
 @dataclass(frozen=True)
 class ReadinessReport:
@@ -32,12 +36,7 @@ def evaluate_strategy_evidence(
     min_expectancy_usdt: float = DEFAULT_MIN_SHADOW_EXPECTANCY_USDT,
     max_ambiguous_rate: float = DEFAULT_MAX_SHADOW_AMBIGUOUS_RATE,
 ) -> ReadinessReport:
-    """Conservative SHADOW-evidence gate for future real-money promotion.
-
-    This is a promotion guardrail, not a claim of profitability. AMBIGUOUS
-    outcomes are excluded from PnL metrics and separately capped so coarse
-    candle resolution cannot make the evidence look better than it is.
-    """
+    """Conservative SHADOW-evidence gate for future real-money promotion."""
 
     blockers: list[str] = []
     if min_decisive <= 0 or min_profit_factor <= 0 or min_expectancy_usdt < 0:
@@ -79,6 +78,49 @@ def evaluate_strategy_evidence(
     return _report(blockers)
 
 
+def evaluate_paper_evidence(
+    stats: Mapping[str, object],
+    *,
+    min_closed: int = DEFAULT_MIN_PAPER_CLOSED,
+    min_profit_factor: float = DEFAULT_MIN_PAPER_PROFIT_FACTOR,
+    min_expectancy_usdt: float = DEFAULT_MIN_PAPER_EXPECTANCY_USDT,
+) -> ReadinessReport:
+    """Fee-aware PAPER evidence gate for future real-money promotion.
+
+    Paper is still simulated execution, so passing this gate is necessary
+    evidence rather than a guarantee of future profitability.
+    """
+
+    blockers: list[str] = []
+    if min_closed <= 0 or min_profit_factor <= 0 or min_expectancy_usdt < 0:
+        return _report(["invalid_paper_evidence_thresholds"])
+
+    try:
+        closed = int(stats.get("closed", 0) or 0)
+    except (TypeError, ValueError):
+        closed = -1
+    if closed < min_closed:
+        blockers.append("paper_sample_insufficient")
+
+    profit_factor_raw = stats.get("profit_factor")
+    try:
+        profit_factor = float(profit_factor_raw) if profit_factor_raw is not None else None
+    except (TypeError, ValueError):
+        profit_factor = None
+    if profit_factor is None or profit_factor < min_profit_factor:
+        blockers.append("paper_profit_factor_unproven")
+
+    expectancy_raw = stats.get("expectancy_usdt")
+    try:
+        expectancy = float(expectancy_raw) if expectancy_raw is not None else None
+    except (TypeError, ValueError):
+        expectancy = None
+    if expectancy is None or expectancy <= min_expectancy_usdt:
+        blockers.append("paper_expectancy_nonpositive")
+
+    return _report(blockers)
+
+
 def evaluate_paper_readiness(
     *,
     persistent_state_enabled: bool,
@@ -111,6 +153,7 @@ def evaluate_live_readiness(
     live_engine_lock_removed: bool,
     emergency_flatten_verified: bool,
     strategy_evidence_ready: bool = False,
+    paper_evidence_ready: bool = False,
 ) -> ReadinessReport:
     blockers = list(
         evaluate_paper_readiness(
@@ -121,7 +164,7 @@ def evaluate_live_readiness(
         ).blockers
     )
 
-    if not strategy_evidence_ready:
+    if not (strategy_evidence_ready or paper_evidence_ready):
         blockers.append("strategy_evidence_not_proven")
     if pending_execution_count < 0:
         blockers.append("invalid_pending_execution_count")
