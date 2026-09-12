@@ -61,6 +61,9 @@ def run(
                     "PERSISTENCE_NOT_PROVEN: state must survive a different deployment revision before Paper/Live can start"
                 )
 
+        if hasattr(engine, "persistence_proven"):
+            engine.persistence_proven = bool(persistence_proven)
+
         if runtime_settings.mode == "live":
             journal = make_execution_journal(runtime_settings)
             pending = journal.pending()
@@ -112,6 +115,10 @@ def run(
                     "telegram_enabled": telegram_enabled,
                     "startup_alert_requested": runtime_settings.startup_alert,
                     "startup_alert_sent": startup_alert_sent,
+                    "private_credentials_present": runtime_settings.private_credentials_present,
+                    "private_adapter_enabled": runtime_settings.private_adapter_enabled,
+                    "explicit_live_authorization": runtime_settings.live_authorized,
+                    "live_engine_unlock": runtime_settings.live_engine_unlock,
                 },
                 sort_keys=True,
             ),
