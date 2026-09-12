@@ -6,7 +6,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from statistics import fmean, median
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -122,7 +122,7 @@ def _simulate(
     btc = h1["BTCUSDT"]
     btcclose = h1close["BTCUSDT"]
     by_open = {s: {int(r["open_time"]): (i, r) for i, r in enumerate(rows)} for s, rows in data.items()}
-    all_times = sorted(t for mapping in by_open.values() for t in mapping if start_ms <= t < end_ms)
+    all_times = sorted({t for mapping in by_open.values() for t in mapping if start_ms <= t < end_ms})
 
     blocked_until = -1
     daily_realized = defaultdict(float)
@@ -150,7 +150,6 @@ def _simulate(
             ok, setup = family_signal(family, f)
             if ok:
                 raw_signals += 1
-                # fixed deterministic ranking: rel volume then taker flow
                 candidates.append((symbol, idx, setup, f["relvol"] * 10 + f["taker"]))
         if not candidates:
             continue
