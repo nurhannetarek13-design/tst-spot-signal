@@ -11,4 +11,5 @@ ENTRYPOINT []
 # OctoBot standalone web UI.
 EXPOSE 5001
 
-CMD ["/bin/bash", "-lc", "python /octobot/octobot-paper-bootstrap.py && exec ./docker-entrypoint.sh"]
+# Use absolute venv paths so Railway shell startup cannot drop OctoBot from PATH.
+CMD ["/bin/sh", "-c", "/opt/venv/bin/python /octobot/octobot-paper-bootstrap.py && exec /opt/venv/bin/OctoBot"]
