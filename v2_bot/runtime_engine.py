@@ -26,6 +26,23 @@ class RuntimeV2Engine(V2Engine):
             settings.telegram_chat_id,
         )
 
+    def _execution_preflight(self, *, candidate, books):
+        result = super()._execution_preflight(candidate=candidate, books=books)
+        if self.settings.mode == "paper" and result.get("allowed"):
+            claimed = self.state.claim_signal(
+                symbol=candidate.symbol,
+                signal_open_time=candidate.signal_open_time,
+                kind="paper",
+            )
+            if not claimed:
+                result = dict(result)
+                result["allowed"] = False
+                result["reasons"] = [
+                    *list(result.get("reasons", [])),
+                    "paper_signal_duplicate",
+                ]
+        return result
+
     def scan_once(self):
         summary = super().scan_once()
         paper_stats = self.paper_evidence.stats()
