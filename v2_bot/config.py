@@ -33,6 +33,16 @@ class Settings:
     deploy_revision: str = os.getenv("V2_DEPLOY_REV", "").strip()
     state_backend: str = os.getenv("V2_STATE_BACKEND", "sqlite").strip().lower()
     database_url: str = os.getenv("V2_DATABASE_URL", "").strip()
+
+    # Private Spot execution stays fail-closed unless every independent gate is
+    # intentionally enabled later. Secrets are never emitted in runtime summaries.
+    binance_api_key: str = os.getenv("V2_BINANCE_API_KEY", "").strip()
+    binance_api_secret: str = os.getenv("V2_BINANCE_API_SECRET", "").strip()
+    private_adapter_enabled: bool = _bool("V2_PRIVATE_ADAPTER_ENABLED", False)
+    live_authorized: bool = _bool("V2_LIVE_AUTHORIZED", False)
+    live_engine_unlock: bool = _bool("V2_LIVE_ENGINE_UNLOCK", False)
+    emergency_flatten_verified: bool = _bool("V2_EMERGENCY_FLATTEN_VERIFIED", False)
+
     quote_asset: str = os.getenv("V2_QUOTE_ASSET", "USDT").upper()
     min_quote_volume_24h: float = _float("V2_MIN_QUOTE_VOLUME_24H", 20_000_000.0)
     max_spread_bps: float = _float("V2_MAX_SPREAD_BPS", 15.0)
@@ -49,6 +59,10 @@ class Settings:
     telegram_chat_id: str = os.getenv("V2_TELEGRAM_CHAT_ID", "").strip()
     startup_alert: bool = _bool("V2_STARTUP_ALERT", False)
     state_db: str = os.getenv("V2_STATE_DB", "v2_state.sqlite3")
+
+    @property
+    def private_credentials_present(self) -> bool:
+        return bool(self.binance_api_key and self.binance_api_secret)
 
     def validate(self) -> None:
         if self.mode not in {"shadow", "paper", "live"}:
@@ -68,6 +82,10 @@ class Settings:
         if self.mode in {"paper", "live"} and not self.deploy_revision:
             raise RuntimeError(
                 f"{self.mode.upper()} mode requires V2_DEPLOY_REV for cross-deploy persistence proof"
+            )
+        if self.private_adapter_enabled and not self.private_credentials_present:
+            raise RuntimeError(
+                "V2_PRIVATE_ADAPTER_ENABLED=true requires V2_BINANCE_API_KEY and V2_BINANCE_API_SECRET"
             )
         if not self.quote_asset:
             raise ValueError("V2_QUOTE_ASSET must not be empty")
