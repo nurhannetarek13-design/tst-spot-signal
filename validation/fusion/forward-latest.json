@@ -1,10 +1,13 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "NO_CANDIDATE",
+  "status": "COLLECTING",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +20,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-12T05:04:55.874Z",
-  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
+  "generatedAt": "2026-09-12T07:16:02.716Z",
+  "notes": "Exact unified candidate. Requires 50 closed forward trades, PF>=1.15, positive expectancy and max DD<=1 USDT."
 }
