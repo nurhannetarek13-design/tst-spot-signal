@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from contextlib import closing
 from typing import Iterable
 
@@ -56,6 +57,25 @@ def summarize_pnls(pnls: Iterable[float]) -> dict[str, float | int | None]:
     }
 
 
+def _strategy_from_reason(reason: str) -> str:
+    text = str(reason or "")
+    if ":" not in text:
+        return "LEGACY"
+    strategy_id, _exit_reason = text.split(":", 1)
+    strategy_id = strategy_id.strip()
+    return strategy_id or "LEGACY"
+
+
+def summarize_strategy_rows(rows: Iterable[tuple[float, str]]) -> dict[str, dict[str, float | int | None]]:
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for pnl, reason in rows:
+        grouped[_strategy_from_reason(reason)].append(float(pnl))
+    return {
+        strategy_id: summarize_pnls(values)
+        for strategy_id, values in sorted(grouped.items())
+    }
+
+
 class SqlitePaperEvidence:
     def __init__(self, path: str) -> None:
         self.path = path
@@ -66,6 +86,13 @@ class SqlitePaperEvidence:
                 "SELECT pnl_usdt FROM trades ORDER BY closed_at ASC, id ASC"
             ).fetchall()
         return summarize_pnls(row[0] for row in rows)
+
+    def stats_by_strategy(self) -> dict[str, dict[str, float | int | None]]:
+        with closing(sqlite3.connect(self.path)) as conn:
+            rows = conn.execute(
+                "SELECT pnl_usdt, reason FROM trades ORDER BY closed_at ASC, id ASC"
+            ).fetchall()
+        return summarize_strategy_rows((float(row[0]), str(row[1])) for row in rows)
 
 
 class PostgresPaperEvidence:
@@ -81,3 +108,14 @@ class PostgresPaperEvidence:
             )
             rows = cur.fetchall()
         return summarize_pnls(float(row["pnl_usdt"]) for row in rows)
+
+    def stats_by_strategy(self) -> dict[str, dict[str, float | int | None]]:
+        with psycopg.connect(self.dsn, row_factory=dict_row) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT pnl_usdt, reason FROM v2.trades ORDER BY closed_at ASC, id ASC"
+            )
+            rows = cur.fetchall()
+        return summarize_strategy_rows(
+            (float(row["pnl_usdt"]), str(row["reason"]))
+            for row in rows
+        )
