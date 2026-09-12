@@ -2,9 +2,61 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "candidateId": null,
   "candidateFingerprint": null,
-  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
-  "candidatePool": [],
-  "poolSize": 0,
+  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "candidatePool": [
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-11T07:24:08.901423+00:00",
+      "symbol": "SAHARAUSDT",
+      "family": "TS_MOMENTUM",
+      "timeframe": "1h",
+      "params": {
+        "emaFast": 48,
+        "emaSlow": 120,
+        "retLookback": 24,
+        "retMin": 0.02,
+        "atrMin": 0.006,
+        "atrMax": 0.08,
+        "relvol": 0.8,
+        "holdBars": 24,
+        "sl": 0.03,
+        "tp": 0.06
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 78,
+          "wins": 33,
+          "winRate": 0.4230769230769231,
+          "netPnlUSDT": 1.3455849539515468,
+          "expectancyUSDT": 0.017251089153224958,
+          "profitFactor": 1.1694084583892437,
+          "maxDrawdownUSDT": 3.3327425460484585
+        },
+        "stress2x": {
+          "trades": 78,
+          "wins": 33,
+          "winRate": 0.4230769230769231,
+          "netPnlUSDT": 0.05463014430615093,
+          "expectancyUSDT": 0.0007003864654634734,
+          "profitFactor": 1.0062977661835362,
+          "maxDrawdownUSDT": 4.187024855693853
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 69645215.50477,
+        "priceUSDT": 0.00929
+      },
+      "rankKey": [
+        1,
+        0.0007003864654634734,
+        1.0062977661835362,
+        78
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e"
+    }
+  ],
+  "poolSize": 1,
   "recentRejectedFingerprints": [
     "1240a5c4024ad81ee1e2",
     "1b7dc1733caf8b96d86e",
@@ -26,5 +78,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-11T17:14:52.041935+00:00"
+  "generatedAt": "2026-09-12T06:17:44.654410+00:00"
 }
