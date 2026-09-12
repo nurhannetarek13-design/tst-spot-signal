@@ -51,11 +51,12 @@ def _ids(symbol: str, signal_key: str) -> dict[str, str]:
 
 
 class ProtectedSpotExecutor:
-    """Future live executor with idempotency and crash-safe journaling.
+    """Crash-safe Spot BUY + immediate protective OCO executor.
 
-    It is intentionally not wired into V2Engine yet. Live remains hard-locked
-    until persistent storage, account reconciliation, and explicit credentials
-    are available in the isolated runtime.
+    A new order is rejected while any uncertain execution OR any protected
+    exposure is still open. This keeps the current V2 single-position risk
+    contract enforceable at the private execution layer, independent of the
+    strategy engine.
     """
 
     def __init__(
@@ -132,6 +133,7 @@ class ProtectedSpotExecutor:
                 details={
                     "buy_order_id": str(order.get("orderId", "")),
                     "executed_qty": str(order.get("executedQty", "")),
+                    "buy_cumulative_quote_qty": str(order.get("cummulativeQuoteQty", "")),
                     "reconciled": True,
                 },
             )
@@ -203,6 +205,7 @@ class ProtectedSpotExecutor:
                     "flatten_order_id": str(result.get("orderId", "")),
                     "flatten_status": flatten_status,
                     "flatten_executed_qty": format(flatten_executed_qty, "f"),
+                    "flatten_cumulative_quote_qty": str(result.get("cummulativeQuoteQty", "")),
                 },
             )
             raise RecoveryRequired(
@@ -216,6 +219,7 @@ class ProtectedSpotExecutor:
                 "flatten_order_id": str(result.get("orderId", "")),
                 "flatten_status": flatten_status,
                 "flatten_executed_qty": format(flatten_executed_qty, "f"),
+                "flatten_cumulative_quote_qty": str(result.get("cummulativeQuoteQty", "")),
             },
         )
 
@@ -236,6 +240,10 @@ class ProtectedSpotExecutor:
             raise RecoveryRequired(
                 "LIVE_RECOVERY_REQUIRED: pending execution journal entries exist"
             )
+        if self.journal.has_active_protected():
+            raise RecoveryRequired(
+                "LIVE_POSITION_LIMIT: a protected Spot exposure is already active"
+            )
         if quote_size <= 0 or step_size <= 0:
             raise ValueError("quote_size and step_size must be > 0")
         if min_qty < 0 or min_notional < 0:
@@ -251,7 +259,7 @@ class ProtectedSpotExecutor:
 
         existing = self.journal.get(ids["buy"])
         if existing is not None:
-            if existing.stage in {"PROTECTED", "FLATTENED", "ABORTED"}:
+            if existing.stage in {"PROTECTED", "CLOSED", "FLATTENED", "ABORTED"}:
                 raise RuntimeError("execution_already_finalized_for_signal")
             raise RecoveryRequired("execution_already_pending_for_signal")
 
@@ -318,6 +326,7 @@ class ProtectedSpotExecutor:
                 details={
                     "buy_order_id": str(buy.get("orderId", "")),
                     "executed_qty": str(buy.get("executedQty", "")),
+                    "buy_cumulative_quote_qty": str(buy.get("cummulativeQuoteQty", "")),
                 },
             )
 
