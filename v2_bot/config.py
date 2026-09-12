@@ -31,6 +31,8 @@ class Settings:
     live_trading: bool = _bool("V2_LIVE_TRADING", False)
     persistent_state: bool = _bool("V2_PERSISTENT_STATE", False)
     deploy_revision: str = os.getenv("V2_DEPLOY_REV", "").strip()
+    state_backend: str = os.getenv("V2_STATE_BACKEND", "sqlite").strip().lower()
+    database_url: str = os.getenv("V2_DATABASE_URL", "").strip()
     quote_asset: str = os.getenv("V2_QUOTE_ASSET", "USDT").upper()
     min_quote_volume_24h: float = _float("V2_MIN_QUOTE_VOLUME_24H", 20_000_000.0)
     max_spread_bps: float = _float("V2_MAX_SPREAD_BPS", 15.0)
@@ -53,6 +55,12 @@ class Settings:
             raise ValueError("V2_MODE must be shadow, paper, or live")
         if self.mode == "live" and not self.live_trading:
             raise RuntimeError("LIVE mode requested while V2_LIVE_TRADING=false")
+        if self.state_backend not in {"sqlite", "postgres"}:
+            raise ValueError("V2_STATE_BACKEND must be sqlite or postgres")
+        if self.state_backend == "postgres" and not self.database_url:
+            raise RuntimeError("V2_STATE_BACKEND=postgres requires V2_DATABASE_URL")
+        if self.state_backend == "postgres" and not self.database_url.startswith(("postgresql://", "postgres://")):
+            raise ValueError("V2_DATABASE_URL must be a PostgreSQL connection string")
         if self.mode in {"paper", "live"} and not self.persistent_state:
             raise RuntimeError(
                 f"{self.mode.upper()} mode requires V2_PERSISTENT_STATE=true"
