@@ -1,12 +1,109 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "source": "PUBLIC_EDGE_LAB",
+  "sourceGeneratedAt": "2026-09-12T07:15:48.512012+00:00",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "sourceMetrics": {
+    "base": {
+      "trades": 81,
+      "wins": 36,
+      "winRate": 0.4444444444444444,
+      "netPnlUSDT": 1.5662104627997517,
+      "expectancyUSDT": 0.019335931639503107,
+      "profitFactor": 1.2041747462996721,
+      "maxDrawdownUSDT": 1.1792313112706907
+    },
+    "stress2x": {
+      "trades": 81,
+      "wins": 34,
+      "winRate": 0.41975308641975306,
+      "netPnlUSDT": 0.22534985619564468,
+      "expectancyUSDT": 0.0027820969900696872,
+      "profitFactor": 1.0267408035066357,
+      "maxDrawdownUSDT": 1.8715008686398373
+    }
+  },
+  "liquidity": {
+    "quoteVolume24h": 99177490.27871,
+    "priceUSDT": 0.0626
+  },
+  "rankKey": [
+    1,
+    0.0027820969900696872,
+    1.0267408035066357,
+    81
+  ],
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
-      "sourceGeneratedAt": "2026-09-11T07:24:08.901423+00:00",
+      "sourceGeneratedAt": "2026-09-12T07:15:48.512012+00:00",
+      "symbol": "HOLOUSDT",
+      "family": "TS_MOMENTUM",
+      "timeframe": "1h",
+      "params": {
+        "emaFast": 48,
+        "emaSlow": 120,
+        "retLookback": 24,
+        "retMin": 0.02,
+        "atrMin": 0.006,
+        "atrMax": 0.08,
+        "relvol": 0.8,
+        "holdBars": 24,
+        "sl": 0.03,
+        "tp": 0.06
+      },
+      "sourceMetrics": {
+        "base": {
+          "trades": 81,
+          "wins": 36,
+          "winRate": 0.4444444444444444,
+          "netPnlUSDT": 1.5662104627997517,
+          "expectancyUSDT": 0.019335931639503107,
+          "profitFactor": 1.2041747462996721,
+          "maxDrawdownUSDT": 1.1792313112706907
+        },
+        "stress2x": {
+          "trades": 81,
+          "wins": 34,
+          "winRate": 0.41975308641975306,
+          "netPnlUSDT": 0.22534985619564468,
+          "expectancyUSDT": 0.0027820969900696872,
+          "profitFactor": 1.0267408035066357,
+          "maxDrawdownUSDT": 1.8715008686398373
+        }
+      },
+      "liquidity": {
+        "quoteVolume24h": 99177490.27871,
+        "priceUSDT": 0.0626
+      },
+      "rankKey": [
+        1,
+        0.0027820969900696872,
+        1.0267408035066357,
+        81
+      ],
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c"
+    },
+    {
+      "source": "PUBLIC_EDGE_LAB",
+      "sourceGeneratedAt": "2026-09-12T07:15:48.512012+00:00",
       "symbol": "SAHARAUSDT",
       "family": "TS_MOMENTUM",
       "timeframe": "1h",
@@ -24,52 +121,50 @@
       },
       "sourceMetrics": {
         "base": {
-          "trades": 78,
-          "wins": 33,
-          "winRate": 0.4230769230769231,
-          "netPnlUSDT": 1.3455849539515468,
-          "expectancyUSDT": 0.017251089153224958,
-          "profitFactor": 1.1694084583892437,
+          "trades": 80,
+          "wins": 34,
+          "winRate": 0.425,
+          "netPnlUSDT": 1.3834438186252132,
+          "expectancyUSDT": 0.017293047732815165,
+          "profitFactor": 1.1702889449869467,
           "maxDrawdownUSDT": 3.3327425460484585
         },
         "stress2x": {
-          "trades": 78,
-          "wins": 33,
-          "winRate": 0.4230769230769231,
-          "netPnlUSDT": 0.05463014430615093,
-          "expectancyUSDT": 0.0007003864654634734,
-          "profitFactor": 1.0062977661835362,
+          "trades": 80,
+          "wins": 34,
+          "winRate": 0.425,
+          "netPnlUSDT": 0.05938256101085271,
+          "expectancyUSDT": 0.0007422820126356588,
+          "profitFactor": 1.0066932309767163,
           "maxDrawdownUSDT": 4.187024855693853
         }
       },
       "liquidity": {
-        "quoteVolume24h": 69645215.50477,
-        "priceUSDT": 0.00929
+        "quoteVolume24h": 57449119.85281,
+        "priceUSDT": 0.00909
       },
       "rankKey": [
         1,
-        0.0007003864654634734,
-        1.0062977661835362,
-        78
+        0.0007422820126356588,
+        1.0066932309767163,
+        80
       ],
       "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
       "candidateFingerprint": "5a8be2536ed727aaa38e"
     }
   ],
-  "poolSize": 1,
+  "poolSize": 2,
   "recentRejectedFingerprints": [
     "1240a5c4024ad81ee1e2",
     "1b7dc1733caf8b96d86e",
-    "355f478a8b669d789baf",
     "46ad824ea85b257ae59f",
     "5a8be2536ed727aaa38e",
     "62e620408a8cb85cc7c2",
-    "82bc01511e155b64e664",
     "ae0299f52aa7a9708aa9",
     "bf01f22fc60141ca16b1",
     "cba53276448a08d4eebc"
   ],
-  "authorization": "RESEARCH_ONLY",
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -78,5 +173,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-12T06:17:44.654410+00:00"
+  "generatedAt": "2026-09-12T07:15:49.039091+00:00"
 }
