@@ -9,14 +9,15 @@ import httpx
 
 from .config import Settings, settings
 from .engine import V2Engine
-from .execution_journal import ExecutionJournal
+from .runtime_engine import RuntimeV2Engine
+from .storage_backend import make_execution_journal
 
 
 def run(
     once: bool,
     *,
     runtime_settings: Settings = settings,
-    engine_factory: Callable[[Settings], V2Engine] = V2Engine,
+    engine_factory: Callable[[Settings], V2Engine] = RuntimeV2Engine,
     sleep_fn: Callable[[float], None] = time.sleep,
     max_cycles: int | None = None,
 ) -> None:
@@ -45,6 +46,7 @@ def run(
                         {
                             "event": "persistence_gate_blocked",
                             "mode": runtime_settings.mode,
+                            "state_backend": runtime_settings.state_backend,
                             "deploy_revision": runtime_settings.deploy_revision,
                             "persistent_state": runtime_settings.persistent_state,
                             "persistence_proven": False,
@@ -60,7 +62,7 @@ def run(
                 )
 
         if runtime_settings.mode == "live":
-            journal = ExecutionJournal(runtime_settings.state_db)
+            journal = make_execution_journal(runtime_settings)
             pending = journal.pending()
             if pending:
                 print(
@@ -68,6 +70,7 @@ def run(
                         {
                             "event": "live_recovery_gate_blocked",
                             "mode": runtime_settings.mode,
+                            "state_backend": runtime_settings.state_backend,
                             "pending_count": len(pending),
                             "pending": [
                                 {
@@ -101,6 +104,7 @@ def run(
                     "event": "startup",
                     "mode": runtime_settings.mode,
                     "live_trading": runtime_settings.live_trading,
+                    "state_backend": runtime_settings.state_backend,
                     "persistent_state": runtime_settings.persistent_state,
                     "persistence_proven": persistence_proven,
                     "persistence_reason": persistence_reason,
@@ -126,9 +130,6 @@ def run(
                     "mode": runtime_settings.mode,
                 }
                 print(json.dumps(error, sort_keys=True), flush=True)
-                # One-shot smoke/diagnostic runs must fail loudly. A continuous
-                # worker may survive transient public-market-data outages and
-                # try again on the next normal scan interval.
                 if once:
                     raise
 
