@@ -94,6 +94,51 @@ class RuntimeEnginePaperGuardTests(unittest.TestCase):
         self.assertIn("Profit factor: 1.4200", message)
         self.assertIn("Max DD: 0.8800 USDT", message)
 
+    def test_paper_ready_alert_is_claimed_and_sent_once(self):
+        engine = self._engine(True)
+        stats = {
+            "closed": 60,
+            "win_rate": 0.60,
+            "net_pnl_usdt": 2.5,
+            "expectancy_usdt": 0.0417,
+            "profit_factor": 1.25,
+            "max_drawdown_usdt": 1.1,
+        }
+        sent = engine._maybe_notify_paper_ready(stats, SimpleNamespace(ready=True))
+        self.assertTrue(sent)
+        self.assertEqual(len(engine.notifier.messages), 1)
+        self.assertIn("PAPER EVIDENCE READY", engine.notifier.messages[0])
+        self.assertIn("Live remains OFF", engine.notifier.messages[0])
+        self.assertEqual(
+            engine.state.calls[-1],
+            {
+                "symbol": "__V2_SYSTEM__",
+                "signal_open_time": 0.0,
+                "kind": "paper_evidence_ready_v1",
+            },
+        )
+
+    def test_paper_ready_alert_does_not_repeat_after_claim_exists(self):
+        engine = self._engine(False)
+        stats = {
+            "closed": 60,
+            "win_rate": 0.60,
+            "net_pnl_usdt": 2.5,
+            "expectancy_usdt": 0.0417,
+            "profit_factor": 1.25,
+            "max_drawdown_usdt": 1.1,
+        }
+        sent = engine._maybe_notify_paper_ready(stats, SimpleNamespace(ready=True))
+        self.assertFalse(sent)
+        self.assertEqual(engine.notifier.messages, [])
+
+    def test_paper_ready_alert_never_fires_before_evidence_passes(self):
+        engine = self._engine(True)
+        sent = engine._maybe_notify_paper_ready({}, SimpleNamespace(ready=False))
+        self.assertFalse(sent)
+        self.assertEqual(engine.state.calls, [])
+        self.assertEqual(engine.notifier.messages, [])
+
 
 if __name__ == "__main__":
     unittest.main()
