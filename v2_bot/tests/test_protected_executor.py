@@ -17,6 +17,7 @@ class FakeSignedClient:
             "orderId": 1,
             "status": "FILLED",
             "executedQty": "1.000",
+            "cummulativeQuoteQty": "102.00",
             "fills": [],
         }
         self.buy_exc: Exception | None = None
@@ -32,7 +33,12 @@ class FakeSignedClient:
             "listOrderStatus": "EXECUTING",
         }
         self.query_list_exc: Exception | None = None
-        self.sell_result = {"orderId": 9, "status": "FILLED", "executedQty": "1.000"}
+        self.sell_result = {
+            "orderId": 9,
+            "status": "FILLED",
+            "executedQty": "1.000",
+            "cummulativeQuoteQty": "101.00",
+        }
         self.sell_exc: Exception | None = None
         self.calls: list[tuple[str, dict]] = []
 
@@ -95,7 +101,9 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
     def test_happy_path_is_protected_and_never_flattens(self) -> None:
         result = self.execute()
         self.assertEqual(result.status, "PROTECTED")
-        self.assertEqual(self.journal.get(result.client_order_id).stage, "PROTECTED")
+        record = self.journal.get(result.client_order_id)
+        self.assertEqual(record.stage, "PROTECTED")
+        self.assertEqual(record.details["buy_cumulative_quote_qty"], "102.00")
         self.assertEqual([name for name, _ in self.client.calls], ["buy", "oco"])
 
     def test_base_asset_commission_is_removed_before_oco(self) -> None:
@@ -103,6 +111,7 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
             "orderId": 1,
             "status": "FILLED",
             "executedQty": "1.000",
+            "cummulativeQuoteQty": "102.00",
             "fills": [{"commission": "0.001", "commissionAsset": "SOL"}],
         }
         result = self.execute()
@@ -161,6 +170,7 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
             "orderId": 9,
             "status": "EXPIRED",
             "executedQty": "0",
+            "cummulativeQuoteQty": "0",
         }
         with self.assertRaises(RecoveryRequired):
             self.execute()
@@ -204,6 +214,7 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
             "orderId": 1,
             "status": "FILLED",
             "executedQty": "0.050",
+            "cummulativeQuoteQty": "5.10",
             "fills": [],
         }
         self.client.sell_result["executedQty"] = "0.050"
@@ -220,6 +231,14 @@ class ProtectedSpotExecutorTests(unittest.TestCase):
         )
         with self.assertRaises(RecoveryRequired):
             self.execute()
+        self.assertEqual(self.client.calls, [])
+
+    def test_active_protected_exposure_blocks_second_buy(self) -> None:
+        first = self.execute()
+        self.assertEqual(first.status, "PROTECTED")
+        self.client.calls.clear()
+        with self.assertRaisesRegex(RecoveryRequired, "LIVE_POSITION_LIMIT"):
+            self.execute(signal_key="different-signal")
         self.assertEqual(self.client.calls, [])
 
 
