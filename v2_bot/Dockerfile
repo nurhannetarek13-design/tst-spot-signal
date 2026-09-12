@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     V2_MODE=shadow \
     V2_LIVE_TRADING=false \
+    V2_PERSISTENT_STATE=false \
+    V2_STATE_BACKEND=sqlite \
     V2_STATE_DB=/data/v2_state.sqlite3
 
 WORKDIR /app
