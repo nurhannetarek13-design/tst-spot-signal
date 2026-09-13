@@ -1,8 +1,54 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "source": "PUBLIC_EDGE_LAB",
+  "sourceGeneratedAt": "2026-09-12T07:15:48.512012+00:00",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "sourceMetrics": {
+    "base": {
+      "trades": 80,
+      "wins": 34,
+      "winRate": 0.425,
+      "netPnlUSDT": 1.3834438186252132,
+      "expectancyUSDT": 0.017293047732815165,
+      "profitFactor": 1.1702889449869467,
+      "maxDrawdownUSDT": 3.3327425460484585
+    },
+    "stress2x": {
+      "trades": 80,
+      "wins": 34,
+      "winRate": 0.425,
+      "netPnlUSDT": 0.05938256101085271,
+      "expectancyUSDT": 0.0007422820126356588,
+      "profitFactor": 1.0066932309767163,
+      "maxDrawdownUSDT": 4.187024855693853
+    }
+  },
+  "liquidity": {
+    "quoteVolume24h": 57449119.85281,
+    "priceUSDT": 0.00909
+  },
+  "rankKey": [
+    1,
+    0.0007422820126356588,
+    1.0066932309767163,
+    80
+  ],
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -110,16 +156,14 @@
   "poolSize": 2,
   "recentRejectedFingerprints": [
     "1240a5c4024ad81ee1e2",
-    "1b7dc1733caf8b96d86e",
     "46ad824ea85b257ae59f",
     "47d4daea870e3a1ab59c",
-    "5a8be2536ed727aaa38e",
     "62e620408a8cb85cc7c2",
     "ae0299f52aa7a9708aa9",
     "bf01f22fc60141ca16b1",
     "cba53276448a08d4eebc"
   ],
-  "authorization": "RESEARCH_ONLY",
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -128,5 +172,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-12T07:18:01.464611+00:00"
+  "generatedAt": "2026-09-13T06:32:09.824926+00:00"
 }
