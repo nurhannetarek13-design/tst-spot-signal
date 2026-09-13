@@ -40,10 +40,27 @@ pconfig = profile.setdefault('config', {})
 pconfig.setdefault('trader', {})['enabled'] = False
 sim = pconfig.setdefault('trader-simulator', {})
 sim['enabled'] = True
-sim['starting-portfolio'] = {'BTC': 0, 'ETH': 0, 'USDT': 50}
+sim['starting-portfolio'] = {
+    'BTC': 0,
+    'ETH': 0,
+    'SOL': 0,
+    'BNB': 0,
+    'XRP': 0,
+    'DOGE': 0,
+    'ADA': 0,
+    'TRX': 0,
+    'USDT': 50,
+}
 pconfig['exchanges'] = {'binance': {'enabled': True, 'exchange-type': 'spot'}}
 pconfig['crypto-currencies'] = {
-    'Bitcoin': {'enabled': True, 'pairs': ['BTC/USDT']}
+    'Bitcoin': {'enabled': True, 'pairs': ['BTC/USDT']},
+    'Ethereum': {'enabled': True, 'pairs': ['ETH/USDT']},
+    'Solana': {'enabled': True, 'pairs': ['SOL/USDT']},
+    'BNB': {'enabled': True, 'pairs': ['BNB/USDT']},
+    'XRP': {'enabled': True, 'pairs': ['XRP/USDT']},
+    'Dogecoin': {'enabled': True, 'pairs': ['DOGE/USDT']},
+    'Cardano': {'enabled': True, 'pairs': ['ADA/USDT']},
+    'TRON': {'enabled': True, 'pairs': ['TRX/USDT']},
 }
 pconfig.setdefault('trading', {})['reference-market'] = 'USDT'
 save(PROFILE, profile)
@@ -61,4 +78,5 @@ dca['use_market_entry_orders'] = False
 # Never add leverage, futures, live-trader flags, or credentials here.
 save(DCA, dca)
 
-print('OCTOBOT_PAPER_BOOTSTRAP_OK profile=smart_dca balance=50_USDT pair=BTC/USDT sizing=25pct cooldown=240m')
+pairs = 'BTC,ETH,SOL,BNB,XRP,DOGE,ADA,TRX'
+print(f'OCTOBOT_PAPER_BOOTSTRAP_OK profile=smart_dca balance=50_USDT pairs={pairs} sizing=25pct cooldown=240m')
