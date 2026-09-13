@@ -1,12 +1,46 @@
 {
   "engine": "VECTORBT_CANDIDATE",
   "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "independentEnginePass": true,
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "base": {
+    "trades": 31,
+    "wins": 14,
+    "winRate": 0.45161290322580644,
+    "netPnlUSDT": 1.525004152858346,
+    "expectancyUSDT": 0.049193682350269226,
+    "profitFactor": 1.5020772869942265,
+    "maxDrawdownUSDT": 0.8365412580355723
+  },
+  "stress2x": {
+    "trades": 31,
+    "wins": 14,
+    "winRate": 0.45161290322580644,
+    "netPnlUSDT": 1.0104448076111867,
+    "expectancyUSDT": 0.03259499379390925,
+    "profitFactor": 1.3049250874638085,
+    "maxDrawdownUSDT": 1.0717830556656496
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-12T07:19:16.591410+00:00",
-  "notes": "No unified candidate; heavy VectorBT validation skipped."
+  "generatedAt": "2026-09-13T07:38:46.584525+00:00",
+  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
 }
