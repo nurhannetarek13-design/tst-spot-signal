@@ -1,10 +1,10 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "symbol": null,
-  "family": null,
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
   "historicalScope": "FULL_CANDIDATE",
   "forwardScope": "FULL_CANDIDATE",
   "requiredValidators": [
@@ -30,7 +30,8 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "CANDIDATE:MISSING",
+    "freqtrade:CANDIDATE_ID_MISMATCH",
+    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:CANDIDATE_ID_MISMATCH",
@@ -61,9 +62,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "CANDIDATE:MISSING",
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:CANDIDATE_ID_MISMATCH",
@@ -84,21 +82,21 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 31,
+      "independentEnginePass": true,
+      "baseProfitFactor": 1.5020772869942265,
+      "baseExpectancyUSDT": 0.049193682350269226,
+      "stressProfitFactor": 1.3049250874638085,
+      "stressExpectancyUSDT": 0.03259499379390925
     },
     "freqtrade": {
       "status": "NO_CANDIDATE",
@@ -169,6 +167,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-13T06:18:32.488024+00:00",
+  "generatedAt": "2026-09-13T07:38:59.016909+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
