@@ -108,15 +108,19 @@ class AdaptiveRegimeFusionValidator(Strategy):
         n = len(closes)
         demand_low = None
         demand_high = None
+        demand_seed_idx = -10_000
         last_sweep_idx = -10_000
         last_sweep_low = None
         last_shift_idx = -10_000
 
         for i in range(n):
             atr_now = atrs[i]
-            if demand_low is not None and closes[i] < demand_low:
+            zone_expired = demand_low is not None and i - demand_seed_idx > 96
+            zone_invalidated = demand_low is not None and closes[i] < demand_low
+            if zone_expired or zone_invalidated:
                 demand_low = None
                 demand_high = None
+                demand_seed_idx = -10_000
                 last_sweep_idx = -10_000
                 last_sweep_low = None
                 last_shift_idx = -10_000
@@ -139,7 +143,8 @@ class AdaptiveRegimeFusionValidator(Strategy):
 
             body = closes[i] - opens[i]
             displaced = (
-                closes[i] > prior_high
+                demand_low is None
+                and closes[i] > prior_high
                 and body >= 0.80 * atr_now
                 and relvols[i] >= 1.10
                 and i >= 1
@@ -148,6 +153,7 @@ class AdaptiveRegimeFusionValidator(Strategy):
             if displaced:
                 demand_low = float(lows[i - 1])
                 demand_high = float(opens[i - 1])
+                demand_seed_idx = i
                 last_sweep_idx = -10_000
                 last_sweep_low = None
                 last_shift_idx = -10_000
@@ -181,7 +187,11 @@ class AdaptiveRegimeFusionValidator(Strategy):
             and distance >= 0
             and distance <= 3.0 * atr_now
         )
-        structure_stop = max(0.0, demand_low - 0.20 * atr_now)
+        invalidation_low = min(
+            demand_low,
+            last_sweep_low if last_sweep_low is not None else demand_low,
+        )
+        structure_stop = max(0.0, invalidation_low - 0.20 * atr_now)
         risk = entry - structure_stop
         risk_pct = risk / entry if entry > 0 and risk > 0 else 999.0
         prior_48_high = float(np.max(highs[max(0, i - 48):i])) if i > 0 else entry
@@ -300,7 +310,6 @@ class AdaptiveRegimeFusionValidator(Strategy):
             return
 
         target = entry + 2.0 * risk
-        # Existing account policy max risk is 0.20 USDT. Shrink notional if needed.
         risk_limited_notional = 0.20 / risk_pct
         size_usd = min(5.5, max(0.0, float(self.balance)), risk_limited_notional)
         if size_usd <= 0:
