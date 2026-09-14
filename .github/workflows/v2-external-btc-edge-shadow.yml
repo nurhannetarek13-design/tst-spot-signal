@@ -42,6 +42,7 @@ jobs:
       - name: Install V2 dependencies
         run: pip install -r v2_bot/requirements.txt
 
+      # The runner uses the same official Binance public fallback client as V2.
       - name: Run BTC EMA600 + funding Shadow edge
         run: python -m v2_bot.github_shadow_edge --state .runtime/btc_ema600_funding_state.json --quote-size 10
 
