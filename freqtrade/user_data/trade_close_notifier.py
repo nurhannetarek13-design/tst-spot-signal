@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
+
+# This file runs from /freqtrade/user_data, so make the app root importable.
+if '/freqtrade' not in sys.path:
+    sys.path.insert(0, '/freqtrade')
 
 import telegram_signal_bridge as bridge
 import trade_state
 
 POLL_SEC = max(10, int(os.getenv('TRADE_CLOSE_NOTIFY_POLL_SEC', '15')))
+STARTED_AT = time.time()
+BACKFILL_GRACE_SEC = max(30, int(os.getenv('TRADE_CLOSE_NOTIFY_BACKFILL_GRACE_SEC', '120')))
 
 _REASON_LABELS = {
     'TAKE_PROFIT': 'TP 🎯',
@@ -31,6 +38,17 @@ def _notify(pos: dict) -> bool:
     if not signal_id or not symbol or pos.get('close_notified_at'):
         return False
 
+    closed_at = float(pos.get('closed_at') or 0.0)
+    # Do not dump historical closes into Telegram when this notifier is first
+    # introduced or after a long restart. Fresh closes around a restart are kept.
+    if closed_at > 0 and closed_at < STARTED_AT - BACKFILL_GRACE_SEC:
+        trade_state.update_position(
+            signal_id,
+            close_notified_at=time.time(),
+            close_notify_backfill_suppressed=True,
+        )
+        return False
+
     entry = float(pos.get('entry') or 0.0)
     exit_price = float(pos.get('exit_price') or 0.0)
     quote_spent = float(pos.get('quote_spent') or 0.0)
@@ -38,7 +56,7 @@ def _notify(pos: dict) -> bool:
     pnl = float(pos.get('realized_pnl_usdt') or 0.0)
     pnl_pct = (pnl / quote_spent * 100.0) if quote_spent > 0 else 0.0
     opened_at = float(pos.get('opened_at') or 0.0)
-    closed_at = float(pos.get('closed_at') or time.time())
+    closed_at = closed_at or time.time()
     held_min = max(0, int(round((closed_at - opened_at) / 60.0))) if opened_at > 0 else 0
     reason = str(pos.get('close_reason') or 'CLOSED').upper()
     reason_label = _REASON_LABELS.get(reason, reason.replace('_', ' '))
@@ -83,7 +101,10 @@ def run_once() -> None:
 
 
 def main() -> None:
-    print(f'[trade-close-notifier] ONLINE poll={POLL_SEC}s', flush=True)
+    print(
+        f'[trade-close-notifier] ONLINE poll={POLL_SEC}s backfill_grace={BACKFILL_GRACE_SEC}s',
+        flush=True,
+    )
     while True:
         try:
             run_once()
