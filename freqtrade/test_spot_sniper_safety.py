@@ -23,51 +23,62 @@ def test_sideways_is_fail_closed() -> None:
     try:
         market_context.symbol_context = lambda _symbol: _ctx('SIDEWAYS_COMPRESSION', 1)
         result = spot_sniper_gate.evaluate({
-            'symbol': 'DOGEUSDT',
-            'score': 100,
-            'entry': 1.0,
-            'target': 1.02,
-            'stop': 0.99,
+            'symbol': 'DOGEUSDT', 'score': 100, 'entry': 1.0,
+            'target': 1.02, 'stop': 0.99,
         })
     finally:
         market_context.symbol_context = original
-
     assert result['passed'] is False, result
     assert result['live_authorized'] is False, result
     assert result['status'] == 'REGIME_REJECT', result
     assert result['reason'] == 'sideways-compression-no-validated-edge', result
 
 
-def test_observe_only_research_can_use_strict_weak_bull_fallback() -> None:
+def test_observe_only_research_can_use_strict_weak_bull_fallback_when_ranked() -> None:
     original_ctx = market_context.symbol_context
     original_ev = spot_sniper_gate.live_ev_gate.evaluate
     try:
-        # Rank deliberately outside the validated-EV top-N contract. In fallback
-        # mode it is telemetry only because unapproved research cannot veto live.
-        market_context.symbol_context = lambda _symbol: _ctx('WEAK_BULL', 12)
+        # Rank 4 mirrors the successful ZEC case: not top-3 validated-EV rank,
+        # but still high enough cross-sectionally for the production fallback.
+        market_context.symbol_context = lambda _symbol: _ctx('WEAK_BULL', 4)
         spot_sniper_gate.live_ev_gate.evaluate = lambda _payload: {
-            'enforced': False,
-            'passed': True,
-            'status': 'OBSERVE_ONLY',
+            'enforced': False, 'passed': True, 'status': 'OBSERVE_ONLY',
             'validation_status': 'validation-not-approved',
         }
         result = spot_sniper_gate.evaluate({
-            'symbol': 'TRXUSDT',
-            'score': 92,
-            'strategy': 'FAST_PRE_MOMENTUM',
-            'entry': 1.0,
-            'target': 1.012,
-            'stop': 0.993,
+            'symbol': 'ZECUSDT', 'score': 100,
+            'strategy': 'MID_MOMENTUM_CONTINUATION',
+            'entry': 1.0, 'target': 1.02, 'stop': 0.99,
         })
     finally:
         market_context.symbol_context = original_ctx
         spot_sniper_gate.live_ev_gate.evaluate = original_ev
-
     assert result['passed'] is True, result
     assert result['live_authorized'] is True, result
     assert result['status'] == 'LIVE_RULES_FALLBACK_PASS', result
     assert result['authorization_basis'] == 'PRODUCTION_GATES_RESEARCH_SHADOW', result
-    assert result['fallback_score_required'] == 92, result
+
+
+def test_far_rank_cannot_pass_fallback_on_score_alone() -> None:
+    original_ctx = market_context.symbol_context
+    original_ev = spot_sniper_gate.live_ev_gate.evaluate
+    try:
+        # Rank 31 mirrors the CRCLB setup that should now be blocked even if its
+        # heuristic lane score happens to print 100/100.
+        market_context.symbol_context = lambda _symbol: _ctx('WEAK_BULL', 31)
+        spot_sniper_gate.live_ev_gate.evaluate = lambda _payload: {
+            'enforced': False, 'passed': True, 'status': 'OBSERVE_ONLY',
+        }
+        result = spot_sniper_gate.evaluate({
+            'symbol': 'DOGEUSDT', 'score': 100,
+            'strategy': 'MID_MOMENTUM_CONTINUATION',
+            'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+        })
+    finally:
+        market_context.symbol_context = original_ctx
+        spot_sniper_gate.live_ev_gate.evaluate = original_ev
+    assert result['passed'] is False, result
+    assert result['status'] == 'FALLBACK_RANK_REJECT', result
 
 
 def test_fallback_score_floor_is_hard() -> None:
@@ -76,22 +87,16 @@ def test_fallback_score_floor_is_hard() -> None:
     try:
         market_context.symbol_context = lambda _symbol: _ctx('WEAK_BULL', 1)
         spot_sniper_gate.live_ev_gate.evaluate = lambda _payload: {
-            'enforced': False,
-            'passed': True,
-            'status': 'OBSERVE_ONLY',
+            'enforced': False, 'passed': True, 'status': 'OBSERVE_ONLY',
         }
         result = spot_sniper_gate.evaluate({
-            'symbol': 'TRXUSDT',
-            'score': 91,
+            'symbol': 'TRXUSDT', 'score': 91,
             'strategy': 'FAST_PRE_MOMENTUM',
-            'entry': 1.0,
-            'target': 1.012,
-            'stop': 0.993,
+            'entry': 1.0, 'target': 1.012, 'stop': 0.993,
         })
     finally:
         market_context.symbol_context = original_ctx
         spot_sniper_gate.live_ev_gate.evaluate = original_ev
-
     assert result['passed'] is False, result
     assert result['status'] == 'FALLBACK_SCORE_REJECT', result
 
@@ -102,22 +107,16 @@ def test_weak_bear_has_no_production_fallback() -> None:
     try:
         market_context.symbol_context = lambda _symbol: _ctx('WEAK_BEAR', 1)
         spot_sniper_gate.live_ev_gate.evaluate = lambda _payload: {
-            'enforced': False,
-            'passed': True,
-            'status': 'OBSERVE_ONLY',
+            'enforced': False, 'passed': True, 'status': 'OBSERVE_ONLY',
         }
         result = spot_sniper_gate.evaluate({
-            'symbol': 'DOGEUSDT',
-            'score': 100,
+            'symbol': 'DOGEUSDT', 'score': 100,
             'strategy': 'FAST_PRE_MOMENTUM',
-            'entry': 1.0,
-            'target': 1.012,
-            'stop': 0.993,
+            'entry': 1.0, 'target': 1.012, 'stop': 0.993,
         })
     finally:
         market_context.symbol_context = original_ctx
         spot_sniper_gate.live_ev_gate.evaluate = original_ev
-
     assert result['passed'] is False, result
     assert result['status'] == 'REGIME_REJECT', result
     assert 'production-fallback-regime-not-allowed' in result['reason'], result
@@ -129,40 +128,30 @@ def test_enforced_ev_reject_cannot_be_rescued() -> None:
     try:
         market_context.symbol_context = lambda _symbol: _ctx('STRONG_BULL', 1)
         spot_sniper_gate.live_ev_gate.evaluate = lambda _payload: {
-            'enforced': True,
-            'passed': False,
-            'status': 'ENFORCED_REJECT',
-            'prob_tp_before_sl': 0.40,
-            'expected_net_pct': -0.20,
-            'expected_mfe_pct': 0.5,
-            'expected_mae_pct': -0.8,
+            'enforced': True, 'passed': False, 'status': 'ENFORCED_REJECT',
+            'prob_tp_before_sl': 0.40, 'expected_net_pct': -0.20,
+            'expected_mfe_pct': 0.5, 'expected_mae_pct': -0.8,
         }
         result = spot_sniper_gate.evaluate({
-            'symbol': 'SOLUSDT',
-            'score': 100,
+            'symbol': 'SOLUSDT', 'score': 100,
             'strategy': 'FAST_PRE_MOMENTUM',
-            'entry': 1.0,
-            'target': 1.012,
-            'stop': 0.993,
+            'entry': 1.0, 'target': 1.012, 'stop': 0.993,
         })
     finally:
         market_context.symbol_context = original_ctx
         spot_sniper_gate.live_ev_gate.evaluate = original_ev
-
     assert result['passed'] is False, result
     assert result['status'] == 'EV_REJECT', result
 
 
 def test_approx_historical_evidence_cannot_promote() -> None:
     fake = {
-        'status': 'APPROVED',
-        'evidence_pass': True,
+        'status': 'APPROVED', 'evidence_pass': True,
         'runtime_parity': 'APPROXIMATION_ONLY',
         'feature_version': ev_validation_guard.m.FEATURE_VERSION,
         'model': {
             'feature_version': ev_validation_guard.m.FEATURE_VERSION,
-            'schema': {'fake': True},
-            'probability_weights': [1.0],
+            'schema': {'fake': True}, 'probability_weights': [1.0],
             'regression_weights': {'net_pct': [1.0]},
         },
     }
@@ -173,9 +162,10 @@ def test_approx_historical_evidence_cannot_promote() -> None:
 
 if __name__ == '__main__':
     test_sideways_is_fail_closed()
-    test_observe_only_research_can_use_strict_weak_bull_fallback()
+    test_observe_only_research_can_use_strict_weak_bull_fallback_when_ranked()
+    test_far_rank_cannot_pass_fallback_on_score_alone()
     test_fallback_score_floor_is_hard()
     test_weak_bear_has_no_production_fallback()
     test_enforced_ev_reject_cannot_be_rescued()
     test_approx_historical_evidence_cannot_promote()
-    print('[spot-sniper-safety-test] PASS sideways=blocked weakbear=blocked fallback=guarded enforced_ev_reject=hard historical_approx=blocked')
+    print('[spot-sniper-safety-test] PASS sideways=blocked weakbear=blocked fallback=rank<=10+score enforced_ev_reject=hard historical_approx=blocked')
