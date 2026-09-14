@@ -94,3 +94,18 @@ for required in [
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
 print('[manual-confirm-fallback] OK score>=80 top10 warmup/sideways manual-only path; all hard risk/execution gates unchanged')
+
+# Railway Dockerfile already copies /freqtrade/user_data as a directory. Keep the
+# new whipsaw/profit-lock patch there so no Dockerfile surgery is needed. Apply it
+# here after all fast-entry patches and before dynamic_exit_v2/final build checks.
+whipsaw_patch = Path('/freqtrade/user_data/patch_early_whipsaw_protection.py')
+if not whipsaw_patch.exists():
+    raise SystemExit('manual-confirm fallback: whipsaw patch missing from user_data')
+code = compile(whipsaw_patch.read_text(encoding='utf-8'), str(whipsaw_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(whipsaw_patch)})
+
+whipsaw_test = Path('/freqtrade/user_data/test_early_whipsaw_protection.py')
+if not whipsaw_test.exists():
+    raise SystemExit('manual-confirm fallback: whipsaw test missing from user_data')
+code = compile(whipsaw_test.read_text(encoding='utf-8'), str(whipsaw_test), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(whipsaw_test)})
