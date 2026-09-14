@@ -8,8 +8,8 @@ if 'def _signal_visibility_alert(' in s:
     raise SystemExit(0)
 
 # Visibility is deliberately separate from authorization. WATCH / BLOCKED alerts
-# can be disabled entirely. Confirmed BUY remains behind every existing
-# execution, quality, regime, EV, portfolio, OCO and user-confirmation gate.
+# are OFF by default. Confirmed BUY remains behind every existing execution,
+# quality, regime, EV, portfolio, OCO and user-confirmation gate.
 insert_marker = '\ndef _watch_live_price(m: dict) -> float:\n'
 helper = r'''
 
@@ -25,7 +25,8 @@ def _signal_visibility_alert(
     reason: str = '',
     regime: str = '',
 ) -> None:
-    if str(os.getenv('FAST_VISIBILITY_ENABLED', '1')).strip().lower() not in {'1', 'true', 'yes', 'on'}:
+    # Telegram is confirmed-buy only unless visibility is deliberately re-enabled.
+    if str(os.getenv('FAST_VISIBILITY_ENABLED', '0')).strip().lower() not in {'1', 'true', 'yes', 'on'}:
         return
     now = time.time()
     key = f'{state}:{symbol}'
@@ -65,7 +66,7 @@ if insert_marker not in s:
     raise SystemExit('signal visibility patch failed: adaptive-watch helper marker missing')
 s = s.replace(insert_marker, helper + insert_marker, 1)
 
-# Notify once when a candidate first enters the adaptive WATCH band.
+# Keep the optional WATCH instrumentation wired, but disabled by default.
 watch_marker = "            f'ttl={WATCH_TTL_SEC}s direct={DIRECT_SCORE:.0f}'\n        )\n        return\n"
 watch_replacement = (
     "            f'ttl={WATCH_TTL_SEC}s direct={DIRECT_SCORE:.0f}'\n"
@@ -77,8 +78,8 @@ if watch_marker not in s:
     raise SystemExit('signal visibility patch failed: WATCH insertion marker missing')
 s = s.replace(watch_marker, watch_replacement, 1)
 
-# If a direct-score setup is rejected by the final Spot Sniper authorization
-# contract, surface it only when visibility alerts are explicitly enabled.
+# If a direct-score setup is rejected by final Spot Sniper authorization, keep
+# the optional diagnostic hook, also disabled by default.
 reject_marker = "        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)\n        return False\n"
 reject_replacement = (
     "        _record_candidate(symbol, lane, score, price, 'REJECT', why, **telemetry)\n"
@@ -92,13 +93,13 @@ s = s.replace(reject_marker, reject_replacement, 1)
 for required in [
     'def _signal_visibility_alert(',
     "FAST_VISIBILITY_ENABLED",
+    "os.getenv('FAST_VISIBILITY_ENABLED', '0')",
     "_signal_visibility_alert(symbol, score, 'WATCH'",
     "_signal_visibility_alert(symbol, score, 'DIRECT_BLOCKED'",
-    '[signal-visibility] SENT',
 ]:
     if required not in s:
         raise SystemExit(f'signal visibility patch failed: missing {required}')
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[signal-visibility-patch] OK optional WATCH/blocked visibility; execution authorization unchanged')
+print('[signal-visibility-patch] OK Telegram default=CONFIRMED_BUY_ONLY; WATCH/blocked visibility opt-in only')
