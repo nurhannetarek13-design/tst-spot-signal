@@ -63,7 +63,10 @@ function normalizedSymbol(symbol) {
 function signalGateReasons(candidate) {
   const reasons = [];
   const g = policy.signalGate || {};
-  if (g.requireMacdTrigger && candidate.macdTrigger !== true) reasons.push("MACD_TRIGGER_REQUIRED");
+  if (g.requireAlligatorTrigger && candidate.alligatorTrigger !== true) reasons.push("ALLIGATOR_TRIGGER_REQUIRED");
+  if (g.requireMacdConfirmation && candidate.macdConfirmed !== true) reasons.push("MACD_CONFIRMATION_REQUIRED");
+  if (g.requireSarConfirmation && candidate.sarConfirmed !== true) reasons.push("SAR_CONFIRMATION_REQUIRED");
+  if (g.requireTrendConfirmation && candidate.trendConfirmed !== true) reasons.push("TREND_CONFIRMATION_REQUIRED");
   if (g.requireL2Confirmation && candidate.l2Confirmed !== true) reasons.push("L2_CONFIRMATION_REQUIRED");
   if (g.requireBtcRegimeOk && candidate.btcRegimeOk !== true) reasons.push("BTC_REGIME_BLOCK");
   if (g.requireLiquidityOk && candidate.liquidityOk !== true) reasons.push("LIQUIDITY_BLOCK");
@@ -149,12 +152,16 @@ app.post("/candidate/hummingbot", ingestAuthorized, (req, res) => {
     side: req.body?.side,
     score: Number(req.body?.score || 0),
     regime: req.body?.regime || null,
+    setup: req.body?.setup || null,
     entry: Number(req.body?.entry || 0),
     stop: Number(req.body?.stop || 0),
     target: Number(req.body?.target || 0),
     notionalUSDT: Number(req.body?.notionalUSDT || 0),
     riskUSDT: Number(req.body?.riskUSDT || 0),
-    macdTrigger: req.body?.macdTrigger === true,
+    alligatorTrigger: req.body?.alligatorTrigger === true,
+    macdConfirmed: req.body?.macdConfirmed === true,
+    sarConfirmed: req.body?.sarConfirmed === true,
+    trendConfirmed: req.body?.trendConfirmed === true,
     l2Confirmed: req.body?.l2Confirmed === true,
     btcRegimeOk: req.body?.btcRegimeOk === true,
     liquidityOk: req.body?.liquidityOk === true,
