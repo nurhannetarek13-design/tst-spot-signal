@@ -1,8 +1,8 @@
 {
-  "release": "TST_FUSION_V3_MACD_L2",
+  "release": "TST_FUSION_V4_ALLIGATOR_TMV",
   "mode": "PAPER_ONLY",
   "liveTrading": false,
-  "strategyId": "TST_MACD_EMA200_L2_V1",
+  "strategyId": "TST_ALLIGATOR_TMV_V1",
   "candidateManifest": "validation/fusion/candidate-manifest.json",
   "engines": {
     "scanner": "CLOUDFLARE_ORDERBOOK_MICROSTRUCTURE",
@@ -32,13 +32,16 @@
   },
   "signalGate": {
     "timeframe": "15m",
-    "trigger": "MACD_12_26_9_BULLISH_CROSS_WHILE_MACD_BELOW_ZERO_AND_CLOSE_ABOVE_EMA200",
-    "requireMacdTrigger": true,
+    "trigger": "CAUSAL_ALLIGATOR_EXPANSION_PLUS_MACD_PLUS_PSAR_PLUS_RELATIVE_VOLUME_PLUS_EMA200",
+    "requireAlligatorTrigger": true,
+    "requireMacdConfirmation": true,
+    "requireSarConfirmation": true,
+    "requireTrendConfirmation": true,
     "requireL2Confirmation": true,
     "requireBtcRegimeOk": true,
     "requireLiquidityOk": true,
     "minTakerBuyShare": 0.56,
-    "minRelativeVolume": 1.5,
+    "minRelativeVolume": 1.2,
     "maxSpreadBps": 20,
     "missingDataPolicy": "NO_TRADE"
   },
