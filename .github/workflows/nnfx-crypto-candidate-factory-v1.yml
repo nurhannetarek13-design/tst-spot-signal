@@ -1,0 +1,69 @@
+name: NNFX Crypto Candidate Factory V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/nnfx-crypto-factory-v1
+    paths:
+      - "research/nnfx_crypto_candidate_factory_v1.py"
+      - ".github/workflows/nnfx-crypto-candidate-factory-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nnfx-crypto-candidate-factory-v1
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        run: pip install numpy pandas
+      - name: Run frozen discovery validation OOS factory
+        run: |
+          python research/nnfx_crypto_candidate_factory_v1.py \
+            --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT LINKUSDT \
+            --start 2024-09-01 \
+            --end 2026-09-01 \
+            --top-discovery 20 \
+            --top-validation 8 \
+            --output artifacts/nnfx-crypto-factory-v1/report.json
+      - name: Enforce fail-closed research contract
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/nnfx-crypto-factory-v1/report.json'
+          r=json.load(open(p))
+          assert r['authorization']=='RESEARCH_ONLY'
+          assert r['liveTrading'] is False
+          assert r['promotionGate']['canEnableLiveTrading'] is False
+          assert r['selectionProtocol']['oosUsedForSelection'] is False
+          assert r['window']['timeframe']=='15m'
+          assert r['checksumVerification'] is True
+          assert set(r['data']) == {'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','LINKUSDT'}
+          assert r['componentLibrary']['candidateCount'] >= 81
+          assert len(r['validation']['frozenFinalists']) <= 8
+          print(json.dumps({
+              'factory': r['engine'],
+              'candidateCount': r['componentLibrary']['candidateCount'],
+              'discoveryEligible': r['discovery']['eligible'],
+              'validationPassed': r['validation']['passed'],
+              'frozenFinalists': r['validation']['frozenFinalists'],
+              'oosPassed': r['oos']['passed'],
+              'promotionGate': r['promotionGate'],
+          }, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nnfx-crypto-candidate-factory-v1-report
+          path: artifacts/nnfx-crypto-factory-v1/report.json
+          retention-days: 14
