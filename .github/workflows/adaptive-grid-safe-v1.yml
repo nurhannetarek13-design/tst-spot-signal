@@ -7,6 +7,7 @@ on:
       - research/adaptive-grid-safe-v1
     paths:
       - "research/adaptive_grid_safe_v1.py"
+      - "research/adaptive_grid_safe_v1_vision.py"
       - ".github/workflows/adaptive-grid-safe-v1.yml"
 
 permissions:
@@ -27,12 +28,12 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install numpy pandas requests
-      - name: Run one-year 15m Binance Spot backtest
+      - name: Run one-year 15m Binance Vision Spot backtest
         run: |
-          python research/adaptive_grid_safe_v1.py \
+          python research/adaptive_grid_safe_v1_vision.py \
             --symbols LINKUSDT TONUSDT BTCUSDT ETHUSDT SOLUSDT \
-            --start 2025-09-14 \
-            --end 2026-09-14 \
+            --start 2025-09-01 \
+            --end 2026-09-01 \
             --oos-fraction 0.30 \
             --output artifacts/adaptive-grid-safe-v1/report.json
       - name: Enforce research-only safety contract
@@ -45,6 +46,7 @@ jobs:
           assert r['liveTrading'] is False
           assert r['promotionGate']['canEnableLiveTrading'] is False
           assert r['timeframe']=='15m'
+          assert r['checksumVerification'] is True
           assert set(r['symbols']) == {'LINKUSDT','TONUSDT','BTCUSDT','ETHUSDT','SOLUSDT'}
           print(json.dumps({
               'aggregate': r['aggregate'],
