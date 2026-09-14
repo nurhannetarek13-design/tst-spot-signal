@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run AdaptiveGridSafeSpotV1 on official Binance Vision Spot monthly 15m archives.
 
-This avoids cloud-runner geo restrictions on api.binance.com. Research only: it
-never reads account credentials and cannot place orders.
+Research only: no account credentials, no order endpoints, no live trading.
+Missing archive months are recorded; symbols with <90% expected coverage fail closed
+without preventing the remaining validation universe from running.
 """
 from __future__ import annotations
 
@@ -11,10 +12,10 @@ import hashlib
 import io
 import json
 import math
+import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -23,7 +24,7 @@ from adaptive_grid_safe_v1 import Params, metrics, run_symbol
 
 AUTHORIZATION = "RESEARCH_ONLY"
 BASE = "https://data.binance.vision/data/spot/monthly/klines"
-UA = "tst-adaptive-grid-safe-v1/1.0"
+UA = "tst-adaptive-grid-safe-v1/1.1"
 KLINE_COLS = [
     "open_time", "open", "high", "low", "close", "volume", "close_time", "quote_volume",
     "trades", "taker_base", "taker_quote", "ignore",
@@ -72,29 +73,42 @@ def read_kline_zip(raw: bytes) -> pd.DataFrame:
 
 
 def month_stamps(start: str, end: str) -> list[str]:
-    a = pd.Timestamp(start, tz="UTC").to_period("M")
-    b = (pd.Timestamp(end, tz="UTC") - pd.Timedelta(microseconds=1)).to_period("M")
+    a = pd.Timestamp(start).to_period("M")
+    b = (pd.Timestamp(end) - pd.Timedelta(microseconds=1)).to_period("M")
     return [str(p) for p in pd.period_range(a, b, freq="M")]
 
 
-def fetch_vision_klines(symbol: str, start: str, end: str) -> tuple[pd.DataFrame, list[dict]]:
+def fetch_vision_klines(symbol: str, start: str, end: str) -> tuple[pd.DataFrame, list[dict], float]:
     parts = []
     sources = []
     for stamp in month_stamps(start, end):
         url = f"{BASE}/{symbol}/15m/{symbol}-15m-{stamp}.zip"
-        raw = fetch_verified_zip(url)
-        df = read_kline_zip(raw)
-        parts.append(df)
-        sources.append({"month": stamp, "url": url, "rows": len(df), "checksumVerified": True})
+        try:
+            raw = fetch_verified_zip(url)
+            df = read_kline_zip(raw)
+            parts.append(df)
+            sources.append({"month": stamp, "url": url, "status": "OK", "rows": len(df), "checksumVerified": True})
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                sources.append({"month": stamp, "url": url, "status": "MISSING_404", "rows": 0, "checksumVerified": False})
+                continue
+            raise
+
     if not parts:
         raise RuntimeError(f"No Binance Vision monthly data for {symbol}")
+
     df = pd.concat(parts, ignore_index=True).sort_values("ts").drop_duplicates("ts").reset_index(drop=True)
     start_ts = pd.Timestamp(start, tz="UTC")
     end_ts = pd.Timestamp(end, tz="UTC")
     df = df[(df["ts"] >= start_ts) & (df["ts"] < end_ts)].copy().reset_index(drop=True)
-    # The imported backtest expects integer open_time only for metadata/filter semantics.
+    expected = max(1, int((end_ts - start_ts) / pd.Timedelta(minutes=15)))
+    coverage = len(df) / expected
+    if coverage < 0.90:
+        missing = [s["month"] for s in sources if s["status"] != "OK"]
+        raise RuntimeError(f"Insufficient data coverage for {symbol}: {coverage:.3%}; missingMonths={missing}")
+
     df["open_time"] = (df["ts"].astype("int64") // 1_000_000).astype("int64")
-    return df, sources
+    return df, sources, coverage
 
 
 def finite_metrics(ts):
@@ -130,20 +144,29 @@ def main() -> None:
 
     for symbol in args.symbols:
         print(f"Loading Binance Vision {symbol}...")
-        df, sources = fetch_vision_klines(symbol, args.start, args.end)
-        trades, meta = run_symbol(symbol, df, p, args.oos_fraction)
-        all_trades.extend(trades)
-        is_trades = [t for t in trades if t.segment == "IS"]
-        oos_trades = [t for t in trades if t.segment == "OOS"]
-        report["symbols"][symbol] = {
-            "meta": meta,
-            "sources": sources,
-            "overall": finite_metrics(trades),
-            "IS": finite_metrics(is_trades),
-            "OOS": finite_metrics(oos_trades),
-            "trades_detail": [asdict(t) for t in trades],
-        }
-        print(symbol, json.dumps(report["symbols"][symbol]["OOS"], indent=2))
+        try:
+            df, sources, coverage = fetch_vision_klines(symbol, args.start, args.end)
+            trades, meta = run_symbol(symbol, df, p, args.oos_fraction)
+            all_trades.extend(trades)
+            is_trades = [t for t in trades if t.segment == "IS"]
+            oos_trades = [t for t in trades if t.segment == "OOS"]
+            report["symbols"][symbol] = {
+                "status": "TESTED",
+                "dataCoverage": coverage,
+                "meta": meta,
+                "sources": sources,
+                "overall": finite_metrics(trades),
+                "IS": finite_metrics(is_trades),
+                "OOS": finite_metrics(oos_trades),
+                "trades_detail": [asdict(t) for t in trades],
+            }
+            print(symbol, json.dumps(report["symbols"][symbol]["OOS"], indent=2))
+        except Exception as e:
+            report["symbols"][symbol] = {
+                "status": "DATA_UNAVAILABLE",
+                "error": f"{type(e).__name__}: {e}",
+            }
+            print(symbol, report["symbols"][symbol]["error"])
 
     report["aggregate"] = {
         "overall": finite_metrics(all_trades),
@@ -153,6 +176,8 @@ def main() -> None:
 
     eligible = []
     for symbol, r in report["symbols"].items():
+        if r.get("status") != "TESTED":
+            continue
         o = r["OOS"]
         if (
             o["trades"] >= 20
@@ -172,7 +197,11 @@ def main() -> None:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
-    print(json.dumps({"aggregate": report["aggregate"], "promotionGate": report["promotionGate"]}, indent=2))
+    print(json.dumps({
+        "aggregate": report["aggregate"],
+        "promotionGate": report["promotionGate"],
+        "symbolStatus": {k: v.get("status") for k, v in report["symbols"].items()},
+    }, indent=2))
 
 
 if __name__ == "__main__":
