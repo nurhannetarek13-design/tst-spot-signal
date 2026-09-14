@@ -13,16 +13,24 @@ from .storage_backend import make_execution_journal
 from .tournament_engine import TournamentRuntimeV2Engine
 
 
+SHADOW_TOURNAMENT_RUNTIME_MISSING = (
+    "SHADOW_TOURNAMENT_RUNTIME_MISSING: production shadow runtime must emit "
+    "strategy-aware tournament state"
+)
+
+
 def run(
     once: bool,
     *,
     runtime_settings: Settings = settings,
-    engine_factory: Callable[[Settings], V2Engine] = TournamentRuntimeV2Engine,
+    engine_factory: Callable[[Settings], V2Engine] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     max_cycles: int | None = None,
 ) -> None:
     runtime_settings.validate()
-    engine = engine_factory(runtime_settings)
+    production_engine = engine_factory is None
+    factory = TournamentRuntimeV2Engine if engine_factory is None else engine_factory
+    engine = factory(runtime_settings)
 
     try:
         notifier = getattr(engine, "notifier", None)
@@ -105,6 +113,10 @@ def run(
             json.dumps(
                 {
                     "event": "startup",
+                    "engine_class": type(engine).__name__,
+                    "shadow_tournament_required": bool(
+                        production_engine and runtime_settings.mode == "shadow"
+                    ),
                     "mode": runtime_settings.mode,
                     "live_trading": runtime_settings.live_trading,
                     "state_backend": runtime_settings.state_backend,
@@ -129,6 +141,12 @@ def run(
         while True:
             try:
                 summary = engine.scan_once()
+                if (
+                    production_engine
+                    and runtime_settings.mode == "shadow"
+                    and "shadow_tournament" not in summary
+                ):
+                    raise RuntimeError(SHADOW_TOURNAMENT_RUNTIME_MISSING)
                 print(engine.dump_summary(summary), flush=True)
             except httpx.HTTPError as exc:
                 error = {
