@@ -110,3 +110,12 @@ if not whipsaw_test.exists():
     raise SystemExit('manual-confirm fallback: whipsaw test missing from user_data')
 code = compile(whipsaw_test.read_text(encoding='utf-8'), str(whipsaw_test), 'exec')
 exec(code, {'__name__': '__main__', '__file__': str(whipsaw_test)})
+
+# Wire the supervised 60-minute hard exit and the final Telegram trade result
+# notifier into entrypoint. The managers themselves live under user_data so the
+# existing Docker COPY user_data step is enough.
+lifecycle_patch = Path('/freqtrade/user_data/patch_hard_time_exit_lifecycle.py')
+if not lifecycle_patch.exists():
+    raise SystemExit('manual-confirm fallback: hard-time-exit lifecycle patch missing from user_data')
+code = compile(lifecycle_patch.read_text(encoding='utf-8'), str(lifecycle_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(lifecycle_patch)})
