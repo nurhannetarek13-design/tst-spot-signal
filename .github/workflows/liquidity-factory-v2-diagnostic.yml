@@ -1,0 +1,57 @@
+name: Liquidity Factory V2 Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/liquidity-factory-v2
+    paths:
+      - "research/liquidity_factory_v2.py"
+      - "research/liquidity_factory_v2_diagnostic.py"
+      - ".github/workflows/liquidity-factory-v2-diagnostic.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: liquidity-factory-v2-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas
+      - name: Rank failed V2 candidates without changing gates
+        run: |
+          python research/liquidity_factory_v2_diagnostic.py \
+            --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT LINKUSDT \
+            --start 2024-09-01 \
+            --end 2026-09-01 \
+            --output artifacts/liquidity-factory-v2/diagnostic.json
+      - name: Enforce diagnostic isolation
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/liquidity-factory-v2/diagnostic.json'))
+          assert r['authorization']=='RESEARCH_ONLY'
+          assert r['liveTrading'] is False
+          assert r['gateChanged'] is False
+          assert r['oosTouched'] is False
+          assert r['candidateCount']==96
+          print(json.dumps({
+            'failureReasonCounts':r['failureReasonCounts'],
+            'closest':r['closestToFixedGate'][:5]
+          }, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: liquidity-factory-v2-diagnostic
+          path: artifacts/liquidity-factory-v2/diagnostic.json
+          retention-days: 14
