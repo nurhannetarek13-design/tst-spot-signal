@@ -127,3 +127,12 @@ if not final_patch.exists():
     raise SystemExit('manual-confirm fallback: final entry hardening patch missing from user_data')
 code = compile(final_patch.read_text(encoding='utf-8'), str(final_patch), 'exec')
 exec(code, {'__name__': '__main__', '__file__': str(final_patch)})
+
+# Unattended execution is injected last, after every entry/rank/persistence gate
+# has finalized the FAST_SIGNAL_READY contract. It is time-windowed and never
+# auto-executes WATCH or manual-fallback candidates.
+auto_patch = Path('/freqtrade/user_data/patch_sleep_auto_trading.py')
+if not auto_patch.exists():
+    raise SystemExit('manual-confirm fallback: sleep auto-trading patch missing from user_data')
+code = compile(auto_patch.read_text(encoding='utf-8'), str(auto_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(auto_patch)})
