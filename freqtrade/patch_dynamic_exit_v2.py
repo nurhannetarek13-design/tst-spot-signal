@@ -186,11 +186,104 @@ if new_cancel not in s:
         raise SystemExit('dynamic-exit-v2: destructive cancel marker missing')
     s = s.replace(old_cancel, new_cancel, 1)
 
+# Restore the old Telegram lifecycle idea without creating another execution
+# owner: 45m review + 60m decision deadline are notifications only. The OCO and
+# dynamic profit-lock remain the automated protection layer.
+review_anchor = "_write_permission_cache = {'checked_at': 0.0, 'ok': False, 'reason': 'not-checked'}\n"
+review_consts = review_anchor + (
+    "POSITION_REVIEW_45_SEC = max(300, int(os.getenv('POSITION_REVIEW_45_SEC', str(45 * 60))))\n"
+    "POSITION_REVIEW_60_SEC = max(POSITION_REVIEW_45_SEC + 60, int(os.getenv('POSITION_REVIEW_60_SEC', str(60 * 60))))\n"
+)
+if 'POSITION_REVIEW_45_SEC =' not in s:
+    if review_anchor not in s:
+        raise SystemExit('dynamic-exit-v2: review constants anchor missing')
+    s = s.replace(review_anchor, review_consts, 1)
+
+run_marker = '\ndef run_once() -> None:\n'
+review_helper = r'''
+
+def _position_status_label(pnl_pct: float, peak_pct: float) -> str:
+    if pnl_pct >= 0.50:
+        return 'قوية 🟢'
+    if pnl_pct >= -0.20:
+        return 'شبه ثابتة 🟡'
+    if peak_pct > 0.40 and pnl_pct < peak_pct * 0.45:
+        return 'الربح بيتراجع 🟠'
+    return 'ضعفت 🔴'
+
+
+def _maybe_position_review(pos: dict, market: dict) -> None:
+    signal_id = str(pos.get('signal_id') or '')
+    symbol = str(pos.get('symbol') or '')
+    opened_at = float(pos.get('opened_at') or 0.0)
+    entry = float(pos.get('entry') or 0.0)
+    current = float(market.get('bid') or 0.0)
+    if not signal_id or not symbol or opened_at <= 0 or entry <= 0 or current <= 0:
+        return
+    age = time.time() - opened_at
+    peak = max(float(pos.get('peak_price') or entry), current)
+    pnl_pct = ((current / entry) - 1.0) * 100.0
+    peak_pct = ((peak / entry) - 1.0) * 100.0
+    status = _position_status_label(pnl_pct, peak_pct)
+
+    # If the service restarted after the deadline, send only the more useful 60m
+    # message and mark the 45m review as satisfied to avoid a two-message burst.
+    if age >= POSITION_REVIEW_60_SEC and not pos.get('deadline_60_sent_at'):
+        text = (
+            f'⏰ 60m DECISION DEADLINE\n{symbol}\n'
+            f'⌛ Age: {int(age // 60)} min\n'
+            f'💲 Current: {current:.8g}\n'
+            f'📍 Entry ref: {entry:.8g}\n'
+            f'📈 P/L ref: {pnl_pct:+.2f}%\n'
+            f'🏔 Peak P/L: {peak_pct:+.2f}%\n'
+            f'{status}\n\n'
+            'الصفقة وصلت نهاية مدة FAST30_60 المستهدفة. '
+            'الـOCO والـDynamic Profit Lock لسه شغالين للحماية.'
+        )
+        _alert(text)
+        now = time.time()
+        trade_state.update_position(signal_id, review_45_sent_at=pos.get('review_45_sent_at') or now, deadline_60_sent_at=now)
+        trade_state.append_event('POSITION_DEADLINE_60_SENT', signal_id=signal_id, symbol=symbol, current=current, pnl_pct=pnl_pct, peak_pct=peak_pct)
+        return
+
+    if age >= POSITION_REVIEW_45_SEC and not pos.get('review_45_sent_at'):
+        text = (
+            f'⏱ 45m POSITION REVIEW\n{symbol}\n'
+            f'⌛ Age: {int(age // 60)} min\n'
+            f'💲 Current: {current:.8g}\n'
+            f'📍 Entry ref: {entry:.8g}\n'
+            f'📈 P/L ref: {pnl_pct:+.2f}%\n'
+            f'🏔 Peak P/L: {peak_pct:+.2f}%\n'
+            f'{status}\n\n'
+            'مراجعة مبكرة. الـOCO والـDynamic Profit Lock شغالين؛ '
+            'لو الربح بدأ يتاكل مدير الخروج يشد الحماية حسب الحركة.'
+        )
+        _alert(text)
+        trade_state.update_position(signal_id, review_45_sent_at=time.time())
+        trade_state.append_event('POSITION_REVIEW_45_SENT', signal_id=signal_id, symbol=symbol, current=current, pnl_pct=pnl_pct, peak_pct=peak_pct)
+
+
+'''
+if 'def _maybe_position_review(' not in s:
+    if run_marker not in s:
+        raise SystemExit('dynamic-exit-v2: run_once marker missing for reviews')
+    s = s.replace(run_marker, review_helper + run_marker, 1)
+
+market_line = "            market = _market(symbol)\n"
+market_with_review = market_line + "            _maybe_position_review(pos, market)\n"
+if '_maybe_position_review(pos, market)' not in s:
+    if market_line not in s:
+        raise SystemExit('dynamic-exit-v2: market marker missing for review call')
+    s = s.replace(market_line, market_with_review, 1)
+
 required = [
     'def _resolve_oco_client', 'OCO_RATCHET_RESPONSE_RECOVERED',
     'OCO_RATCHET_ROLLBACK_RESPONSE_RECOVERED', 'make-exact-oco-route',
     'def _cancel_make_oco(', 'CANCEL_OCO_EXACT',
     'cancelled, cancel = _cancel_exact_oco(pos, current_oid)',
+    'POSITION_REVIEW_45_SEC =', 'POSITION_REVIEW_60_SEC =',
+    'def _maybe_position_review(', '_maybe_position_review(pos, market)',
+    '45m POSITION REVIEW', '60m DECISION DEADLINE', 'Peak P/L',
 ]
 for item in required:
     if item not in s:
@@ -198,4 +291,4 @@ for item in required:
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[dynamic-exit-v2-patch] OK Make-backed exact OCO cancel + ambiguous OCO recovery + fail-closed replacement')
+print('[dynamic-exit-v2-patch] OK exact OCO recovery + profit protection + 45m/60m Telegram lifecycle reviews')
