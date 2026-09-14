@@ -9,6 +9,7 @@ import httpx
 
 from .config import Settings, settings
 from .engine import V2Engine
+from .external_btc_edge import run_external_challenger
 from .storage_backend import make_execution_journal
 from .tournament_engine import TournamentRuntimeV2Engine
 
@@ -147,6 +148,8 @@ def run(
                     and "shadow_tournament" not in summary
                 ):
                     raise RuntimeError(SHADOW_TOURNAMENT_RUNTIME_MISSING)
+                if production_engine and runtime_settings.mode == "shadow":
+                    summary["external_btc_edge"] = run_external_challenger(engine)
                 print(engine.dump_summary(summary), flush=True)
             except httpx.HTTPError as exc:
                 error = {
