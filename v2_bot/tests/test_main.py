@@ -2,6 +2,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import httpx
 
@@ -186,6 +187,49 @@ class MainLoopTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn('"persistence_proven": true', text)
         self.assertIn('"persistence_reason": "survived_prior_deployment"', text)
+        self.assertTrue(holder["engine"].closed)
+
+    def test_default_runtime_resolves_tournament_factory_at_call_time(self):
+        holder = {}
+
+        def factory(settings):
+            engine = FakeEngine(
+                settings,
+                [{"mode": "shadow", "shadow_tournament": {"enabled": True}}],
+            )
+            holder["engine"] = engine
+            return engine
+
+        output = io.StringIO()
+        with patch("v2_bot.main.TournamentRuntimeV2Engine", side_effect=factory) as tournament_factory:
+            with redirect_stdout(output):
+                run(
+                    True,
+                    runtime_settings=Settings(mode="shadow", live_trading=False),
+                    sleep_fn=lambda _seconds: None,
+                )
+
+        tournament_factory.assert_called_once()
+        self.assertIn('"shadow_tournament_required": true', output.getvalue())
+        self.assertTrue(holder["engine"].closed)
+
+    def test_default_shadow_runtime_fails_closed_without_tournament_marker(self):
+        holder = {}
+
+        def factory(settings):
+            engine = FakeEngine(settings, [{"mode": "shadow", "ok": True}])
+            holder["engine"] = engine
+            return engine
+
+        with patch("v2_bot.main.TournamentRuntimeV2Engine", side_effect=factory):
+            with self.assertRaisesRegex(RuntimeError, "SHADOW_TOURNAMENT_RUNTIME_MISSING"):
+                with redirect_stdout(io.StringIO()):
+                    run(
+                        True,
+                        runtime_settings=Settings(mode="shadow", live_trading=False),
+                        sleep_fn=lambda _seconds: None,
+                    )
+
         self.assertTrue(holder["engine"].closed)
 
 
