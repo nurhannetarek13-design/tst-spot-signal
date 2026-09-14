@@ -148,7 +148,13 @@ def run(
                     and "shadow_tournament" not in summary
                 ):
                     raise RuntimeError(SHADOW_TOURNAMENT_RUNTIME_MISSING)
-                if production_engine and runtime_settings.mode == "shadow":
+                if (
+                    production_engine
+                    and runtime_settings.mode == "shadow"
+                    and hasattr(engine, "settings")
+                    and hasattr(engine, "_get_runtime_meta")
+                    and hasattr(engine, "_set_runtime_meta")
+                ):
                     summary["external_btc_edge"] = run_external_challenger(engine)
                 print(engine.dump_summary(summary), flush=True)
             except httpx.HTTPError as exc:
