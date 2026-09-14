@@ -68,4 +68,14 @@ for required in [
         raise SystemExit(f'hard-time-exit lifecycle: missing {required}')
 
 entrypoint.write_text(s, encoding='utf-8')
-print('[hard-time-exit-lifecycle-patch] OK 60m hard exit + final Telegram PnL notifier wired into supervised runtime')
+
+# After the lifecycle files are present, make OCO closes account for any base
+# asset remainder caused by commission + LOT_SIZE rounding and show it explicitly
+# instead of making the missing cash look like a trading loss.
+residual_patch = Path('/freqtrade/user_data/patch_residual_accounting.py')
+if not residual_patch.exists():
+    raise SystemExit('hard-time-exit lifecycle: residual accounting patch missing')
+code = compile(residual_patch.read_text(encoding='utf-8'), str(residual_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(residual_patch)})
+
+print('[hard-time-exit-lifecycle-patch] OK 60m hard exit + final Telegram PnL notifier + residual accounting wired into supervised runtime')
