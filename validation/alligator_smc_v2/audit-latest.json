@@ -1,0 +1,102 @@
+{
+  "strategyId": "TST_ALLIGATOR_SMC_V2",
+  "auditStatus": "REJECTED",
+  "classification": "E_STRATEGY_HAS_NO_RELIABLE_EDGE",
+  "secondaryFinding": "CATASTROPHICALLY_OVER_FILTERED",
+  "liveReady": false,
+  "realMoneyAuthorization": false,
+  "auditWindow": {
+    "days": 365,
+    "start": "2025-09-14T13:58:00Z",
+    "end": "2026-09-14T13:58:00Z",
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "BNBUSDT",
+      "XRPUSDT",
+      "DOGEUSDT",
+      "ADAUSDT",
+      "LINKUSDT",
+      "AVAXUSDT",
+      "TRXUSDT"
+    ],
+    "timeframe": "15m",
+    "rowsPerSymbol": 35040,
+    "totalRows": 350400
+  },
+  "costModel": {
+    "feePerSidePct": 0.10,
+    "executionBufferPerSidePct": 0.05,
+    "note": "Historical L2/spread/depth was not available and is explicitly NOT_MEASURED_HISTORICALLY."
+  },
+  "fullStrategyMinusHistoricalL2": {
+    "trades": 3,
+    "wins": 1,
+    "losses": 2,
+    "winRatePct": 33.3333,
+    "profitFactor": 0.393972,
+    "expectancyPctPerTrade": -0.099902,
+    "netSumReturnPct": -0.299707,
+    "maxDrawdownPct": -0.457725,
+    "payoffRatio": 0.78794,
+    "breakEvenWinRatePct": 55.93,
+    "targetHitRatePct": 0.0,
+    "medianMfePct": 0.973159,
+    "medianMaePct": -0.480768,
+    "averageHoldBars": 12.33,
+    "tradesPerDay": 0.008219,
+    "tradesPerWeek": 0.057534,
+    "tradesPerMonth": 0.246575
+  },
+  "oos": {
+    "splitPct": 30,
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "profitFactor": 0.0,
+    "expectancyPctPerTrade": -0.457725
+  },
+  "unseenSymbolHoldout": {
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "profitFactor": 0.0,
+    "expectancyPctPerTrade": -0.457725
+  },
+  "ablation": [
+    {"stage": "A_ALLIGATOR", "trades": 10472, "profitFactor": 0.507610, "expectancyPctPerTrade": -0.330127},
+    {"stage": "B_PLUS_MACD", "trades": 9865, "profitFactor": 0.511736, "expectancyPctPerTrade": -0.325215},
+    {"stage": "C_PLUS_SAR", "trades": 9518, "profitFactor": 0.509920, "expectancyPctPerTrade": -0.326795},
+    {"stage": "D_PLUS_VOLUME", "trades": 7695, "profitFactor": 0.510507, "expectancyPctPerTrade": -0.319784},
+    {"stage": "E_PLUS_EMA_HTF", "trades": 3728, "profitFactor": 0.533015, "expectancyPctPerTrade": -0.296362},
+    {"stage": "F_PLUS_SMC_LOCATION_ROOM", "trades": 482, "profitFactor": 0.475356, "expectancyPctPerTrade": -0.342761},
+    {"stage": "G_PLUS_LIQUIDITY_SWEEP", "trades": 5, "profitFactor": 0.129144, "expectancyPctPerTrade": -0.702575},
+    {"stage": "H_PLUS_BOS", "trades": 5, "profitFactor": 0.129144, "expectancyPctPerTrade": -0.702575},
+    {"stage": "I_PLUS_BTC_REGIME", "trades": 5, "profitFactor": 0.129144, "expectancyPctPerTrade": -0.702575},
+    {"stage": "J_PLUS_L2", "status": "NOT_MEASURED_HISTORICALLY"},
+    {"stage": "K_PLUS_TAKER_FLOW", "trades": 3, "profitFactor": 0.227357, "expectancyPctPerTrade": -0.590118}
+  ],
+  "rejectionFunnel": {
+    "alligatorPassPct": 21.3279,
+    "plusMacdPassPct": 18.1926,
+    "plusSarPassPct": 16.9977,
+    "plusVolumePassPct": 7.0210,
+    "plusEmaHtfPassPct": 3.4083,
+    "plusSmcLocationRoomPassPct": 0.19752,
+    "plusLiquiditySweepPassPct": 0.0017301,
+    "plusBosPassPct": 0.0017301,
+    "plusBtcRegimePassPct": 0.0017301,
+    "plusTakerFlowPassPct": 0.00086505
+  },
+  "findings": [
+    "The baseline Alligator family is already materially negative after realistic costs; over-filtering is not the only problem.",
+    "The SMC location/room layer reduces trade count sharply and worsens both profit factor and expectancy.",
+    "The liquidity-sweep gate collapses 482 trades to 5 while materially worsening performance.",
+    "BOS and BTC regime add no measurable incremental benefit after the preceding gates because the sample is already nearly eliminated.",
+    "The complete historical-minus-L2 path produces about 0.25 trades per month across ten liquid symbols, which is not operationally useful.",
+    "No threshold optimization is authorized from this failed baseline; doing so would create a high overfitting risk.",
+    "Real-money execution for TST_ALLIGATOR_SMC_V2 must remain disabled."
+  ],
+  "decision": "Reject TST_ALLIGATOR_SMC_V2 as a live candidate. Keep production infrastructure fixes, but do not promote this strategy or loosen thresholds to rescue it."
+}
