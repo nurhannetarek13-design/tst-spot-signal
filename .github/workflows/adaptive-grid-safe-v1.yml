@@ -1,0 +1,60 @@
+name: Adaptive Grid Safe V1 Research
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/adaptive-grid-safe-v1
+    paths:
+      - "research/adaptive_grid_safe_v1.py"
+      - ".github/workflows/adaptive-grid-safe-v1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adaptive-grid-safe-v1
+  cancel-in-progress: true
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas requests
+      - name: Run one-year 15m Binance Spot backtest
+        run: |
+          python research/adaptive_grid_safe_v1.py \
+            --symbols LINKUSDT TONUSDT BTCUSDT ETHUSDT SOLUSDT \
+            --start 2025-09-14 \
+            --end 2026-09-14 \
+            --oos-fraction 0.30 \
+            --output artifacts/adaptive-grid-safe-v1/report.json
+      - name: Enforce research-only safety contract
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/adaptive-grid-safe-v1/report.json'
+          r=json.load(open(p))
+          assert r['authorization']=='RESEARCH_ONLY'
+          assert r['liveTrading'] is False
+          assert r['promotionGate']['canEnableLiveTrading'] is False
+          assert r['timeframe']=='15m'
+          assert set(r['symbols']) == {'LINKUSDT','TONUSDT','BTCUSDT','ETHUSDT','SOLUSDT'}
+          print(json.dumps({
+              'aggregate': r['aggregate'],
+              'promotionGate': r['promotionGate'],
+              'perSymbolOOS': {k:v['OOS'] for k,v in r['symbols'].items()},
+          }, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: adaptive-grid-safe-v1-report
+          path: artifacts/adaptive-grid-safe-v1/report.json
+          retention-days: 14
