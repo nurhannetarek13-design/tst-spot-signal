@@ -69,7 +69,8 @@ class AdaptiveRegimeStrategy(IStrategy):
         """Build a fully causal SMC-style context on completed bars.
 
         Rules:
-        - Demand zone: previous bearish pivot candle before a bullish displacement.
+        - Demand zone: previous bearish pivot candle before a bullish displacement;
+          it stays active until invalidation or a 96-bar expiry.
         - Liquidity sweep: take prior 12-bar low, reclaim it, and interact with demand.
         - Market shift/BOS: close above prior 12-bar high after the sweep.
         - Location: stay within 3 ATR of the active demand-zone top.
@@ -97,15 +98,19 @@ class AdaptiveRegimeStrategy(IStrategy):
 
         demand_low = None
         demand_high = None
+        demand_seed_idx = -10_000
         last_sweep_idx = -10_000
         last_sweep_low = None
         last_shift_idx = -10_000
 
         for i in range(n):
             atr_now = atrs[i]
-            if demand_low is not None and closes[i] < demand_low:
+            zone_expired = demand_low is not None and i - demand_seed_idx > 96
+            zone_invalidated = demand_low is not None and closes[i] < demand_low
+            if zone_expired or zone_invalidated:
                 demand_low = None
                 demand_high = None
+                demand_seed_idx = -10_000
                 last_sweep_idx = -10_000
                 last_sweep_low = None
                 last_shift_idx = -10_000
@@ -134,7 +139,11 @@ class AdaptiveRegimeStrategy(IStrategy):
                         and distance_from_zone <= 3.0 * atr_now
                     )
 
-                    structural_stop = demand_low - 0.20 * atr_now
+                    invalidation_low = min(
+                        demand_low,
+                        last_sweep_low if last_sweep_low is not None else demand_low,
+                    )
+                    structural_stop = invalidation_low - 0.20 * atr_now
                     risk = closes[i] - structural_stop
                     risk_pct = risk / closes[i] if closes[i] > 0 else float("inf")
                     structure_risk_pct_out[i] = risk_pct
@@ -156,7 +165,8 @@ class AdaptiveRegimeStrategy(IStrategy):
                 # any pre-existing zone, preventing same-bar self-confirmation.
                 body = closes[i] - opens[i]
                 displaced = (
-                    closes[i] > prior_high
+                    demand_low is None
+                    and closes[i] > prior_high
                     and body >= 0.80 * atr_now
                     and relvols[i] == relvols[i]
                     and relvols[i] >= 1.10
@@ -166,6 +176,7 @@ class AdaptiveRegimeStrategy(IStrategy):
                 if displaced:
                     demand_low = float(lows[i - 1])
                     demand_high = float(opens[i - 1])
+                    demand_seed_idx = i
                     last_sweep_idx = -10_000
                     last_sweep_low = None
                     last_shift_idx = -10_000
