@@ -1,0 +1,50 @@
+name: V2 External BTC Edge Shadow
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '5 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-external-btc-edge-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested V2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: bot-v2-standalone
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore Shadow state
+        uses: actions/cache@v4
+        with:
+          path: .runtime
+          key: v2-btc-edge-shadow-${{ github.run_id }}
+          restore-keys: |
+            v2-btc-edge-shadow-
+
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+
+      - name: Run BTC EMA600 + funding Shadow edge
+        run: python -m v2_bot.github_shadow_edge --state .runtime/btc_ema600_funding_state.json --quote-size 10
+
+      - name: Assert no Live flags are enabled
+        shell: bash
+        run: |
+          test "${V2_LIVE_TRADING:-false}" != "true"
+          test "${V2_PRIVATE_ADAPTER_ENABLED:-false}" != "true"
+          test "${V2_LIVE_AUTHORIZED:-false}" != "true"
+          test "${V2_LIVE_ENGINE_UNLOCK:-false}" != "true"
