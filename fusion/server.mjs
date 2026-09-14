@@ -60,19 +60,52 @@ function normalizedSymbol(symbol) {
   return String(symbol || "").toUpperCase().replace("/", "-");
 }
 
+function structureRiskMetrics(candidate) {
+  const entry = Number(candidate.entry);
+  const stop = Number(candidate.stop);
+  const target = Number(candidate.target);
+  if (!(entry > 0) || !(stop >= 0) || !(target > 0) || !(stop < entry) || !(target > entry)) {
+    return { valid: false, riskPct: Infinity, rr: 0 };
+  }
+  const risk = entry - stop;
+  const reward = target - entry;
+  return {
+    valid: risk > 0,
+    riskPct: risk / entry,
+    rr: reward / risk
+  };
+}
+
 function signalGateReasons(candidate) {
   const reasons = [];
   const g = policy.signalGate || {};
+
   if (g.requireAlligatorTrigger && candidate.alligatorTrigger !== true) reasons.push("ALLIGATOR_TRIGGER_REQUIRED");
   if (g.requireMacdConfirmation && candidate.macdConfirmed !== true) reasons.push("MACD_CONFIRMATION_REQUIRED");
   if (g.requireSarConfirmation && candidate.sarConfirmed !== true) reasons.push("SAR_CONFIRMATION_REQUIRED");
   if (g.requireTrendConfirmation && candidate.trendConfirmed !== true) reasons.push("TREND_CONFIRMATION_REQUIRED");
+  if (g.requireHtfProxyConfirmation && candidate.htfProxyConfirmed !== true) reasons.push("HTF_PROXY_CONFIRMATION_REQUIRED");
+  if (g.requireHtfBiasOk && candidate.htfBiasOk !== true) reasons.push("HTF_4H_BIAS_BLOCK");
+  if (g.requireLiquiditySweep && candidate.liquiditySweepConfirmed !== true) reasons.push("LIQUIDITY_SWEEP_REQUIRED");
+  if (g.requireMarketStructure && candidate.marketStructureConfirmed !== true) reasons.push("BULLISH_MARKET_SHIFT_REQUIRED");
+  if (g.requireDemandLocation && candidate.demandLocationConfirmed !== true) reasons.push("DEMAND_LOCATION_REQUIRED");
+  if (g.requireRoomFor2R && candidate.roomFor2R !== true) reasons.push("NO_2R_ROOM");
   if (g.requireL2Confirmation && candidate.l2Confirmed !== true) reasons.push("L2_CONFIRMATION_REQUIRED");
   if (g.requireBtcRegimeOk && candidate.btcRegimeOk !== true) reasons.push("BTC_REGIME_BLOCK");
   if (g.requireLiquidityOk && candidate.liquidityOk !== true) reasons.push("LIQUIDITY_BLOCK");
   if (!(Number(candidate.takerBuyShare) >= Number(g.minTakerBuyShare || 0))) reasons.push("TAKER_BUY_TOO_LOW");
   if (!(Number(candidate.relativeVolume) >= Number(g.minRelativeVolume || 0))) reasons.push("RELATIVE_VOLUME_TOO_LOW");
   if (!(Number(candidate.spreadBps) <= Number(g.maxSpreadBps ?? Infinity))) reasons.push("SPREAD_TOO_WIDE");
+
+  const demandLow = Number(candidate.demandZoneLow || 0);
+  const demandHigh = Number(candidate.demandZoneHigh || 0);
+  if (!(demandLow > 0 && demandHigh > demandLow)) reasons.push("DEMAND_ZONE_INVALID");
+
+  const r = structureRiskMetrics(candidate);
+  if (!r.valid) reasons.push("STRUCTURE_LEVELS_INVALID");
+  if (!(r.riskPct <= Number(g.maxStructureRiskPct ?? Infinity))) reasons.push("STRUCTURE_STOP_TOO_WIDE");
+  if (!(r.rr >= Number(g.minRiskReward || 0))) reasons.push("RR_TOO_LOW");
+
   return reasons;
 }
 
@@ -81,9 +114,15 @@ function decide(candidate, state) {
   const symbol = normalizedSymbol(candidate.symbol);
   const strategyId = candidate.strategyId || policy.strategyId;
 
+  if (strategyId !== policy.strategyId) reasons.push("POLICY_STRATEGY_MISMATCH");
   if (!["LONG", "BUY"].includes(String(candidate.side || "").toUpperCase())) reasons.push("LONG_ONLY");
   if (!symbol.endsWith("USDT")) reasons.push("USDT_SPOT_ONLY");
+  if (!policy.universe?.symbols?.includes(String(candidate.symbol || "").toUpperCase().replace("-", "").replace("/", ""))) {
+    reasons.push("SYMBOL_NOT_IN_POLICY_UNIVERSE");
+  }
+
   reasons.push(...signalGateReasons(candidate));
+
   if (Number(candidate.score || 0) < policy.decisionGate.minCandidateScore) reasons.push("SCORE_TOO_LOW");
   if (!(Number(candidate.notionalUSDT || 0) > 0) || Number(candidate.notionalUSDT) > policy.account.maxPositionUSDT) reasons.push("POSITION_LIMIT");
   if (!(Number(candidate.riskUSDT || 0) > 0) || Number(candidate.riskUSDT) > policy.account.maxRiskUSDT) reasons.push("RISK_LIMIT");
@@ -109,14 +148,26 @@ function decide(candidate, state) {
 }
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "tst-fusion-master", mode: policy.mode, liveTrading: false, strategyId: policy.strategyId });
+  res.json({
+    ok: true,
+    service: "tst-fusion-master",
+    mode: policy.mode,
+    liveTrading: false,
+    strategyId: policy.strategyId
+  });
 });
 
 app.get("/status", (req, res) => {
   const state = readState();
   res.json({
     ok: true,
-    policy: { release: policy.release, mode: policy.mode, strategyId: policy.strategyId, signalGate: policy.signalGate, execution: policy.execution },
+    policy: {
+      release: policy.release,
+      mode: policy.mode,
+      strategyId: policy.strategyId,
+      signalGate: policy.signalGate,
+      execution: policy.execution
+    },
     state
   });
 });
@@ -158,10 +209,21 @@ app.post("/candidate/hummingbot", ingestAuthorized, (req, res) => {
     target: Number(req.body?.target || 0),
     notionalUSDT: Number(req.body?.notionalUSDT || 0),
     riskUSDT: Number(req.body?.riskUSDT || 0),
+    riskReward: Number(req.body?.riskReward || 0),
     alligatorTrigger: req.body?.alligatorTrigger === true,
     macdConfirmed: req.body?.macdConfirmed === true,
     sarConfirmed: req.body?.sarConfirmed === true,
     trendConfirmed: req.body?.trendConfirmed === true,
+    htfProxyConfirmed: req.body?.htfProxyConfirmed === true,
+    htfBiasOk: req.body?.htfBiasOk === true,
+    liquiditySweepConfirmed: req.body?.liquiditySweepConfirmed === true,
+    marketStructureConfirmed: req.body?.marketStructureConfirmed === true,
+    demandLocationConfirmed: req.body?.demandLocationConfirmed === true,
+    roomFor2R: req.body?.roomFor2R === true,
+    demandZoneLow: Number(req.body?.demandZoneLow || 0),
+    demandZoneHigh: Number(req.body?.demandZoneHigh || 0),
+    sweepLow: Number(req.body?.sweepLow || 0),
+    structureRiskPct: Number(req.body?.structureRiskPct ?? NaN),
     l2Confirmed: req.body?.l2Confirmed === true,
     btcRegimeOk: req.body?.btcRegimeOk === true,
     liquidityOk: req.body?.liquidityOk === true,
