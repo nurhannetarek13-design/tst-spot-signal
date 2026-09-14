@@ -149,16 +149,26 @@ def run(
                 ):
                     raise RuntimeError(SHADOW_TOURNAMENT_RUNTIME_MISSING)
 
-                engine_settings = getattr(engine, "settings", None)
-                external_edge_runtime = (
+                if (
                     production_engine
                     and runtime_settings.mode == "shadow"
-                    and getattr(engine_settings, "mode", "") == "shadow"
-                    and hasattr(engine, "_get_runtime_meta")
-                    and hasattr(engine, "_set_runtime_meta")
-                )
-                if external_edge_runtime:
-                    summary["external_btc_edge"] = run_external_challenger(engine)
+                    and "shadow_tournament" in summary
+                ):
+                    try:
+                        summary["external_btc_edge"] = run_external_challenger(engine)
+                    except Exception as exc:
+                        # This imported challenger is research-only and must never
+                        # interrupt the existing tournament runtime.
+                        summary["external_btc_edge"] = {
+                            "strategy_id": "btc_ema600_funding",
+                            "symbol": "BTCUSDT",
+                            "research_only": True,
+                            "promotion_eligible": False,
+                            "live_eligible": False,
+                            "status": "error",
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        }
 
                 print(engine.dump_summary(summary), flush=True)
             except httpx.HTTPError as exc:
