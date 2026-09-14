@@ -3,7 +3,7 @@
   "mode": "PAPER_ONLY",
   "liveTrading": false,
   "strategyId": "TST_ALLIGATOR_TMV_V1",
-  "candidateManifest": "validation/fusion/candidate-manifest.json",
+  "candidateManifest": "validation/fusion/alligator-tmv-manifest.json",
   "engines": {
     "scanner": "CLOUDFLARE_ORDERBOOK_MICROSTRUCTURE",
     "edgeDiscovery": "PUBLIC_EDGE_LAB",
