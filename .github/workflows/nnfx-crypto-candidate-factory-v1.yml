@@ -7,6 +7,7 @@ on:
       - research/nnfx-crypto-factory-v1
     paths:
       - "research/nnfx_crypto_candidate_factory_v1.py"
+      - "research/nnfx_crypto_candidate_factory_v1_81.py"
       - ".github/workflows/nnfx-crypto-candidate-factory-v1.yml"
 
 permissions:
@@ -27,9 +28,9 @@ jobs:
           python-version: "3.12"
       - name: Install research dependencies
         run: pip install numpy pandas
-      - name: Run frozen discovery validation OOS factory
+      - name: Run frozen 81-candidate discovery validation OOS factory
         run: |
-          python research/nnfx_crypto_candidate_factory_v1.py \
+          python research/nnfx_crypto_candidate_factory_v1_81.py \
             --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT LINKUSDT \
             --start 2024-09-01 \
             --end 2026-09-01 \
@@ -49,7 +50,7 @@ jobs:
           assert r['window']['timeframe']=='15m'
           assert r['checksumVerification'] is True
           assert set(r['data']) == {'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','LINKUSDT'}
-          assert r['componentLibrary']['candidateCount'] >= 81
+          assert r['componentLibrary']['candidateCount'] == 81
           assert len(r['validation']['frozenFinalists']) <= 8
           print(json.dumps({
               'factory': r['engine'],
