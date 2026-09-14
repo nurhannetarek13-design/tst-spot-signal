@@ -8,6 +8,7 @@ on:
     paths:
       - "research/nnfx_crypto_candidate_factory_v1.py"
       - "research/nnfx_crypto_candidate_factory_v1_81.py"
+      - "research/nnfx_crypto_candidate_factory_v1_fast.py"
       - ".github/workflows/nnfx-crypto-candidate-factory-v1.yml"
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
         run: pip install numpy pandas
       - name: Run frozen 81-candidate discovery validation OOS factory
         run: |
-          python research/nnfx_crypto_candidate_factory_v1_81.py \
+          python research/nnfx_crypto_candidate_factory_v1_fast.py \
             --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT LINKUSDT \
             --start 2024-09-01 \
             --end 2026-09-01 \
