@@ -1,16 +1,8 @@
 from pathlib import Path
 
 # Spot Sniper whipsaw + profit-giveback protection.
-#
-# Goals:
-# 1) Stop one-scan momentum spikes becoming immediate BUYs.
-# 2) Keep the initial hard OCO outside ordinary 1m noise without removing it.
-# 3) Do not tighten a fresh position just because pre-entry candles had a high.
-# 4) Once a trade earns meaningful open profit, ratchet the OCO fast enough that
-#    a red reversal cannot give most of that move back.
-#
-# This patch never removes the exchange stop and never raises the configured
-# dollars-at-risk ceiling. It only changes entry persistence and OCO placement.
+# Applied after the existing entry/growth patches and before dynamic_exit_v2.
+# Hard exchange protection stays active at all times.
 
 fast_path = Path('/freqtrade/fast_entry_engine.py')
 s = fast_path.read_text(encoding='utf-8')
@@ -31,17 +23,15 @@ if 'DIRECT_CONFIRM_HITS =' not in s:
     s = s.replace(const_marker, const_block, 1)
 
 state_marker = "adaptive_watch: dict[str, dict] = {}\n"
-state_block = state_marker + "direct_confirm_state: dict[str, dict] = {}\n"
 if 'direct_confirm_state: dict[str, dict]' not in s:
     if state_marker not in s:
         raise SystemExit('whipsaw patch failed: adaptive watch state marker missing')
-    s = s.replace(state_marker, state_block, 1)
+    s = s.replace(state_marker, state_marker + "direct_confirm_state: dict[str, dict] = {}\n", 1)
 
 helper_marker = "\ndef _watch_live_price(m: dict) -> float:\n"
 helpers = r'''
 
 def _whipsaw_stop_pct(proposed: float, m: dict) -> float:
-    """Keep the hard stop beyond ordinary 1m noise, within a strict cap."""
     try:
         atr = float(m.get('atr_pct') or m.get('atr') or 0.0)
     except Exception:
@@ -51,15 +41,13 @@ def _whipsaw_stop_pct(proposed: float, m: dict) -> float:
 
 
 def _direct_confirmation_ready(symbol: str, score: float, m: dict) -> bool:
-    """Require persistent direct-grade pressure across at least two scans."""
     now = time.time()
     price = _watch_live_price(m)
     row = direct_confirm_state.get(symbol)
     if row is None or now - float(row.get('last_at') or 0.0) > DIRECT_CONFIRM_MAX_GAP_SEC:
         direct_confirm_state[symbol] = {
             'first_at': now, 'last_at': now, 'hits': 1,
-            'first_score': float(score), 'last_score': float(score),
-            'first_price': price,
+            'first_score': float(score), 'last_score': float(score), 'first_price': price,
         }
         print(f'[direct-confirm] ARM {symbol} score={score:.0f} hits=1/{DIRECT_CONFIRM_HITS} min_age={DIRECT_CONFIRM_MIN_SEC}s')
         return False
@@ -79,18 +67,18 @@ def _direct_confirmation_ready(symbol: str, score: float, m: dict) -> bool:
 '''
 if 'def _whipsaw_stop_pct(' not in s:
     if helper_marker not in s:
-        raise SystemExit('whipsaw patch failed: watch helper insertion marker missing')
+        raise SystemExit('whipsaw patch failed: watch helper marker missing')
     s = s.replace(helper_marker, helpers + helper_marker, 1)
 
-loop_header_old = "            for score, symbol, change, volume, _ in ranked[:15]:\n"
-loop_header_new = "            for score, symbol, change, volume, m in ranked[:15]:\n"
-if loop_header_old in s:
-    s = s.replace(loop_header_old, loop_header_new, 1)
-elif loop_header_new not in s:
+loop_old = "            for score, symbol, change, volume, _ in ranked[:15]:\n"
+loop_new = "            for score, symbol, change, volume, m in ranked[:15]:\n"
+if loop_old in s:
+    s = s.replace(loop_old, loop_new, 1)
+elif loop_new not in s:
     raise SystemExit('whipsaw patch failed: normal direct loop header missing')
 
-signal_call_old = "                try:\n                    if maybe_signal(symbol, change, volume):\n                        break\n"
-signal_call_new = (
+call_old = "                try:\n                    if maybe_signal(symbol, change, volume):\n                        break\n"
+call_new = (
     "                try:\n"
     "                    if not _direct_confirmation_ready(symbol, score, m):\n"
     "                        continue\n"
@@ -98,26 +86,31 @@ signal_call_new = (
     "                        break\n"
 )
 if 'if not _direct_confirmation_ready(symbol, score, m):' not in s:
-    if signal_call_old not in s:
+    if call_old not in s:
         raise SystemExit('whipsaw patch failed: normal maybe_signal call marker missing')
-    s = s.replace(signal_call_old, signal_call_new, 1)
+    s = s.replace(call_old, call_new, 1)
 
-stop_old = (
-    "    tp_pct = clamp(max(0.009, m['atr_pct'] * 5.0), 0.009, 0.014)\n"
-    "    sl_pct = clamp(tp_pct / 1.55, 0.0055, 0.0090)\n"
-)
-stop_new = stop_old + (
-    "    sl_pct = _whipsaw_stop_pct(sl_pct, m)\n"
-    "    tp_pct = clamp(max(tp_pct, sl_pct * WHIPSAW_MIN_RR), 0.0100, 0.0180)\n"
-)
+# Current production normal lane is created by momentum/growth patches and uses
+# tp/2.4. Keep compatibility with older forms so the patch is upgrade-safe.
 if 'sl_pct = _whipsaw_stop_pct(sl_pct, m)' not in s:
-    if stop_old not in s:
-        raise SystemExit('whipsaw patch failed: normal TP/SL marker missing')
-    s = s.replace(stop_old, stop_new, 1)
+    stop_candidates = [
+        "    sl_pct = clamp(tp_pct / 2.4, 0.0055, 0.0090)\n",
+        "    sl_pct = clamp(tp_pct / 2.0, 0.0055, 0.0090)\n",
+        "    sl_pct = clamp(tp_pct / 1.55, 0.0055, 0.0090)\n",
+    ]
+    chosen = next((x for x in stop_candidates if x in s), None)
+    if chosen is None:
+        raise SystemExit('whipsaw patch failed: current normal stop marker missing')
+    s = s.replace(
+        chosen,
+        chosen
+        + "    sl_pct = _whipsaw_stop_pct(sl_pct, m)\n"
+        + "    tp_pct = max(tp_pct, sl_pct * WHIPSAW_MIN_RR)\n",
+        1,
+    )
 
 for item in [
-    'DIRECT_CONFIRM_HITS =', 'DIRECT_CONFIRM_MIN_SEC =',
-    'WHIPSAW_MIN_STOP_PCT =', 'WHIPSAW_ATR_MULT =', 'WHIPSAW_MIN_RR =',
+    'DIRECT_CONFIRM_HITS =', 'DIRECT_CONFIRM_MIN_SEC =', 'WHIPSAW_MIN_STOP_PCT =',
     'def _direct_confirmation_ready(', 'def _whipsaw_stop_pct(',
     'if not _direct_confirmation_ready(symbol, score, m):',
     'sl_pct = _whipsaw_stop_pct(sl_pct, m)',
@@ -127,6 +120,9 @@ for item in [
 compile(s, str(fast_path), 'exec')
 fast_path.write_text(s, encoding='utf-8')
 
+# ---------------------------------------------------------------------------
+# Dynamic exit: post-entry peak only + profit giveback protection.
+# ---------------------------------------------------------------------------
 dex_path = Path('/freqtrade/dynamic_exit_manager.py')
 d = dex_path.read_text(encoding='utf-8')
 
@@ -146,8 +142,8 @@ if 'PROFIT_LOCK_ARM_R =' not in d:
         raise SystemExit('whipsaw patch failed: dynamic-exit constant marker missing')
     d = d.replace(ratchet_const, ratchet_block, 1)
 
-market_return_old = "    return {'bid': bid, 'ask': ask, 'high20': max(h[-20:]), 'swing_low7': min(l[-7:]), 'atr': atr}\n"
-market_return_new = (
+market_old = "    return {'bid': bid, 'ask': ask, 'high20': max(h[-20:]), 'swing_low7': min(l[-7:]), 'atr': atr}\n"
+market_new = (
     "    last = rows[-1]\n"
     "    return {\n"
     "        'bid': bid, 'ask': ask, 'high20': max(h[-20:]), 'swing_low7': min(l[-7:]), 'atr': atr,\n"
@@ -158,13 +154,13 @@ market_return_new = (
     "    }\n"
 )
 if "'last_red':" not in d:
-    if market_return_old not in d:
+    if market_old not in d:
         raise SystemExit('whipsaw patch failed: dynamic market return marker missing')
-    d = d.replace(market_return_old, market_return_new, 1)
+    d = d.replace(market_old, market_new, 1)
 
-stop_start = d.find('def _suggest_stop(pos: dict, market: dict) -> tuple[float | None, str]:\n')
-stop_end = d.find('\ndef _ids(signal_id: str, seq: int) -> tuple[str, str, str]:\n', stop_start)
-if stop_start < 0 or stop_end < 0:
+start = d.find('def _suggest_stop(pos: dict, market: dict) -> tuple[float | None, str]:\n')
+end = d.find('\ndef _ids(signal_id: str, seq: int) -> tuple[str, str, str]:\n', start)
+if start < 0 or end < 0:
     raise SystemExit('whipsaw patch failed: _suggest_stop block missing')
 new_suggest = r'''def _suggest_stop(pos: dict, market: dict) -> tuple[float | None, str]:
     entry = float(pos.get('entry') or 0.0)
@@ -172,12 +168,13 @@ new_suggest = r'''def _suggest_stop(pos: dict, market: dict) -> tuple[float | No
     target = float(pos.get('target') or 0.0)
     opened_at = float(pos.get('opened_at') or 0.0)
     previous_peak = max(float(pos.get('peak_price') or 0.0), entry)
-    post_entry_candle_high = 0.0
+    post_entry_high = 0.0
     if opened_at > 0 and float(market.get('last_open_time') or 0.0) >= opened_at:
-        post_entry_candle_high = float(market.get('last_high') or 0.0)
-    peak = max(previous_peak, float(market['bid']), post_entry_candle_high)
+        post_entry_high = float(market.get('last_high') or 0.0)
+    peak = max(previous_peak, float(market['bid']), post_entry_high)
     if not (entry > stop > 0 and target > entry and peak > entry):
         return None, 'not-ready'
+
     r0 = float(pos.get('initial_risk_per_unit') or max(entry - stop, entry * 0.001))
     peak_gain = max(0.0, peak - entry)
     peak_gain_pct = peak_gain / entry
@@ -185,19 +182,19 @@ new_suggest = r'''def _suggest_stop(pos: dict, market: dict) -> tuple[float | No
     progress = peak_gain / max(target - entry, 1e-12)
     bid = float(market['bid'])
     giveback = max(0.0, peak - bid) / max(peak_gain, 1e-12)
+
     suggested = stop
     reason = 'hold'
     if r_mult >= 1.0 or progress >= 0.45:
         suggested = max(suggested, entry * 1.0015)
         reason = 'breakeven-plus'
     if r_mult >= 1.55 or progress >= 0.72:
-        structure = float(market['swing_low7']) - 0.20 * float(market['atr'])
-        suggested = max(suggested, structure, entry + 0.65 * r0)
+        suggested = max(suggested, entry + 0.65 * r0)
         reason = 'structure-lock'
     if r_mult >= 2.0 or progress >= 0.88:
-        structure = float(market['swing_low7']) - 0.12 * float(market['atr'])
-        suggested = max(suggested, structure, entry + 1.10 * r0)
+        suggested = max(suggested, entry + 1.10 * r0)
         reason = 'near-target-lock'
+
     armed = r_mult >= PROFIT_LOCK_ARM_R or peak_gain_pct >= PROFIT_LOCK_ARM_PCT
     if armed:
         keep = PROFIT_LOCK_STRONG_KEEP if r_mult >= PROFIT_LOCK_STRONG_R else PROFIT_LOCK_KEEP
@@ -211,6 +208,7 @@ new_suggest = r'''def _suggest_stop(pos: dict, market: dict) -> tuple[float | No
         elif reason == 'hold':
             reason = 'profit-lock'
         suggested = max(suggested, entry + peak_gain * keep)
+
     atr_pct = max(0.0, float(market.get('atr_pct') or 0.0))
     cushion = min(0.0040, max(0.0020, atr_pct * 0.75))
     suggested = min(suggested, bid * (1.0 - cushion))
@@ -220,7 +218,7 @@ new_suggest = r'''def _suggest_stop(pos: dict, market: dict) -> tuple[float | No
 
 
 '''
-d = d[:stop_start] + new_suggest + d[stop_end + 1:]
+d = d[:start] + new_suggest + d[end + 1:]
 
 peak_old = "            peak = max(float(pos.get('peak_price') or pos.get('entry') or 0.0), float(market['high20']), float(market['bid']))\n"
 peak_new = (
@@ -234,30 +232,30 @@ if 'candle_high = float(market.get(' not in d:
     d = d.replace(peak_old, peak_new, 1)
 
 seq_marker = "    seq = int(pos.get('live_ratchet_seq') or 0) + 1\n"
-age_guard = seq_marker + (
-    "    opened_at = float(pos.get('opened_at') or 0.0)\n"
-    "    position_age = time.time() - opened_at if opened_at > 0 else 0.0\n"
-    "    entry = float(pos.get('entry') or 0.0)\n"
-    "    lock_profit_pct = (suggested / entry - 1.0) if entry > 0 else 0.0\n"
-    "    if opened_at > 0 and position_age < MIN_POSITION_AGE_BEFORE_RATCHET_SEC and lock_profit_pct < EARLY_RATCHET_UNLOCK_PROFIT_PCT:\n"
-    "        trade_state.update_position(signal_id, shadow_suggested_stop=suggested, shadow_reason='early-ratchet-lock:' + reason, shadow_suggested_at=time.time())\n"
-    "        print(f'[dynamic-exit] EARLY_LOCK {symbol} age={position_age:.0f}s<{MIN_POSITION_AGE_BEFORE_RATCHET_SEC}s lock={lock_profit_pct*100:.2f}% hard_oco_remains_active', flush=True)\n"
-    "        return\n"
-)
 if '[dynamic-exit] EARLY_LOCK' not in d:
     if seq_marker not in d:
-        raise SystemExit('whipsaw patch failed: dynamic-exit _replace marker missing')
-    d = d.replace(seq_marker, age_guard, 1)
+        raise SystemExit('whipsaw patch failed: _replace seq marker missing')
+    d = d.replace(
+        seq_marker,
+        seq_marker
+        + "    opened_at = float(pos.get('opened_at') or 0.0)\n"
+        + "    position_age = time.time() - opened_at if opened_at > 0 else 0.0\n"
+        + "    entry_px = float(pos.get('entry') or 0.0)\n"
+        + "    live_gain_pct = (float(market.get('bid') or 0.0) / entry_px - 1.0) if entry_px > 0 else 0.0\n"
+        + "    if opened_at > 0 and position_age < MIN_POSITION_AGE_BEFORE_RATCHET_SEC and live_gain_pct < EARLY_RATCHET_UNLOCK_PROFIT_PCT:\n"
+        + "        trade_state.update_position(signal_id, shadow_suggested_stop=suggested, shadow_reason='early-ratchet-lock:' + reason, shadow_suggested_at=time.time())\n"
+        + "        print(f'[dynamic-exit] EARLY_LOCK {symbol} age={position_age:.0f}s gain={live_gain_pct*100:.2f}% hard_oco_active', flush=True)\n"
+        + "        return\n",
+        1,
+    )
 
 for item in [
-    'PROFIT_LOCK_ARM_R =', 'PROFIT_LOCK_KEEP =', 'PROFIT_REVERSAL_GIVEBACK =',
-    "'last_red':", 'post_entry_candle_high', 'red-reversal-profit-lock',
-    'profit-giveback-lock', 'candle_high = float(market.get(',
-    'EARLY_RATCHET_UNLOCK_PROFIT_PCT =', '[dynamic-exit] EARLY_LOCK',
+    'PROFIT_LOCK_ARM_R =', "'last_red':", 'red-reversal-profit-lock',
+    'candle_high = float(market.get(', '[dynamic-exit] EARLY_LOCK',
 ]:
     if item not in d:
         raise SystemExit(f'whipsaw patch failed: missing dynamic marker {item}')
 compile(d, str(dex_path), 'exec')
 dex_path.write_text(d, encoding='utf-8')
 
-print('[early-whipsaw-protection] OK 2-scan entry persistence + noise-aware hard stop + post-entry peak tracking + red-reversal/giveback profit lock')
+print('[early-whipsaw-protection] OK persistent entry + noise-aware stop + post-entry profit lock + red-reversal protection')
