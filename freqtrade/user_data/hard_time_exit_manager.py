@@ -3,9 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
+
+# This file runs from /freqtrade/user_data, so make the app root importable.
+if '/freqtrade' not in sys.path:
+    sys.path.insert(0, '/freqtrade')
 
 import dynamic_exit_manager as dex
 import reconcile_state
@@ -169,7 +174,6 @@ def _rescue_oco(pos: dict, reason: str) -> bool:
 
 
 def _recover_pending(pos: dict) -> bool:
-    signal_id = str(pos.get('signal_id') or '')
     symbol = str(pos.get('symbol') or '')
     client_id = str(pos.get('time_exit_client_order_id') or '')
     if not client_id:
