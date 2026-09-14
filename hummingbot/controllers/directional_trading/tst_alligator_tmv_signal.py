@@ -154,15 +154,19 @@ class TSTAlligatorTMVSignalController(DirectionalTradingControllerBase):
 
         demand_low = None
         demand_high = None
+        demand_seed_idx = -10_000
         last_sweep_idx = -10_000
         last_sweep_low = None
         last_shift_idx = -10_000
 
         for j in range(0, i + 1):
             atr_now = atrs[j]
-            if demand_low is not None and closes[j] < demand_low:
+            zone_expired = demand_low is not None and j - demand_seed_idx > 96
+            zone_invalidated = demand_low is not None and closes[j] < demand_low
+            if zone_expired or zone_invalidated:
                 demand_low = None
                 demand_high = None
+                demand_seed_idx = -10_000
                 last_sweep_idx = -10_000
                 last_sweep_low = None
                 last_shift_idx = -10_000
@@ -185,7 +189,8 @@ class TSTAlligatorTMVSignalController(DirectionalTradingControllerBase):
 
             body = closes[j] - opens[j]
             displaced = (
-                closes[j] > prior_high
+                demand_low is None
+                and closes[j] > prior_high
                 and body >= 0.80 * atr_now
                 and pd.notna(relvols[j])
                 and relvols[j] >= 1.10
@@ -195,6 +200,7 @@ class TSTAlligatorTMVSignalController(DirectionalTradingControllerBase):
             if displaced:
                 demand_low = float(lows[j - 1])
                 demand_high = float(opens[j - 1])
+                demand_seed_idx = j
                 last_sweep_idx = -10_000
                 last_sweep_low = None
                 last_shift_idx = -10_000
@@ -223,7 +229,11 @@ class TSTAlligatorTMVSignalController(DirectionalTradingControllerBase):
             and distance_from_zone <= 3.0 * atr_now
         )
 
-        structure_stop = max(0.0, demand_low - 0.20 * atr_now)
+        invalidation_low = min(
+            demand_low,
+            last_sweep_low if last_sweep_low is not None else demand_low,
+        )
+        structure_stop = max(0.0, invalidation_low - 0.20 * atr_now)
         risk = entry - structure_stop
         risk_pct = risk / entry if entry > 0 and risk > 0 else 999.0
 
