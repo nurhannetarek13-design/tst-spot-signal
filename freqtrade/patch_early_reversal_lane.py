@@ -42,8 +42,6 @@ def early_reversal_candidates() -> list[tuple[str, float, float]]:
         if not (EARLY_REVERSAL_MIN_24H_PCT <= ch <= EARLY_REVERSAL_MAX_24H_PCT):
             continue
         out.append((symbol, ch, qv))
-    # Favor liquid names first.  The actual reversal test below is structural,
-    # so 24h change itself is not treated as a buy signal.
     out.sort(key=lambda x: x[2], reverse=True)
     return out[:14]
 
@@ -70,8 +68,6 @@ def early_reversal_metrics(symbol: str) -> dict:
         raise RuntimeError('bad-book')
     live = (bid + ask) / 2.0
 
-    # The low must be recent enough to be an actual reversal attempt, but not
-    # the current minute.  Find the selloff high before that low, not after it.
     low_start = len(rows) - 45
     low_end = len(rows) - 2
     low_idx = min(range(low_start, low_end), key=lambda i: l[i])
@@ -109,9 +105,6 @@ def early_reversal_metrics(symbol: str) -> dict:
 
     trs = [max(h[i] - l[i], abs(h[i] - c[i - 1]), abs(l[i] - c[i - 1])) for i in range(-20, 0)]
     atr = (sum(trs) / len(trs)) / live
-
-    # Structural reclaim: price has recovered the fast average and at least a
-    # small part of the selloff, while the fast average has stopped falling.
     reclaimed = live >= ema9_now * 0.999 and ema9_slope >= -0.0005 and mom3 > 0
 
     return {
@@ -126,7 +119,6 @@ def early_reversal_metrics(symbol: str) -> dict:
 
 
 def score_early_reversal(m: dict) -> tuple[float, list[str]]:
-    # Fail closed.  This lane is a verified turn, never a falling-knife buyer.
     if not (0.025 <= m['drawdown'] <= 0.16): return 0.0, ['selloff-not-valid']
     if not (2 <= int(m['low_age']) <= 28): return 0.0, ['low-not-recent']
     if not (0.006 <= m['bounce'] <= 0.042): return 0.0, ['bounce-not-fresh']
@@ -184,9 +176,6 @@ def score_early_reversal(m: dict) -> tuple[float, list[str]]:
 
 
 def early_reversal_context_ok(symbol: str) -> tuple[bool, str]:
-    # BTC/regime protection stays hard.  We intentionally do not require the
-    # alt's 15m EMA trend to have fully recovered, because that would make this
-    # lane as late as MID.  We do require the waterfall itself to have stopped.
     try:
         pf = entry_quality.runtime_preflight()
         if not bool(pf.get('btc_regime_ok')):
@@ -207,7 +196,6 @@ def early_reversal_context_ok(symbol: str) -> tuple[bool, str]:
         return False, '10m-waterfall-active'
     if c15[-1] / c15[-2] - 1.0 < -0.045:
         return False, '15m-capitulation-still-active'
-    # Do not buy a rebound that is already a 5m vertical chase.
     if c5[-1] / c5[-2] - 1.0 > 0.030:
         return False, '5m-bounce-too-extended'
     return True, 'ok'
@@ -234,7 +222,6 @@ def maybe_early_reversal_signal(symbol: str, ch24: float, volume24: float) -> bo
             _record_candidate(symbol, 'REVERSAL', score, m['live'], 'REJECT', why)
         return False
 
-    # Structural stop lives below the reversal low with an ATR-aware buffer.
     low_buffer = clamp(m['atr'] * 0.45, 0.0020, 0.0050)
     structural_stop = m['low'] * (1.0 - low_buffer)
     sl_pct = 1.0 - structural_stop / m['live']
@@ -265,11 +252,9 @@ def maybe_early_reversal_signal(symbol: str, ch24: float, volume24: float) -> bo
         'dryRun': False,
     }
 
-    # Reuse the exact same fail-closed Spot Sniper + portfolio + loss-circuit
-    # authorization as every other live lane.  An early reversal cannot bypass it.
-    if not _expert_pre_ingest(payload):
-        return False
-
+    # Shared expert/portfolio/Spot-Sniper authorization is injected later in
+    # the build for every live fast_ingest path. Do not predeclare that helper
+    # here, otherwise the legacy safety patch can incorrectly think it exists.
     row = fast_ingest(payload, timeout=30)
     if row.get('status') != 'FAST_SIGNAL_READY' or row.get('userConfirmationRequired') is not True or row.get('autoBuy') is not False:
         raise RuntimeError(f'unexpected early reversal ingest response: {row}')
@@ -287,9 +272,6 @@ if 'def early_reversal_candidates()' not in s:
         raise SystemExit('early-reversal patch failed: main marker missing')
     s = s.replace(main_marker, helpers + main_marker, 1)
 
-# Insert after all previously-added specialized lanes and immediately before
-# the base NORMAL ranked scan.  WATCH is internal telemetry only; Telegram is
-# reached only from maybe_early_reversal_signal after DIRECT + Spot Sniper pass.
 if 'reversal_ranked = []' not in s:
     anchor = "            ranked = []\n"
     pos = s.rfind(anchor)
@@ -331,7 +313,6 @@ for required in [
     'def early_reversal_metrics(symbol: str)',
     'def score_early_reversal(m: dict)',
     'def maybe_early_reversal_signal(symbol: str, ch24: float, volume24: float)',
-    "if not _expert_pre_ingest(payload):",
     'reversal_ranked = []',
     '[early-reversal] ONLINE',
 ]:
@@ -340,4 +321,4 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[early-reversal-patch] OK confirmed-only starter lane: recent selloff + fast reclaim + volume/taker confirmation + structural stop + Spot Sniper hard gate; no OCO-unsafe pyramiding')
+print('[early-reversal-patch] OK confirmed-only starter lane: recent selloff + fast reclaim + volume/taker confirmation + structural stop; shared live hard gates injected downstream; no OCO-unsafe pyramiding')
