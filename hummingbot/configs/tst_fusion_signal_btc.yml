@@ -18,7 +18,7 @@ take_profit_order_type: MARKET
 trailing_stop: null
 fusion_url: http://host.docker.internal:8787
 fusion_token: ""
-strategy_id: TST_ALLIGATOR_TMV_V1
+strategy_id: TST_ALLIGATOR_SMC_V2
 order_amount_usd: 5.5
 max_risk_usd: 0.20
 allow_executor_actions: false
