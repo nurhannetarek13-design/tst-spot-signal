@@ -2,6 +2,14 @@ name: Fusion Stack Validate
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "fusion/**"
+      - "hummingbot/**"
+      - "jesse/**"
+      - "freqtrade/**"
+      - "deploy/**"
+      - ".github/workflows/fusion-validate.yml"
   push:
     branches: [main]
     paths:
@@ -36,8 +44,11 @@ jobs:
       - name: Syntax check Fusion master
         run: node --check fusion/server.mjs
 
-      - name: Python syntax check Hummingbot controller
+      - name: Python syntax check legacy Hummingbot controller
         run: python -m py_compile hummingbot/controllers/directional_trading/tst_fusion_signal.py
+
+      - name: Python syntax check Alligator TMV Hummingbot controller
+        run: python -m py_compile hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
 
       - name: Python syntax check Jesse validator
         run: python -m py_compile jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py
@@ -58,6 +69,8 @@ jobs:
           grep -q '^allow_executor_actions: false$' hummingbot/configs/tst_fusion_signal_btc.yml
           grep -q '^connector_name: binance$' hummingbot/configs/tst_fusion_signal_btc.yml
           grep -q '^leverage: 1$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^controller_name: tst_alligator_tmv_signal$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^strategy_id: TST_ALLIGATOR_TMV_V1$' hummingbot/configs/tst_fusion_signal_btc.yml
 
       - name: Fusion fail-closed assertion
         run: |
@@ -69,5 +82,6 @@ jobs:
           if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
           if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
           if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
+          if (p.strategyId !== 'TST_ALLIGATOR_TMV_V1') throw new Error('unexpected strategy id');
           console.log('fail-closed assertions passed');
           NODE
