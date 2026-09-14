@@ -7,14 +7,14 @@ if 'MANUAL_FALLBACK_MIN_SCORE' in s:
     print('[manual-confirm-fallback] already applied')
     raise SystemExit(0)
 
-# Manual-only bridge while calibrated EV evidence is warming up. This never
-# enables auto-buy and does not weaken quality, API health, daily-loss,
-# loss-streak, drawdown, position-count, stop-risk, OCO or confirmation gates.
+# Manual fallback is OFF by default. A Telegram CONFIRMED BUY must normally have
+# passed the final Spot Sniper authorization contract, not merely a WATCH/warmup
+# path. The fallback remains available only as an explicit operator opt-in.
 const_anchor = "PORTFOLIO_MAX_POSITIONS = int(os.getenv('FAST_PORTFOLIO_MAX_POSITIONS', '3'))\n"
 const_block = const_anchor + (
-    "MANUAL_FALLBACK_MIN_SCORE = float(os.getenv('FAST_MANUAL_FALLBACK_MIN_SCORE', '80'))\n"
-    "MANUAL_FALLBACK_TOP_N = max(1, min(20, int(os.getenv('FAST_MANUAL_FALLBACK_TOP_N', '10'))))\n"
-    "MANUAL_FALLBACK_ENABLED = os.getenv('FAST_MANUAL_FALLBACK_ENABLED', '1').strip() == '1'\n"
+    "MANUAL_FALLBACK_MIN_SCORE = float(os.getenv('FAST_MANUAL_FALLBACK_MIN_SCORE', '90'))\n"
+    "MANUAL_FALLBACK_TOP_N = max(1, min(20, int(os.getenv('FAST_MANUAL_FALLBACK_TOP_N', '5'))))\n"
+    "MANUAL_FALLBACK_ENABLED = os.getenv('FAST_MANUAL_FALLBACK_ENABLED', '0').strip() == '1'\n"
 )
 if const_anchor not in s:
     raise SystemExit('manual-confirm fallback failed: constants anchor missing')
@@ -39,9 +39,9 @@ replacement = r'''        _signal_visibility_alert(symbol, score, 'DIRECT_BLOCKE
             ctx_rank = None
         regime = str(ctx.get('regime') or decision.get('regime') or 'UNKNOWN')
 
-        # Only rescue lack-of-model-evidence / Sideways authorization. Never
-        # rescue panic, enforced-EV rejection, stale context, poor rank, or a
-        # genuine hard-risk rejection.
+        # Only rescue lack-of-model-evidence / Sideways authorization when an
+        # operator explicitly enables this path. Never rescue panic, enforced-EV
+        # rejection, stale context, poor rank, or a genuine hard-risk rejection.
         warmup_or_sideways = (
             str(decision.get('status') or '') == 'WARMUP_BLOCK'
             or reject_reason == 'sideways-compression-no-validated-edge'
@@ -83,6 +83,7 @@ if ready_old in s:
 for required in [
     'MANUAL_FALLBACK_MIN_SCORE',
     'MANUAL_FALLBACK_TOP_N',
+    "FAST_MANUAL_FALLBACK_ENABLED', '0'",
     "payload['manualFallback'] = True",
     '[manual-fallback]',
     "str(ev.get('status') or '') != 'ENFORCED_REJECT'",
@@ -93,7 +94,7 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[manual-confirm-fallback] OK score>=80 top10 warmup/sideways manual-only path; all hard risk/execution gates unchanged')
+print('[manual-confirm-fallback] OK default=OFF; explicit opt-in requires score>=90 top5 and all hard gates')
 
 # Railway Dockerfile already copies /freqtrade/user_data as a directory. Apply
 # the whipsaw/profit-lock patch after all fast-entry patches and before
