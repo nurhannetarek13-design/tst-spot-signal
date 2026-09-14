@@ -1,88 +1,172 @@
+import numpy as np
 from jesse.strategies import Strategy
 import jesse.indicators as ta
-from jesse import utils
 
 
 class AdaptiveRegimeFusionValidator(Strategy):
-    """
-    Independent research validator for TST_ADAPTIVE_FUSION_V1.
-    Long-only by design. This file is for backtesting/research, not live execution.
+    """Independent validator for TST_ALLIGATOR_TMV_V1.
+
+    Long-only, causal, and intentionally free of the forward plotting shifts used
+    by the visual Williams Alligator indicator.
     """
 
-    STRATEGY_ID = "TST_ADAPTIVE_FUSION_V1"
+    STRATEGY_ID = "TST_ALLIGATOR_TMV_V1"
 
-    def _signals(self):
-        ema20 = ta.ema(self.candles, 20)
-        ema50 = ta.ema(self.candles, 50)
-        ema200 = ta.ema(self.candles, 200)
-        rsi = ta.rsi(self.candles, 14)
-        adx = ta.adx(self.candles, 14)
-        atr = ta.atr(self.candles, 14)
-        return ema20, ema50, ema200, rsi, adx, atr
+    @staticmethod
+    def _ema(values, period: int):
+        values = np.asarray(values, dtype=float)
+        out = np.empty(len(values), dtype=float)
+        alpha = 2.0 / (period + 1.0)
+        out[0] = values[0]
+        for i in range(1, len(values)):
+            out[i] = alpha * values[i] + (1.0 - alpha) * out[i - 1]
+        return out
+
+    @staticmethod
+    def _smma(values, period: int):
+        values = np.asarray(values, dtype=float)
+        out = np.empty(len(values), dtype=float)
+        alpha = 1.0 / float(period)
+        out[0] = values[0]
+        for i in range(1, len(values)):
+            out[i] = alpha * values[i] + (1.0 - alpha) * out[i - 1]
+        return out
+
+    @staticmethod
+    def _psar(highs, lows, step=0.02, maximum=0.2):
+        highs = np.asarray(highs, dtype=float)
+        lows = np.asarray(lows, dtype=float)
+        n = len(highs)
+        out = np.zeros(n, dtype=float)
+        if n == 0:
+            return out
+        if n == 1:
+            out[0] = lows[0]
+            return out
+
+        bull = True
+        af = step
+        ep = highs[0]
+        out[0] = lows[0]
+
+        for i in range(1, n):
+            psar = out[i - 1] + af * (ep - out[i - 1])
+            if bull:
+                psar = min(psar, lows[i - 1])
+                if i > 1:
+                    psar = min(psar, lows[i - 2])
+                if lows[i] < psar:
+                    bull = False
+                    psar = ep
+                    ep = lows[i]
+                    af = step
+                elif highs[i] > ep:
+                    ep = highs[i]
+                    af = min(maximum, af + step)
+            else:
+                psar = max(psar, highs[i - 1])
+                if i > 1:
+                    psar = max(psar, highs[i - 2])
+                if highs[i] > psar:
+                    bull = True
+                    psar = ep
+                    ep = highs[i]
+                    af = step
+                elif lows[i] < ep:
+                    ep = lows[i]
+                    af = min(maximum, af + step)
+            out[i] = psar
+        return out
+
+    def _state(self):
+        closes = self.candles[:, 2].astype(float)
+        highs = self.candles[:, 3].astype(float)
+        lows = self.candles[:, 4].astype(float)
+        volumes = self.candles[:, 5].astype(float)
+
+        jaw = self._smma(closes, 13)
+        teeth = self._smma(closes, 8)
+        lips = self._smma(closes, 5)
+        ema12 = self._ema(closes, 12)
+        ema26 = self._ema(closes, 26)
+        macd = ema12 - ema26
+        macd_signal = self._ema(macd, 9)
+        ema200 = self._ema(closes, 200)
+        psar = self._psar(highs, lows)
+
+        spread = (lips - jaw) / np.maximum(closes, 1e-12)
+        prior_vol = volumes[-21:-1]
+        relvol = volumes[-1] / prior_vol.mean() if len(prior_vol) == 20 and prior_vol.mean() > 0 else 0.0
+
+        return {
+            "close": closes[-1],
+            "jaw": jaw,
+            "teeth": teeth,
+            "lips": lips,
+            "spread": spread,
+            "macd": macd,
+            "macd_signal": macd_signal,
+            "ema200": ema200[-1],
+            "psar": psar[-1],
+            "relvol": relvol,
+            "volume": volumes[-1],
+        }
 
     def should_long(self) -> bool:
-        if len(self.candles) < 210:
+        if len(self.candles) < 220:
             return False
 
-        ema20, ema50, ema200, rsi, adx, atr = self._signals()
-        closes = self.candles[:, 2]
-        highs = self.candles[:, 3]
-        lows = self.candles[:, 4]
-        volumes = self.candles[:, 5]
-
-        close = self.price
-        open_price = self.candles[-1, 1]
-        low = lows[-1]
-        hh20 = highs[-21:-1].max()
-        ll20 = lows[-21:-1].min()
-
-        vol_window = volumes[-25:-1]
-        vol_med = sorted(vol_window)[len(vol_window) // 2] if len(vol_window) else 0
-        relvol = volumes[-1] / vol_med if vol_med > 0 else 0
-
-        atr_pct_now = atr / close if close > 0 else 0
-        atr_samples = []
-        for offset in range(2, 50):
-            price = closes[-offset]
-            if price > 0:
-                atr_samples.append(abs(closes[-offset] - closes[-offset - 1]) / price)
-        atr_med = sorted(atr_samples)[len(atr_samples) // 2] if atr_samples else atr_pct_now
-
-        trend_regime = close > ema200 and ema20 > ema50 and adx >= 22
-        range_regime = adx < 19
-        vol_regime = atr_pct_now > atr_med * 1.35 and relvol >= 1.5
-
-        trend_breakout = trend_regime and close > hh20 and relvol >= 1.25 and 53 <= rsi <= 70
-        trend_pullback = (
-            trend_regime
-            and low <= ema20 * 1.004
-            and close > ema20
-            and close > open_price
-            and 48 <= rsi <= 65
+        s = self._state()
+        alligator_bull = (
+            s["lips"][-1] > s["teeth"][-1] > s["jaw"][-1]
+            and s["lips"][-1] > s["lips"][-2]
+            and s["teeth"][-1] > s["teeth"][-2]
+            and s["jaw"][-1] > s["jaw"][-2]
+            and s["spread"][-1] > s["spread"][-2]
         )
-        mean_reversion = range_regime and close <= ll20 * 1.003 and rsi < 34 and relvol >= 0.8
-        volatility_momentum = vol_regime and close > hh20 and close > ema50 and 55 <= rsi <= 73
+        macd_bull = s["macd"][-1] > s["macd_signal"][-1] and (s["macd"][-1] - s["macd_signal"][-1]) > 0
+        sar_bull = s["psar"] < s["close"]
+        volume_confirmed = s["relvol"] >= 1.20
+        trend_confirmed = s["close"] > s["ema200"]
 
-        return trend_breakout or trend_pullback or mean_reversion or volatility_momentum
+        return bool(
+            alligator_bull
+            and macd_bull
+            and sar_bull
+            and volume_confirmed
+            and trend_confirmed
+            and s["volume"] > 0
+        )
 
     def should_short(self) -> bool:
         return False
 
     def go_long(self):
-        _, _, _, _, _, atr = self._signals()
-        entry = self.price
-        stop = max(0, entry - 1.2 * atr)
-        target = entry + 3.0 * max(entry - stop, 0)
+        entry = float(self.price)
+        atr = float(ta.atr(self.candles, 14))
+        if not np.isfinite(atr) or atr <= 0:
+            return
 
-        size_usd = min(5.5, max(0, self.balance))
+        stop = max(0.0, entry - 2.0 * atr)
+        target = entry + 2.0 * max(entry - stop, 0.0)
+        size_usd = min(5.5, max(0.0, float(self.balance)))
         qty = max(size_usd / entry, 1e-8)
 
         self.buy = qty, entry
         self.stop_loss = qty, stop
         self.take_profit = qty, target
 
-    def go_short(self):
-        pass
-
     def should_cancel_entry(self) -> bool:
         return True
+
+    def should_exit(self) -> bool:
+        if len(self.candles) < 30:
+            return False
+        s = self._state()
+        alligator_failure = s["lips"][-1] < s["teeth"][-1]
+        macd_failure = s["macd"][-1] < s["macd_signal"][-1]
+        sar_flip = s["psar"] > s["close"]
+        return bool(alligator_failure or macd_failure or sar_flip)
+
+    def go_short(self):
+        pass
