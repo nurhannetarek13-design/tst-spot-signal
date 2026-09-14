@@ -2,6 +2,15 @@ name: Fusion Stack Validate
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "fusion/**"
+      - "hummingbot/**"
+      - "jesse/**"
+      - "freqtrade/**"
+      - "validation/fusion/**"
+      - "deploy/**"
+      - ".github/workflows/fusion-validate.yml"
   push:
     branches: [main]
     paths:
@@ -9,6 +18,7 @@ on:
       - "hummingbot/**"
       - "jesse/**"
       - "freqtrade/**"
+      - "validation/fusion/**"
       - "deploy/**"
       - ".github/workflows/fusion-validate.yml"
 
@@ -30,14 +40,24 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Validate Fusion policy JSON
-        run: node -e "JSON.parse(require('fs').readFileSync('fusion/policy.json','utf8')); console.log('fusion policy ok')"
+      - name: Validate Fusion policy and strategy manifest
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('fusion/policy.json', 'utf8'));
+          const m = JSON.parse(fs.readFileSync(p.candidateManifest, 'utf8'));
+          if (m.strategyId !== p.strategyId) throw new Error('manifest/policy strategy mismatch');
+          console.log('fusion policy + manifest ok');
+          NODE
 
       - name: Syntax check Fusion master
         run: node --check fusion/server.mjs
 
-      - name: Python syntax check Hummingbot controller
+      - name: Python syntax check legacy Hummingbot controller
         run: python -m py_compile hummingbot/controllers/directional_trading/tst_fusion_signal.py
+
+      - name: Python syntax check Alligator SMC Hummingbot controller
+        run: python -m py_compile hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
 
       - name: Python syntax check Jesse validator
         run: python -m py_compile jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py
@@ -58,6 +78,20 @@ jobs:
           grep -q '^allow_executor_actions: false$' hummingbot/configs/tst_fusion_signal_btc.yml
           grep -q '^connector_name: binance$' hummingbot/configs/tst_fusion_signal_btc.yml
           grep -q '^leverage: 1$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^controller_name: tst_alligator_tmv_signal$' hummingbot/configs/tst_fusion_signal_btc.yml
+          grep -q '^strategy_id: TST_ALLIGATOR_SMC_V2$' hummingbot/configs/tst_fusion_signal_btc.yml
+
+      - name: Assert structure gates are wired end-to-end
+        run: |
+          grep -q 'liquiditySweepConfirmed' hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
+          grep -q 'marketStructureConfirmed' hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
+          grep -q 'demandLocationConfirmed' hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
+          grep -q 'roomFor2R' hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
+          grep -q 'htfBiasOk' hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py
+          grep -q 'LIQUIDITY_SWEEP_REQUIRED' fusion/server.mjs
+          grep -q 'BULLISH_MARKET_SHIFT_REQUIRED' fusion/server.mjs
+          grep -q 'DEMAND_LOCATION_REQUIRED' fusion/server.mjs
+          grep -q 'RR_TOO_LOW' fusion/server.mjs
 
       - name: Fusion fail-closed assertion
         run: |
@@ -69,5 +103,11 @@ jobs:
           if (p.execution?.withdrawalsAllowed !== false) throw new Error('withdrawals must be disabled');
           if (p.execution?.futuresAllowed !== false) throw new Error('futures must be disabled');
           if (p.execution?.leverageAllowed !== false) throw new Error('leverage must be disabled');
-          console.log('fail-closed assertions passed');
+          if (p.strategyId !== 'TST_ALLIGATOR_SMC_V2') throw new Error('unexpected strategy id');
+          if (p.signalGate?.requireLiquiditySweep !== true) throw new Error('liquidity sweep gate missing');
+          if (p.signalGate?.requireMarketStructure !== true) throw new Error('market structure gate missing');
+          if (p.signalGate?.requireDemandLocation !== true) throw new Error('demand location gate missing');
+          if (p.signalGate?.requireHtfBiasOk !== true) throw new Error('4h bias gate missing');
+          if (Number(p.signalGate?.minRiskReward) < 2) throw new Error('minimum RR must be >=2');
+          console.log('fail-closed + structure assertions passed');
           NODE

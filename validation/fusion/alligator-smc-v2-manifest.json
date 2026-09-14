@@ -1,0 +1,57 @@
+{
+  "strategyId": "TST_ALLIGATOR_SMC_V2",
+  "release": "TST_FUSION_V5_ALLIGATOR_SMC",
+  "implementationRevision": 2,
+  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
+  "liveTrading": false,
+  "market": "BINANCE_SPOT_LONG_ONLY",
+  "timeframe": "15m",
+  "higherTimeframe": "4h",
+  "sourceConcepts": [
+    "Trend + Momentum + Volume + ATR discipline",
+    "Williams Alligator + MACD + Parabolic SAR confirmation",
+    "Market structure + supply/demand + liquidity sweep + conservative market shift"
+  ],
+  "causality": {
+    "alligatorForwardPlotOffsetsUsed": false,
+    "currentOpenCandleUsedForSignal": false,
+    "sameBarDemandZoneSelfConfirmationAllowed": false
+  },
+  "entry": {
+    "alligator": "SMMA 5 > 8 > 13, all three rising, spread widening",
+    "macd": "MACD 12/26 > signal 9 with positive histogram",
+    "psar": "PSAR below close",
+    "relativeVolume": ">=1.20x prior 20-bar mean",
+    "trend": "close above EMA200",
+    "validatorHigherTimeframeProxy": "15m EMA320 rising and price above",
+    "runtimeHigherTimeframe": "actual Binance 4h close above rising EMA20",
+    "demandZone": "previous bearish pivot candle before bullish displacement >=0.8 ATR and relvol >=1.10; expires after 96 bars or a close below the zone low",
+    "liquiditySweep": "take prior 12-bar low, reclaim it, and interact with pre-existing demand",
+    "marketShift": "close above prior 12-bar high within 8 bars after sweep",
+    "location": "entry within 3 ATR above valid demand-zone top",
+    "minimumRoom": "known overhead 48-bar liquidity must allow >=2R, unless price already broke it"
+  },
+  "risk": {
+    "structureStop": "0.20 ATR below the lower of demand-zone low or swept-liquidity low",
+    "maxStructureStopPct": 0.03,
+    "minimumRiskReward": 2.0,
+    "maxPositionUSDT": 7.0,
+    "preferredOrderAmountUSDT": 5.5,
+    "maxRiskUSDT": 0.2,
+    "positionSizing": "shrink notional when structural stop would exceed maxRiskUSDT",
+    "maxOpenPositions": 1,
+    "dailyLossCapUSDT": 0.5
+  },
+  "runtimeConfirmations": {
+    "btcRegime": "BTC 15m close above EMA200",
+    "l2BidShareMin": 0.52,
+    "takerBuyShareMin": 0.56,
+    "relativeVolumeMin": 1.2,
+    "maxSpreadBps": 20,
+    "minVisibleDepthUSDT": 25000
+  },
+  "notes": [
+    "This is an implemented mechanical translation of the source concepts, not a claim that the source strategy is profitable.",
+    "Real-money execution stays disabled until the existing validator/forward gates and explicit user enable condition are satisfied."
+  ]
+}

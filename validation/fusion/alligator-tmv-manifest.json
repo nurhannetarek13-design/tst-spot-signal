@@ -1,0 +1,66 @@
+{
+  "strategyId": "TST_ALLIGATOR_TMV_V1",
+  "status": "IMPLEMENTED_PAPER_ONLY",
+  "market": "BINANCE_SPOT",
+  "side": "LONG_ONLY",
+  "timeframe": "15m",
+  "entry": {
+    "alligator": {
+      "jawSMMA": 13,
+      "teethSMMA": 8,
+      "lipsSMMA": 5,
+      "forwardPlotShiftsUsed": false,
+      "requireBullishOrder": true,
+      "requireRisingLines": true,
+      "requireWideningSpread": true
+    },
+    "macd": {
+      "fast": 12,
+      "slow": 26,
+      "signal": 9,
+      "requireMacdAboveSignal": true,
+      "requirePositiveHistogram": true
+    },
+    "parabolicSar": {
+      "step": 0.02,
+      "maximum": 0.2,
+      "requireBelowPrice": true
+    },
+    "trend": {
+      "ema": 200,
+      "requireCloseAbove": true
+    },
+    "volume": {
+      "lookback": 20,
+      "baseline": "PRIOR_MEAN",
+      "minimumRelativeVolume": 1.2
+    }
+  },
+  "risk": {
+    "atrPeriod": 14,
+    "stopATR": 2.0,
+    "targetRiskMultiple": 2.0,
+    "maxPositionUSDT": 7.0,
+    "maxRiskUSDT": 0.2,
+    "dailyLossCapUSDT": 0.5
+  },
+  "fusionConfirmations": {
+    "btcRegime": true,
+    "l2BidShare": true,
+    "takerBuyShareMinimum": 0.56,
+    "relativeQuoteVolumeMinimum": 1.2,
+    "liquidity": true,
+    "maxSpreadBps": 20
+  },
+  "execution": {
+    "paperOnly": true,
+    "liveTrading": false,
+    "executorAllowed": false,
+    "futuresAllowed": false,
+    "leverageAllowed": false
+  },
+  "notes": [
+    "The classic visual Alligator forward offsets are intentionally excluded to avoid look-ahead bias.",
+    "No profitability claim is encoded in this manifest."
+  ]
+}

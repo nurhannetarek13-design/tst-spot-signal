@@ -1,26 +1,74 @@
-# TST Fusion Spot Research Bot
+# TST Fusion Spot Bot
 
-The project is now organized as **one master bot with three specialist engines**:
+The bot is organized as one master Binance Spot bot with specialist engines:
 
-- **Hummingbot V2 + Condor** — market-data / order-book layer and future deterministic execution engine.
-- **Freqtrade** — primary strategy, backtesting, and dry-run validator.
-- **Jesse** — independent second validator.
-- **Fusion Master** — final decision and risk gate that combines the three.
+- **Hummingbot V2 + Condor** — market-data / order-book layer and deterministic execution path.
+- **Freqtrade** — primary strategy and backtest validator.
+- **Jesse** — independent validator.
+- **Fusion Master** — final decision and risk gate.
+
+## Active implemented strategy
+
+`TST_ALLIGATOR_SMC_V2`
+
+This version keeps the useful trigger stack from the first two sources, then adds the mechanical market-structure rules from the day-trading course:
+
+1. **Williams Alligator + MACD + Parabolic SAR**
+2. **Trend + Momentum + Relative Volume**
+3. **Pre-existing demand zone**
+4. **Liquidity sweep at demand**
+5. **Bullish market shift / break of structure**
+6. **Higher-timeframe bias**
+7. **Structural stop + minimum 2R + risk-limited position sizing**
+8. Existing Fusion confirmations: BTC regime, L2 bid share, taker flow, spread and visible liquidity.
+
+The Williams Alligator remains causal: SMMA 13/8/5 is calculated without the classic forward plotting offsets.
+
+## Mechanical 15m entry path
+
+```text
+Alligator bullish and widening
++ MACD bullish
++ PSAR below price
++ relative volume >= 1.20x prior 20-bar mean
++ close above EMA200
++ higher-time-horizon trend proxy positive
++ valid demand zone created BEFORE the current setup
++ liquidity sweep/reclaim at that demand zone
++ bullish market shift: close above prior 12-bar high after sweep
++ entry still within 3 ATR of demand-zone top
++ structural stop <= 3%
++ room for at least 2R
++ runtime actual 4h EMA20 bias positive
++ BTC regime / L2 / taker-flow / spread / liquidity gates
+```
+
+### Demand / liquidity rules
+
+A demand zone is created from the prior bearish pivot candle when a later bullish displacement closes above the prior 12-bar high with body >= `0.80 ATR` and relative volume >= `1.10x`.
+
+The zone cannot confirm itself on the same candle. It remains active until a close below its low or a 96-bar expiry. Price must later interact with the pre-existing zone, sweep the prior 12-bar low and reclaim it, then print a bullish market shift within 8 bars. The market-shift confirmation remains valid for 6 bars.
+
+### Higher-timeframe rule
+
+The validators use a causal 15m `EMA320` rising proxy to cover roughly the same time horizon. At runtime Hummingbot separately fetches actual Binance `4h` candles and requires the latest closed 4h candle to be above a rising `EMA20`.
+
+### Risk / exit
+
+The normal structural stop is `0.20 ATR` below the lower of the active demand-zone low and the swept-liquidity low. If that stop would be wider than 3% the setup is rejected. The target is at least `2R`.
+
+Position notional is reduced automatically when the structural stop would otherwise exceed the shared `0.20 USDT` maximum risk. This keeps the existing small-account risk policy instead of forcing a fixed position size.
 
 ## Current safety status
 
 Real-money execution is **disabled**.
 
-The current release is:
-
 ```text
-TST_FUSION_V1
+release: TST_FUSION_V5_ALLIGATOR_SMC
 mode: PAPER_ONLY
 liveTrading: false
 executorAllowed: false
 ```
-
-The historical validation already performed on the older strategy family did not justify automatic live execution, so the new architecture starts fail-closed rather than inheriting a live flag.
 
 ## Shared account limits
 
@@ -35,37 +83,15 @@ The historical validation already performed on the older strategy family did not
 - maximum risk per trade: 0.20 USDT
 - daily realized loss stop: 0.50 USDT
 
-## Fusion decision flow
-
-```text
-Hummingbot market candidate
-        |
-        v
-Fusion Master
-   |         |
-   v         v
-Freqtrade   Jesse
-validator   validator
-   \         /
-    \       /
-     v     v
-Shared risk gate
-        |
-        +--> PAPER_APPROVED
-        |
-        +--> NO_TRADE
-```
-
-Both validators must refer to the same strategy release, be fresh, and pass the configured evidence checks. Missing evidence, stale evidence, risk-limit breaches, or disagreement fails closed.
-
 ## Main files
 
-- `fusion/policy.json` — shared trading/risk policy
+- `fusion/policy.json` — shared strategy/risk policy
 - `fusion/server.mjs` — master decision layer
-- `hummingbot/controllers/directional_trading/tst_fusion_signal.py` — Hummingbot V2 candidate controller
-- `freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py` — Freqtrade strategy/validator
-- `jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py` — Jesse independent validator
-- `.github/workflows/fusion-validate.yml` — syntax and fail-closed CI checks
+- `validation/fusion/alligator-smc-v2-manifest.json` — frozen mechanical definition
+- `hummingbot/controllers/directional_trading/tst_alligator_tmv_signal.py` — runtime candidate controller, execution disabled
+- `freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py` — Freqtrade implementation
+- `jesse/strategies/AdaptiveRegimeFusionValidator/__init__.py` — Jesse implementation
+- `.github/workflows/fusion-validate.yml` — syntax, structure-gate and fail-closed CI checks
 
 ## Run Fusion Master
 
@@ -82,7 +108,3 @@ curl http://127.0.0.1:8787/status
 ```
 
 Secrets must stay in the deployment secret store. Do not commit Binance, Telegram, Condor, Freqtrade, Jesse, or Fusion credentials to GitHub.
-
-## Deployment requirement
-
-The three-engine stack needs a persistent Docker host for Hummingbot/Condor and Freqtrade. Cloudflare Worker / Vercel remain useful for lightweight services, but they are not a replacement for a long-running Hummingbot container.
