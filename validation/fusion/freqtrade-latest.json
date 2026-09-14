@@ -33,6 +33,6 @@
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-14T19:22:22.259179+00:00",
+  "generatedAt": "2026-09-14T19:47:18.329387+00:00",
   "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
