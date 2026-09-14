@@ -54,27 +54,27 @@ def _fast_spot_usdt_symbols() -> list[str]:
 
 
 def _fast_ticker_rows(path: str, symbols: list[str], extra: dict) -> list[dict]:
-    """Fetch one all-market ticker snapshot, then filter locally.
+    """Fetch ticker rows with the cheapest working shape for each endpoint.
 
-    The previous multi-symbol query shape was rejected on the active Binance
-    route and caused a RuntimeError/fallback on every refresh. Binance's ticker
-    endpoints can return the whole market when `symbol(s)` is omitted; one
-    snapshot is faster and internally consistent. If that route ever fails we
-    fail over to bounded concurrent single-symbol requests.
+    `/ticker/24hr` supports one all-market snapshot, so use it and filter locally.
+    The rolling-window `/ticker` route on the active Binance endpoint rejects the
+    all-market shape with windowSize, so go directly to bounded single-symbol
+    requests instead of intentionally throwing a RuntimeError on every refresh.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     wanted = set(symbols)
-    try:
-        rows = api(path, dict(extra))
-        if isinstance(rows, dict):
-            rows = [rows]
-        if isinstance(rows, list):
-            filtered = [row for row in rows if isinstance(row, dict) and str(row.get('symbol') or '') in wanted]
-            if filtered or not symbols:
-                return filtered
-    except Exception as exc:
-        print(f'[fast-discovery] universe-snapshot-fallback path={path} err={type(exc).__name__}')
+    if path != '/ticker':
+        try:
+            rows = api(path, dict(extra))
+            if isinstance(rows, dict):
+                rows = [rows]
+            if isinstance(rows, list):
+                filtered = [row for row in rows if isinstance(row, dict) and str(row.get('symbol') or '') in wanted]
+                if filtered or not symbols:
+                    return filtered
+        except Exception as exc:
+            print(f'[fast-discovery] universe-snapshot-fallback path={path} err={type(exc).__name__}')
 
     def one(symbol: str) -> dict | None:
         params = {'symbol': symbol}
@@ -90,6 +90,8 @@ def _fast_ticker_rows(path: str, symbols: list[str], extra: dict) -> list[dict]:
         return None
 
     result: list[dict] = []
+    if not symbols:
+        return result
     workers = max(1, min(8, len(symbols)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(one, symbol) for symbol in symbols]
@@ -103,7 +105,7 @@ def _fast_ticker_rows(path: str, symbols: list[str], extra: dict) -> list[dict]:
 def fast_momentum_candidates() -> list[tuple[str, float, float]]:
     """Discover fresh 5m movers from the liquid Spot/USDT universe.
 
-    Discovery now uses the same high-liquidity philosophy as the original live
+    Discovery uses the same high-liquidity philosophy as the original live
     rules: at least 20M USDT 24h quote volume by default. All downstream score,
     ignition, quality, BTC, spread, sizing and confirmation gates remain intact.
     """
@@ -206,7 +208,7 @@ for required in [
     "'windowSize': '5m'",
     "api('/exchangeInfo', {})",
     'ThreadPoolExecutor',
-    'universe-snapshot-fallback',
+    "if path != '/ticker':",
     '[fast-discovery]',
     'for symbol, pct5, volume in fast_momentum_candidates()',
     "FAST_DISCOVERY_MIN_5M_PCT",
@@ -216,4 +218,4 @@ for required in [
 
 compile(s, str(path), 'exec')
 path.write_text(s, encoding='utf-8')
-print('[fast-momentum-discovery] OK all-market ticker snapshots + 20M 24h liquidity floor + bounded single-symbol failover')
+print('[fast-momentum-discovery] OK 24h universe snapshot + direct 5m rolling singles + 20M liquidity floor')
