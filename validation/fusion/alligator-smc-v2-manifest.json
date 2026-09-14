@@ -1,6 +1,7 @@
 {
   "strategyId": "TST_ALLIGATOR_SMC_V2",
   "release": "TST_FUSION_V5_ALLIGATOR_SMC",
+  "implementationRevision": 2,
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
   "market": "BINANCE_SPOT_LONG_ONLY",
