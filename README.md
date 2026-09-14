@@ -47,7 +47,7 @@ Alligator bullish and widening
 
 A demand zone is created from the prior bearish pivot candle when a later bullish displacement closes above the prior 12-bar high with body >= `0.80 ATR` and relative volume >= `1.10x`.
 
-The zone cannot confirm itself on the same candle. Price must later interact with the pre-existing zone, sweep the prior 12-bar low and reclaim it, then print a bullish market shift within 8 bars. The market-shift confirmation remains valid for 6 bars.
+The zone cannot confirm itself on the same candle. It remains active until a close below its low or a 96-bar expiry. Price must later interact with the pre-existing zone, sweep the prior 12-bar low and reclaim it, then print a bullish market shift within 8 bars. The market-shift confirmation remains valid for 6 bars.
 
 ### Higher-timeframe rule
 
@@ -55,7 +55,7 @@ The validators use a causal 15m `EMA320` rising proxy to cover roughly the same 
 
 ### Risk / exit
 
-The normal structural stop is `0.20 ATR` below the active demand-zone low. If that stop would be wider than 3% the setup is rejected. The target is at least `2R`.
+The normal structural stop is `0.20 ATR` below the lower of the active demand-zone low and the swept-liquidity low. If that stop would be wider than 3% the setup is rejected. The target is at least `2R`.
 
 Position notional is reduced automatically when the structural stop would otherwise exceed the shared `0.20 USDT` maximum risk. This keeps the existing small-account risk policy instead of forcing a fixed position size.
 
