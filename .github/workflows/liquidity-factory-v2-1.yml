@@ -1,0 +1,65 @@
+name: Liquidity Factory V2.1 Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/liquidity-factory-v2
+    paths:
+      - "research/liquidity_factory_v2.py"
+      - "research/liquidity_factory_v2_1.py"
+      - ".github/workflows/liquidity-factory-v2-1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: liquidity-factory-v2-1
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas
+      - name: Run V2.1 with untouched validation and OOS
+        run: |
+          python research/liquidity_factory_v2_1.py \
+            --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT LINKUSDT \
+            --start 2024-09-01 \
+            --end 2026-09-01 \
+            --top-discovery 20 \
+            --top-validation 8 \
+            --output artifacts/liquidity-factory-v2-1/report.json
+      - name: Enforce V2.1 research contract
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/liquidity-factory-v2-1/report.json'))
+          assert r['authorization']=='RESEARCH_ONLY'
+          assert r['liveTrading'] is False
+          assert r['candidateDefinitionsChangedFromV2'] is False
+          assert r['gateMethodologyChange']['oosWasUntouchedBeforeChange'] is True
+          assert r['selectionProtocol']['oosUsedForSelection'] is False
+          assert r['selectionProtocol']['frozenBeforeOos'] is True
+          assert r['promotionGate']['canEnableLiveTrading'] is False
+          print(json.dumps({
+            'discoveryEligible':r['discovery']['eligible'],
+            'validationPassed':r['validation']['passed'],
+            'frozenFinalists':r['validation']['frozenFinalists'],
+            'oosPassed':r['oos']['passed'],
+            'promotionGate':r['promotionGate'],
+            'oosRows':r['oos']['rows']
+          }, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: liquidity-factory-v2-1-report
+          path: artifacts/liquidity-factory-v2-1/report.json
+          retention-days: 14
