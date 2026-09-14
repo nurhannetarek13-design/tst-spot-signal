@@ -16,7 +16,7 @@ else
 fi
 
 cleanup() {
-  kill "${EV_VALIDATION_PID:-}" "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${DYNAMIC_EXIT_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${FRONT_PROXY_PID:-}" "${EV_VALIDATION_PID:-}" "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${DYNAMIC_EXIT_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -64,6 +64,15 @@ if ! python -u /freqtrade/reconcile_state.py --once; then
 fi
 
 echo "[entrypoint] startup reconciliation passed"
+
+# Railway probes /health on PORT=8080. In signal-first mode run_ready_bot.sh is
+# intentionally skipped, so the signed relay/health server must be started here
+# explicitly. Starting it only after reconciliation keeps the deploy fail-closed:
+# a container cannot become healthy unless the startup account-state check passed.
+python -u /freqtrade/front_proxy.py &
+FRONT_PROXY_PID=$!
+echo "[entrypoint] health/make relay started pid=${FRONT_PROXY_PID} port=${PORT:-8080}"
+
 python -u /freqtrade/reconcile_state.py &
 RECONCILE_PID=$!
 echo "[entrypoint] Binance reconciler started pid=${RECONCILE_PID}"
@@ -129,8 +138,13 @@ else
   echo "[entrypoint] research workers disabled; signal/execution path remains active"
 fi
 
-# Keep the container alive while continuously supervising the primary fast engine.
+# Keep the container alive while continuously supervising the critical processes.
 while true; do
+  if ! kill -0 "$FRONT_PROXY_PID" 2>/dev/null; then
+    echo "[entrypoint] CRITICAL health/make relay exited; terminating for clean Railway restart" >&2
+    wait "$FRONT_PROXY_PID" || true
+    exit 1
+  fi
   if ! kill -0 "$FAST_PID" 2>/dev/null; then
     echo "[entrypoint] CRITICAL fast-entry engine exited; terminating for clean Railway restart" >&2
     wait "$FAST_PID" || true
