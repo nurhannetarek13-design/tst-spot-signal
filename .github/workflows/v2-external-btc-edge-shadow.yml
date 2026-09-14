@@ -1,4 +1,4 @@
-name: V2 External BTC Edge Shadow
+name: V2 External BTC 4H Trend Shadow
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: v2-external-btc-edge-shadow
+  group: v2-external-btc-4h-trend-shadow
   cancel-in-progress: false
 
 jobs:
@@ -35,16 +35,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .runtime
-          key: v2-btc-edge-shadow-${{ github.run_id }}
+          key: v2-btc-4h-trend-shadow-${{ github.run_id }}
           restore-keys: |
-            v2-btc-edge-shadow-
+            v2-btc-4h-trend-shadow-
 
       - name: Install V2 dependencies
         run: pip install -r v2_bot/requirements.txt
 
-      # The runner uses the same official Binance public fallback client as V2.
-      - name: Run BTC EMA600 + funding Shadow edge
-        run: python -m v2_bot.github_shadow_edge --state .runtime/btc_ema600_funding_state.json --quote-size 10
+      - name: Run BTC 4h SMA200 Spot Shadow edge
+        run: python -m v2_bot.github_shadow_trend --state .runtime/btc_4h_sma200_state.json --quote-size 10
 
       - name: Assert no Live flags are enabled
         shell: bash
