@@ -119,3 +119,11 @@ if not lifecycle_patch.exists():
     raise SystemExit('manual-confirm fallback: hard-time-exit lifecycle patch missing from user_data')
 code = compile(lifecycle_patch.read_text(encoding='utf-8'), str(lifecycle_patch), 'exec')
 exec(code, {'__name__': '__main__', '__file__': str(lifecycle_patch)})
+
+# Final live-entry hardening runs after whipsaw injection so every lane shares
+# persistent confirmation, ranked fallback and the unified priority allocator.
+final_patch = Path('/freqtrade/user_data/patch_final_entry_hardening.py')
+if not final_patch.exists():
+    raise SystemExit('manual-confirm fallback: final entry hardening patch missing from user_data')
+code = compile(final_patch.read_text(encoding='utf-8'), str(final_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(final_patch)})
