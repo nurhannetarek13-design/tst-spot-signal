@@ -1,9 +1,9 @@
 {
-  "release": "TST_FUSION_V4_ALLIGATOR_TMV",
+  "release": "TST_FUSION_V5_ALLIGATOR_SMC",
   "mode": "PAPER_ONLY",
   "liveTrading": false,
-  "strategyId": "TST_ALLIGATOR_TMV_V1",
-  "candidateManifest": "validation/fusion/alligator-tmv-manifest.json",
+  "strategyId": "TST_ALLIGATOR_SMC_V2",
+  "candidateManifest": "validation/fusion/alligator-smc-v2-manifest.json",
   "engines": {
     "scanner": "CLOUDFLARE_ORDERBOOK_MICROSTRUCTURE",
     "edgeDiscovery": "PUBLIC_EDGE_LAB",
@@ -23,30 +23,47 @@
     "maxOpenPositions": 1,
     "maxPositionUSDT": 7,
     "maxRiskUSDT": 0.2,
+    "maxRiskFractionOfBaselineCapital": 0.01,
     "dailyLossCapUSDT": 0.5
   },
   "universe": {
     "mode": "FIXED_VALIDATED_V1",
-    "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT"
+    ],
     "marketFilterSymbol": "BTCUSDT"
   },
   "signalGate": {
     "timeframe": "15m",
-    "trigger": "CAUSAL_ALLIGATOR_EXPANSION_PLUS_MACD_PLUS_PSAR_PLUS_RELATIVE_VOLUME_PLUS_EMA200",
+    "higherTimeframe": "4h",
+    "trigger": "CAUSAL_ALLIGATOR_TMV_PLUS_PREEXISTING_DEMAND_LIQUIDITY_SWEEP_BULLISH_MARKET_SHIFT",
     "requireAlligatorTrigger": true,
     "requireMacdConfirmation": true,
     "requireSarConfirmation": true,
     "requireTrendConfirmation": true,
+    "requireHtfProxyConfirmation": true,
+    "requireHtfBiasOk": true,
+    "requireLiquiditySweep": true,
+    "requireMarketStructure": true,
+    "requireDemandLocation": true,
+    "requireRoomFor2R": true,
     "requireL2Confirmation": true,
     "requireBtcRegimeOk": true,
     "requireLiquidityOk": true,
     "minTakerBuyShare": 0.56,
     "minRelativeVolume": 1.2,
+    "minRiskReward": 2.0,
+    "maxStructureRiskPct": 0.03,
     "maxSpreadBps": 20,
     "missingDataPolicy": "NO_TRADE"
   },
   "decisionGate": {
-    "validatorsRequired": ["freqtrade", "jesse"],
+    "validatorsRequired": [
+      "freqtrade",
+      "jesse"
+    ],
     "requireSameCandidateFingerprint": true,
     "validatorMaxAgeHours": 48,
     "minTrades": 100,
