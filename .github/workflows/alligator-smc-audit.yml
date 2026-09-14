@@ -1,0 +1,59 @@
+name: Alligator SMC V2 quantitative audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "freqtrade/alligator_smc_audit.py"
+      - "freqtrade/alligator_smc_paper_runner.py"
+      - "validation/fusion/alligator-smc-v2-manifest.json"
+      - ".github/workflows/alligator-smc-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install audit dependencies
+        run: python -m pip install --disable-pip-version-check pandas numpy
+      - name: Syntax check
+        run: python -m py_compile freqtrade/alligator_smc_audit.py
+      - name: Run 365-day multi-symbol audit
+        run: |
+          python freqtrade/alligator_smc_audit.py \
+            --days 365 \
+            --symbols BTCUSDT ETHUSDT SOLUSDT BNBUSDT XRPUSDT DOGEUSDT ADAUSDT LINKUSDT AVAXUSDT TRXUSDT \
+            --output validation/alligator_smc_v2/audit-latest.json
+      - name: Print compact result
+        if: always()
+        run: |
+          if [ -f validation/alligator_smc_v2/audit-latest.json ]; then
+            python - <<'PY'
+          import json
+          p='validation/alligator_smc_v2/audit-latest.json'
+          x=json.load(open(p))
+          print(json.dumps({
+            'verdict': x['verdict'],
+            'frequency': x['trade_frequency'],
+            'full': x['full_minus_l2']['all'],
+            'oos': x['full_minus_l2']['oos_30pct'],
+            'unseen': x['full_minus_l2']['unseen_symbol_holdout'],
+            'killers': x['top_frequency_killers'],
+            'funnel': x['funnel'],
+            'ablation_deltas': x['ablation_deltas'],
+          }, indent=2))
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alligator-smc-v2-audit
+          path: validation/alligator_smc_v2/audit-latest.json
+          if-no-files-found: warn
