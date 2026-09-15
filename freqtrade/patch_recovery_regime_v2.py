@@ -137,3 +137,11 @@ for marker in [
 compile(g, str(p), 'exec')
 p.write_text(g, encoding='utf-8')
 print('[recovery-regime-v2] OK shadow PANIC requires live BTC hard confirmation; recovered PANIC/SIDEWAYS allow confirmed REVERSAL score>=95 only')
+
+# Final live-opportunity patch runs after all regime rewrites above so it can
+# remove the remaining NORMAL weak-bear deadlock and redundant third confirmation.
+opportunity_patch = Path('/freqtrade/user_data/patch_live_opportunity_balance.py')
+if not opportunity_patch.exists():
+    raise SystemExit('recovery-regime-v2: live opportunity patch missing')
+code = opportunity_patch.read_text(encoding='utf-8')
+exec(compile(code, str(opportunity_patch), 'exec'), {'__name__': '__main__'})
