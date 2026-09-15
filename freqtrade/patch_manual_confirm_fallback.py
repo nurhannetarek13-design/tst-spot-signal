@@ -136,3 +136,12 @@ if not auto_patch.exists():
     raise SystemExit('manual-confirm fallback: sleep auto-trading patch missing from user_data')
 code = compile(auto_patch.read_text(encoding='utf-8'), str(auto_patch), 'exec')
 exec(code, {'__name__': '__main__', '__file__': str(auto_patch)})
+
+# Final execution-time quality guard runs after all signal-generation patches.
+# It blocks buys whose live fill geometry has decayed and tightens MID entries
+# specifically during sideways compression after the UNI loss post-mortem.
+live_quality_patch = Path('/freqtrade/user_data/patch_live_entry_quality_v2.py')
+if not live_quality_patch.exists():
+    raise SystemExit('manual-confirm fallback: live entry quality v2 patch missing from user_data')
+code = compile(live_quality_patch.read_text(encoding='utf-8'), str(live_quality_patch), 'exec')
+exec(code, {'__name__': '__main__', '__file__': str(live_quality_patch)})
