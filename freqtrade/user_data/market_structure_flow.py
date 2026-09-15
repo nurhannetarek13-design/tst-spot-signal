@@ -17,11 +17,13 @@ SIDEWAYS_MIN_SCORE = float(os.getenv('FLOW_SIDEWAYS_MIN_SCORE', '55'))
 WEAK_BEAR_MIN_SCORE = float(os.getenv('FLOW_WEAK_BEAR_MIN_SCORE', '60'))
 MAX_STOP_RISK_USDT = float(os.getenv('FLOW_MAX_STOP_RISK_USDT', '0.50'))
 MIN_EXEC_STAKE_USDT = float(os.getenv('FLOW_MIN_EXEC_STAKE_USDT', '5.50'))
+WEAK_BEAR_STAKE_MULT = max(0.50, min(0.85, float(os.getenv('FLOW_WEAK_BEAR_STAKE_MULT', '0.70'))))
+WEAK_BEAR_MAX_STAKE_USDT = max(MIN_EXEC_STAKE_USDT, float(os.getenv('FLOW_WEAK_BEAR_MAX_STAKE_USDT', '10.00')))
 FAIL_CLOSED = str(os.getenv('FLOW_FAIL_CLOSED', '1')).lower() not in {'0', 'false', 'no', 'off'}
 
 
 def _get(url: str, timeout: int = 8):
-    req = Request(url, headers={'User-Agent': 'tst-structure-flow/1.0', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-structure-flow/1.1', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read() or b'null')
 
@@ -219,9 +221,20 @@ def decide(m: dict, payload: dict, regime: str = '') -> dict:
     elif atr > 0 and risk_pct < max(0.0035, 0.55 * atr): blockers.append('stop-inside-market-noise')
 
     mult = 1.0 if score >= 75 else 0.85 if score >= 60 else 0.70
+    if regime == 'WEAK_BEAR' and stake > 0:
+        # Weak bear is selective, not a blanket veto. Keep exceptional setups
+        # eligible while automatically shrinking dollars exposed. Never increase
+        # a stake and never shrink below Binance's executable minimum solely due
+        # to this regime adjustment.
+        executable_floor_mult = min(1.0, MIN_EXEC_STAKE_USDT / stake)
+        mult = min(mult, max(WEAK_BEAR_STAKE_MULT, executable_floor_mult))
+        reasons.append('weak-bear-risk-reduction')
+
     adjusted = stake * mult if stake > 0 else 0.0
     if 0 < risk_pct < 1:
         adjusted = min(adjusted, MAX_STOP_RISK_USDT / risk_pct)
+    if regime == 'WEAK_BEAR' and adjusted > 0:
+        adjusted = min(adjusted, WEAK_BEAR_MAX_STAKE_USDT)
     adjusted = math.floor(max(0.0, adjusted) * 100.0) / 100.0
     if stake >= MIN_EXEC_STAKE_USDT and adjusted < MIN_EXEC_STAKE_USDT:
         blockers.append('risk-sized-below-min-executable-stake')
