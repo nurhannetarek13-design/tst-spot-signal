@@ -80,12 +80,27 @@ if '[live-rr] BLOCK' not in p:
 
 # Sideways MID overheat guard. In SIDEWAYS_COMPRESSION a strong micro score alone
 # is not enough: RSI must have reset and 4h breadth must not be weak.
-ctx_old = """    ok, why = mid_context_ok(symbol, m, score)\n    if not ok:\n        print(f'[mid-context] {symbol} BLOCKED reason={why}')\n        return False\n\n    sl_pct = clamp(max(0.007, m['atr'] * 3.0), 0.007, 0.014)\n"""
-ctx_new = """    ok, why = mid_context_ok(symbol, m, score)\n    if not ok:\n        print(f'[mid-context] {symbol} BLOCKED reason={why}')\n        return False\n\n    try:\n        _ctx = market_context.symbol_context(symbol) or {}\n    except Exception:\n        _ctx = {}\n    if str(_ctx.get('regime') or '') == 'SIDEWAYS_COMPRESSION':\n        try: _breadth4h = float(_ctx.get('breadth_4h'))\n        except Exception: _breadth4h = 0.0\n        if float(m.get('rsi') or 100.0) > 68.0:\n            print(f\"[mid-context] {symbol} BLOCKED reason=sideways-rsi-overheated rsi={float(m.get('rsi') or 0):.1f}\")\n            return False\n        if _breadth4h < 0.55:\n            print(f\"[mid-context] {symbol} BLOCKED reason=sideways-4h-breadth-weak breadth4h={_breadth4h:.2f}\")\n            return False\n\n    sl_pct = clamp(max(0.007, m['atr'] * 3.0), 0.007, 0.014)\n"""
+ctx_anchor = """    ok, why = mid_context_ok(symbol, m, score)\n    if not ok:\n        print(f'[mid-context] {symbol} BLOCKED reason={why}')\n        return False\n"""
+ctx_extra = r'''
+
+    try:
+        _ctx = market_context.symbol_context(symbol) or {}
+    except Exception:
+        _ctx = {}
+    if str(_ctx.get('regime') or '') == 'SIDEWAYS_COMPRESSION':
+        try: _breadth4h = float(_ctx.get('breadth_4h'))
+        except Exception: _breadth4h = 0.0
+        if float(m.get('rsi') or 100.0) > 68.0:
+            print(f"[mid-context] {symbol} BLOCKED reason=sideways-rsi-overheated rsi={float(m.get('rsi') or 0):.1f}")
+            return False
+        if _breadth4h < 0.55:
+            print(f"[mid-context] {symbol} BLOCKED reason=sideways-4h-breadth-weak breadth4h={_breadth4h:.2f}")
+            return False
+'''
 if 'sideways-rsi-overheated' not in e:
-    if ctx_old not in e:
-        raise SystemExit('live-entry-quality-v2: MID context marker missing')
-    e = e.replace(ctx_old, ctx_new, 1)
+    if ctx_anchor not in e:
+        raise SystemExit('live-entry-quality-v2: MID context anchor missing')
+    e = e.replace(ctx_anchor, ctx_anchor + ctx_extra, 1)
 
 for marker in ['MIN_LIVE_ENTRY_RR=', 'def _live_rr_check(', '[live-rr] BLOCK']:
     if marker not in p:
