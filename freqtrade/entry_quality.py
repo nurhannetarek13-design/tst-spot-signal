@@ -21,6 +21,17 @@ MAX_15M_IMPULSE = float(os.getenv('FAST_MAX_15M_IMPULSE', '0.018'))
 BTC_MAX_15M_DROP = float(os.getenv('FAST_BTC_MAX_15M_DROP', '0.006'))
 BTC_MAX_1H_DROP = float(os.getenv('FAST_BTC_MAX_1H_DROP', '0.012'))
 
+# BTC has two separate jobs:
+# 1) The strict baseline gate used by NORMAL ignition entries.
+# 2) A true panic/dump veto used by selective MID/Reversal lanes via runtime_preflight().
+# A mild weak tape must not deadlock exceptional relative-strength alt setups.
+BTC_HARD_15M_DROP = max(0.008, float(os.getenv('FAST_BTC_HARD_15M_DROP', '0.012')))
+BTC_HARD_1H_DROP = max(0.015, float(os.getenv('FAST_BTC_HARD_1H_DROP', '0.020')))
+BTC_HARD_COMBINED_15M_DROP = max(0.006, float(os.getenv('FAST_BTC_HARD_COMBINED_15M_DROP', '0.008')))
+BTC_HARD_COMBINED_1H_DROP = max(0.010, float(os.getenv('FAST_BTC_HARD_COMBINED_1H_DROP', '0.012')))
+BTC_HARD_15M_EMA_GAP = max(0.010, float(os.getenv('FAST_BTC_HARD_15M_EMA_GAP', '0.015')))
+BTC_HARD_1H_EMA_GAP = max(0.020, float(os.getenv('FAST_BTC_HARD_1H_EMA_GAP', '0.030')))
+
 # Strong first-touch momentum exception. This is deliberately stricter than
 # the normal micro gate so we can catch ignition at resistance without
 # turning the strategy into a chase/fake-breakout machine.
@@ -32,7 +43,7 @@ IGNITION_MIN_DISTANCE = float(os.getenv('FAST_IGNITION_MIN_DISTANCE', '-0.0010')
 
 
 def _get_json(url: str, timeout: int = 10):
-    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.2', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.3', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -146,35 +157,60 @@ def _btc_regime() -> dict:
     mom15 = c15[-1] / c15[-2] - 1.0
     mom1h = c1h[-1] / c1h[-2] - 1.0
 
+    # Baseline stays strict for NORMAL ignition trades.
     ok = (
         mom15 >= -BTC_MAX_15M_DROP
         and mom1h >= -BTC_MAX_1H_DROP
         and c15[-1] >= ema20_15 * 0.994
         and c1h[-1] >= ema20_1h * 0.985
     )
+
+    gap15 = (ema20_15 - c15[-1]) / ema20_15 if ema20_15 > 0 else 0.0
+    gap1h = (ema20_1h - c1h[-1]) / ema20_1h if ema20_1h > 0 else 0.0
+    hard_block = (
+        mom15 <= -BTC_HARD_15M_DROP
+        or mom1h <= -BTC_HARD_1H_DROP
+        or (mom15 <= -BTC_HARD_COMBINED_15M_DROP and mom1h <= -BTC_HARD_COMBINED_1H_DROP)
+        or (gap15 >= BTC_HARD_15M_EMA_GAP and gap1h >= BTC_HARD_1H_EMA_GAP)
+    )
+    tier = 'HARD_BEAR' if hard_block else 'SOFT_WEAK' if not ok else 'OK'
     return {
         'ok': ok,
+        'hard_block': hard_block,
+        'tier': tier,
         'mom15': mom15,
         'mom1h': mom1h,
         'ema20_15': ema20_15,
         'ema20_1h': ema20_1h,
         'last15': c15[-1],
         'last1h': c1h[-1],
+        'ema_gap15': gap15,
+        'ema_gap1h': gap1h,
     }
 
 
 def runtime_preflight() -> dict:
-    """Prove the higher-timeframe/BTC data path is live before signals are allowed."""
+    """Live BTC data path with a selective hard-risk contract.
+
+    btc_regime_ok now means "no BTC panic/dump hard veto" for MID/Reversal
+    lanes. btc_baseline_ok preserves the old stricter state for diagnostics.
+    NORMAL entries remain strict because validate_entry() checks btc['ok'].
+    """
     trend = _trend_snapshot('BTCUSDT')
     btc = _btc_regime()
     return {
         'ok': True,
-        'btc_regime_ok': bool(btc['ok']),
+        'btc_regime_ok': not bool(btc['hard_block']),
+        'btc_baseline_ok': bool(btc['ok']),
+        'btc_hard_block': bool(btc['hard_block']),
+        'btc_tier': str(btc['tier']),
         'trend15_ok': bool(trend['trend15_ok']),
         'trend1h_ok': bool(trend['trend1h_ok']),
         'move_from_2h_low': float(trend['move_from_2h_low']),
         'btc_mom15': float(btc['mom15']),
         'btc_mom1h': float(btc['mom1h']),
+        'btc_ema_gap15': float(btc['ema_gap15']),
+        'btc_ema_gap1h': float(btc['ema_gap1h']),
     }
 
 
