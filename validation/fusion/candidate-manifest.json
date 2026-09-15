@@ -156,11 +156,9 @@
   "poolSize": 2,
   "recentRejectedFingerprints": [
     "1240a5c4024ad81ee1e2",
-    "46ad824ea85b257ae59f",
     "47d4daea870e3a1ab59c",
     "62e620408a8cb85cc7c2",
-    "ae0299f52aa7a9708aa9",
-    "cba53276448a08d4eebc"
+    "ae0299f52aa7a9708aa9"
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
@@ -171,5 +169,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-14T06:38:30.747801+00:00"
+  "generatedAt": "2026-09-15T06:34:06.874207+00:00"
 }
