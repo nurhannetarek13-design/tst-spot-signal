@@ -68,6 +68,7 @@ COPY patch_manual_confirm_fallback.py /freqtrade/patch_manual_confirm_fallback.p
 COPY patch_dynamic_exit_v2.py /freqtrade/patch_dynamic_exit_v2.py
 COPY patch_front_proxy_ops.py /freqtrade/patch_front_proxy_ops.py
 COPY patch_regime_balance.py /freqtrade/patch_regime_balance.py
+COPY patch_recovery_regime_v2.py /freqtrade/patch_recovery_regime_v2.py
 COPY patch_oco_recovery_v2.py /freqtrade/patch_oco_recovery_v2.py
 COPY patch_trade_state_protection_gate.py /freqtrade/patch_trade_state_protection_gate.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
@@ -107,6 +108,7 @@ RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 16/' /freqtrade/run_ready_bot.s
     && python /freqtrade/patch_dynamic_exit_v2.py \
     && python /freqtrade/patch_front_proxy_ops.py \
     && python /freqtrade/patch_regime_balance.py \
+    && python /freqtrade/patch_recovery_regime_v2.py \
     && python /freqtrade/patch_oco_recovery_v2.py \
     && sed -i 's|python -u "$BRIDGE_FILE" \&|sleep infinity \& # Cloudflare owns Telegram webhook; keep placeholder PID only|' /freqtrade/run_ready_bot.sh \
     && python -m py_compile /freqtrade/alligator_smc_paper_runner.py \
