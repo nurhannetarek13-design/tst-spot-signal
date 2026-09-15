@@ -83,4 +83,107 @@ for marker in ['MIN_LIVE_ENTRY_RR=', 'def _live_rr_check(', '[live-rr] BLOCK']:
 
 compile(p, str(proxy_path), 'exec')
 proxy_path.write_text(p, encoding='utf-8')
-print('[live-entry-quality-v2] OK execution-time live RR>=1.45 fail-closed before BUY')
+
+# Final market-location/flow gate. It runs only after persistence + Spot Sniper
+# authorization, so it improves entry quality without burdening every scanner
+# candidate. Order-book depth is never trusted alone: hard rejection needs a
+# multi-signal trap (taker delta + depth, Wyckoff upthrust, or profile chase).
+engine_path = Path('/freqtrade/fast_entry_engine.py')
+s = engine_path.read_text(encoding='utf-8')
+import_marker = 'import spot_sniper_gate\n'
+if 'from user_data import market_structure_flow\n' not in s:
+    if import_marker not in s:
+        raise SystemExit('live-entry-quality-v2: spot sniper import marker missing')
+    s = s.replace(import_marker, import_marker + 'from user_data import market_structure_flow\n', 1)
+
+anchor = "    ok, why = _portfolio_allows(payload)\n    if not ok:\n"
+flow_block = r'''    flow = market_structure_flow.evaluate(symbol, payload, str(decision.get('regime') or ''))
+    payload['marketStructureFlow'] = flow
+    fm = flow.get('metrics') or {}
+    telemetry.update({
+        'flow_structure_status': flow.get('status'),
+        'flow_structure_score': flow.get('quality_score'),
+        'flow_structure_required': flow.get('required_score'),
+        'flow_structure_reason': flow.get('reason'),
+        'flow_taker_buy_ratio': fm.get('taker_buy_ratio'),
+        'flow_delta_ratio': fm.get('delta_ratio'),
+        'flow_depth_imbalance': fm.get('depth_imbalance'),
+        'flow_micro_bias_bps': fm.get('micro_bias_bps'),
+        'volume_profile_location': fm.get('profile_location'),
+        'volume_profile_poc': fm.get('poc'),
+        'volume_profile_val': fm.get('val'),
+        'volume_profile_vah': fm.get('vah'),
+        'wyckoff_phase': fm.get('phase'),
+    })
+    if not bool(flow.get('passed')):
+        why_flow = 'market-structure-flow:' + str(flow.get('reason') or flow.get('status') or 'reject')
+        print(
+            f"[structure-flow] {symbol} BLOCKED lane={lane} regime={decision.get('regime')} "
+            f"quality={flow.get('quality_score')} required={flow.get('required_score')} "
+            f"phase={fm.get('phase')} profile={fm.get('profile_location')} "
+            f"taker={fm.get('taker_buy_ratio')} delta={fm.get('delta_ratio')} "
+            f"depth={fm.get('depth_imbalance')} reason={why_flow}", flush=True,
+        )
+        _record_candidate(symbol, lane, score, price, 'REJECT', why_flow, **telemetry)
+        return False
+
+    try:
+        old_stake = float(payload.get('stakeUSDT') or 0.0)
+        new_stake = float(flow.get('adjusted_stake_usdt') or old_stake)
+        if old_stake > 0 and 0 < new_stake < old_stake:
+            payload['stakeUSDT'] = new_stake
+            telemetry['stake_usdt'] = new_stake
+            telemetry['flow_original_stake_usdt'] = old_stake
+    except Exception:
+        pass
+    print(
+        f"[structure-flow] {symbol} PASS lane={lane} regime={decision.get('regime')} "
+        f"quality={flow.get('quality_score')}/{flow.get('required_score')} "
+        f"phase={fm.get('phase')} profile={fm.get('profile_location')} "
+        f"taker={float(fm.get('taker_buy_ratio') or 0)*100:.1f}% "
+        f"delta={float(fm.get('delta_ratio') or 0):+.3f} depth={float(fm.get('depth_imbalance') or 0):+.3f} "
+        f"stake={payload.get('stakeUSDT')}", flush=True,
+    )
+
+    ok, why = _portfolio_allows(payload)
+    if not ok:
+'''
+if '[structure-flow] ' not in s:
+    wrapper = s.find('def _expert_pre_ingest(payload: dict) -> bool:\n')
+    if wrapper < 0:
+        raise SystemExit('live-entry-quality-v2: final expert wrapper missing')
+    pos = s.find(anchor, wrapper)
+    if pos < 0:
+        raise SystemExit('live-entry-quality-v2: portfolio anchor missing in final wrapper')
+    s = s[:pos] + flow_block + s[pos + len(anchor):]
+
+startup_marker = "    last_chat_retry = 0.0\n"
+startup = "    print(f'[market-structure-flow] ONLINE order_flow=depth20+taker-delta volume_profile=90m/70pct wyckoff=objective risk_quality_sizing=ON fail_closed={market_structure_flow.FAIL_CLOSED}')\n"
+if '[market-structure-flow] ONLINE' not in s:
+    if startup_marker not in s:
+        raise SystemExit('live-entry-quality-v2: structure-flow startup marker missing')
+    s = s.replace(startup_marker, startup + startup_marker, 1)
+
+for marker in ['from user_data import market_structure_flow', "payload['marketStructureFlow']", '[structure-flow] ', '[market-structure-flow] ONLINE']:
+    if marker not in s:
+        raise SystemExit(f'live-entry-quality-v2: structure-flow marker missing {marker}')
+compile(s, str(engine_path), 'exec')
+engine_path.write_text(s, encoding='utf-8')
+
+# Build-time pure decision tests: no external API required.
+from user_data import market_structure_flow as _msf
+_good = {
+    'taker_buy_ratio': 0.60, 'delta_ratio': 0.10, 'delta_accel': 0.03,
+    'depth_imbalance': 0.10, 'micro_bias_bps': 1.2, 'strong_buy_flow': True,
+    'negative_flow': False, 'absorption': False, 'profile_location': 'ABOVE_POC_IN_VALUE',
+    'profile_extension_atr': 0.0, 'phase': 'RANGE', 'atr_pct': 0.0025,
+}
+_bad = dict(_good)
+_bad.update({'taker_buy_ratio': 0.44, 'delta_ratio': -0.14, 'depth_imbalance': -0.18, 'strong_buy_flow': False, 'negative_flow': True})
+_p = {'entry': 100.0, 'stop': 99.0, 'target': 102.0, 'stakeUSDT': 20.0}
+assert _msf.decide(_good, _p, 'WEAK_BULL')['passed'] is True
+assert _msf.decide(_bad, _p, 'WEAK_BULL')['passed'] is False
+_up = dict(_good); _up.update({'phase': 'UPTHRUST', 'strong_buy_flow': False, 'taker_buy_ratio': 0.51})
+assert _msf.decide(_up, _p, 'SIDEWAYS_COMPRESSION')['passed'] is False
+
+print('[live-entry-quality-v2] OK live RR>=1.45 + order-flow/CVD + volume-profile + objective-Wyckoff + quality-aware risk sizing')
