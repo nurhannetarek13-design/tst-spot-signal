@@ -22,9 +22,10 @@ BTC_MAX_15M_DROP = float(os.getenv('FAST_BTC_MAX_15M_DROP', '0.006'))
 BTC_MAX_1H_DROP = float(os.getenv('FAST_BTC_MAX_1H_DROP', '0.012'))
 
 # BTC has two separate jobs:
-# 1) The strict baseline gate used by NORMAL ignition entries.
-# 2) A true panic/dump veto used by selective MID/Reversal lanes via runtime_preflight().
-# A mild weak tape must not deadlock exceptional relative-strength alt setups.
+# 1) A baseline context check for NORMAL ignition entries.
+# 2) A true panic/dump veto that remains hard for every lane.
+# Exceptional, flow-confirmed NORMAL setups may pass SOFT_WEAK BTC only; they
+# still must pass all downstream Spot Sniper, structure/flow, R:R and risk gates.
 BTC_HARD_15M_DROP = max(0.008, float(os.getenv('FAST_BTC_HARD_15M_DROP', '0.012')))
 BTC_HARD_1H_DROP = max(0.015, float(os.getenv('FAST_BTC_HARD_1H_DROP', '0.020')))
 BTC_HARD_COMBINED_15M_DROP = max(0.006, float(os.getenv('FAST_BTC_HARD_COMBINED_15M_DROP', '0.008')))
@@ -41,9 +42,19 @@ IGNITION_MAX_SPREAD_PCT = float(os.getenv('FAST_IGNITION_MAX_SPREAD_PCT', '0.08'
 IGNITION_MAX_WICK_RATIO = float(os.getenv('FAST_IGNITION_MAX_WICK_RATIO', '1.80'))
 IGNITION_MIN_DISTANCE = float(os.getenv('FAST_IGNITION_MIN_DISTANCE', '-0.0010'))
 
+# Soft-BTC exception for already-confirmed NORMAL entries. This is intentionally
+# demanding: BTC may be mildly weak, but the alt must show exceptional live
+# participation and must not be overheated. HARD_BEAR is never bypassed.
+SOFT_BTC_MIN_VOLUME_RATIO = float(os.getenv('FAST_SOFT_BTC_MIN_VOLUME_RATIO', '1.25'))
+SOFT_BTC_MIN_TAKER_BUY_RATIO = float(os.getenv('FAST_SOFT_BTC_MIN_TAKER_BUY_RATIO', '0.72'))
+SOFT_BTC_MAX_SPREAD_PCT = float(os.getenv('FAST_SOFT_BTC_MAX_SPREAD_PCT', '0.08'))
+SOFT_BTC_MAX_RSI = float(os.getenv('FAST_SOFT_BTC_MAX_RSI', '72'))
+SOFT_BTC_MAX_MOM5 = float(os.getenv('FAST_SOFT_BTC_MAX_MOM5', '0.010'))
+SOFT_BTC_MAX_MOM15 = float(os.getenv('FAST_SOFT_BTC_MAX_MOM15', '0.018'))
+
 
 def _get_json(url: str, timeout: int = 10):
-    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.3', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.4', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -157,7 +168,6 @@ def _btc_regime() -> dict:
     mom15 = c15[-1] / c15[-2] - 1.0
     mom1h = c1h[-1] / c1h[-2] - 1.0
 
-    # Baseline stays strict for NORMAL ignition trades.
     ok = (
         mom15 >= -BTC_MAX_15M_DROP
         and mom1h >= -BTC_MAX_1H_DROP
@@ -190,12 +200,7 @@ def _btc_regime() -> dict:
 
 
 def runtime_preflight() -> dict:
-    """Live BTC data path with a selective hard-risk contract.
-
-    btc_regime_ok now means "no BTC panic/dump hard veto" for MID/Reversal
-    lanes. btc_baseline_ok preserves the old stricter state for diagnostics.
-    NORMAL entries remain strict because validate_entry() checks btc['ok'].
-    """
+    """Live BTC data path with a selective hard-risk contract."""
     trend = _trend_snapshot('BTCUSDT')
     btc = _btc_regime()
     return {
@@ -212,6 +217,25 @@ def runtime_preflight() -> dict:
         'btc_ema_gap15': float(btc['ema_gap15']),
         'btc_ema_gap1h': float(btc['ema_gap1h']),
     }
+
+
+def _soft_btc_exception(m: dict, micro_reason: str) -> bool:
+    if micro_reason not in {
+        'ignition-ok',
+        'fresh-ignition-micro-ok',
+        'controlled-continuation-micro-ok',
+        'micro-ok',
+    }:
+        return False
+    return (
+        float(m.get('volume_ratio') or 0.0) >= SOFT_BTC_MIN_VOLUME_RATIO
+        and float(m.get('taker_buy_ratio') or 0.0) >= SOFT_BTC_MIN_TAKER_BUY_RATIO
+        and float(m.get('spread_pct') or 999.0) <= SOFT_BTC_MAX_SPREAD_PCT
+        and float(m.get('rsi') or 999.0) <= SOFT_BTC_MAX_RSI
+        and float(m.get('mom5') or 999.0) <= SOFT_BTC_MAX_MOM5
+        and float(m.get('mom15') or 999.0) <= SOFT_BTC_MAX_MOM15
+        and float(m.get('wick_ratio') or 999.0) <= 2.0
+    )
 
 
 def validate_entry(symbol: str, m: dict) -> tuple[bool, str, dict]:
@@ -231,7 +255,12 @@ def validate_entry(symbol: str, m: dict) -> tuple[bool, str, dict]:
 
     btc = _btc_regime()
     context = {**trend, 'btc': btc, 'micro_reason': micro_reason}
+    if btc['hard_block']:
+        return False, 'btc-hard-bear', context
     if not btc['ok']:
-        return False, 'btc-regime-weak', context
+        if not _soft_btc_exception(m, micro_reason):
+            return False, 'btc-soft-weak-no-exception', context
+        context['btc_soft_exception'] = True
+        return True, 'quality-soft-btc-exception', context
 
-    return True, 'quality-ignition-ok' if micro_reason == 'ignition-ok' else 'quality-ok', context
+    return True, 'quality-ignition-ok' if micro_reason in {'ignition-ok', 'fresh-ignition-micro-ok', 'controlled-continuation-micro-ok'} else 'quality-ok', context
