@@ -82,6 +82,7 @@ const_extra = (
     "FALLBACK_REVERSAL_PENALTY = float(os.getenv('SPOT_SNIPER_FALLBACK_REVERSAL_PENALTY', '3'))\n"
     "FALLBACK_MAX_RANK = max(1, int(os.getenv('SPOT_SNIPER_FALLBACK_MAX_RANK', '10')))\n"
     "FALLBACK_SIDEWAYS_SCORE = float(os.getenv('SPOT_SNIPER_FALLBACK_SIDEWAYS_SCORE', '96'))\n"
+    "FALLBACK_SIDEWAYS_MID_MIN_BREADTH_4H = max(0.0, min(1.0, float(os.getenv('SPOT_SNIPER_SIDEWAYS_MID_MIN_BREADTH_4H', '0.55'))))\n"
     "FALLBACK_HIGH_SCORE_MAX_RANK = max(FALLBACK_MAX_RANK, int(os.getenv('SPOT_SNIPER_HIGH_SCORE_MAX_RANK', '15')))\n"
 )
 if 'FALLBACK_MAX_RANK =' not in g:
@@ -102,10 +103,6 @@ if penalty_old in g:
 elif penalty_new not in g:
     raise SystemExit('final-entry-hardening: lane penalty marker missing')
 
-# SIDEWAYS used to be an unconditional hard block. Live logs showed this was
-# suppressing fully-confirmed score-100 MID setups. Keep it restrictive, but
-# allow only very high-conviction candidates to continue to the normal rank,
-# portfolio, BTC, HTF, microstructure and OCO gates.
 regime_old = "    elif regime == 'POST_CRASH_RECOVERY':\n        base = FALLBACK_POST_CRASH_SCORE\n    else:\n"
 regime_new = "    elif regime == 'POST_CRASH_RECOVERY':\n        base = FALLBACK_POST_CRASH_SCORE\n    elif regime == 'SIDEWAYS_COMPRESSION':\n        base = FALLBACK_SIDEWAYS_SCORE\n    else:\n"
 if regime_new not in g:
@@ -114,8 +111,8 @@ if regime_new not in g:
     g = g.replace(regime_old, regime_new, 1)
 
 sideways_old = "    if SIDEWAYS_BLOCK and regime == 'SIDEWAYS_COMPRESSION':\n        return _reject(\n            'REGIME_REJECT', 'sideways-compression-no-validated-edge',\n            regime=regime, age=age, lane=lane,\n        )\n"
-sideways_new = "    if SIDEWAYS_BLOCK and regime == 'SIDEWAYS_COMPRESSION':\n        sideways_required = _fallback_threshold(regime, lane)\n        if sideways_required is None or score < sideways_required:\n            return _reject(\n                'REGIME_REJECT', 'sideways-compression-quality-below-exception',\n                regime=regime, age=age, lane=lane, fallback_score_required=sideways_required,\n            )\n"
-if sideways_new not in g:
+sideways_new = "    if SIDEWAYS_BLOCK and regime == 'SIDEWAYS_COMPRESSION':\n        sideways_required = _fallback_threshold(regime, lane)\n        try:\n            sideways_breadth4h = float(ctx.get('breadth_4h') or 0.0)\n        except Exception:\n            sideways_breadth4h = 0.0\n        if lane == 'MID' and sideways_breadth4h < FALLBACK_SIDEWAYS_MID_MIN_BREADTH_4H:\n            return _reject(\n                'REGIME_REJECT', 'sideways-4h-breadth-weak',\n                regime=regime, age=age, lane=lane, breadth_4h=sideways_breadth4h,\n                required_breadth_4h=FALLBACK_SIDEWAYS_MID_MIN_BREADTH_4H,\n            )\n        if sideways_required is None or score < sideways_required:\n            return _reject(\n                'REGIME_REJECT', 'sideways-compression-quality-below-exception',\n                regime=regime, age=age, lane=lane, fallback_score_required=sideways_required,\n            )\n"
+if 'sideways-4h-breadth-weak' not in g:
     if sideways_old not in g:
         raise SystemExit('final-entry-hardening: sideways block marker missing')
     g = g.replace(sideways_old, sideways_new, 1)
@@ -151,9 +148,10 @@ for marker in ['def _lane_confirmation_ready(', "'persistent-confirmation-pendin
     if marker not in s:
         raise SystemExit(f'final-entry-hardening: missing engine marker {marker}')
 for marker in [
-    'FALLBACK_MAX_RANK =', 'FALLBACK_SIDEWAYS_SCORE =', 'FALLBACK_HIGH_SCORE_MAX_RANK =',
-    "'FALLBACK_RANK_REJECT'", "strategy.startswith('EARLY_REVERSAL_STARTER')",
-    "regime == 'SIDEWAYS_COMPRESSION'", 'effective_max_rank =',
+    'FALLBACK_MAX_RANK =', 'FALLBACK_SIDEWAYS_SCORE =', 'FALLBACK_SIDEWAYS_MID_MIN_BREADTH_4H =',
+    'FALLBACK_HIGH_SCORE_MAX_RANK =', "'FALLBACK_RANK_REJECT'",
+    "strategy.startswith('EARLY_REVERSAL_STARTER')", "regime == 'SIDEWAYS_COMPRESSION'",
+    "'sideways-4h-breadth-weak'", 'effective_max_rank =',
 ]:
     if marker not in g:
         raise SystemExit(f'final-entry-hardening: missing gate marker {marker}')
@@ -162,4 +160,4 @@ compile(s, str(engine_path), 'exec')
 compile(g, str(gate_path), 'exec')
 engine_path.write_text(s, encoding='utf-8')
 gate_path.write_text(g, encoding='utf-8')
-print('[final-entry-hardening] OK persistent confirm + safe SIDEWAYS high-conviction exception + score98 rank<=15 + CRCLB far-rank protection')
+print('[final-entry-hardening] OK persistent confirm + SIDEWAYS MID breadth4h>=0.55 + score98 rank<=15 + CRCLB far-rank protection')
