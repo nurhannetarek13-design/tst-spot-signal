@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+import entry_quality
 import ev_validation_guard
 import market_context
 import spot_sniper_gate
@@ -23,16 +24,23 @@ def _observe_only(_payload: dict) -> dict:
     return {'enforced': False, 'passed': True, 'status': 'OBSERVE_ONLY'}
 
 
-def _eval(ctx: dict, payload: dict) -> dict:
+def _eval(ctx: dict, payload: dict, *, btc_ok: bool = True) -> dict:
     original_ctx = market_context.symbol_context
     original_ev = spot_sniper_gate.live_ev_gate.evaluate
+    original_pf = entry_quality.runtime_preflight
     try:
         market_context.symbol_context = lambda _symbol: ctx
         spot_sniper_gate.live_ev_gate.evaluate = _observe_only
+        entry_quality.runtime_preflight = lambda: {
+            'btc_regime_ok': bool(btc_ok),
+            'btc_hard_block': not bool(btc_ok),
+            'btc_tier': 'OK' if btc_ok else 'HARD_BEAR',
+        }
         return spot_sniper_gate.evaluate(payload)
     finally:
         market_context.symbol_context = original_ctx
         spot_sniper_gate.live_ev_gate.evaluate = original_ev
+        entry_quality.runtime_preflight = original_pf
 
 
 def test_sideways_low_quality_still_blocked() -> None:
@@ -55,6 +63,16 @@ def test_sideways_score100_mid_can_continue_when_ranked() -> None:
     assert result['passed'] is True, result
     assert result['live_authorized'] is True, result
     assert result['status'] == 'LIVE_RULES_FALLBACK_PASS', result
+
+
+def test_sideways_reversal_score95_can_continue_in_thin_recovery_context() -> None:
+    result = _eval(_ctx('SIDEWAYS_COMPRESSION', None, 22), {
+        'symbol': 'ZECUSDT', 'score': 95,
+        'strategy': 'EARLY_REVERSAL_STARTER',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    })
+    assert result['passed'] is True, result
+    assert result['live_authorized'] is True, result
 
 
 def test_observe_only_research_can_use_strict_weak_bull_fallback_when_ranked() -> None:
@@ -146,15 +164,36 @@ def test_weak_bear_explosive_still_blocked() -> None:
     assert result['status'] == 'REGIME_REJECT', result
 
 
-def test_panic_remains_hard_block() -> None:
+def test_panic_stays_hard_when_live_btc_confirms_danger() -> None:
     result = _eval(_ctx('PANIC_HIGH_VOL_BEAR', 1), {
+        'symbol': 'SOLUSDT', 'score': 100,
+        'strategy': 'EARLY_REVERSAL_STARTER',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    }, btc_ok=False)
+    assert result['passed'] is False, result
+    assert result['status'] == 'REGIME_REJECT', result
+    assert result['reason'] == 'panic-live-btc-hard', result
+
+
+def test_panic_shadow_reversal_can_continue_after_live_btc_recovers() -> None:
+    result = _eval(_ctx('PANIC_HIGH_VOL_BEAR', None, 22), {
+        'symbol': 'ZECUSDT', 'score': 95,
+        'strategy': 'EARLY_REVERSAL_STARTER',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    }, btc_ok=True)
+    assert result['passed'] is True, result
+    assert result['live_authorized'] is True, result
+
+
+def test_panic_shadow_mid_stays_blocked_even_after_live_btc_recovers() -> None:
+    result = _eval(_ctx('PANIC_HIGH_VOL_BEAR', 1, 22), {
         'symbol': 'SOLUSDT', 'score': 100,
         'strategy': 'MID_MOMENTUM_CONTINUATION',
         'entry': 1.0, 'target': 1.02, 'stop': 0.99,
-    })
+    }, btc_ok=True)
     assert result['passed'] is False, result
     assert result['status'] == 'REGIME_REJECT', result
-    assert result['reason'] == 'panic-high-vol-bear', result
+    assert result['reason'] == 'panic-shadow-recovery-reversal-only', result
 
 
 def test_enforced_ev_reject_cannot_be_rescued() -> None:
@@ -198,6 +237,7 @@ def test_approx_historical_evidence_cannot_promote() -> None:
 if __name__ == '__main__':
     test_sideways_low_quality_still_blocked()
     test_sideways_score100_mid_can_continue_when_ranked()
+    test_sideways_reversal_score95_can_continue_in_thin_recovery_context()
     test_observe_only_research_can_use_strict_weak_bull_fallback_when_ranked()
     test_score100_can_use_wider_but_bounded_rank()
     test_far_rank_cannot_pass_fallback_on_score_alone_when_context_reliable()
@@ -207,7 +247,9 @@ if __name__ == '__main__':
     test_weak_bear_score100_mid_can_continue_when_context_is_thin_and_unranked()
     test_weak_bear_reversal_score98_can_continue_when_thin_context_rank_is_noisy()
     test_weak_bear_explosive_still_blocked()
-    test_panic_remains_hard_block()
+    test_panic_stays_hard_when_live_btc_confirms_danger()
+    test_panic_shadow_reversal_can_continue_after_live_btc_recovers()
+    test_panic_shadow_mid_stays_blocked_even_after_live_btc_recovers()
     test_enforced_ev_reject_cannot_be_rescued()
     test_approx_historical_evidence_cannot_promote()
-    print('[spot-sniper-safety-test] PASS sideways=selective weakbear=MID97+REV98 only thin-context=score100-unranked panic=hard reliable-rank=bounded enforced-ev-reject=hard')
+    print('[spot-sniper-safety-test] PASS sideways=selective+reversal95 weakbear=MID97+REV98 panic=live-btc-confirmed+reversal95-only reliable-rank=bounded enforced-ev-reject=hard')
