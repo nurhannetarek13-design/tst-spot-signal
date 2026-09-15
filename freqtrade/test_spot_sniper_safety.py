@@ -114,14 +114,44 @@ def test_fallback_score_floor_is_hard() -> None:
     assert result['status'] == 'FALLBACK_SCORE_REJECT', result
 
 
-def test_weak_bear_normal_lane_stays_blocked() -> None:
-    result = _eval(_ctx('WEAK_BEAR', 1), {
-        'symbol': 'DOGEUSDT', 'score': 100,
+def test_weak_bear_normal_below_exception_stays_blocked() -> None:
+    result = _eval(_ctx('WEAK_BEAR', 1, 80), {
+        'symbol': 'DOGEUSDT', 'score': 95,
         'strategy': 'FAST_PRE_MOMENTUM',
         'entry': 1.0, 'target': 1.012, 'stop': 0.993,
     })
     assert result['passed'] is False, result
-    assert result['status'] == 'REGIME_REJECT', result
+    assert result['status'] == 'FALLBACK_SCORE_REJECT', result
+
+
+def test_weak_bear_normal_score96_can_continue_when_reliably_ranked() -> None:
+    result = _eval(_ctx('WEAK_BEAR', 1, 80), {
+        'symbol': 'DOGEUSDT', 'score': 96,
+        'strategy': 'FAST_PRE_MOMENTUM',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    })
+    assert result['passed'] is True, result
+    assert result['live_authorized'] is True, result
+
+
+def test_weak_bear_normal_thin_unranked_score97_stays_blocked() -> None:
+    result = _eval(_ctx('WEAK_BEAR', None, 22), {
+        'symbol': 'TRXUSDT', 'score': 97,
+        'strategy': 'FAST_PRE_MOMENTUM',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    })
+    assert result['passed'] is False, result
+    assert result['status'] == 'FALLBACK_RANK_REJECT', result
+
+
+def test_weak_bear_normal_thin_unranked_score98_can_continue() -> None:
+    result = _eval(_ctx('WEAK_BEAR', None, 22), {
+        'symbol': 'TRXUSDT', 'score': 98,
+        'strategy': 'FAST_PRE_MOMENTUM',
+        'entry': 1.0, 'target': 1.02, 'stop': 0.99,
+    })
+    assert result['passed'] is True, result
+    assert result['live_authorized'] is True, result
 
 
 def test_weak_bear_mid_needs_exceptional_score() -> None:
@@ -242,7 +272,10 @@ if __name__ == '__main__':
     test_score100_can_use_wider_but_bounded_rank()
     test_far_rank_cannot_pass_fallback_on_score_alone_when_context_reliable()
     test_fallback_score_floor_is_hard()
-    test_weak_bear_normal_lane_stays_blocked()
+    test_weak_bear_normal_below_exception_stays_blocked()
+    test_weak_bear_normal_score96_can_continue_when_reliably_ranked()
+    test_weak_bear_normal_thin_unranked_score97_stays_blocked()
+    test_weak_bear_normal_thin_unranked_score98_can_continue()
     test_weak_bear_mid_needs_exceptional_score()
     test_weak_bear_score100_mid_can_continue_when_context_is_thin_and_unranked()
     test_weak_bear_reversal_score98_can_continue_when_thin_context_rank_is_noisy()
@@ -252,4 +285,4 @@ if __name__ == '__main__':
     test_panic_shadow_mid_stays_blocked_even_after_live_btc_recovers()
     test_enforced_ev_reject_cannot_be_rescued()
     test_approx_historical_evidence_cannot_promote()
-    print('[spot-sniper-safety-test] PASS sideways=selective+reversal95 weakbear=MID97+REV98 panic=live-btc-confirmed+reversal95-only reliable-rank=bounded enforced-ev-reject=hard')
+    print('[spot-sniper-safety-test] PASS sideways=selective+reversal95 weakbear=NORMAL96-ranked/NORMAL98-thin-unranked+MID97+REV98 explosive=blocked panic=live-btc-confirmed+reversal95-only reliable-rank=bounded enforced-ev-reject=hard')
