@@ -54,7 +54,7 @@ SOFT_BTC_MAX_MOM15 = float(os.getenv('FAST_SOFT_BTC_MAX_MOM15', '0.018'))
 
 
 def _get_json(url: str, timeout: int = 10):
-    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.4', 'Accept': 'application/json'})
+    req = Request(url, headers={'User-Agent': 'tst-entry-quality/1.5', 'Accept': 'application/json'})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -248,19 +248,41 @@ def validate_entry(symbol: str, m: dict) -> tuple[bool, str, dict]:
         return False, '2h-move-already-spent', trend
     if trend['max_recent_15m_impulse'] > MAX_15M_IMPULSE:
         return False, '15m-impulse-already-spent', trend
-    if not trend['trend15_ok']:
-        return False, '15m-trend-not-confirmed', trend
-    if not trend['trend1h_ok']:
-        return False, '1h-trend-not-confirmed', trend
 
     btc = _btc_regime()
     context = {**trend, 'btc': btc, 'micro_reason': micro_reason}
     if btc['hard_block']:
         return False, 'btc-hard-bear', context
+
+    trend_failures = []
+    if not trend['trend15_ok']:
+        trend_failures.append('15m-trend-not-confirmed')
+    if not trend['trend1h_ok']:
+        trend_failures.append('1h-trend-not-confirmed')
+
+    if trend_failures:
+        strong_micro = (
+            float(m.get('volume_ratio') or 0.0) >= 1.35
+            and float(m.get('taker_buy_ratio') or 0.0) >= 0.68
+            and bool(m.get('volume_accel'))
+            and float(m.get('spread_pct') or 999.0) <= 0.08
+            and float(m.get('compression_ratio') or 999.0) <= 1.00
+            and float(m.get('wick_ratio') or 999.0) <= 1.80
+            and float(trend.get('move_from_2h_low') or 99.0) <= 0.022
+            and float(trend.get('max_recent_15m_impulse') or 99.0) <= 0.014
+        )
+        # quality-strong-micro-exception: one marginal HTF miss only.
+        if len(trend_failures) != 1 or not strong_micro:
+            return False, trend_failures[0], context
+        context['trend_exception'] = trend_failures[0]
+
     if not btc['ok']:
         if not _soft_btc_exception(m, micro_reason):
             return False, 'btc-soft-weak-no-exception', context
         context['btc_soft_exception'] = True
-        return True, 'quality-soft-btc-exception', context
 
+    if trend_failures:
+        return True, 'quality-strong-micro-exception', context
+    if context.get('btc_soft_exception'):
+        return True, 'quality-soft-btc-exception', context
     return True, 'quality-ignition-ok' if micro_reason in {'ignition-ok', 'fresh-ignition-micro-ok', 'controlled-continuation-micro-ok'} else 'quality-ok', context
