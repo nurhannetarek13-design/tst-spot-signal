@@ -1,0 +1,3 @@
+Isolated V2 deployment trigger.
+Mode remains SHADOW; live trading remains disabled.
+Strategy-aware tournament runtime verified in production on 2026-09-14.
