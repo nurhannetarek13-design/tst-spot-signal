@@ -98,10 +98,19 @@ class StrategyShelfTests(unittest.TestCase):
     def test_loss_cap_exits_and_halts(self):
         state = new_state("trend_breakout", "BTCUSDT")
         _buy(state, 100, 15, RULES, "test")
-        outcome = step(state, bars(), hourly(), {"bid": 65, "ask": 65.05}, RULES)
+        outcome = step(state, bars(), hourly(), {"bid": 70, "ask": 70.05}, RULES)
         self.assertTrue(outcome["halted"])
         self.assertEqual(outcome["action"], "paper_sell_halted")
+        self.assertEqual(len(state["lots"]), 0)
         self.assertLess(outcome["total_pnl_including_unrealized_usdt"], -2)
+
+    def test_loss_cap_does_not_claim_illegal_dust_sale(self):
+        state = new_state("trend_breakout", "BTCUSDT")
+        _buy(state, 100, 15, RULES, "test")
+        outcome = step(state, bars(), hourly(), {"bid": 65, "ask": 65.05}, RULES)
+        self.assertTrue(outcome["halted"])
+        self.assertEqual(outcome["action"], "sell_under_exchange_minimum_do_not_fake_fill_halted")
+        self.assertEqual(len(state["lots"]), 1)
 
     def test_gap_halts_without_fake_fill(self):
         state = new_state("fixed_dca", "BTCUSDT")
