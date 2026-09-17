@@ -1,0 +1,61 @@
+name: V2 public shadow runtime smoke (no orders)
+
+on:
+  push:
+    branches:
+      - fix/v2-github-shadow-fallback-20260917
+    paths:
+      - '.github/workflows/v2-public-shadow-smoke.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/v2-public-shadow-smoke.yml'
+      - 'v2_bot/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shadow_one_scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+      V2_STATE_BACKEND: sqlite
+      V2_PERSISTENT_STATE: 'false'
+      V2_STARTUP_ALERT: 'false'
+      V2_UNIVERSE_LIMIT: '3'
+      V2_TRADE_SIZE_USDT: '10'
+      V2_SCAN_INTERVAL_SECONDS: '900'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install read-only scanner dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Execute one real public-market SHADOW scan; no credentials available
+        run: |
+          python -m v2_bot.main --once | tee v2_shadow_smoke.jsonl
+      - name: Require actual strategy-aware scan summary, not just successful process exit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          messages = [json.loads(line) for line in Path('v2_shadow_smoke.jsonl').read_text().splitlines() if line.strip()]
+          assert any(m.get('event') == 'startup' and m.get('mode') == 'shadow' and m.get('live_trading') is False for m in messages)
+          scans = [m for m in messages if 'shadow_tournament' in m]
+          assert scans, 'Missing real strategy-aware shadow scan'
+          scan = scans[-1]
+          assert scan['mode'] == 'shadow'
+          assert scan.get('shadow_tournament', {}).get('live_trading') is False
+          assert scan.get('evaluated', 0) > 0, 'No market symbols evaluated'
+          assert scan.get('errors') == [], 'At least one market symbol failed'
+          assert scan.get('open_positions', 0) == 0, 'No live or paper positions allowed in smoke'
+          print(json.dumps({'result':'PUBLIC_SHADOW_SCAN_PASS','evaluated':scan['evaluated'], 'orders_sent':0, 'live_trading':False},sort_keys=True))
+          PY
