@@ -156,7 +156,6 @@
   "poolSize": 2,
   "recentRejectedFingerprints": [
     "47d4daea870e3a1ab59c",
-    "62e620408a8cb85cc7c2",
     "ae0299f52aa7a9708aa9"
   ],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
@@ -168,5 +167,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-16T06:32:25.263409+00:00"
+  "generatedAt": "2026-09-17T06:41:20.088350+00:00"
 }
