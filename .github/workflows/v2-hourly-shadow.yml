@@ -1,0 +1,128 @@
+name: V2 hourly Spot shadow monitor - no real orders
+
+# Research / simulated outcomes only. Never give this job Binance credentials.
+# Schedules are only run from the repository default branch (main).
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/v2-hourly-shadow-runtime-20260917
+    paths:
+      - '.github/workflows/v2-hourly-shadow.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-hourly-shadow-state
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+      V2_STATE_BACKEND: sqlite
+      V2_PERSISTENT_STATE: 'true'
+      V2_STATE_DB: .v2-shadow/v2_state.sqlite3
+      V2_DEPLOY_REV: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      V2_STARTUP_ALERT: 'false'
+      V2_UNIVERSE_LIMIT: '8'
+      V2_TRADE_SIZE_USDT: '10'
+      V2_MAX_DAILY_LOSS_USDT: '2'
+      V2_MAX_OPEN_POSITIONS: '1'
+      V2_SCAN_INTERVAL_SECONDS: '3600'
+    steps:
+      - name: Checkout frozen audited V2 commit; do not persist GitHub credentials
+        uses: actions/checkout@v4
+        with:
+          ref: a68974207233c8f8cd6bc8690cf806d110227c54
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore last completed research-only database cache
+        id: previous
+        uses: actions/cache/restore@v4
+        with:
+          path: .v2-shadow
+          key: v2-hourly-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            v2-hourly-shadow-
+      - name: Inspect cache and install dependencies without private secrets
+        run: |
+          mkdir -p .v2-shadow
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          old = Path('.v2-shadow/v2_state.sqlite3').exists()
+          assert not any(os.getenv(name) for name in (
+              'V2_BINANCE_API_KEY', 'V2_BINANCE_API_SECRET', 'BINANCE_API_KEY', 'BINANCE_API_SECRET'))
+          assert os.environ['V2_MODE'] == 'shadow' and os.environ['V2_LIVE_TRADING'] == 'false'
+          print(json.dumps({'state_cache_present': old, 'state_continuity_proven': old,
+                            'permission':'PUBLIC_MARKET_READ_ONLY', 'live_orders':False}))
+          PY
+          pip install -r v2_bot/requirements.txt
+      - name: Run real Binance public-market shadow worker for one bounded cycle
+        run: |
+          set -o pipefail
+          python -m v2_bot.main --once | tee v2_hourly_shadow_scan.jsonl
+      - name: Validate full strategy runtime, failure gates and state checkpoint
+        run: |
+          python - <<'PY'
+          import json
+          import sqlite3
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from os import environ
+          rows = [json.loads(line) for line in Path('v2_hourly_shadow_scan.jsonl').read_text().splitlines() if line.strip()]
+          start = next((row for row in rows if row.get('event') == 'startup'), None)
+          scans = [row for row in rows if 'shadow_tournament' in row]
+          assert start and start.get('mode') == 'shadow' and start.get('live_trading') is False
+          assert start.get('private_credentials_present') is False
+          assert start.get('persistent_state') is True and start.get('state_backend') == 'sqlite'
+          assert scans, 'V2 strategy-aware runtime did not complete'
+          scan = scans[-1]
+          assert scan.get('mode') == 'shadow' and scan.get('live_trading') is False
+          assert scan.get('shadow_tournament', {}).get('live_trading') is False
+          assert scan.get('evaluated', 0) > 0 and scan.get('errors') == []
+          assert scan.get('action', {}).get('event') not in ('live_buy', 'live_order') if scan.get('action') else True
+          state = Path(environ['V2_STATE_DB'])
+          assert state.exists() and state.stat().st_size > 0, 'Missing persistent research database'
+          with sqlite3.connect(state) as db:
+              assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+              db.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
+          report = {'checked_at_utc':datetime.now(timezone.utc).isoformat(),
+                    'mode':'SHADOW_ONLY_NOT_TRADE_APPROVAL',
+                    'state_was_restored':start.get('persistence_previous_revision') is not None,
+                    'persistence_proven':start.get('persistence_proven'),
+                    'evaluated':scan['evaluated'], 'eligible':scan.get('eligible'),
+                    'shadow_stats':scan.get('shadow_stats'),
+                    'shadow_tournament':scan.get('shadow_tournament'),
+                    'external_challenger_status':scan.get('external_btc_edge', {}).get('status'),
+                    'real_orders_sent':0, 'live_trading':False}
+          Path('v2_hourly_shadow_report.json').write_text(json.dumps(report, indent=2, sort_keys=True))
+          print(json.dumps({'status':'SHADOW_SCAN_PASSED','evaluated':scan['evaluated'],
+                            'persistence_proven':start.get('persistence_proven'),
+                            'eligible':scan.get('eligible'), 'live_trading':False}, sort_keys=True))
+          PY
+      - name: Save research-only SQLite state for the next scheduled scan
+        uses: actions/cache/save@v4
+        with:
+          path: .v2-shadow
+          key: v2-hourly-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish read-only scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-hourly-shadow-report
+          path: v2_hourly_shadow_report.json
+          retention-days: 7
