@@ -1,0 +1,53 @@
+name: V2 safe research audit
+
+on:
+  pull_request:
+    paths:
+      - 'v2_bot/research_data_gate.py'
+      - 'v2_bot/safe_candidate_discovery.py'
+      - 'v2_bot/candidate_discovery.py'
+      - 'v2_bot/historical_replay.py'
+      - '.github/workflows/v2-safe-research-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic_only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install public-market research dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Verify default execution stays research-only
+        run: |
+          test "$V2_MODE" = 'shadow'
+          test "$V2_LIVE_TRADING" = 'false'
+          test "$V2_PRIVATE_ADAPTER_ENABLED" = 'false'
+          test "$V2_LIVE_AUTHORIZED" = 'false'
+          test "$V2_LIVE_ENGINE_UNLOCK" = 'false'
+      - name: Validate data gate offline
+        run: python -m unittest v2_bot.tests.test_research_data_gate -v
+      - name: Run 90-day historical diagnostic using public Binance candles only
+        run: >-
+          python -m v2_bot.safe_candidate_discovery
+          --days 90 --symbols BTCUSDT,ETHUSDT,SOLUSDT
+          --slippage-bps 5 --output v2_safe_research_90d.json
+      - name: Preserve evidence report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-safe-research-90d
+          path: v2_safe_research_90d.json
+          retention-days: 30
