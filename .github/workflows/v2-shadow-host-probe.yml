@@ -1,0 +1,39 @@
+name: V2 shadow host prerequisites (no trading)
+
+on:
+  push:
+    branches:
+      - fix/v2-github-shadow-fallback-20260917
+      - bot-v2-standalone
+    paths:
+      - '.github/workflows/v2-shadow-host-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      POSTGRES_DSN: ${{ secrets.V2_DATABASE_URL || secrets.NEON_DATABASE_URL || secrets.DATABASE_URL }}
+      V2_TELEGRAM_BOT_TOKEN: ${{ secrets.V2_TELEGRAM_BOT_TOKEN }}
+      V2_TELEGRAM_CHAT_ID: ${{ secrets.V2_TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Inspect available prerequisites without printing values
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          dsn = os.getenv('POSTGRES_DSN', '')
+          print(json.dumps({
+              'postgres_secret_present': bool(dsn),
+              'postgres_scheme_valid': dsn.startswith(('postgresql://', 'postgres://')),
+              'telegram_bot_secret_present': bool(os.getenv('V2_TELEGRAM_BOT_TOKEN')),
+              'telegram_chat_secret_present': bool(os.getenv('V2_TELEGRAM_CHAT_ID')),
+              'private_binance_api_used': False,
+              'real_trading_enabled': False,
+              'worker_started': False,
+          }, sort_keys=True))
+          PY
