@@ -1,0 +1,92 @@
+name: V2 Grid DCA Breakout - real-data paper simulation
+# Public Binance market data, no private API credentials, zero order routes.
+# Tested V2 source is immutable; keep this SHA frozen until a reviewed upgrade.
+on:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
+  push:
+    branches: [main]
+    paths: ['.github/workflows/v2-pionex-style.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v2-grid-dca-breakout-virtual-ledger
+  cancel-in-progress: false
+jobs:
+  paper_shelf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+    steps:
+      - name: Checkout reviewed V2 commit without retaining GitHub token
+        uses: actions/checkout@v4
+        with:
+          ref: ba6603e378d863a971e1d10bc101f42f69eb6690
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore independent 50-USDT simulated portfolio states
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .v2-pionex
+          key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: v2-pionex-shelf-
+      - name: Verify continuity and run strategy unit tests
+        env:
+          CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          assert os.environ['V2_MODE'] == 'shadow' and os.environ['V2_LIVE_TRADING'] == 'false'
+          assert not any(os.getenv(k) for k in ('BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
+          if os.environ['GITHUB_EVENT_NAME'] == 'schedule':
+              assert os.getenv('CACHE_KEY') and Path('.v2-pionex/state.json').is_file(), 'Lost virtual ledger: halt instead of fabricated PnL'
+          print('VIRTUAL_LEDGER_RESTORED', Path('.v2-pionex/state.json').is_file())
+          PY
+          pip install -r v2_bot/requirements.txt
+          python -m unittest v2_bot.tests.test_pionex_style -v
+      - name: Execute all three independent virtual bots using real Binance Spot data
+        run: |
+          set -o pipefail
+          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
+      - name: Verify no real orders, capital honesty and no duplicate virtual fills
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row=json.loads(Path('v2_pionex_report.json').read_text())
+          assert row['real_orders']==0 and row['live_trading'] is False
+          assert row['virtual_budget_per_scenario']==50
+          assert row['virtual_scenarios_are_independent_not_additive'] is True
+          assert set(row['strategies'])=={'spot_grid','fixed_dca','trend_breakout'}
+          assert all(v['actual_orders']==0 and v['live_trading'] is False for v in row['strategies'].values())
+          assert Path('.v2-pionex/state.json').is_file()
+          print('PIONEX_STYLE_THREE_REAL_DATA_STRATEGIES_PASS; LIVE=OFF')
+          PY
+          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 > v2_repeat_report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row=json.loads(Path('v2_repeat_report.json').read_text())
+          assert all(s['action']=='duplicate_bar_no_action' for s in row['strategies'].values())
+          print('VIRTUAL_FILL_DEDUPLICATION_PASS')
+          PY
+      - name: Persist paper-only account state for next scan
+        uses: actions/cache/save@v4
+        with:
+          path: .v2-pionex
+          key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish actual public-data signal, equity, trade and fee report
+        uses: actions/upload-artifact@v4
+        with:
+          name: grid-dca-breakout-paper-results
+          path: v2_pionex_report.json
+          retention-days: 7
