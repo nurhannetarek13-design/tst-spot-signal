@@ -59,7 +59,7 @@ jobs:
         run: |
           set -o pipefail
           python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
-      - name: Verify virtual accounting, no real orders and identical-bar deduplication
+      - name: Verify virtual accounting, no real orders and identical-bar idempotence
         run: |
           python - <<'PY'
           import json
@@ -80,9 +80,15 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          row=json.loads(Path('v2_repeat_report.json').read_text())
-          assert all(s['action']=='duplicate_bar_no_action' for s in row['strategies'].values())
-          print('VIRTUAL_FILL_DEDUPLICATION_PASS')
+          first=json.loads(Path('v2_pionex_report.json').read_text())
+          repeat=json.loads(Path('v2_repeat_report.json').read_text())
+          for mode, original in first['strategies'].items():
+              expected = ('missed_closed_candle_halted_manual_reconciliation'
+                          if original['action']=='missed_closed_candle_halted_manual_reconciliation'
+                          else 'duplicate_bar_no_action')
+              assert repeat['strategies'][mode]['action']==expected, (mode, expected)
+              assert repeat['strategies'][mode]['trades']==original['trades']
+          print('VIRTUAL_FILL_DEDUPLICATION_OR_HALT_IDEMPOTENCE_PASS')
           PY
       - name: Save verified paper-only state for subsequent scans
         uses: actions/cache/save@v4
