@@ -53,11 +53,8 @@ jobs:
           assert not any(os.getenv(k) for k in ('BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
           assert os.getenv('CACHE_KEY') and Path('.v2-pionex/state.json').is_file(), 'BTC prior virtual ledger absent: halt, never reset'
           alt = [Path('.v2-pionex/ethusdt_state.json'), Path('.v2-pionex/solusdt_state.json')]
-          found = [p.is_file() for p in alt]
-          assert all(found) or not any(found), 'partial per-symbol ledger unavailable: halt'
-          if os.environ['GITHUB_EVENT_NAME'] != 'push':
-              assert all(found), 'multi-symbol ledger missing: halt instead of resetting PnL'
-          print('BTC_LEGACY_LEDGER_RESTORED=True; ALT_LEDGERS_RESTORED=', all(found))
+          assert all(p.is_file() for p in alt), 'ETH/SOL virtual ledgers missing: halt instead of resetting PnL'
+          print('BTC_ETH_SOL_LEDGERS_RESTORED_FROM_PRIOR_RUN=True')
           PY
           pip install -r v2_bot/requirements.txt
           python -m unittest v2_bot.tests.test_pionex_style v2_bot.tests.test_pionex_integrity v2_bot.tests.test_pionex_multi -v
