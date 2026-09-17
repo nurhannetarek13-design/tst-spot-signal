@@ -1,6 +1,7 @@
-name: V2 Grid DCA Breakout - real-data paper simulation
-# Public Binance market data only; no private API credentials or real order routes.
-# Immutable V2 SHA: reviewed and tested in PRs #12 and #13.
+name: V2 BTC ETH SOL - nine isolated virtual Spot bots
+# Grid, fixed-size DCA, trend breakout x BTC/ETH/SOL. Public market data only.
+# No private credentials, no live orders; standalone virtual scenarios, NOT pooled capital.
+# Source pinned to merged, CI-tested PR #14; never move automatically with branch head.
 on:
   schedule:
     - cron: '4,19,34,49 * * * *'
@@ -22,82 +23,110 @@ jobs:
       V2_LIVE_TRADING: 'false'
       V2_PRIVATE_ADAPTER_ENABLED: 'false'
       V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
     steps:
-      - name: Checkout reviewed immutable V2 commit without retaining token
+      - name: Checkout reviewed immutable V2 source without retaining credentials
         uses: actions/checkout@v4
         with:
-          ref: 98ec511a923214de2d7c002c108dd6ce7ab9c0c9
+          ref: d5da0c1c2d79ec4852d86503444264ef4d7069c3
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Restore 50-USDT isolated virtual portfolios
+      - name: Restore isolated virtual ledgers, retaining original BTC file
         id: cache
         uses: actions/cache/restore@v4
         with:
           path: .v2-pionex
           key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: v2-pionex-shelf-
-      - name: Validate ledger continuity and run strategy plus integrity regression tests
+      - name: Fail closed on lost accounting and run complete safety regression
         env:
           CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: |
           python - <<'PY'
           import os
           from pathlib import Path
-          assert os.environ['V2_MODE'] == 'shadow' and os.environ['V2_LIVE_TRADING'] == 'false'
+          assert os.environ['V2_MODE']=='shadow' and os.environ['V2_LIVE_TRADING']=='false'
+          assert os.environ['V2_PRIVATE_ADAPTER_ENABLED']=='false' and os.environ['V2_LIVE_AUTHORIZED']=='false'
           assert not any(os.getenv(k) for k in ('BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
-          require_continuity = os.environ['GITHUB_EVENT_NAME'] == 'schedule' or int(os.environ['GITHUB_RUN_NUMBER']) > 3
-          state_found = Path('.v2-pionex/state.json').is_file()
-          if require_continuity:
-              assert os.getenv('CACHE_KEY') and state_found, 'Lost virtual ledger: halt instead of fabricated PnL'
-          print('VIRTUAL_LEDGER_RESTORED', state_found)
+          assert os.getenv('CACHE_KEY') and Path('.v2-pionex/state.json').is_file(), 'BTC prior virtual ledger absent: halt, never reset'
+          alt = [Path('.v2-pionex/ethusdt_state.json'), Path('.v2-pionex/solusdt_state.json')]
+          found = [p.is_file() for p in alt]
+          assert all(found) or not any(found), 'partial per-symbol ledger unavailable: halt'
+          if os.environ['GITHUB_EVENT_NAME'] != 'push':
+              assert all(found), 'multi-symbol ledger missing: halt instead of resetting PnL'
+          print('BTC_LEGACY_LEDGER_RESTORED=True; ALT_LEDGERS_RESTORED=', all(found))
           PY
           pip install -r v2_bot/requirements.txt
-          python -m unittest v2_bot.tests.test_pionex_style v2_bot.tests.test_pionex_integrity -v
-      - name: Execute three independent paper strategies on real Binance Spot market data
+          python -m unittest v2_bot.tests.test_pionex_style v2_bot.tests.test_pionex_integrity v2_bot.tests.test_pionex_multi -v
+      - name: Run nine virtual Spot bots against live public Binance market data
         run: |
           set -o pipefail
-          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
-      - name: Verify virtual accounting, no real orders and identical-bar idempotence
+          python -m v2_bot.pionex_multi --once --budget 50 | tee v2_pionex_report.json
+      - name: Verify nine ledgers, non-pooled capital, no real orders and duplicate safety
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           from v2_bot.pionex_ledger_guard import validate_ledger
-          row=json.loads(Path('v2_pionex_report.json').read_text())
-          state=json.loads(Path('.v2-pionex/state.json').read_text())
-          validate_ledger(state['strategies'], symbol='BTCUSDT', budget=50)
-          assert row['real_orders']==0 and row['live_trading'] is False
-          assert row['virtual_budget_per_scenario']==50
-          assert row['virtual_scenarios_are_independent_not_additive'] is True
-          assert set(row['strategies'])=={'spot_grid','fixed_dca','trend_breakout'}
-          assert all(v['actual_orders']==0 and v['live_trading'] is False for v in row['strategies'].values())
-          assert all(abs(v['equity_usdt']-v['virtual_budget_usdt']-v['total_pnl_including_unrealized_usdt'])<0.00001 for v in row['strategies'].values())
-          print('THREE_PAPER_STRATEGIES_LEDGER_VALID; LIVE=OFF')
+          from v2_bot.pionex_multi import SYMBOLS, state_path
+          report=json.loads(Path('v2_pionex_report.json').read_text())
+          assert report['real_orders']==0 and report['live_trading'] is False
+          assert report['virtual_scenarios']==9 and report['virtual_budget_per_scenario']==50
+          assert report['independent_scenarios_not_a_pooled_portfolio'] and report['do_not_sum_hypothetical_balances']
+          assert set(report['by_symbol'])==set(SYMBOLS)
+          for symbol in SYMBOLS:
+              account=report['by_symbol'][symbol]
+              state=json.loads(Path(state_path('.v2-pionex',symbol)).read_text())
+              validate_ledger(state['strategies'],symbol=symbol,budget=50)
+              assert set(account['strategies'])=={'spot_grid','fixed_dca','trend_breakout'}
+              assert all(v['actual_orders']==0 and v['live_trading'] is False for v in account['strategies'].values())
+              assert all(abs(v['equity_usdt']-v['virtual_budget_usdt']-v['total_pnl_including_unrealized_usdt'])<0.00001 for v in account['strategies'].values())
+          print('NINE_VIRTUAL_ACCOUNTS_ACCOUNTING_PASS; REAL_ORDERS=0')
           PY
-          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 > v2_repeat_report.json
+          python -m v2_bot.pionex_multi --once --budget 50 > v2_repeat_report.json
           python - <<'PY'
           import json
           from pathlib import Path
           first=json.loads(Path('v2_pionex_report.json').read_text())
           repeat=json.loads(Path('v2_repeat_report.json').read_text())
-          for mode, original in first['strategies'].items():
-              expected = ('missed_closed_candle_halted_manual_reconciliation'
-                          if original['action']=='missed_closed_candle_halted_manual_reconciliation'
-                          else 'duplicate_bar_no_action')
-              assert repeat['strategies'][mode]['action']==expected, (mode, expected)
-              assert repeat['strategies'][mode]['trades']==original['trades']
-          print('VIRTUAL_FILL_DEDUPLICATION_OR_HALT_IDEMPOTENCE_PASS')
+          for symbol, account in first['by_symbol'].items():
+              for mode, initial in account['strategies'].items():
+                  subsequent=repeat['by_symbol'][symbol]['strategies'][mode]
+                  expected=('missed_closed_candle_halted_manual_reconciliation'
+                            if initial['action']=='missed_closed_candle_halted_manual_reconciliation'
+                            else 'duplicate_bar_no_action')
+                  assert subsequent['action']==expected,(symbol,mode,expected,subsequent['action'])
+                  assert subsequent['trades']==initial['trades']
+                  assert subsequent['fees_paid_usdt']==initial['fees_paid_usdt']
+          print('NINE_ACCOUNT_DUPLICATE_OR_HALT_IDEMPOTENCE_PASS')
           PY
-      - name: Save verified paper-only state for subsequent scans
+      - name: Save virtual account continuity for subsequent runs
         uses: actions/cache/save@v4
         with:
           path: .v2-pionex
           key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Publish actual virtual holdings and fee-aware PnL
+      - name: Present actual virtual holdings, trades and fee-aware PnL in GitHub summary
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          row=json.loads(Path('v2_pionex_report.json').read_text())
+          lines=['## BTC + ETH + SOL: virtual strategy dashboard',
+                 '**Not real trading.** Nine independent, alternative 50-USDT simulations; balances are NOT additive.',
+                 '| Pair | Strategy | Action | Virtual equity USDT | Net total PnL USDT | Fees USDT | Fills | Halted |',
+                 '|---|---|---|---:|---:|---:|---:|---|']
+          for symbol, account in row['by_symbol'].items():
+              for mode, s in account['strategies'].items():
+                  lines.append(f"| {symbol} | {mode} | {s['action']} | {s['equity_usdt']:.4f} | {s['total_pnl_including_unrealized_usdt']:+.4f} | {s['fees_paid_usdt']:.4f} | {s['trades']} | {s['halted']} |")
+          lines.append('Real orders: **0**. Live execution: **OFF**. Profitability: **unproven**.')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n'.join(lines)+'\n')
+          PY
+      - name: Publish complete public-data paper report
         uses: actions/upload-artifact@v4
         with:
-          name: grid-dca-breakout-paper-results
+          name: grid-dca-breakout-nine-account-paper-results
           path: v2_pionex_report.json
           retention-days: 7
