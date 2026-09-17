@@ -11,7 +11,7 @@ from .config import Settings, settings
 from .engine import V2Engine
 from .external_btc_edge import run_external_challenger
 from .storage_backend import make_execution_journal
-from .tournament_engine import TournamentRuntimeV2Engine
+from .shadow_recovery import ContinuitySafeTournamentRuntimeV2Engine as TournamentRuntimeV2Engine
 
 
 SHADOW_TOURNAMENT_RUNTIME_MISSING = (
@@ -60,7 +60,7 @@ def run(
                             "persistent_state": runtime_settings.persistent_state,
                             "persistence_proven": False,
                             "persistence_reason": probe.reason,
-                            "persistence_previous_revision": probe.previous_revision,
+                            "persistence_previous_revision": persistence_previous_revision,
                         },
                         sort_keys=True,
                     ),
