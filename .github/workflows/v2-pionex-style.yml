@@ -38,7 +38,7 @@ jobs:
           path: .v2-pionex
           key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: v2-pionex-shelf-
-      - name: Verify continuity and run strategy unit tests
+      - name: Enforce continuity after initial boot and run strategy tests
         env:
           CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: |
@@ -47,9 +47,11 @@ jobs:
           from pathlib import Path
           assert os.environ['V2_MODE'] == 'shadow' and os.environ['V2_LIVE_TRADING'] == 'false'
           assert not any(os.getenv(k) for k in ('BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
-          if os.environ['GITHUB_EVENT_NAME'] == 'schedule':
-              assert os.getenv('CACHE_KEY') and Path('.v2-pionex/state.json').is_file(), 'Lost virtual ledger: halt instead of fabricated PnL'
-          print('VIRTUAL_LEDGER_RESTORED', Path('.v2-pionex/state.json').is_file())
+          require_continuity = os.environ['GITHUB_EVENT_NAME'] == 'schedule' or int(os.environ['GITHUB_RUN_NUMBER']) > 3
+          state_found = Path('.v2-pionex/state.json').is_file()
+          if require_continuity:
+              assert os.getenv('CACHE_KEY') and state_found, 'Lost virtual ledger: halt instead of fabricated PnL'
+          print('VIRTUAL_LEDGER_RESTORED', state_found)
           PY
           pip install -r v2_bot/requirements.txt
           python -m unittest v2_bot.tests.test_pionex_style -v
@@ -57,7 +59,7 @@ jobs:
         run: |
           set -o pipefail
           python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
-      - name: Verify no real orders, capital honesty and no duplicate virtual fills
+      - name: Verify no orders, capital accounting and no duplicate virtual fills
         run: |
           python - <<'PY'
           import json
@@ -68,6 +70,7 @@ jobs:
           assert row['virtual_scenarios_are_independent_not_additive'] is True
           assert set(row['strategies'])=={'spot_grid','fixed_dca','trend_breakout'}
           assert all(v['actual_orders']==0 and v['live_trading'] is False for v in row['strategies'].values())
+          assert all(abs(v['equity_usdt']-v['virtual_budget_usdt']-v['total_pnl_including_unrealized_usdt'])<0.00001 for v in row['strategies'].values())
           assert Path('.v2-pionex/state.json').is_file()
           print('PIONEX_STYLE_THREE_REAL_DATA_STRATEGIES_PASS; LIVE=OFF')
           PY
