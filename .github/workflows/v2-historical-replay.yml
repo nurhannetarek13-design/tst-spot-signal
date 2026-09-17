@@ -1,0 +1,47 @@
+name: V2 Historical Replay
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Historical window in days
+        required: false
+        default: '90'
+  push:
+    branches:
+      - bot-v2-standalone
+    paths:
+      - 'v2_bot/historical_replay.py'
+      - 'v2_bot/tests/test_historical_replay.py'
+      - '.github/workflows/v2-historical-replay.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install V2 dependencies
+        run: pip install -r v2_bot/requirements.txt
+      - name: Run replay primitive tests
+        run: python -m unittest v2_bot.tests.test_historical_replay -v
+      - name: Run conservative 90-day replay
+        env:
+          REPLAY_DAYS: ${{ inputs.days || '90' }}
+        run: |
+          python -m v2_bot.historical_replay \
+            --days "$REPLAY_DAYS" \
+            --output v2_historical_replay.json
+      - name: Upload replay report
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-historical-replay
+          path: v2_historical_replay.json
+          if-no-files-found: error
+          retention-days: 14

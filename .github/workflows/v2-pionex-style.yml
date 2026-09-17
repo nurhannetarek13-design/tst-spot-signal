@@ -1,0 +1,95 @@
+name: V2 Pionex-style Spot strategies - simulation only
+on:
+  push:
+    branches: [bot-v2-standalone]
+    paths:
+      - 'v2_bot/pionex_style.py'
+      - 'v2_bot/pionex_run.py'
+      - 'v2_bot/tests/test_pionex_style.py'
+      - '.github/workflows/v2-pionex-style.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: v2-pionex-style-virtual-ledger
+  cancel-in-progress: false
+jobs:
+  strategy_shelf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+    steps:
+      - name: Checkout V2 without persistent token
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore virtual-only state
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .v2-pionex
+          key: v2-pionex-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: v2-pionex-
+      - name: Install dependencies and execute real strategy tests
+        run: |
+          pip install -r v2_bot/requirements.txt
+          python -m unittest v2_bot.tests.test_pionex_style -v
+      - name: Check ledger continuity on scheduled runs
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-matched-key }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          assert os.environ['V2_MODE'] == 'shadow' and os.environ['V2_LIVE_TRADING'] == 'false'
+          if os.environ['GITHUB_EVENT_NAME'] == 'schedule':
+              assert os.getenv('CACHE_HIT') and Path('.v2-pionex/state.json').is_file(), 'Virtual state cache lost: fail closed'
+          print('NO_LIVE_KEYS_OR_ORDERS; prior ledger exists:', Path('.v2-pionex/state.json').is_file())
+          PY
+      - name: Execute all three real-data virtual strategies once
+        run: |
+          set -o pipefail
+          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
+      - name: Verify report, fee accounting, capital, idempotence and no orders
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('v2_pionex_report.json').read_text())
+          assert report['real_orders'] == 0 and report['live_trading'] is False
+          assert report['status'] == 'FORWARD_SIMULATION_NOT_PROFIT_APPROVAL'
+          assert report['virtual_budget_per_scenario'] == 50
+          assert set(report['strategies']) == {'spot_grid', 'fixed_dca', 'trend_breakout'}
+          assert all(r['actual_orders'] == 0 and r['live_trading'] is False and r['equity_usdt'] >= 0 for r in report['strategies'].values())
+          state = json.loads(Path('.v2-pionex/state.json').read_text())
+          assert state['schema'] == 1 and len(state['strategies']) == 3
+          print('VIRTUAL_STRATEGIES_PASS; orders=0; modes=3')
+          PY
+          python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 > repeat.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          repeat = json.loads(Path('repeat.json').read_text())
+          assert all(s['action'] == 'duplicate_bar_no_action' for s in repeat['strategies'].values())
+          print('NO_DUPLICATE_VIRTUAL_FILLS_PASS')
+          PY
+      - name: Save independent simulated ledger
+        uses: actions/cache/save@v4
+        with:
+          path: .v2-pionex
+          key: v2-pionex-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish transparent PnL and strategy decisions
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-pionex-strategy-report
+          path: v2_pionex_report.json
+          retention-days: 7

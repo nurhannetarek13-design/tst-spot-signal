@@ -1,0 +1,68 @@
+name: Frozen 4h Spot trend tournament - research only
+on:
+  push:
+    branches: [research/frozen-4h-trend-oos-20260917]
+    paths:
+      - '.github/workflows/frozen-trend-lab-20260917.yml'
+      - 'v2_bot/backtest_4h_sma200.py'
+      - 'v2_bot/frozen_trend_lab.py'
+      - 'v2_bot/tests/test_frozen_trend_lab.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx==0.28.1
+      - name: Validate no-lookahead, fee stress and gap stop logic
+        run: python -m unittest v2_bot.tests.test_frozen_trend_lab -v
+      - name: Benchmark original frozen BTC 4h SMA200
+        run: |
+          set -o pipefail
+          python -m v2_bot.backtest_4h_sma200 | tee frozen_btc_4h_sma200.jsonl
+      - name: Measure three fixed trend systems on BTC ETH SOL and untouched time holdout
+        run: |
+          set -o pipefail
+          python -m v2_bot.frozen_trend_lab | tee frozen_trend_summary.jsonl
+      - name: Verify real historical coverage and research-only gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          b=json.loads(Path('frozen_btc_4h_sma200.jsonl').read_text().splitlines()[-1])
+          r=json.loads(Path('frozen_trend_lab_report.json').read_text())
+          assert b['bars']>2000 and b['cost_model']['fee_each_side']>=0.001
+          assert b['live_trading'] is False and r['live_trading'] is False
+          assert r['status']=='RESEARCH_ONLY_NO_AUTO_PROMOTION'
+          assert r['costs']['fee_each_side']>=0.001 and r['costs']['stress_slippage_bps_each_side']>=15
+          assert set(r['results'])=={'BTCUSDT','ETHUSDT','SOLUSDT'}
+          assert all(v['bars']>2500 for v in r['results'].values())
+          assert all(not g['live_approved'] for g in r['frozen_research_gates'].values())
+          print(json.dumps({'result':'FROZEN_RESEARCH_EXECUTED_NOT_TRADE_APPROVAL',
+              'original_baseline_gate':b['promotion_gate_passed'],
+              'new_gates':r['frozen_research_gates']},sort_keys=True))
+          PY
+      - name: Publish reproducible full trade ledger and baseline (no secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-trend-4h-multisymbol-oos
+          path: |
+            frozen_btc_4h_sma200.jsonl
+            frozen_trend_lab_report.json
+            frozen_trend_summary.jsonl
+          retention-days: 30
