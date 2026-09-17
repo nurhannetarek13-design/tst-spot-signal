@@ -11,7 +11,7 @@ from .config import Settings, settings
 from .engine import V2Engine
 from .external_btc_edge import run_external_challenger
 from .storage_backend import make_execution_journal
-from .tournament_engine import TournamentRuntimeV2Engine
+from .shadow_recovery import ContinuitySafeTournamentRuntimeV2Engine as TournamentRuntimeV2Engine
 
 
 SHADOW_TOURNAMENT_RUNTIME_MISSING = (
