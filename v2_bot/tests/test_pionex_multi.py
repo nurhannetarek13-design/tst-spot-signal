@@ -38,7 +38,11 @@ class MultiSymbolPaperTests(unittest.TestCase):
                 self.assertTrue(row['prior_ledger_restored'])
                 self.assertTrue(all(v['action'] == 'duplicate_bar_no_action'
                                     for v in row['strategies'].values()))
-                self.assertTrue(all(v['trades'] == 0 for v in row['strategies'].values()))
+                for mode, virtual_account in row['strategies'].items():
+                    earlier = first['by_symbol'][symbol]['strategies'][mode]
+                    self.assertEqual(virtual_account['trades'], earlier['trades'])
+                    self.assertEqual(virtual_account['equity_usdt'], earlier['equity_usdt'])
+                    self.assertEqual(virtual_account['fees_paid_usdt'], earlier['fees_paid_usdt'])
 
     def test_corrupt_one_symbol_halts_batch_instead_of_resetting_its_state(self):
         fake = ThreeSymbolPublic()
@@ -47,11 +51,12 @@ class MultiSymbolPaperTests(unittest.TestCase):
             run_all(client=fake, state_dir=tmp, now_ms=now)
             target = Path(state_path(tmp, 'ETHUSDT'))
             payload = json.loads(target.read_text())
+            original_cash = payload['strategies']['spot_grid']['cash']
             payload['strategies']['spot_grid']['cash'] += 17
             target.write_text(json.dumps(payload))
             with self.assertRaisesRegex(RuntimeError, 'paper_batch_failed_at_ETHUSDT'):
                 run_all(client=fake, state_dir=tmp, now_ms=now)
-            self.assertEqual(json.loads(target.read_text())['strategies']['spot_grid']['cash'], 67)
+            self.assertEqual(json.loads(target.read_text())['strategies']['spot_grid']['cash'], original_cash + 17)
 
     def test_mismatched_market_bar_times_fail_without_aggregate_report(self):
         def inconsistent(*, symbol, **kwargs):
