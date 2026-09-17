@@ -13,7 +13,8 @@ from pathlib import Path
 
 from .binance_public import BinancePublicClient
 from .pionex_ledger_guard import validate_ledger
-from .pionex_style import MODES, Rules, new_state, step
+from .pionex_safe_cycle import safe_step
+from .pionex_style import MODES, Rules, new_state
 
 BAR_MS = 900_000
 HOUR_MS = 3_600_000
@@ -69,12 +70,11 @@ def run_once(*, symbol: str = "BTCUSDT", budget: float = 50.0,
             states = data.get("strategies")
         else:
             states = {mode: new_state(mode, symbol, budget) for mode in MODES}
-        # Validate BEFORE applying a trade. A valid JSON document might still
-        # contain phantom PnL, negative cash, mismatched lots or NaN balances.
+        # Check BEFORE a trade: valid JSON may contain impossible balances.
         validate_ledger(states, symbol=symbol, budget=budget)
-        results = {mode: step(states[mode], candles, hourly, book, rules) for mode in MODES}
-        # Validate AFTER each simulation too. On failure, leave prior durable
-        # state unchanged, rather than persisting an impossible accounting row.
+        results = {mode: safe_step(states[mode], candles, hourly, book, rules)
+                   for mode in MODES}
+        # Check AFTER too: never persist imaginary profit or missing inventory.
         validate_ledger(states, symbol=symbol, budget=budget)
         report = {"schema": 1, "event": "PIONEX_STYLE_PAPER_SCAN", "symbol": symbol,
                   "last_closed_bar": last_open, "prior_ledger_restored": restored,
