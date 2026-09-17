@@ -1,6 +1,6 @@
 name: V2 Grid DCA Breakout - real-data paper simulation
-# Public Binance market data, no private API credentials, zero order routes.
-# Tested V2 source is immutable; keep this SHA frozen until a reviewed upgrade.
+# Public Binance market data only; no private API credentials or real order routes.
+# Immutable V2 SHA: reviewed and tested in PRs #12 and #13.
 on:
   schedule:
     - cron: '4,19,34,49 * * * *'
@@ -23,22 +23,22 @@ jobs:
       V2_PRIVATE_ADAPTER_ENABLED: 'false'
       V2_LIVE_AUTHORIZED: 'false'
     steps:
-      - name: Checkout reviewed V2 commit without retaining GitHub token
+      - name: Checkout reviewed immutable V2 commit without retaining token
         uses: actions/checkout@v4
         with:
-          ref: ba6603e378d863a971e1d10bc101f42f69eb6690
+          ref: 98ec511a923214de2d7c002c108dd6ce7ab9c0c9
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Restore independent 50-USDT simulated portfolio states
+      - name: Restore 50-USDT isolated virtual portfolios
         id: cache
         uses: actions/cache/restore@v4
         with:
           path: .v2-pionex
           key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: v2-pionex-shelf-
-      - name: Enforce continuity after initial boot and run strategy tests
+      - name: Validate ledger continuity and run strategy plus integrity regression tests
         env:
           CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: |
@@ -54,25 +54,27 @@ jobs:
           print('VIRTUAL_LEDGER_RESTORED', state_found)
           PY
           pip install -r v2_bot/requirements.txt
-          python -m unittest v2_bot.tests.test_pionex_style -v
-      - name: Execute all three independent virtual bots using real Binance Spot data
+          python -m unittest v2_bot.tests.test_pionex_style v2_bot.tests.test_pionex_integrity -v
+      - name: Execute three independent paper strategies on real Binance Spot market data
         run: |
           set -o pipefail
           python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 | tee v2_pionex_report.json
-      - name: Verify no orders, capital accounting and no duplicate virtual fills
+      - name: Verify virtual accounting, no real orders and identical-bar deduplication
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
+          from v2_bot.pionex_ledger_guard import validate_ledger
           row=json.loads(Path('v2_pionex_report.json').read_text())
+          state=json.loads(Path('.v2-pionex/state.json').read_text())
+          validate_ledger(state['strategies'], symbol='BTCUSDT', budget=50)
           assert row['real_orders']==0 and row['live_trading'] is False
           assert row['virtual_budget_per_scenario']==50
           assert row['virtual_scenarios_are_independent_not_additive'] is True
           assert set(row['strategies'])=={'spot_grid','fixed_dca','trend_breakout'}
           assert all(v['actual_orders']==0 and v['live_trading'] is False for v in row['strategies'].values())
           assert all(abs(v['equity_usdt']-v['virtual_budget_usdt']-v['total_pnl_including_unrealized_usdt'])<0.00001 for v in row['strategies'].values())
-          assert Path('.v2-pionex/state.json').is_file()
-          print('PIONEX_STYLE_THREE_REAL_DATA_STRATEGIES_PASS; LIVE=OFF')
+          print('THREE_PAPER_STRATEGIES_LEDGER_VALID; LIVE=OFF')
           PY
           python -m v2_bot.pionex_run --once --symbol BTCUSDT --budget 50 > v2_repeat_report.json
           python - <<'PY'
@@ -82,12 +84,12 @@ jobs:
           assert all(s['action']=='duplicate_bar_no_action' for s in row['strategies'].values())
           print('VIRTUAL_FILL_DEDUPLICATION_PASS')
           PY
-      - name: Persist paper-only account state for next scan
+      - name: Save verified paper-only state for subsequent scans
         uses: actions/cache/save@v4
         with:
           path: .v2-pionex
           key: v2-pionex-shelf-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Publish actual public-data signal, equity, trade and fee report
+      - name: Publish actual virtual holdings and fee-aware PnL
         uses: actions/upload-artifact@v4
         with:
           name: grid-dca-breakout-paper-results
