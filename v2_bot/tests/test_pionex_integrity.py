@@ -56,16 +56,32 @@ class VirtualLedgerIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "budget"):
             self.validate()
 
-    def test_single_skipped_closed_candle_halts_without_fake_fill(self):
+    def test_flat_skipped_candle_resynchronizes_without_trade(self):
         data = bars()
         state = self.states["spot_grid"]
         state["last_bar"] = int(data[-1]["open_time"]) - 2 * 900_000
+        state["anchor"] = 99.0
+        result = safe_step(state, data, hourly(), BOOK, RULES)
+        self.assertFalse(result["halted"])
+        self.assertEqual(result["action"], "flat_gap_resynchronized_no_trade")
+        self.assertEqual(state["last_bar"], int(data[-1]["open_time"]))
+        self.assertIsNone(state["anchor"])
+        self.assertEqual(state["trades"], 0)
+        self.validate()
+
+    def test_exposed_skipped_candle_halts_without_fake_fill(self):
+        data = bars()
+        state = self.states["spot_grid"]
+        self.assertEqual(_buy(state, 100.0, 15.0, RULES, "test"), "paper_buy")
+        state["last_bar"] = int(data[-1]["open_time"]) - 2 * 900_000
         before = state["last_bar"]
+        lot = dict(state["lots"][0])
         result = safe_step(state, data, hourly(), BOOK, RULES)
         self.assertTrue(result["halted"])
         self.assertEqual(result["action"], "missed_closed_candle_halted_manual_reconciliation")
         self.assertEqual(state["last_bar"], before)
-        self.assertEqual(state["trades"], 0)
+        self.assertEqual(state["trades"], 1)
+        self.assertEqual(state["lots"], [lot])
         self.validate()
 
     def test_ordinary_one_bar_advance_is_allowed(self):
@@ -91,7 +107,7 @@ class VirtualLedgerIntegrityTests(unittest.TestCase):
                 run_once(client=fake, path=str(path), now_ms=now)
             self.assertEqual(path.read_bytes(), before)
 
-    def test_runner_marks_missed_single_bar_halted_without_rewriting_history(self):
+    def test_runner_skips_flat_signals_but_halts_exposed_gap_without_rewriting_history(self):
         fake = FakePublic()
         now = int(fake.candles[-1]["open_time"]) + 900_100
         with tempfile.TemporaryDirectory() as tmp:
@@ -106,15 +122,20 @@ class VirtualLedgerIntegrityTests(unittest.TestCase):
             report = run_once(client=fake, path=str(path), now_ms=now)
             after = json.loads(path.read_text())
             for mode in MODES:
-                self.assertEqual(report["strategies"][mode]["action"],
-                                 "missed_closed_candle_halted_manual_reconciliation")
-                self.assertEqual(after["strategies"][mode]["last_bar"],
-                                 prior["strategies"][mode]["last_bar"])
-                self.assertEqual(after["strategies"][mode]["trades"],
-                                 prior["strategies"][mode]["trades"])
-                self.assertEqual(after["strategies"][mode]["lots"],
-                                 prior["strategies"][mode]["lots"])
-                self.assertTrue(after["strategies"][mode]["halted"])
+                earlier = prior["strategies"][mode]
+                later = after["strategies"][mode]
+                self.assertEqual(later["trades"], earlier["trades"])
+                self.assertEqual(later["lots"], earlier["lots"])
+                if earlier["lots"] or earlier["halted"]:
+                    self.assertEqual(report["strategies"][mode]["action"],
+                                     "missed_closed_candle_halted_manual_reconciliation")
+                    self.assertEqual(later["last_bar"], earlier["last_bar"])
+                    self.assertTrue(later["halted"])
+                else:
+                    self.assertEqual(report["strategies"][mode]["action"],
+                                     "flat_gap_resynchronized_no_trade")
+                    self.assertEqual(later["last_bar"], int(fake.candles[-1]["open_time"]))
+                    self.assertFalse(later["halted"])
 
 
 if __name__ == "__main__":
