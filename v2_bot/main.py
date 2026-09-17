@@ -60,7 +60,7 @@ def run(
                             "persistent_state": runtime_settings.persistent_state,
                             "persistence_proven": False,
                             "persistence_reason": probe.reason,
-                            "persistence_previous_revision": persistence_previous_revision,
+                            "persistence_previous_revision": probe.previous_revision,
                         },
                         sort_keys=True,
                     ),
