@@ -9,7 +9,7 @@ from pathlib import Path
 from v2_bot.pionex_ledger_guard import validate_ledger
 from v2_bot.pionex_run import run_once
 from v2_bot.pionex_safe_cycle import safe_step
-from v2_bot.pionex_style import MODES, Rules, _buy, _sell, new_state
+from v2_bot.pionex_style import MODES, _buy, _sell, new_state
 from v2_bot.tests.test_pionex_style import BOOK, RULES, FakePublic, bars, hourly
 
 
@@ -110,7 +110,10 @@ class VirtualLedgerIntegrityTests(unittest.TestCase):
                                  "missed_closed_candle_halted_manual_reconciliation")
                 self.assertEqual(after["strategies"][mode]["last_bar"],
                                  prior["strategies"][mode]["last_bar"])
-                self.assertEqual(after["strategies"][mode]["trades"], 0)
+                self.assertEqual(after["strategies"][mode]["trades"],
+                                 prior["strategies"][mode]["trades"])
+                self.assertEqual(after["strategies"][mode]["lots"],
+                                 prior["strategies"][mode]["lots"])
                 self.assertTrue(after["strategies"][mode]["halted"])
 
 
