@@ -1,7 +1,7 @@
-"""Run all three independent, zero-credential Spot strategy simulations once.
+"""Run three independent zero-credential, forward-only Spot strategy simulations.
 
 Usage: python -m v2_bot.pionex_run --once
-This module imports only the public Binance client: no orders, secrets or trading.
+No private Binance client, API credentials or real order route is imported.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from .binance_public import BinancePublicClient
+from .pionex_ledger_guard import validate_ledger
 from .pionex_style import MODES, Rules, new_state, step
 
 BAR_MS = 900_000
@@ -61,14 +62,20 @@ def run_once(*, symbol: str = "BTCUSDT", budget: float = 50.0,
         restored = file.is_file()
         if restored:
             data = json.loads(file.read_text())
-            if (data.get("schema") != 1 or data.get("symbol") != symbol or
-                    float(data.get("virtual_budget_per_scenario", -1)) != float(budget) or
-                    set(data.get("strategies", {})) != set(MODES)):
+            if (not isinstance(data, dict) or data.get("schema") != 1 or
+                    data.get("symbol") != symbol or
+                    data.get("virtual_budget_per_scenario") != budget):
                 raise RuntimeError("incompatible_ledger_fail_closed_no_reset")
-            states = data["strategies"]
+            states = data.get("strategies")
         else:
             states = {mode: new_state(mode, symbol, budget) for mode in MODES}
+        # Validate BEFORE applying a trade. A valid JSON document might still
+        # contain phantom PnL, negative cash, mismatched lots or NaN balances.
+        validate_ledger(states, symbol=symbol, budget=budget)
         results = {mode: step(states[mode], candles, hourly, book, rules) for mode in MODES}
+        # Validate AFTER each simulation too. On failure, leave prior durable
+        # state unchanged, rather than persisting an impossible accounting row.
+        validate_ledger(states, symbol=symbol, budget=budget)
         report = {"schema": 1, "event": "PIONEX_STYLE_PAPER_SCAN", "symbol": symbol,
                   "last_closed_bar": last_open, "prior_ledger_restored": restored,
                   "virtual_budget_per_scenario": budget,
@@ -80,7 +87,8 @@ def run_once(*, symbol: str = "BTCUSDT", budget: float = 50.0,
         temporary = file.with_suffix(".pending")
         temporary.write_text(json.dumps({"schema": 1, "symbol": symbol,
                                          "virtual_budget_per_scenario": budget,
-                                         "strategies": states}, sort_keys=True))
+                                         "strategies": states}, sort_keys=True,
+                                        allow_nan=False))
         os.replace(temporary, file)
         return report
     finally:
@@ -96,7 +104,7 @@ def main() -> None:
     parser.add_argument("--state", default=".v2-pionex/state.json")
     args = parser.parse_args()
     print(json.dumps(run_once(symbol=args.symbol, budget=args.budget, path=args.state),
-                     sort_keys=True), flush=True)
+                     sort_keys=True, allow_nan=False), flush=True)
 
 
 if __name__ == "__main__":
