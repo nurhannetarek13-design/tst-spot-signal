@@ -1,0 +1,52 @@
+name: Frozen 4h Spot trend baseline - research only
+on:
+  push:
+    branches: [research/frozen-4h-trend-oos-20260917]
+    paths:
+      - '.github/workflows/frozen-trend-lab-20260917.yml'
+      - 'v2_bot/backtest_4h_sma200.py'
+      - 'v2_bot/frozen_trend_lab.py'
+      - 'v2_bot/tests/test_frozen_trend_lab.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx==0.28.1
+      - name: Run frozen existing BTC 4h SMA200 benchmark, including fees and slippage
+        run: |
+          set -o pipefail
+          python -m v2_bot.backtest_4h_sma200 | tee frozen_btc_4h_sma200.jsonl
+      - name: Validate baseline has real candles and never approves live trading
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          v=json.loads(Path('frozen_btc_4h_sma200.jsonl').read_text().splitlines()[-1])
+          assert v['bars']>2000 and v['cost_model']['fee_each_side']>=0.001
+          assert v['cost_model']['slippage_each_side']>=0.0005
+          assert v['live_trading'] is False
+          print(json.dumps({'research_result':'MEASURED_NOT_PROMOTED','bars':v['bars'],'discovery':v['discovery'],'oos':v['oos'],'promotion_gate_passed':v['promotion_gate_passed']},sort_keys=True))
+          PY
+      - name: Upload immutable backtest outcome
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-4h-btc-baseline
+          path: frozen_btc_4h_sma200.jsonl
+          retention-days: 30
