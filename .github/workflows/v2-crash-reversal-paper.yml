@@ -1,0 +1,135 @@
+name: V2 Crash Reversal Retest - isolated Spot paper challenger
+# Unproven research candidate. Zero private credentials, ZERO real orders.
+# Immutable tested V2 merge PR #15; do not checkout unreviewed branch head.
+on:
+  schedule:
+    - cron: '6,21,36,51 * * * *'
+  push:
+    branches: [main]
+    paths: ['.github/workflows/v2-crash-reversal-paper.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v2-crash-reversal-virtual-ledgers
+  cancel-in-progress: false
+jobs:
+  forward_paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - name: Checkout reviewed immutable V2 without retaining credentials
+        uses: actions/checkout@v4
+        with:
+          ref: 3586234be748a6d8b5b55aa03f72bd3604395b4b
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore isolated candidate state
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .v2-crash-reversal
+          key: v2-crash-retest-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: v2-crash-retest-
+      - name: Assert paper-only and refuse missing historical ledgers
+        env:
+          CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          assert os.getenv('V2_MODE') == 'shadow'
+          assert all(os.getenv(k) == 'false' for k in (
+              'V2_LIVE_TRADING','V2_PRIVATE_ADAPTER_ENABLED','V2_LIVE_AUTHORIZED',
+              'V2_LIVE_ENGINE_UNLOCK','V2_EMERGENCY_FLATTEN_VERIFIED'))
+          assert not any(os.getenv(k) for k in (
+              'BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
+          files=[Path('.v2-crash-reversal') / f'{s}_crash_reversal.json'
+                 for s in ('btcusdt','ethusdt','solusdt')]
+          existing=[p.is_file() for p in files]
+          assert all(existing) or not any(existing), 'Partial candidate ledger: halt, do not reset'
+          first_bootstrap = (os.environ['GITHUB_RUN_NUMBER'] == '1'
+                             and os.environ['GITHUB_EVENT_NAME'] == 'push')
+          if not first_bootstrap:
+              assert os.getenv('CACHE_KEY') and all(existing), 'Candidate state unavailable: halt, no reset'
+          print('CANDIDATE_PRIOR_LEDGERS_RESTORED=', all(existing))
+          PY
+          pip install -r v2_bot/requirements.txt
+          python -m unittest v2_bot.tests.test_crash_reversal_retest -v
+      - name: Run BTC ETH SOL closed-candle crash-retest paper candidate
+        run: |
+          set -o pipefail
+          python -m v2_bot.crash_reversal_retest --once --budget 50 | tee crash_retest_paper_report.json
+      - name: Validate zero orders, independent balances and no duplicate fills
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from v2_bot.crash_reversal_retest import SYMBOLS, state_path, validate
+          row=json.loads(Path('crash_retest_paper_report.json').read_text())
+          assert row['real_orders']==0 and row['live_trading'] is False
+          assert row['candidate'] and row['status']=='UNPROVEN_FORWARD_PAPER_ONLY'
+          assert row['independent_scenarios_not_pooled_capital']
+          assert set(row['by_symbol'])==set(SYMBOLS)
+          for symbol in SYMBOLS:
+              account=row['by_symbol'][symbol]
+              state=json.loads(Path(state_path('.v2-crash-reversal',symbol)).read_text())
+              validate(state,symbol=symbol,budget=50.)
+              strategy=account['strategy']
+              assert strategy['actual_orders']==0 and strategy['live_trading'] is False
+              assert abs(strategy['equity_usdt']-50.-strategy['total_pnl_including_unrealized_usdt']) < 0.00001
+          print('CRASH_CANDIDATE_THREE_LEDGER_VALID; REAL_ORDERS=0')
+          PY
+          python -m v2_bot.crash_reversal_retest --once --budget 50 > crash_retest_repeat.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          original=json.loads(Path('crash_retest_paper_report.json').read_text())
+          replay=json.loads(Path('crash_retest_repeat.json').read_text())
+          for symbol, initial in original['by_symbol'].items():
+              before=initial['strategy']
+              after=replay['by_symbol'][symbol]['strategy']
+              expected=('exposed_gap_halted_no_invented_fill'
+                        if before['action']=='exposed_gap_halted_no_invented_fill'
+                        else 'duplicate_bar_no_action')
+              assert after['action']==expected,(symbol,after['action'])
+              assert after['trades']==before['trades']
+              assert after['fees_paid_usdt']==before['fees_paid_usdt']
+          print('CRASH_CANDIDATE_IDEMPOTENT_OR_HALTED; NO_FAKE_FILLS')
+          PY
+      - name: Save candidate virtual ledgers for next scan
+        uses: actions/cache/save@v4
+        with:
+          path: .v2-crash-reversal
+          key: v2-crash-retest-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Present per-pair results, not pooled profit
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          row=json.loads(Path('crash_retest_paper_report.json').read_text())
+          lines=['## Crash Reversal + Retest — unproven forward-paper candidate',
+                 '**No real orders.** Three ALTERNATIVE 50-USDT virtual accounts; do not sum balances.',
+                 '| Pair | Action | Equity USDT | PnL incl unrealized USDT | Fees USDT | Fills | Halt |',
+                 '|---|---|---:|---:|---:|---:|---|']
+          for symbol, item in row['by_symbol'].items():
+              s=item['strategy']
+              lines.append(f"| {symbol} | {s['action']} | {s['equity_usdt']:.4f} | {s['total_pnl_including_unrealized_usdt']:+.4f} | {s['fees_paid_usdt']:.4f} | {s['trades']} | {s['halted']} |")
+          lines.append('Live: **OFF**. Real orders: **0**. Edge: **not established**.')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n'.join(lines)+'\n')
+          PY
+      - name: Archive actual forward paper result
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reversal-retest-three-symbol-paper
+          path: crash_retest_paper_report.json
+          retention-days: 7
