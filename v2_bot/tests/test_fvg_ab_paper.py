@@ -89,7 +89,7 @@ class FvgABTests(unittest.TestCase):
             altered = copy.deepcopy(data)
             change(altered)
             self.assertIsNone(detect_crash_fvg_retest(altered,
-                ask=BOOK["ask"], bid=BOOK["bid"])))
+                ask=BOOK["ask"], bid=BOOK["bid"]))
         self.assertIsNone(detect_crash_fvg_retest(data, ask=99., bid=98.95))
 
     def test_actual_book_paper_entry_and_idempotent_repeat(self):
@@ -132,10 +132,10 @@ class FvgABTests(unittest.TestCase):
         step(state, data, BOOK, RULES)
         later = {**data[-1], "open_time": data[-1]["open_time"]+BAR_MS,
                  "low": state["stop"]-.1, "close": 98.2}
-        report = step(state, data+[later], BOOK, RULES)
-        self.assertEqual(report["action"], "intrabar_stop_touch_halted_no_fabricated_fill")
-        self.assertTrue(report["halted"])
-        self.assertEqual(report["trades"], 1)
+        result = step(state, data+[later], BOOK, RULES)
+        self.assertEqual(result["action"], "intrabar_stop_touch_halted_no_fabricated_fill")
+        self.assertTrue(result["halted"])
+        self.assertEqual(result["trades"], 1)
         self.assertEqual(len(state["lots"]), 1)
         validate(state, symbol="BTCUSDT", budget=50.)
 
