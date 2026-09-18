@@ -1,0 +1,67 @@
+name: V2 Frozen 4h Trend Audit - Historical Only No Orders
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/v2-frozen-4h-trend-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trend_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - name: Checkout immutable V2 source without persisted tokens
+        uses: actions/checkout@v4
+        with:
+          ref: 329149d587fe8315fc6813ccf4f3257d792e6aa0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify public-only mode and test signal lookahead and gap behavior
+        run: |
+          python - <<'PY'
+          import os
+          assert os.getenv('V2_MODE')=='shadow'
+          assert all(os.getenv(k)=='false' for k in (
+            'V2_LIVE_TRADING','V2_PRIVATE_ADAPTER_ENABLED','V2_LIVE_AUTHORIZED',
+            'V2_LIVE_ENGINE_UNLOCK','V2_EMERGENCY_FLATTEN_VERIFIED'))
+          assert not any(os.getenv(k) for k in (
+            'BINANCE_API_KEY','BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
+          PY
+          pip install -r v2_bot/requirements.txt
+          python -m compileall -q v2_bot
+          python -m unittest v2_bot.tests.test_frozen_trend_lab -v
+      - name: Pre-registered 2021-2026 discovery validation untouched OOS with stress costs
+        run: |
+          set -o pipefail
+          python -m v2_bot.frozen_trend_lab | tee frozen_trend_lab_stdout.log
+      - name: Validate diagnostic only and report all nine independent alternatives
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('frozen_trend_lab_report.json').read_text())
+          assert r['status']=='RESEARCH_ONLY_NO_AUTO_PROMOTION'
+          assert r['live_trading'] is False and r['trade_size_usdt']==10.
+          assert len(r['symbols'])==3 and len(r['rules'])==3
+          assert all(not x['live_approved'] for x in r['frozen_research_gates'].values())
+          print('FROZEN_TREND_DIAGNOSTIC_RESEARCH_ONLY_NO_LIVE_APPROVAL')
+          print('DESCRIPTIVE_GATES='+json.dumps(r['frozen_research_gates'],sort_keys=True))
+          PY
+      - name: Upload full independent 4h history results and trade logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-long-horizon-4h-trend-independent-9-strategy-diagnostic
+          path: |
+            frozen_trend_lab_report.json
+            frozen_trend_lab_stdout.log
+          retention-days: 30
