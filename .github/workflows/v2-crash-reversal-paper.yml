@@ -58,6 +58,7 @@ jobs:
           existing=[p.is_file() for p in files]
           assert all(existing) or not any(existing), 'Partial candidate ledger: halt, do not reset'
           first_bootstrap = (os.environ['GITHUB_RUN_NUMBER'] == '1'
+                             and os.environ['GITHUB_RUN_ATTEMPT'] == '1'
                              and os.environ['GITHUB_EVENT_NAME'] == 'push')
           if not first_bootstrap:
               assert os.getenv('CACHE_KEY') and all(existing), 'Candidate state unavailable: halt, no reset'
