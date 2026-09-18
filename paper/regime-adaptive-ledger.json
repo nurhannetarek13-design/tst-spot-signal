@@ -2,9 +2,25 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 20.17181165,
+  "cashUSDT": 15.3137256,
   "realizedPnLUSDT": -0.00513237,
-  "openPositions": [],
+  "openPositions": [
+    {
+      "symbol": "ETHUSDT",
+      "entry": 2614.86,
+      "stop": 2507.21019822,
+      "qty": 0.001857876157,
+      "notionalUSDT": 4.85808605,
+      "riskUSDT": 0.2,
+      "score": 81,
+      "openedAt": "2026-09-18T19:02:43.335Z",
+      "signalBarTime": "2026-09-18T16:00:00.000Z",
+      "highestClose": 2616.42,
+      "barsHeld": 0,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
+      "mode": "PAPER_ONLY"
+    }
+  ],
   "closedTrades": [
     {
       "symbol": "ETHUSDT",
@@ -52,9 +68,10 @@
   "seenSignals": [
     "ETHUSDT:1788451200000",
     "AVAXUSDT:1788451200000",
-    "SPCXBUSDT:1788984000000"
+    "SPCXBUSDT:1788984000000",
+    "ETHUSDT:1789747200000"
   ],
-  "lastRunAt": "2026-09-18T12:59:23.850Z",
+  "lastRunAt": "2026-09-18T19:02:43.335Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -69,7 +86,7 @@
   },
   "todayRealizedPnLUSDT": 0,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 0,
+  "openExposureUSDT": 4.85808605,
   "closedTradeCount": 3,
   "winCount": 1,
   "lossCount": 2,
