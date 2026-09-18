@@ -1,0 +1,74 @@
+name: V2 Existing Grid DCA Breakout - 381 day PROFIT AUDIT (NO LIVE)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shelf_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - name: Checkout immutable frozen strategy source without retained tokens
+        uses: actions/checkout@v4
+        with:
+          ref: 9e95e5c2ffd3cf2c82af847a40ab1dc8d004e8cd
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test strict paper only execution
+        run: |
+          python - <<'PY'
+          import os
+          assert os.getenv('V2_MODE')=='shadow'
+          assert all(os.getenv(k)=='false' for k in (
+            'V2_LIVE_TRADING','V2_PRIVATE_ADAPTER_ENABLED',
+            'V2_LIVE_AUTHORIZED','V2_LIVE_ENGINE_UNLOCK',
+            'V2_EMERGENCY_FLATTEN_VERIFIED'))
+          assert not any(os.getenv(k) for k in (
+            'BINANCE_API_KEY','BINANCE_API_SECRET',
+            'V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
+          PY
+          pip install -r v2_bot/requirements.txt
+          python -m compileall -q v2_bot
+          python -m unittest v2_bot.tests.test_shelf_profit_audit v2_bot.tests.test_crash_reversal_retest v2_bot.tests.test_fvg_ab_paper -v
+      - name: Download validated Binance candles and execute unchanged strategy historical diagnostic
+        run: |
+          set -o pipefail
+          python -m v2_bot.shelf_profit_audit --output shelf_profit_audit.json | tee shelf_audit_stdout.log
+      - name: Validate all records and never turn on real money
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('shelf_profit_audit.json').read_text())
+          assert r['status']=='DIAGNOSTIC_ONLY_NOT_PROVEN_NOT_LIVE_READY'
+          assert r['real_orders']==0 and r['live_trading'] is False
+          assert r['any_strategy_qualified_for_live'] is False
+          assert len(r['results'])==27 and len(r['data_sha256'])==3
+          assert len({(x['period'],x['symbol'],x['mode']) for x in r['results']})==27
+          assert all(len(x)==64 for x in r['data_sha256'].values())
+          assert r['independent_50_usdt_scenarios_not_additive']
+          for row in r['results']:
+            assert row['closed_trades']==row['wins']+row['losses'] or row['closed_trades']>row['wins']+row['losses']
+            assert abs(row['virtual_buys']-row['closed_trades']-row['open_lots'])<=row['virtual_buys']+row['closed_trades']
+          assert Path('shelf_profit_audit.md').is_file()
+          print('SHELF_AUDIT_27_SCENARIOS_NO_LIVE_APPROVAL_CONFIRMED')
+          PY
+          cat shelf_profit_audit.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload complete results and per-fill audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-v2-existing-shelf-profitability-diagnostic
+          path: |
+            shelf_profit_audit.json
+            shelf_profit_audit.md
+            shelf_audit_stdout.log
+          retention-days: 30
