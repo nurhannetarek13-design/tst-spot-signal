@@ -1,0 +1,76 @@
+name: V2 Crash and FVG - historical profitability audit (NO LIVE)
+# One-time frozen experiment. Does not modify any existing paper ledgers or real orders.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/v2-crash-fvg-profit-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: historical-crash-fvg-profit-audit
+  cancel-in-progress: false
+jobs:
+  history_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      V2_MODE: shadow
+      V2_LIVE_TRADING: 'false'
+      V2_PRIVATE_ADAPTER_ENABLED: 'false'
+      V2_LIVE_AUTHORIZED: 'false'
+      V2_LIVE_ENGINE_UNLOCK: 'false'
+      V2_EMERGENCY_FLATTEN_VERIFIED: 'false'
+    steps:
+      - name: Checkout frozen experimental code without credentials
+        uses: actions/checkout@v4
+        with:
+          ref: 24c981ac1b06fd17c91e2c605902098c398a4955
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify fail-closed environment and strategy code
+        run: |
+          python - <<'PY'
+          import os
+          assert os.getenv('V2_MODE') == 'shadow'
+          assert all(os.getenv(k) == 'false' for k in ('V2_LIVE_TRADING',
+              'V2_PRIVATE_ADAPTER_ENABLED','V2_LIVE_AUTHORIZED',
+              'V2_LIVE_ENGINE_UNLOCK','V2_EMERGENCY_FLATTEN_VERIFIED'))
+          assert not any(os.getenv(k) for k in ('BINANCE_API_KEY',
+              'BINANCE_API_SECRET','V2_BINANCE_API_KEY','V2_BINANCE_API_SECRET'))
+          print('HISTORICAL_ONLY_PUBLIC_API_NO_PRIVATE_CREDENTIALS')
+          PY
+          pip install -r v2_bot/requirements.txt
+          python -m compileall -q v2_bot
+          python -m unittest v2_bot.tests.test_crash_reversal_retest v2_bot.tests.test_fvg_ab_paper -v
+      - name: Download contiguous real Binance Spot historical bars and replay frozen variants
+        run: |
+          set -o pipefail
+          python -m v2_bot.crash_fvg_profit_audit --output crash_fvg_profit_audit.json | tee audit_console.log
+      - name: Verify audit provenance, result rows and report only (never promote)
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('crash_fvg_profit_audit.json').read_text())
+          assert r['verdict']=='HISTORICAL_DIAGNOSTIC_ONLY_NO_PROFIT_GUARANTEE_OR_LIVE_APPROVAL'
+          assert r['real_orders']==0 and r['live_trading'] is False
+          assert len(r['results'])==18 and len(r['data_sha256'])==3
+          assert {x['variant'] for x in r['results']}=={'baseline','fvg'}
+          assert len({(x['period'],x['symbol'],x['variant']) for x in r['results']})==18
+          assert all(len(s)==64 for s in r['data_sha256'].values())
+          assert Path('crash_fvg_profit_audit.md').is_file()
+          print('HISTORICAL_AUDIT_INTEGRITY_PASS_18_ROWS_3_HASHES_ZERO_REAL_ORDERS')
+          PY
+          cat crash_fvg_profit_audit.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive full auditable trade log, run metadata and readable scorecard
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-fvg-381day-historical-profit-audit-no-live
+          path: |
+            crash_fvg_profit_audit.json
+            crash_fvg_profit_audit.md
+            audit_console.log
+          retention-days: 30
