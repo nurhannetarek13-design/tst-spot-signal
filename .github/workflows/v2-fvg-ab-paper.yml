@@ -41,7 +41,7 @@ jobs:
           path: .v2-fvg-ab
           key: fvg-ab-six-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: fvg-ab-six-
-      - name: Fail closed on lost or partial ledger, enforce paper-only flags and tests
+      - name: Fail closed on missing ledgers except audited no-fill first-run recovery
         env:
           CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: |
@@ -59,11 +59,23 @@ jobs:
                  for mode in ('baseline','fvg')]
           existing=[p.is_file() for p in files]
           assert all(existing) or not any(existing), 'Partially missing A/B ledgers: halt, never reset'
-          bootstrap=(os.getenv('GITHUB_RUN_NUMBER') == '1'
-                     and os.getenv('GITHUB_RUN_ATTEMPT') == '1'
-                     and os.getenv('GITHUB_EVENT_NAME') == 'push')
-          if not bootstrap:
-              assert os.getenv('CACHE_KEY') and all(existing), 'Lost historical A/B ledgers: halt'
+          first_bootstrap=(os.getenv('GITHUB_RUN_NUMBER') == '1'
+                           and os.getenv('GITHUB_RUN_ATTEMPT') == '1'
+                           and os.getenv('GITHUB_EVENT_NAME') == 'push'
+                           and not any(existing) and not os.getenv('CACHE_KEY'))
+          # Run #1 (35384845110) demonstrably made zero paper fills on all six
+          # accounts but failed before cache/save due a SECOND live data fetch
+          # crossing the 15m boundary. No persisted state exists to restore.
+          # Exactly one run may create new zero-trade accounts; never claim
+          # that the failed first scan's zero-signal event history was retained.
+          recovery_bootstrap=(os.getenv('GITHUB_RUN_NUMBER') == '2'
+                              and os.getenv('GITHUB_RUN_ATTEMPT') == '1'
+                              and os.getenv('GITHUB_EVENT_NAME') == 'push'
+                              and not any(existing) and not os.getenv('CACHE_KEY'))
+          if not first_bootstrap and not recovery_bootstrap:
+              assert os.getenv('CACHE_KEY') and all(existing), 'Lost historical A/B ledgers: halt, never reset'
+          if recovery_bootstrap:
+              print('AUDITED_NO_FILL_RUN1_35384845110_NO_CACHE; INITIALIZE_NEW_SIX_ZERO_TRADE_LEDGERS_RUN2_ONLY')
           print('PRIOR_SIX_AB_LEDGERS_RESTORED=', all(existing))
           PY
           pip install -r v2_bot/requirements.txt
@@ -72,13 +84,14 @@ jobs:
         run: |
           set -o pipefail
           python -m v2_bot.fvg_ab_paper --once --budget 50 | tee fvg_ab_report.json
-      - name: Validate six accounts, prices, fees and replay idempotence
+      - name: Validate six accounting ledgers and offline same-bar idempotence
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           from v2_bot import crash_reversal_retest as baseline
-          from v2_bot.fvg_ab_paper import SYMBOLS, state_path, validate
+          from v2_bot.fvg_ab_paper import SYMBOLS, state_path, validate, step as fvg_step
+          from v2_bot.pionex_style import Rules
           result=json.loads(Path('fvg_ab_report.json').read_text())
           assert result['real_orders']==0 and result['live_trading'] is False
           assert result['status']=='UNPROVEN_PAPER_COMPARISON_NOT_PROFIT_APPROVAL'
@@ -87,34 +100,37 @@ jobs:
           for symbol in SYMBOLS:
               b=result['by_symbol'][symbol]['baseline']
               f=result['by_symbol'][symbol]['fvg']
-              b_state=json.loads(Path(state_path('.v2-fvg-ab',symbol,'baseline')).read_text())
-              f_state=json.loads(Path(state_path('.v2-fvg-ab',symbol,'fvg')).read_text())
+              b_file=Path(state_path('.v2-fvg-ab',symbol,'baseline'))
+              f_file=Path(state_path('.v2-fvg-ab',symbol,'fvg'))
+              b_state=json.loads(b_file.read_text())
+              f_state=json.loads(f_file.read_text())
               baseline.validate(b_state,symbol=symbol,budget=50.)
               validate(f_state,symbol=symbol,budget=50.)
               assert b['last_closed_bar']==f['last_closed_bar']==result['last_closed_bar']
               for item in (b,f):
                   assert item['actual_orders']==0 and item['live_trading'] is False
                   assert abs(item['equity_usdt']-50.-item['total_pnl_including_unrealized_usdt'])<.00001
-          print('SIX_MATCHED_SNAPSHOT_PAPER_ACCOUNTS_VALID; REAL_ORDERS=0')
-          PY
-          python -m v2_bot.fvg_ab_paper --once --budget 50 > fvg_ab_repeat.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          first=json.loads(Path('fvg_ab_report.json').read_text())
-          second=json.loads(Path('fvg_ab_repeat.json').read_text())
-          for symbol, pair in first['by_symbol'].items():
-              for variant in ('baseline','fvg'):
-                  original=pair[variant]
-                  replay=second['by_symbol'][symbol][variant]
-                  expected=('exposed_gap_halted_no_invented_fill'
-                            if original['action']=='exposed_gap_halted_no_invented_fill'
-                            else 'duplicate_bar_no_action')
-                  assert replay['action']==expected,(symbol,variant,replay['action'])
-                  assert replay['trades']==original['trades']
-                  assert replay['fees_paid_usdt']==original['fees_paid_usdt']
-                  assert replay['realized_pnl_after_fees_usdt']==original['realized_pnl_after_fees_usdt']
-          print('SIX_VARIANTS_DEDUPLICATED_NO_EXTRA_VIRTUAL_FILLS')
+              # Idempotence is a PURE same-timestamp state test: do NOT fetch
+              # fresh market data, which might cross the 15m boundary mid-test.
+              # These synthetic bars are only a dummy duplicate identifier;
+              # they are never used for market outcomes, price or performance.
+              for variant, state, file in (('baseline',b_state,b_file),('fvg',f_state,f_file)):
+                  before=file.read_bytes()
+                  prior=json.dumps(state,sort_keys=True)
+                  last=int(state['last_bar'])
+                  assert last>0
+                  bars=[{'open_time':last-(79-i)*900000,'open':100.,'high':100.5,
+                         'low':99.5,'close':100.,'quote_volume':1000000.}
+                        for i in range(80)]
+                  book={'bid':100.,'ask':100.05}
+                  rules=Rules(5.,0.00001,0.00001)
+                  again=(baseline.step(state,bars,book,rules) if variant=='baseline'
+                         else fvg_step(state,bars,book,rules))
+                  assert again['action']=='duplicate_bar_no_action',(symbol,variant,again['action'])
+                  assert again['trades']==result['by_symbol'][symbol][variant]['trades']
+                  assert json.dumps(state,sort_keys=True)==prior, 'Duplicate candle changed state'
+                  assert file.read_bytes()==before, 'Duplicate candle changed saved file'
+          print('SIX_MATCHED_SNAPSHOT_ACCOUNTS_VALID; OFFLINE_DUPLICATE_IDEMPOTENCE_PASS; REAL_ORDERS=0')
           PY
       - name: Save verified isolated ledgers for next scheduled run
         uses: actions/cache/save@v4
@@ -144,7 +160,7 @@ jobs:
                       'fees_paid_usdt':ledger['fees_paid'],'virtual_cash_usdt':ledger['cash']}
                   lines.append(f"| {symbol} | {mode} | {s['action']} | {s['equity_usdt']:.4f} | {s['total_pnl_including_unrealized_usdt']:+.4f} | {s['realized_pnl_after_fees_usdt']:+.4f} | {s['fees_paid_usdt']:.4f} | {s['trades']} | {s['halted']} |")
               difference=report['by_symbol'][symbol]['descriptive_pnl_difference_usdt_not_edge']
-              lines.append(f'**{symbol} descriptive FVG − baseline PnL: {difference:+.4f} USDT; NOT an edge claim.**')
+              lines.append(f'**{symbol} descriptive FVG - baseline PnL: {difference:+.4f} USDT; NOT an edge claim.**')
           lines.append('**Real orders: 0. Live: OFF.** Paper fills are next-observable-book simulations; exchange orders/stop protection not installed.')
           Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n'.join(lines)+'\n')
           Path('fvg_ab_audit.json').write_text(json.dumps({
