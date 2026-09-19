@@ -9,6 +9,7 @@ on:
       - 'ready_bot/multi_bot.py'
       - 'ready_bot/multi_config.json'
       - 'tests/test_multi_bot.py'
+      - 'tests/test_multi_bot_contract.py'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -31,7 +32,7 @@ jobs:
       - name: Compile and test
         run: |
           python -m py_compile ready_bot/multi_bot.py
-          python -m unittest discover -s tests -p 'test_multi_bot.py' -v
+          python -m unittest discover -s tests -p 'test_multi_bot*.py' -v
       - name: Run multi-strategy paper bot
         run: python ready_bot/multi_bot.py
       - name: Persist multi-strategy paper state
