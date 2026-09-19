@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native-source multi-strategy PAPER router. No private API access or order functions.
 
-The JS bridge executes the original JS entry logic. Freqtrade classes with unavailable
+The JS bridge executes original JS entry logic. Freqtrade classes with unavailable
 native runtime/dependencies or incomplete exit semantics are reported as BLOCKED,
 not silently rewritten into counterfeit strategies.
 """
@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import multi_bot as core
+from arbitration import execute_candidates
 
 BASE = Path(__file__).resolve().parents[1]
 BRIDGE = Path(__file__).with_name('native_js_bridge.mjs')
@@ -36,6 +37,7 @@ FREQTRADE_BLOCKS = {
     'NFI_PROTECTED_X7': 'Parent NostalgiaForInfinityX7 is absent from repository; class always vetoes automatic entry',
     'UNIFIED_CANDIDATE': 'Manifest is validation/forward only; fingerprint/OOS unresolved and L2 conditions cannot be proxied by candles',
 }
+BAR_MS = {'15m': 900_000, '1h': 3_600_000}
 
 
 def _native_only(*_args):
@@ -52,9 +54,9 @@ def source_registry():
                for name in ('TREND_BREAKOUT', 'TREND_PULLBACK', 'RANGE_REVERSION')]
     entries.extend([
         dict(id=REGIME, status='PAPER_UNPROVEN_WRAPPED_EXIT', source='src/strategies/regime-adaptive-momentum.mjs',
-             note='Native entry; NEW paper-only fixed 2R target and 24 closed 1h bar time exit; not source-exit parity'),
+             note='Native entry; NEW paper-only fixed 2R target and 24 completed 1h bar time exit; not source-exit parity'),
         dict(id=SMALL_CAP, status='PAPER_UNPROVEN', source='src/strategies/small-cap-intraday.mjs',
-             note='Native entry, native ATR stop/target and 8 closed 15m bar time exit; min-notional may block a 5.50 USDT stake'),
+             note='Native entry, native ATR stop/target and 8 completed 15m bar time exit; min-notional may block a 5.50 USDT stake'),
     ])
     for name, filename in FREQTRADE_FILES.items():
         path = BASE / 'freqtrade' / 'user_data' / 'strategies' / filename
@@ -118,8 +120,8 @@ def native_signal(name, symbol, snapshot, btc):
         if not result.get('ok'):
             return None
         entry, stop = float(result['entry']), float(result['stop'])
-        # The JS source has NO target or exit. This adapter is explicitly a NEW,
-        # unvalidated PAPER variant; never pass it off as the original exit.
+        # The JS source has NO target or exit. Explicit NEW unvalidated PAPER
+        # variant; never pass it off as original exit or live-approved.
         target = entry + 2 * (entry - stop)
         signal = core.candidate(name, symbol, entry, stop, target,
                                 candles[-1]['open_time'], 'Native JS momentum; paper adapter 2R')
@@ -145,6 +147,23 @@ def native_signal(name, symbol, snapshot, btc):
                           hold_interval='15m', native_source=NATIVE_SOURCE_IDS[name])
         return signal
     raise RuntimeError('UNKNOWN_NATIVE_SOURCE')
+
+
+def native_time_exit_due(position, bars):
+    """Count complete interval bars from actual paper FILL time, not signal-bar open.
+
+    Invalid/legacy native exit contracts cause an explicit entry halt in `run`.
+    Stop and target checks remain available even if the time-exit data fails.
+    """
+    interval = position.get('hold_interval')
+    count = position.get('hold_bars')
+    if interval not in BAR_MS or type(count) is not int or count < 1 or not bars:
+        raise RuntimeError('NATIVE_TIME_EXIT_CONTRACT_OR_DATA_MISSING')
+    opened = datetime.fromisoformat(position['opened_at'])
+    if opened.tzinfo is None:
+        raise RuntimeError('NATIVE_POSITION_OPEN_TIME_NOT_UTC')
+    elapsed = (bars[-1]['open_time'] + BAR_MS[interval]) - opened.timestamp() * 1000
+    return elapsed >= count * BAR_MS[interval]
 
 
 def validate(config):
@@ -176,8 +195,8 @@ def run(config):
             snapshots[symbol] = dict(bars=bars, htf=htf, price=price, filters=filters)
         except Exception as exc:
             blocked.append(dict(symbol=symbol, reason='DATA_OR_FILTER_UNAVAILABLE', detail=str(exc)[:140]))
-    # A native-module market-data failure only disables its signal; it must
-    # never disable price monitoring for unrelated existing paper positions.
+    # A native-module data failure must not disable price monitoring for
+    # unrelated paper positions; it only disables signals requiring that data.
     if any(s in enabled for s in NATIVE_SOURCE_IDS):
         for symbol, snap in snapshots.items():
             try:
@@ -190,6 +209,10 @@ def run(config):
                 if not (snap['bid'] > 0 and snap['ask'] > snap['bid'] and snap['quote_vol'] > 0):
                     raise RuntimeError('BAD_ORDER_BOOK_OR_LIQUIDITY')
             except Exception as exc:
+                # Do not retain incomplete quote fields as if they were valid.
+                snap.pop('bid', None)
+                snap.pop('ask', None)
+                snap.pop('quote_vol', None)
                 blocked.append(dict(symbol=symbol, reason='NATIVE_DATA_UNAVAILABLE', detail=str(exc)[:140]))
         benchmark = snapshots.get('BTCUSDT', {})
     else:
@@ -201,19 +224,20 @@ def run(config):
             blocked.append(dict(symbol=symbol, reason='OPEN_POSITION_UNPRICED'))
             unpriced = True
             continue
-        pos, price = state['positions'][symbol], snap['price']
+        pos = state['positions'][symbol]
+        price = snap.get('bid', snap['price'])  # best executable sell quote if available
         if price <= pos['stop']:
             core.close_position(state, symbol, price, config, 'STOP')
         elif price >= pos['target']:
             core.close_position(state, symbol, price, config, 'TARGET')
         elif pos['strategy'] in NATIVE_SOURCE_IDS:
-            interval = '15m' if pos['strategy'] == SMALL_CAP else '1h'
-            bars = snap.get(interval)
-            if not bars:
-                blocked.append(dict(symbol=symbol, reason='NATIVE_TIME_EXIT_DATA_UNAVAILABLE'))
+            try:
+                interval = pos['hold_interval']
+                if native_time_exit_due(pos, snap.get(interval)):
+                    core.close_position(state, symbol, price, config, 'TIME_EXIT')
+            except (ValueError, KeyError, TypeError, RuntimeError) as exc:
+                blocked.append(dict(symbol=symbol, reason='NATIVE_TIME_EXIT_UNVERIFIED', detail=str(exc)[:140]))
                 unpriced = True
-            elif bars[-1]['open_time'] - pos['bar_time'] >= (8 * 15 if interval == '15m' else 24 * 60) * 60_000:
-                core.close_position(state, symbol, price, config, 'TIME_EXIT')
     signals = []
     for symbol, snap in snapshots.items():
         for name in enabled:
@@ -225,28 +249,21 @@ def run(config):
             except Exception as exc:
                 blocked.append(dict(symbol=symbol, strategy=name, reason='SIGNAL_SOURCE_FAILED',
                                     detail=str(exc)[:140]))
+    accepted = []
     if unpriced:
-        blocked.append(dict(reason='GLOBAL_ENTRY_HALT_UNPRICED_POSITION'))
+        blocked.append(dict(reason='GLOBAL_ENTRY_HALT_UNVERIFIED_OPEN_POSITION'))
     else:
-        for signal in core.pick_signals(signals, enabled, state):
-            symbol = signal['symbol']
-            stake = signal.get('max_stake_usdt', config['trade_size_usdt'])
-            if not (math.isfinite(stake) and stake > 0):
-                reason = 'NATIVE_INVALID_STAKE'
-            else:
-                own_config = {**config, 'trade_size_usdt': min(config['trade_size_usdt'], stake)}
-                reason = core.open_position(state, signal, snapshots[symbol]['price'], own_config,
-                                            snapshots[symbol]['filters'])
-            state['seen'][f"{signal['strategy']}:{symbol}"] = signal['bar_time']
-            state.setdefault('seen_symbol', {})[symbol] = signal['bar_time']
-            if reason != 'PAPER_OPENED':
-                blocked.append(dict(symbol=symbol, strategy=signal['strategy'], reason=reason))
+        rejected, accepted = execute_candidates(signals, enabled, state, config, snapshots,
+                                                core.open_position)
+        blocked.extend(rejected)
     state['signals'] = [{k: s[k] for k in ('symbol', 'strategy', 'bar_time', 'reason')} for s in signals]
+    state['accepted_signals'] = accepted
     state['blocked'], state['last_run'] = blocked, core.utc_now()
     core.save_state(state)
     print(json.dumps(dict(mode='PAPER_ONLY', cash_usdt=state['cash_usdt'], day_pnl=state['day_pnl'],
                           positions=state['positions'], signals=state['signals'],
-                          blocked=blocked, source_registry=state['source_registry'],
+                          accepted_signals=accepted, blocked=blocked,
+                          source_registry=state['source_registry'],
                           last_run=state['last_run']), indent=2))
     return state
 
