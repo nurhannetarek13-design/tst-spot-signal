@@ -6,6 +6,7 @@ on:
       - feat/ready-multi-strategy-paper
       - feat/wire-native-strategies-paper-20260919
       - fix/paper-arbitration-fallback-and-fidelity
+      - fix/paper-legacy-lock-migration-20260920
     paths:
       - 'ready_bot/**'
       - 'src/strategies/**'
@@ -13,6 +14,7 @@ on:
       - 'tests/test_native_paper.py'
       - 'tests/test_native_js_real.py'
       - 'tests/test_paper_arbitration.py'
+      - 'tests/test_paper_legacy_locks.py'
       - '.github/workflows/multi-paper-ci.yml'
   pull_request:
     paths:
@@ -22,6 +24,7 @@ on:
       - 'tests/test_native_paper.py'
       - 'tests/test_native_js_real.py'
       - 'tests/test_paper_arbitration.py'
+      - 'tests/test_paper_legacy_locks.py'
       - '.github/workflows/multi-paper-ci.yml'
   workflow_dispatch:
 
@@ -51,4 +54,5 @@ jobs:
           python -m unittest discover -s tests -p 'test_native_paper.py' -v
           python -m unittest discover -s tests -p 'test_native_js_real.py' -v
           python -m unittest discover -s tests -p 'test_paper_arbitration.py' -v
+          python -m unittest discover -s tests -p 'test_paper_legacy_locks.py' -v
           python -c 'import json; c=json.load(open("ready_bot/multi_config.json")); assert c["mode"] == "paper" and c["max_portfolio_risk_usdt"] <= c["max_daily_loss_usdt"]'
