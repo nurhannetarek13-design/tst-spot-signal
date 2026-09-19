@@ -1,21 +1,11 @@
 {
-  "blocked": [
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "FILUSDT"
-    },
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "NEARUSDT"
-    }
-  ],
+  "accepted_signals": [],
+  "blocked": [],
   "cash_usdt": 20.0,
   "closed_trades": [],
   "day": "2026-09-19",
   "day_pnl": 0.0,
-  "last_run": "2026-09-19T18:17:11.140958+00:00",
+  "last_run": "2026-09-19T18:25:16.588375+00:00",
   "mode": "PAPER_ONLY",
   "positions": {},
   "seen": {
@@ -58,13 +48,13 @@
     },
     {
       "id": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "note": "Native entry; NEW paper-only fixed 2R target and 24 closed 1h bar time exit; not source-exit parity",
+      "note": "Native entry; NEW paper-only fixed 2R target and 24 completed 1h bar time exit; not source-exit parity",
       "source": "src/strategies/regime-adaptive-momentum.mjs",
       "status": "PAPER_UNPROVEN_WRAPPED_EXIT"
     },
     {
       "id": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
-      "note": "Native entry, native ATR stop/target and 8 closed 15m bar time exit; min-notional may block a 5.50 USDT stake",
+      "note": "Native entry, native ATR stop/target and 8 completed 15m bar time exit; min-notional may block a 5.50 USDT stake",
       "source": "src/strategies/small-cap-intraday.mjs",
       "status": "PAPER_UNPROVEN"
     },
