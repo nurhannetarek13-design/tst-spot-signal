@@ -1,6 +1,15 @@
 name: Multi-Strategy Paper CI
 
 on:
+  push:
+    branches:
+      - feat/ready-multi-strategy-paper
+    paths:
+      - 'ready_bot/multi_bot.py'
+      - 'ready_bot/multi_config.json'
+      - 'tests/test_multi_bot.py'
+      - 'tests/test_multi_bot_contract.py'
+      - '.github/workflows/multi-paper-ci.yml'
   pull_request:
     paths:
       - 'ready_bot/multi_bot.py'
