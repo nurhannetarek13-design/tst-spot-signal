@@ -34,6 +34,10 @@ def execute_candidates(signals, enabled, state, config, snapshots, open_fn):
         stake = signal.get('max_stake_usdt', config['trade_size_usdt'])
         if not isinstance(stake, (int, float)) or not math.isfinite(stake) or stake <= 0:
             reason = 'INVALID_STRATEGY_STAKE'
+        elif 'hold_bars' in signal and (type(signal['hold_bars']) is not int
+                                        or not 1 <= signal['hold_bars'] <= 1000
+                                        or signal.get('hold_interval') not in ('15m', '1h')):
+            reason = 'INVALID_NATIVE_HOLD_CONTRACT'
         else:
             own_config = {**config, 'trade_size_usdt': min(config['trade_size_usdt'], stake)}
             # Simulated BUY at public best ask when available; a last trade is
@@ -46,6 +50,12 @@ def execute_candidates(signals, enabled, state, config, snapshots, open_fn):
                 reason = open_fn(state, signal, price, own_config, snapshot['filters'])
         state.setdefault('seen', {})[f'{name}:{symbol}'] = bar_time
         if reason == 'PAPER_OPENED':
+            position = state['positions'][symbol]
+            if 'hold_bars' in signal:
+                position['hold_bars'] = signal['hold_bars']
+                position['hold_interval'] = signal['hold_interval']
+            if 'native_source' in signal:
+                position['native_source'] = signal['native_source']
             state.setdefault('seen_symbol', {})[symbol] = bar_time
             accepted.append(dict(symbol=symbol, strategy=name, bar_time=bar_time,
                                  reason='PAPER_OPENED'))
