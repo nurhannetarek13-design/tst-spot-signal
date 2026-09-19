@@ -1,0 +1,15 @@
+{
+  "mode": "paper",
+  "strategies": ["TREND_BREAKOUT", "TREND_PULLBACK", "RANGE_REVERSION"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "trend_interval": "4h",
+  "execution_interval": "1h",
+  "starting_cash_usdt": 20.0,
+  "trade_size_usdt": 7.0,
+  "max_open_positions": 3,
+  "max_daily_loss_usdt": 2.0,
+  "max_risk_usdt": 0.2,
+  "max_stop_fraction": 0.03,
+  "fee_rate": 0.001,
+  "slippage_rate": 0.0005
+}
