@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'ready_bot/native_paper.py'
+      - 'ready_bot/arbitration.py'
       - 'ready_bot/native_js_bridge.mjs'
       - 'ready_bot/multi_bot.py'
       - 'ready_bot/multi_config.json'
@@ -14,6 +15,7 @@ on:
       - 'tests/test_multi_bot_contract.py'
       - 'tests/test_native_paper.py'
       - 'tests/test_native_js_real.py'
+      - 'tests/test_paper_arbitration.py'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -38,11 +40,12 @@ jobs:
           node-version: '22'
       - name: Compile and test full source bridge
         run: |
-          python -m py_compile ready_bot/multi_bot.py ready_bot/native_paper.py
+          python -m py_compile ready_bot/multi_bot.py ready_bot/native_paper.py ready_bot/arbitration.py
           node --check ready_bot/native_js_bridge.mjs
           python -m unittest discover -s tests -p 'test_multi_bot*.py' -v
           python -m unittest discover -s tests -p 'test_native_paper.py' -v
           python -m unittest discover -s tests -p 'test_native_js_real.py' -v
+          python -m unittest discover -s tests -p 'test_paper_arbitration.py' -v
       - name: Run unified native-source paper bot
         run: python ready_bot/native_paper.py
       - name: Persist paper-only state
