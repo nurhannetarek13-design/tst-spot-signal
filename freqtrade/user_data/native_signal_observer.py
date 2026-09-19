@@ -72,11 +72,11 @@ def safe_number(value):
 
 
 def evaluate(symbol, rows, source_id, module_name, class_name):
-    """Execute the actual class methods; fail closed if a dependency is missing."""
-    import importlib
-    import pandas as pd
+    """Execute actual class methods; fail closed before importing optional data dependencies."""
     if len(rows) < 360:
         raise RuntimeError('INSUFFICIENT_FINISHED_15M_HISTORY')
+    import importlib
+    import pandas as pd
     if str(SOURCE) not in sys.path:
         sys.path.insert(0, str(SOURCE))
     klass = getattr(importlib.import_module(module_name), class_name)
