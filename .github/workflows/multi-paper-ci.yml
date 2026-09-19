@@ -1,0 +1,26 @@
+name: Multi-Strategy Paper CI
+
+on:
+  pull_request:
+    paths:
+      - 'ready_bot/multi_bot.py'
+      - 'ready_bot/multi_config.json'
+      - 'tests/test_multi_bot.py'
+      - '.github/workflows/multi-paper-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-paper-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m py_compile ready_bot/multi_bot.py
+          python -m unittest discover -s tests -p test_multi_bot.py -v
+          python -c 'import json; c=json.load(open("ready_bot/multi_config.json")); assert c["mode"] == "paper"'
