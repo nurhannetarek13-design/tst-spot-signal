@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One multi-strategy PAPER trading engine. Does not submit exchange orders."""
+"""One multi-strategy PAPER engine. This module contains no exchange order submission."""
 import json
 import math
 import os
@@ -18,19 +18,19 @@ def utc_now():
 
 
 def request_json(url):
-    req = urllib.request.Request(url, headers={'User-Agent': 'tst-multi-paper/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'tst-multi-paper/1.1'})
     with urllib.request.urlopen(req, timeout=15) as response:
         return json.load(response)
 
 
 def market_request(route):
-    error = None
+    last_error = None
     for base in ('https://data-api.binance.vision', 'https://api.binance.com'):
         try:
             return request_json(base + route)
         except Exception as exc:
-            error = exc
-    raise RuntimeError(f'Binance market data unavailable for {route}: {error}')
+            last_error = exc
+    raise RuntimeError(f'Binance market data unavailable for {route}: {last_error}')
 
 
 def closed_bars(symbol, timeframe='1h', limit=250):
@@ -66,7 +66,9 @@ def rsi(closes, n=14):
     changes = [closes[i] - closes[i-1] for i in range(len(closes)-n, len(closes))]
     gains = sum(max(v, 0) for v in changes) / n
     losses = sum(max(-v, 0) for v in changes) / n
-    return 100 if losses == 0 else 100 - 100 / (1 + gains / losses)
+    if losses == 0:
+        return 100 if gains else 50
+    return 100 - 100 / (1 + gains / losses)
 
 
 def candidate(strategy, symbol, price, stop, target, bar_time, reason):
@@ -79,8 +81,7 @@ def candidate(strategy, symbol, price, stop, target, bar_time, reason):
 def trend_breakout(symbol, htf, bars):
     if min(len(htf), len(bars)) < 220:
         return None
-    higher = [b['close'] for b in htf]
-    closes = [b['close'] for b in bars]
+    higher, closes = [b['close'] for b in htf], [b['close'] for b in bars]
     if not (ema(higher, 50) > ema(higher, 200) and ema(closes, 50) > ema(closes, 200)):
         return None
     last = bars[-1]
@@ -96,8 +97,7 @@ def trend_breakout(symbol, htf, bars):
 def trend_pullback(symbol, htf, bars):
     if min(len(htf), len(bars)) < 220:
         return None
-    higher = [b['close'] for b in htf]
-    closes = [b['close'] for b in bars]
+    higher, closes = [b['close'] for b in htf], [b['close'] for b in bars]
     if not (ema(higher, 50) > ema(higher, 200) and ema(closes, 50) > ema(closes, 200)):
         return None
     prev_ema20, ema20 = ema(closes[:-1], 20), ema(closes, 20)
@@ -111,8 +111,7 @@ def trend_pullback(symbol, htf, bars):
 def range_reversion(symbol, htf, bars):
     if min(len(htf), len(bars)) < 220:
         return None
-    higher = [b['close'] for b in htf]
-    closes = [b['close'] for b in bars]
+    higher, closes = [b['close'] for b in htf], [b['close'] for b in bars]
     if abs(ema(higher, 50) / ema(higher, 200) - 1) > 0.01:
         return None
     window = closes[-21:-1]
@@ -128,6 +127,8 @@ def range_reversion(symbol, htf, bars):
                      mean, last['open_time'], 'Lower-band reclaim, range regime')
 
 
+# Each entry function and its exits are independent. Register a new strategy only
+# after supplying complete causal entry/exit rules and offline tests.
 STRATEGIES = {
     'TREND_BREAKOUT': trend_breakout,
     'TREND_PULLBACK': trend_pullback,
@@ -163,15 +164,29 @@ def simulated_fill(price, side, config):
     return price * (1 + slip if side == 'buy' else 1 - slip)
 
 
+def loss_at_stop(position, config):
+    """Modeled entry cost minus net stop proceeds, inclusive of entry/exit fees and exit slippage."""
+    stop_fill = simulated_fill(position['stop'], 'sell', config)
+    return max(0.0, position['cost'] - position['qty'] * stop_fill * (1 - config['fee_rate']))
+
+
+def portfolio_stop_risk(state, config):
+    return sum(loss_at_stop(pos, config) for pos in state['positions'].values())
+
+
 def close_position(state, symbol, price, config, reason):
     position = state['positions'].pop(symbol)
-    sell = simulated_fill(price, 'sell', config)
+    # A stop can gap against us; a target is conservatively modeled at its target.
+    reference = min(price, position['stop']) if reason == 'STOP' else (
+        position['target'] if reason == 'TARGET' else price)
+    sell = simulated_fill(reference, 'sell', config)
     proceeds = position['qty'] * sell * (1 - config['fee_rate'])
     pnl = proceeds - position['cost']
     state['cash_usdt'] += proceeds
     state['day_pnl'] += pnl
     state['closed_trades'].append(dict(symbol=symbol, strategy=position['strategy'],
-                                       pnl_usdt=pnl, reason=reason, closed_at=utc_now()))
+        entry=position['entry'], exit=sell, qty=position['qty'], pnl_usdt=pnl,
+        reason=reason, opened_at=position['opened_at'], closed_at=utc_now()))
     return pnl
 
 
@@ -183,38 +198,52 @@ def open_position(state, signal, current_price, config, filters):
         return 'POSITION_ALREADY_OPEN'
     if state['day_pnl'] <= -config['max_daily_loss_usdt']:
         return 'DAILY_LOSS_LIMIT'
+    if not (math.isfinite(current_price) and current_price > 0):
+        return 'INVALID_QUOTE'
+    if signal.get('strategy') not in STRATEGIES:
+        return 'UNKNOWN_STRATEGY'
+    entry = float(signal['price'])
+    planned_stop = float(signal['stop'])
+    planned_target = float(signal['target'])
+    if not all(math.isfinite(v) for v in (entry, planned_stop, planned_target)) or not 0 < planned_stop < entry < planned_target:
+        return 'INVALID_STRATEGY_LEVELS'
+    planned_risk_fraction = (entry - planned_stop) / entry
+    if not 0 < planned_risk_fraction <= config['max_stop_fraction']:
+        return 'INVALID_STOP_DISTANCE'
     fee = config['fee_rate']
     notional = min(config['trade_size_usdt'], state['cash_usdt'] / (1 + fee))
     fill = simulated_fill(current_price, 'buy', config)
-    # Stops/targets are anchored at the simulated fill, not the stale signal close.
-    planned_risk_fraction = (signal['price'] - signal['stop']) / signal['price']
-    if not 0 < planned_risk_fraction <= config['max_stop_fraction']:
-        return 'INVALID_STOP_DISTANCE'
-    risk = fill * planned_risk_fraction
-    actual_risk = notional * planned_risk_fraction + notional * 2 * (fee + config['slippage_rate'])
-    if actual_risk > config['max_risk_usdt']:
-        return 'RISK_PER_TRADE'
-    if max(0.0, -state['day_pnl']) + actual_risk > config['max_daily_loss_usdt']:
-        return 'REMAINING_DAILY_RISK'
+    if not math.isfinite(fill) or fill <= 0:
+        return 'INVALID_QUOTE'
     if notional < filters['min_notional'] or notional > filters['max_notional']:
         return 'EXCHANGE_NOTIONAL_FILTER'
-    if notional * (1 + fee) > state['cash_usdt']:
-        return 'INSUFFICIENT_CASH'
     qty = notional / fill
     step = filters['step_size']
-    if step > 0:
-        qty = math.floor((qty + 1e-12) / step) * step
+    if not math.isfinite(step) or step <= 0:
+        return 'INVALID_LOT_STEP'
+    qty = math.floor(qty / step + 1e-10) * step
     if qty < filters['min_qty'] or qty > filters['max_qty']:
         return 'EXCHANGE_LOT_FILTER'
-    if qty * fill < filters['min_notional']:
+    if qty * fill < filters['min_notional'] or qty * fill > filters['max_notional']:
         return 'EXCHANGE_NOTIONAL_FILTER_AFTER_ROUNDING'
     cost = qty * fill * (1 + fee)
-    if cost > state['cash_usdt']:
+    if cost > state['cash_usdt'] + 1e-10:
         return 'INSUFFICIENT_CASH_AFTER_ROUNDING'
-    state['cash_usdt'] -= cost
-    state['positions'][symbol] = dict(strategy=signal['strategy'], entry=fill,
-        qty=qty, cost=cost, stop=fill-risk, target=fill+2*risk,
+    # Preserve each strategy's independently defined stop AND target. The old
+    # engine wrongly replaced RANGE_REVERSION's mean target with a universal 2R.
+    position = dict(strategy=signal['strategy'], entry=fill, qty=qty, cost=cost,
+        stop=fill * planned_stop / entry, target=fill * planned_target / entry,
         opened_at=utc_now(), bar_time=signal['bar_time'])
+    actual_risk = loss_at_stop(position, config)
+    if actual_risk > config['max_risk_usdt'] + 1e-10:
+        return 'RISK_PER_TRADE'
+    total_stop_risk = portfolio_stop_risk(state, config) + actual_risk
+    if total_stop_risk > config.get('max_portfolio_risk_usdt', config['max_daily_loss_usdt']) + 1e-10:
+        return 'PORTFOLIO_STOP_RISK'
+    if max(0.0, -state['day_pnl']) + total_stop_risk > config['max_daily_loss_usdt'] + 1e-10:
+        return 'REMAINING_DAILY_RISK'
+    state['cash_usdt'] -= cost
+    state['positions'][symbol] = position
     return 'PAPER_OPENED'
 
 
@@ -224,9 +253,9 @@ def symbol_filters(symbol):
                   s.get('status') == 'TRADING' and s.get('isSpotTradingAllowed', True)), None)
     if not entry:
         raise RuntimeError(f'Non-trading Spot market: {symbol}')
-    row = {f['filterType']: f for f in entry.get('filters', [])}
-    lots = row.get('LOT_SIZE')
-    notional = row.get('NOTIONAL') or row.get('MIN_NOTIONAL')
+    rows = {f['filterType']: f for f in entry.get('filters', [])}
+    lots = rows.get('LOT_SIZE')
+    notional = rows.get('NOTIONAL') or rows.get('MIN_NOTIONAL')
     if not lots or not notional:
         raise RuntimeError(f'Missing exchange filters: {symbol}')
     return dict(min_notional=float(notional['minNotional']),
@@ -236,52 +265,65 @@ def symbol_filters(symbol):
 
 
 def pick_signals(signals, enabled, state):
-    """Deterministic one-position-per-symbol arbitration, never aggregate signals as votes."""
+    """Deterministic priority; never use several correlated signals as 'votes'."""
     order = {name: i for i, name in enumerate(enabled)}
     selected = {}
     for signal in sorted(signals, key=lambda s: (order[s['strategy']], s['symbol'])):
-        if signal['symbol'] not in selected and signal['symbol'] not in state['positions']:
-            key = f"{signal['strategy']}:{signal['symbol']}"
-            already_used_symbol = state.get('seen_symbol', {}).get(signal['symbol']) == signal['bar_time']
-            if state['seen'].get(key) != signal['bar_time'] and not already_used_symbol:
-                selected[signal['symbol']] = signal
+        symbol = signal['symbol']
+        if symbol not in selected and symbol not in state['positions']:
+            key = f"{signal['strategy']}:{symbol}"
+            if (state.get('seen', {}).get(key) != signal['bar_time']
+                    and state.get('seen_symbol', {}).get(symbol) != signal['bar_time']):
+                selected[symbol] = signal
     return list(selected.values())
 
 
-def run(config):
+def validate_config(config):
     if config.get('mode') != 'paper':
         raise RuntimeError('This bot only supports PAPER mode')
     enabled = config['strategies']
     if not enabled or len(set(enabled)) != len(enabled) or any(x not in STRATEGIES for x in enabled):
         raise RuntimeError('Invalid strategy registry')
-    if any(float(config[x]) < 0 for x in ('fee_rate', 'slippage_rate')):
-        raise RuntimeError('Negative trading costs')
+    if not config.get('symbols') or any(not s.endswith('USDT') for s in config['symbols']):
+        raise RuntimeError('Invalid Spot USDT symbol universe')
+    for key in ('starting_cash_usdt', 'trade_size_usdt', 'max_daily_loss_usdt',
+                'max_risk_usdt', 'max_stop_fraction', 'max_open_positions'):
+        if not float(config[key]) > 0:
+            raise RuntimeError(f'Invalid positive risk setting: {key}')
+    for key in ('fee_rate', 'slippage_rate'):
+        if not 0 <= float(config[key]) < 1:
+            raise RuntimeError(f'Invalid trading cost: {key}')
+    if not 0 < float(config.get('max_portfolio_risk_usdt', config['max_daily_loss_usdt'])) <= config['max_daily_loss_usdt']:
+        raise RuntimeError('Invalid portfolio risk cap')
+
+
+def run(config):
+    validate_config(config)
+    enabled = config['strategies']
     state = read_state(config)
     today = datetime.now(timezone.utc).date().isoformat()
     if state['day'] != today:
         state['day'], state['day_pnl'] = today, 0.0
-    market = {}
-    blocked = []
-    # One unavailable symbol must not silently substitute synthetic prices.
+    market, blocked = {}, []
     for symbol in config['symbols']:
         try:
             bars = closed_bars(symbol, config['execution_interval'], 250)
             htf = closed_bars(symbol, config['trend_interval'], 250)
-            ticker = market_request(f'/api/v3/ticker/price?symbol={symbol}')
-            price = float(ticker['price'])
+            quote = market_request(f'/api/v3/ticker/price?symbol={symbol}')
+            price = float(quote['price'])
             filters = symbol_filters(symbol)
-            if len(bars) < 220 or len(htf) < 220 or not price > 0:
+            if len(bars) < 220 or len(htf) < 220 or not (math.isfinite(price) and price > 0):
                 raise RuntimeError('Insufficient closed bars or invalid quote')
             market[symbol] = htf, bars, price, filters
         except Exception as exc:
             blocked.append(dict(symbol=symbol, reason='DATA_OR_FILTER_UNAVAILABLE', detail=str(exc)[:140]))
-    # A failed quote cannot close an existing position: keep it recorded and block new entries.
+    unpriced_position = False
     for symbol in list(state['positions']):
         if symbol not in market:
             blocked.append(dict(symbol=symbol, reason='OPEN_POSITION_PRICE_UNAVAILABLE'))
+            unpriced_position = True
             continue
-        price = market[symbol][2]
-        position = state['positions'][symbol]
+        price, position = market[symbol][2], state['positions'][symbol]
         if price <= position['stop']:
             close_position(state, symbol, price, config, 'STOP')
         elif price >= position['target']:
@@ -292,21 +334,22 @@ def run(config):
             signal = STRATEGIES[name](symbol, htf, bars)
             if signal:
                 signals.append(signal)
-    for signal in pick_signals(signals, enabled, state):
-        symbol = signal['symbol']
-        reason = open_position(state, signal, market[symbol][2], config, market[symbol][3])
-        # Consume bar after decision, to prevent duplicate orders on the same candle.
-        state['seen'][f"{signal['strategy']}:{symbol}"] = signal['bar_time']
-        state.setdefault('seen_symbol', {})[symbol] = signal['bar_time']
-        if reason != 'PAPER_OPENED':
-            blocked.append(dict(symbol=symbol, strategy=signal['strategy'], reason=reason))
+    if unpriced_position:
+        blocked.append(dict(reason='GLOBAL_ENTRY_HALT_OPEN_POSITION_UNPRICED'))
+    else:
+        for signal in pick_signals(signals, enabled, state):
+            symbol = signal['symbol']
+            reason = open_position(state, signal, market[symbol][2], config, market[symbol][3])
+            state['seen'][f"{signal['strategy']}:{symbol}"] = signal['bar_time']
+            state.setdefault('seen_symbol', {})[symbol] = signal['bar_time']
+            if reason != 'PAPER_OPENED':
+                blocked.append(dict(symbol=symbol, strategy=signal['strategy'], reason=reason))
     state['signals'] = [{k: s[k] for k in ('symbol', 'strategy', 'bar_time', 'reason')} for s in signals]
-    state['blocked'] = blocked
-    state['last_run'] = utc_now()
+    state['blocked'], state['last_run'] = blocked, utc_now()
     save_state(state)
     print(json.dumps(dict(mode='PAPER_ONLY', cash_usdt=state['cash_usdt'],
         day_pnl=state['day_pnl'], positions=state['positions'],
-        signals=state['signals'], blocked=state['blocked'], last_run=state['last_run']), indent=2))
+        signals=state['signals'], blocked=blocked, last_run=state['last_run']), indent=2))
     return state
 
 
