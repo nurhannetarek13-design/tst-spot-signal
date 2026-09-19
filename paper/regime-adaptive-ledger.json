@@ -8,7 +8,7 @@
     {
       "symbol": "ETHUSDT",
       "entry": 2614.86,
-      "stop": 2544.8766027560932,
+      "stop": 2547.091059508313,
       "qty": 0.001857876157,
       "notionalUSDT": 4.85808605,
       "riskUSDT": 0.2,
@@ -16,7 +16,7 @@
       "openedAt": "2026-09-18T19:02:43.335Z",
       "signalBarTime": "2026-09-18T16:00:00.000Z",
       "highestClose": 2642.83,
-      "barsHeld": 4,
+      "barsHeld": 5,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -71,7 +71,7 @@
     "SPCXBUSDT:1788984000000",
     "ETHUSDT:1789747200000"
   ],
-  "lastRunAt": "2026-09-19T18:38:00.563Z",
+  "lastRunAt": "2026-09-19T22:20:18.060Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
