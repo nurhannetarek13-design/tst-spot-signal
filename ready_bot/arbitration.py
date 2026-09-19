@@ -1,20 +1,44 @@
 """Shared-wallet PAPER arbitration: one fill per symbol, independent risk gates.
 
-A high-priority signal rejected by the risk engine must not consume the symbol's
-slot or suppress a DIFFERENT strategy's eligible signal on the same candle.
-Neither indicators nor signal scores can override the wallet, order filters,
-or the existing loss limits. No exchange order functions are present here.
+A rejected high-priority signal cannot consume the symbol lock and suppress a
+different independently eligible strategy. Every accepted trade still passes
+the existing wallet, fee, lot, stop and aggregate risk checks. No live orders.
 """
 import math
 
 
-def execute_candidates(signals, enabled, state, config, snapshots, open_fn):
-    """Attempt frozen-priority signals, using the caller's actual risk/lot engine.
+LOCK_SCHEMA_VERSION = 2
 
-    Returns (rejections, accepted). `seen` is strategy-specific attempt dedupe;
-    `seen_symbol` is updated ONLY following a successful fill. Never use a
-    risk-rejected signal to block other strategies on that symbol.
+
+def reconcile_legacy_symbol_locks(state):
+    """One-time safe migration from the old 'reject == symbol lock' behavior.
+
+    Only clear stale symbol locks when there is affirmative evidence that the
+    account has NEVER opened a paper position: no current/closed trades and an
+    explicit empty accepted-signals record. Retain every strategy-specific
+    attempt marker, so an individually rejected strategy is NOT retried on
+    that same candle. If evidence is absent or ambiguous, preserve old locks.
+    This does not relax any stop, notional, daily loss or portfolio risk gate.
     """
+    if state.get('symbol_lock_schema_version') == LOCK_SCHEMA_VERSION:
+        return 0
+    removed = 0
+    if (state.get('accepted_signals') == [] and state.get('positions') == {}
+            and state.get('closed_trades') == []):
+        removed = len(state.get('seen_symbol', {}))
+        state['seen_symbol'] = {}
+    state['symbol_lock_schema_version'] = LOCK_SCHEMA_VERSION
+    return removed
+
+
+def execute_candidates(signals, enabled, state, config, snapshots, open_fn):
+    """Attempt frozen-priority signals using the same actual risk/lot engine.
+
+    Returns (rejections, accepted). `seen` deduplicates per-strategy attempts;
+    `seen_symbol` is recorded only after a successful paper fill. A rejected
+    signal cannot stop a DIFFERENT strategy for the same symbol and candle.
+    """
+    reconcile_legacy_symbol_locks(state)
     priority = {strategy: n for n, strategy in enumerate(enabled)}
     if any(signal.get('strategy') not in priority for signal in signals):
         raise RuntimeError('UNREGISTERED_SIGNAL_IN_ARBITRATION')
@@ -40,9 +64,9 @@ def execute_candidates(signals, enabled, state, config, snapshots, open_fn):
             reason = 'INVALID_NATIVE_HOLD_CONTRACT'
         else:
             own_config = {**config, 'trade_size_usdt': min(config['trade_size_usdt'], stake)}
-            # Simulated BUY at public best ask when available; a last trade is
-            # not a guaranteed buy execution price. The core applies modeled
-            # additional slippage and fee once, not twice.
+            # Best public ask when available; core applies additional modeled
+            # slippage and fees once. Never pretend last trade is a guaranteed
+            # buy execution price.
             price = snapshot.get('ask', snapshot['price'])
             if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
                 reason = 'INVALID_BUY_QUOTE'
