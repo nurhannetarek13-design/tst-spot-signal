@@ -16,6 +16,7 @@ on:
       - 'tests/test_native_paper.py'
       - 'tests/test_native_js_real.py'
       - 'tests/test_paper_arbitration.py'
+      - 'tests/test_paper_legacy_locks.py'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -46,6 +47,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_native_paper.py' -v
           python -m unittest discover -s tests -p 'test_native_js_real.py' -v
           python -m unittest discover -s tests -p 'test_paper_arbitration.py' -v
+          python -m unittest discover -s tests -p 'test_paper_legacy_locks.py' -v
       - name: Run unified native-source paper bot
         run: python ready_bot/native_paper.py
       - name: Persist paper-only state
