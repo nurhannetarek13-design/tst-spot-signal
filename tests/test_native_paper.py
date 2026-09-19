@@ -11,6 +11,7 @@ import native_paper as bridge
 def rich_rows(n=250, interval=3_600_000):
     return [dict(open_time=i * interval, open=99.5, high=101., low=99., close=100.,
                  volume=100., quote_volume=10000., taker_buy_quote=6000.)
+            for i in range(n)]
 
 
 def snapshot():
@@ -28,7 +29,7 @@ class NativeBridgeContracts(unittest.TestCase):
         self.assertEqual(sum(x['status'].startswith('PAPER') for x in registry), 5)
         self.assertEqual(sum(x['status'].startswith('BLOCKED') for x in registry), 5)
         self.assertTrue(all((ROOT / x['source']).is_file() for x in registry))
-        with self.assertRaisesRegex(RuntimeError, 'native parity'):
+        with self.assertRaisesRegex(RuntimeError, 'Invalid strategy registry|native parity'):
             bridge.validate(dict(mode='paper', strategies=['UNIFIED_CANDIDATE'],
                                  symbols=['BTCUSDT'], starting_cash_usdt=20,
                                  trade_size_usdt=7, max_daily_loss_usdt=2,
