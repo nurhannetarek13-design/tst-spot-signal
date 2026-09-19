@@ -5,31 +5,170 @@
   "closed_trades": [],
   "day": "2026-09-19",
   "day_pnl": 0.0,
-  "last_run": "2026-09-19T18:50:19.740434+00:00",
+  "last_run": "2026-09-19T21:11:53.436810+00:00",
   "mode": "PAPER_ONLY",
+  "paper_audit": {
+    "events": [
+      {
+        "at": "2026-09-19T21:11:53.438646+00:00",
+        "bar_time": 1789837200000,
+        "key": "LOCK_REPAIRED|_SYSTEM|FILUSDT|1789837200000|LEGACY_REJECTED_SIGNAL_LOCK",
+        "kind": "LOCK_REPAIRED",
+        "reason": "LEGACY_REJECTED_SIGNAL_LOCK",
+        "strategy": "_SYSTEM",
+        "symbol": "FILUSDT"
+      },
+      {
+        "at": "2026-09-19T21:11:53.438660+00:00",
+        "bar_time": 1789837200000,
+        "key": "LOCK_REPAIRED|_SYSTEM|NEARUSDT|1789837200000|LEGACY_REJECTED_SIGNAL_LOCK",
+        "kind": "LOCK_REPAIRED",
+        "reason": "LEGACY_REJECTED_SIGNAL_LOCK",
+        "strategy": "_SYSTEM",
+        "symbol": "NEARUSDT"
+      }
+    ],
+    "started_at": "2026-09-19T21:11:53.438619+00:00",
+    "stats": {
+      "_SYSTEM": {
+        "closed": 0,
+        "opened": 0,
+        "pnl_usdt": 0.0,
+        "reasons": {},
+        "rejected": 0,
+        "signals": 0
+      }
+    },
+    "version": 1
+  },
+  "paper_report": {
+    "by_strategy": [
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "TREND_BREAKOUT",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "PAPER_UNPROVEN"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "TREND_PULLBACK",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "PAPER_UNPROVEN"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "RANGE_REVERSION",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "PAPER_UNPROVEN"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "PAPER_UNPROVEN_WRAPPED_EXIT"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "PAPER_UNPROVEN"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "TST_ALLIGATOR_SMC_V2",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "BASTION_JOAT_SPOT_V1",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "BASTION_JOAT_SPOT_V2",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "NFI_PROTECTED_X7",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+      },
+      {
+        "closed": 0,
+        "currently_open": 0,
+        "id": "UNIFIED_CANDIDATE",
+        "opened": 0,
+        "realized_pnl_usdt": 0.0,
+        "rejected": 0,
+        "rejection_reasons": {},
+        "signals": 0,
+        "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+      }
+    ],
+    "generated_at": "2026-09-19T21:11:53.438724+00:00",
+    "last_run": "2026-09-19T21:11:53.436810+00:00",
+    "mode": "PAPER_ONLY",
+    "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
+    "since": "2026-09-19T21:11:53.438619+00:00",
+    "total_realized_pnl_from_audit_usdt": 0.0,
+    "wallet_cash_usdt": 20.0
+  },
   "positions": {},
   "seen": {
     "TREND_BREAKOUT:FILUSDT": 1789837200000,
     "TREND_PULLBACK:NEARUSDT": 1789837200000
   },
-  "seen_symbol": {
-    "FILUSDT": 1789837200000,
-    "NEARUSDT": 1789837200000
-  },
-  "signals": [
-    {
-      "bar_time": 1789837200000,
-      "reason": "EMA20 recovery",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "NEARUSDT"
-    },
-    {
-      "bar_time": 1789837200000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "FILUSDT"
-    }
-  ],
+  "seen_symbol": {},
+  "signals": [],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
