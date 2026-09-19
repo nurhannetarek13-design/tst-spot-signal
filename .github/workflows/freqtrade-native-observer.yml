@@ -1,0 +1,58 @@
+name: Read-only Freqtrade Native Signal Observer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'freqtrade/user_data/native_signal_observer.py'
+      - 'freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py'
+      - 'freqtrade/user_data/strategies/BastionJOATSpotV1.py'
+      - 'freqtrade/user_data/strategies/BastionJOATSpotV2.py'
+      - 'tests/test_freqtrade_native_observer.py'
+      - '.github/workflows/freqtrade-native-observer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline no-lookahead and no-order contracts
+        run: |
+          python -m py_compile freqtrade/user_data/native_signal_observer.py
+          python -m unittest discover -s tests -p 'test_freqtrade_native_observer.py' -v
+      - name: Evaluate original classes on public closed 15m candles
+        env:
+          LIVE_TRADING: 'false'
+        run: |
+          set -euo pipefail
+          docker run --rm --network bridge --entrypoint python \
+            --mount "type=bind,src=$PWD/freqtrade/user_data,dst=/freqtrade/user_data,readonly" \
+            -e LIVE_TRADING=false \
+            freqtradeorg/freqtrade:stable \
+            /freqtrade/user_data/native_signal_observer.py > freqtrade_native_observer.json
+          python - <<'PY'
+          import json
+          report=json.load(open('freqtrade_native_observer.json'))
+          print({'mode':report['mode'], 'evaluations':len(report['rows']),
+                 'native_entries':sum(row['entry'] for row in report['rows']),
+                 'errors':len(report['errors'])})
+          assert report['mode']=='OBSERVE_ONLY'
+          assert len(report['rows']) == 16, report['errors']
+          assert all(row['paper_entry_allowed'] is False for row in report['rows'])
+          assert not report['errors'], report['errors']
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: freqtrade-native-observer
+          path: freqtrade_native_observer.json
+          if-no-files-found: warn
+          retention-days: 7
