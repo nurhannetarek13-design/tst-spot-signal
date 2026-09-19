@@ -1,45 +1,33 @@
-# Trading strategy and indicator integration inventory
+# Exact strategy integration inventory — 2026-09-19
 
-**This file distinguishes inventory from execution.** It does not assert that every strategy/indicator ever shared is accessible, ported, profitable, or live-authorized. This branch cannot place real Binance orders. A Pine `indicator()` is never silently promoted to a trading strategy.
+**One shared PAPER wallet, no exchange order submission.** Every row distinguishes physical source presence from real execution. Native JS functions are imported and executed unchanged via `ready_bot/native_js_bridge.mjs`; all candidates, including original three, flow through `ready_bot/native_paper.py` and the same Python wallet/risk/position logic in `multi_bot.py`. This is NOT evidence of strategy profitability or execution parity with Binance Live.
 
-## Independent PAPER strategies fully implemented in `ready_bot/multi_bot.py`
+## Evaluated for PAPER trades in the unified runner (5)
 
-| Strategy ID | Independent entry | Independent exit | Status |
+| ID | Source | Entry / exit | Status |
 |---|---|---|---|
-| `TREND_BREAKOUT` | Completed 4h/1h EMA50 > EMA200, previous 20-bar high break, volume >= 1.2x | 1.5 ATR stop; 2R target | Paper starter; unproven |
-| `TREND_PULLBACK` | Completed 4h/1h trend, EMA20 reclaim and prior-candle high confirmation | 1.5 ATR stop; 2R target | Paper starter; unproven |
-| `RANGE_REVERSION` | Completed 4h EMA compression, lower-band reclaim, RSI < 40 | 1.5 ATR stop; *its own prior-window mean target*, not generic 2R | Paper starter; unproven |
+| `TREND_BREAKOUT` | `ready_bot/multi_bot.py` | Original closed 4h/1h breakout, 1.5 ATR stop, 2R exit | PAPER; unproven |
+| `TREND_PULLBACK` | `ready_bot/multi_bot.py` | Original closed 4h/1h EMA20 reclaim, 1.5 ATR stop, 2R exit | PAPER; unproven |
+| `RANGE_REVERSION` | `ready_bot/multi_bot.py` | Original lower-band reclaim, 1.5 ATR stop, its OWN mean target | PAPER; unproven |
+| `REGIME_MOMENTUM_PAPER_2R_WRAPPER` | `src/strategies/regime-adaptive-momentum.mjs` | EXACT native JS scoring entry/stop. Original has **no exit**: new and separately named adapter uses 2R target and max 24 completed 1h bars | PAPER experimental VARIANT; source exit parity impossible; unproven |
+| `SMALL_CAP_INTRADAY_MOMENTUM_V1` | `src/strategies/small-cap-intraday.mjs` | EXACT native JS scoring entry, native ATR stop/target and maximum 8 completed 15m bars | PAPER; unproven; 5.50 USDT maximum can be below Binance notional |
 
-The router uses EMA(20/50/200), ATR(14), RSI(14), rolling mean/std, relative volume and prior-high features. All indicator outputs are internal measurements. Separate code/test status is NOT a claim of historical edge.
+The JS runner feeds original scorers 1h or 15m closed candles, actual taker-buy quote share from public Binance kline field 10, 24h quote volume, current best bid/ask and rolling relative volume. No substitute for unknown taker flow. Scores never bypass shared risk: maximum 3 open positions, 0.20 USDT risk/trade, 0.60 USDT total modeled open stop risk, 2 USDT daily loss cutoff, real Spot symbol filters, fee/slippage assumptions. Source stake is a hard MAXIMUM; an exchange min-notional rejection does not trigger a stake increase. A 5-minute snapshot cannot guarantee exchange-like intra-run stop fills.
 
-## Identified repository implementations, present but NOT connected to this router
+## Freqtrade source code present, **not executable in this runner** (5)
 
-| File | Logic / missing requirement | Status |
+| ID | Source | Explicit reason / next dependency |
 |---|---|---|
-| `freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py` | Williams Alligator + MACD + SAR + SMC structure; needs native 15m Freqtrade signal/exit and 4h validation adapter | Catalog only |
-| `freqtrade/user_data/strategies/BastionJOATSpotV1.py` | JOAT 15m port; exit parity explicitly incomplete | Catalog only |
-| `freqtrade/user_data/strategies/BastionJOATSpotV2.py` | JOAT ATR stop, 2R target, ATR trail and NY end-of-day exit; needs temporal/execution parity | Catalog only |
-| `freqtrade/user_data/strategies/NFIProtectedX7.py` | Needs Freqtrade dependency and independent parity/risk checks | Catalog only |
-| `freqtrade/user_data/strategies/UnifiedCandidateStrategy.py` | Prior cross-engine fingerprint and negative-expectancy issues need resolution | Catalog only |
-| `src/strategies/regime-adaptive-momentum.mjs` | Existing JS scorer requires bid/ask, 24h liquidity, 15m or selected candles, actual taker share and relative volume; no independent exit/TP contract yet | Catalog only |
-| `src/strategies/small-cap-intraday.mjs` | JS 15m strategy needs separate small-cap universe (BTC/ETH/SOL excluded), bid/ask and flow; 8-bar time exit must be implemented; 5.50 USDT desired stake can fail current Binance minimum | Catalog only |
+| `TST_ALLIGATOR_SMC_V2` | `freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py` | 15m causal structure + TA-Lib/Freqtrade native environment and exact exits/protections must be adapted and independently tested. |
+| `BASTION_JOAT_SPOT_V1` | `freqtrade/user_data/strategies/BastionJOATSpotV1.py` | Source explicitly says exit parity missing. |
+| `BASTION_JOAT_SPOT_V2` | `freqtrade/user_data/strategies/BastionJOATSpotV2.py` | Inherits V1; custom ATR trailing, 2R, NYC session exit. No equivalent exit model in paper engine yet. |
+| `NFI_PROTECTED_X7` | `freqtrade/user_data/strategies/NFIProtectedX7.py` | Imports missing `NostalgiaForInfinityX7` parent and always returns `False` to refuse auto-entry. Cannot invent signal. |
+| `UNIFIED_CANDIDATE` | `freqtrade/user_data/strategies/UnifiedCandidateStrategy.py` | Manifest says VALIDATION_AND_FORWARD_PAPER_ONLY; OOS/fingerprint mismatch; L2 confirmation cannot be inferred from OHLCV. |
 
-Do NOT rename a source module as a running strategy, invent absent market data, or change the universe and stake secretly. A strategy is not integrated unless it can produce its own reproducible entry, independent complete exits, risk reservation and paper trade record.
+The runner publishes these five source states and blockers in `multi_state.json.source_registry`. They are deliberately excluded from `multi_config.json.strategies`: pretending they run would be incorrect and unsafe. A source file present in GitHub does not imply a working Freqtrade daemon.
 
-## Recovered prior V2 bundle (separate archive, NOT deployed in this repository)
+## Separate historical archive / indicators
 
-The user's earlier `v2_live_ready_final.zip` includes a `v2_bot/strategy_pool.py` with 8 research-only specifications: `trend_momentum`, `compression_breakout`, `mean_reversion_extreme`, `volume_anomaly_reversal`, `btc_alt_leadlag`, `relative_strength_rotation`, `crash_exhaustion_reversal`, `range_reversion`. It separately records four rejected historical variants: `strict_current`, `breakout_continuation`, `volatility_expansion`, `htf_pullback_reclaim` (180-day OOS PF below 1). The archive also includes a comprehensive independent live-capable engine, but its report states deployment/account/evidence gates must pass. **Its 8 strategies are RESEARCH, not promoted to PAPER or ACTIVE**, and the code is not currently in `main`. Do not conflate this separate build with the present Python paper router.
+The user's earlier `v2_live_ready_final.zip` is a SEPARATE build, not committed to this repository: 8 `RESEARCH` V2 strategy specifications and 4 permanently `REJECTED` specifications. Not silently activated or rebranded. Similarly, TradingView Pine files such as JOAT, CVD, relative strength, variance ratio, relative volume at time, liquidity swings, Grid/DCA are different sources and often indicators rather than complete strategies. Required source revisions, execution assumptions, causality, rights, dependencies and OOS outcomes must be resolved separately. Previously rejected SAHARA and adaptive grid remain rejected for Live.
 
-## Previously shared TradingView scripts and indicators
-
-Actual named Pine sources located in earlier uploads: `Variance Ratio Regime Classifier [PickMyTrade]` (Lo–MacKinlay multi-horizon diagnostic, not entry rules), `Relative Strength Rotation Map [AGPro Series]` (benchmark leadership / rotation), `Relative Volume at Time` (same-time-of-day volume comparison, not ordinary rolling RVOL), `Order Flow Microstructure Engine` (may use proprietary footprint data and market presets), `Bastion Execution Protocol [JOAT]` (MPL-2.0 strategy), and `Template Trailing Strategy (Backtester)` (CC BY-NC-SA 4.0, generic backtesting template, cannot supply an entry alone).
-
-Other named supplied concepts/features: `Comparative Relative Strength` versus BTC, `Cumulative Volume Delta` (OHLCV estimate != native taker/trade delta), `Multiple Moving Averages System (MMAS)`, DepthHouse `RVOL`, `Liquidity Swings [LuxAlgo]`, RSI MTF, Kalman Trend Levels, Adaptive Trend Flow, SMC Lite, ATR, ADX, MACD, Donchian, Supertrend, Chandelier Exit, Grid and DCA. Some require exact source or subscription/data access. A license must be respected; non-commercial/restricted code must not be pasted blindly into a commercial or public GitHub repository.
-
-## Rejected / unapproved results retained
-
-SAHARA (negative expectancy), adaptive grid failed OOS, JOAT exit parity incomplete and original Unified Candidate fingerprint mismatches cannot be flipped to profitable by relabeling. Existing 4 rejected V2 strategies stay excluded. A successful CI job only verifies program behavior; it does not prove profitable trading.
-
-## Mandatory adapter contract
-
-For each new entry, record: `strategy_id`, license + immutable code revision, Spot symbol universe/timeframe, exact causal indicators/data sources, signal-bar timestamp and no-lookahead proof, precise independent entry, explicit stop/target/trailing/time exit, fee/slippage/fill rules, exposure correlation and minimum-notional eligibility, validated deterministic tests, and one of `CATALOG_ONLY`, `RESEARCH`, `PAPER`, `DISABLED`, `LIVE_ELIGIBLE`. Default `CATALOG_ONLY`. The shared router must not require unrelated strategies to agree, and portfolio risk overrides every candidate. No guarantee of profit is possible.
+**No Live release:** Fail-closed mode `PAPER_ONLY`; no API keys or trade adapter in this runner. Success in CI tests code, not investment performance. Historical/OOS, real forward results, exchange native OCO and separate explicit authorization are required before any Live proposal.

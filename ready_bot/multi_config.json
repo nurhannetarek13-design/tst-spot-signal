@@ -1,7 +1,13 @@
 {
   "mode": "paper",
-  "strategies": ["TREND_BREAKOUT", "TREND_PULLBACK", "RANGE_REVERSION"],
-  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "strategies": [
+    "TREND_BREAKOUT",
+    "TREND_PULLBACK",
+    "RANGE_REVERSION",
+    "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+    "SMALL_CAP_INTRADAY_MOMENTUM_V1"
+  ],
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "SUIUSDT", "NEARUSDT", "FILUSDT", "LINKUSDT", "AVAXUSDT"],
   "trend_interval": "4h",
   "execution_interval": "1h",
   "starting_cash_usdt": 20.0,
