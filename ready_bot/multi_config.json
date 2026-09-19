@@ -9,6 +9,7 @@
   "max_open_positions": 3,
   "max_daily_loss_usdt": 2.0,
   "max_risk_usdt": 0.2,
+  "max_portfolio_risk_usdt": 0.6,
   "max_stop_fraction": 0.03,
   "fee_rate": 0.001,
   "slippage_rate": 0.0005
