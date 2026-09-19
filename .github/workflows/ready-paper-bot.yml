@@ -6,10 +6,13 @@ on:
     branches:
       - main
     paths:
+      - 'ready_bot/native_paper.py'
+      - 'ready_bot/native_js_bridge.mjs'
       - 'ready_bot/multi_bot.py'
       - 'ready_bot/multi_config.json'
       - 'tests/test_multi_bot.py'
       - 'tests/test_multi_bot_contract.py'
+      - 'tests/test_native_paper.py'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -29,13 +32,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile and test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile, check native modules and test
         run: |
-          python -m py_compile ready_bot/multi_bot.py
+          python -m py_compile ready_bot/multi_bot.py ready_bot/native_paper.py
+          node --check ready_bot/native_js_bridge.mjs
           python -m unittest discover -s tests -p 'test_multi_bot*.py' -v
-      - name: Run multi-strategy paper bot
-        run: python ready_bot/multi_bot.py
-      - name: Persist multi-strategy paper state
+          python -m unittest discover -s tests -p 'test_native_paper.py' -v
+      - name: Run unified native-source paper bot
+        run: python ready_bot/native_paper.py
+      - name: Persist paper-only state
         run: |
           if git diff --quiet -- ready_bot/multi_state.json; then
             echo 'No state change'
