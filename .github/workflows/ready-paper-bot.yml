@@ -3,6 +3,8 @@ name: Ready Multi-Strategy Paper Bot
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - 'ready_bot/multi_bot.py'
       - 'ready_bot/multi_config.json'
@@ -16,6 +18,7 @@ permissions:
 
 jobs:
   run-paper-bot:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: ready-paper-bot
