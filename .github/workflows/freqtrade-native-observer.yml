@@ -3,12 +3,17 @@ name: Read-only Freqtrade Native Signal Observer
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, fix/native-freqtrade-observer-ci-20260920]
     paths:
       - 'freqtrade/user_data/native_signal_observer.py'
       - 'freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py'
       - 'freqtrade/user_data/strategies/BastionJOATSpotV1.py'
       - 'freqtrade/user_data/strategies/BastionJOATSpotV2.py'
+      - 'tests/test_freqtrade_native_observer.py'
+      - '.github/workflows/freqtrade-native-observer.yml'
+  pull_request:
+    paths:
+      - 'freqtrade/user_data/native_signal_observer.py'
       - 'tests/test_freqtrade_native_observer.py'
       - '.github/workflows/freqtrade-native-observer.yml'
 
@@ -44,6 +49,8 @@ jobs:
           print({'mode':report['mode'], 'evaluations':len(report['rows']),
                  'native_entries':sum(row['entry'] for row in report['rows']),
                  'errors':len(report['errors'])})
+          if report['errors']:
+              print('Native observer errors:', report['errors'][:4])
           assert report['mode']=='OBSERVE_ONLY'
           assert len(report['rows']) == 16, report['errors']
           assert all(row['paper_entry_allowed'] is False for row in report['rows'])
