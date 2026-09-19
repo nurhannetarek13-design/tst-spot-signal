@@ -1,13 +1,102 @@
 {
-  "blocked": [],
+  "blocked": [
+    {
+      "reason": "INVALID_STOP_DISTANCE",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "FILUSDT"
+    },
+    {
+      "reason": "INVALID_STOP_DISTANCE",
+      "strategy": "TREND_PULLBACK",
+      "symbol": "NEARUSDT"
+    }
+  ],
   "cash_usdt": 20.0,
   "closed_trades": [],
   "day": "2026-09-19",
   "day_pnl": 0.0,
-  "last_run": "2026-09-19T18:03:20.105741+00:00",
+  "last_run": "2026-09-19T18:17:11.140958+00:00",
   "mode": "PAPER_ONLY",
   "positions": {},
-  "seen": {},
-  "seen_symbol": {},
-  "signals": []
+  "seen": {
+    "TREND_BREAKOUT:FILUSDT": 1789837200000,
+    "TREND_PULLBACK:NEARUSDT": 1789837200000
+  },
+  "seen_symbol": {
+    "FILUSDT": 1789837200000,
+    "NEARUSDT": 1789837200000
+  },
+  "signals": [
+    {
+      "bar_time": 1789837200000,
+      "reason": "EMA20 recovery",
+      "strategy": "TREND_PULLBACK",
+      "symbol": "NEARUSDT"
+    },
+    {
+      "bar_time": 1789837200000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "FILUSDT"
+    }
+  ],
+  "source_registry": [
+    {
+      "id": "TREND_BREAKOUT",
+      "source": "ready_bot/multi_bot.py",
+      "status": "PAPER_UNPROVEN"
+    },
+    {
+      "id": "TREND_PULLBACK",
+      "source": "ready_bot/multi_bot.py",
+      "status": "PAPER_UNPROVEN"
+    },
+    {
+      "id": "RANGE_REVERSION",
+      "source": "ready_bot/multi_bot.py",
+      "status": "PAPER_UNPROVEN"
+    },
+    {
+      "id": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "note": "Native entry; NEW paper-only fixed 2R target and 24 closed 1h bar time exit; not source-exit parity",
+      "source": "src/strategies/regime-adaptive-momentum.mjs",
+      "status": "PAPER_UNPROVEN_WRAPPED_EXIT"
+    },
+    {
+      "id": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
+      "note": "Native entry, native ATR stop/target and 8 closed 15m bar time exit; min-notional may block a 5.50 USDT stake",
+      "source": "src/strategies/small-cap-intraday.mjs",
+      "status": "PAPER_UNPROVEN"
+    },
+    {
+      "id": "TST_ALLIGATOR_SMC_V2",
+      "note": "Native Freqtrade/TA-Lib runtime, 15m structure and full exit parity not installed in this 1h paper engine",
+      "source": "freqtrade/user_data/strategies/AdaptiveRegimeStrategy.py",
+      "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+    },
+    {
+      "id": "BASTION_JOAT_SPOT_V1",
+      "note": "Original source explicitly lacks validated exit parity; no autonomous paper trade",
+      "source": "freqtrade/user_data/strategies/BastionJOATSpotV1.py",
+      "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+    },
+    {
+      "id": "BASTION_JOAT_SPOT_V2",
+      "note": "Depends on V1/Freqtrade and custom trailing, 2R and NY-session exits; native parity absent",
+      "source": "freqtrade/user_data/strategies/BastionJOATSpotV2.py",
+      "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+    },
+    {
+      "id": "NFI_PROTECTED_X7",
+      "note": "Parent NostalgiaForInfinityX7 is absent from repository; class always vetoes automatic entry",
+      "source": "freqtrade/user_data/strategies/NFIProtectedX7.py",
+      "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+    },
+    {
+      "id": "UNIFIED_CANDIDATE",
+      "note": "Manifest is validation/forward only; fingerprint/OOS unresolved and L2 conditions cannot be proxied by candles",
+      "source": "freqtrade/user_data/strategies/UnifiedCandidateStrategy.py",
+      "status": "BLOCKED_DEPENDENCY_OR_PARITY"
+    }
+  ]
 }
