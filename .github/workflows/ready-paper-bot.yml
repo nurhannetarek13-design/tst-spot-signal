@@ -1,12 +1,15 @@
-name: Ready Paper Bot
+name: Ready Multi-Strategy Paper Bot
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
-      - 'ready_bot/bot.py'
-      - 'ready_bot/config.json'
-      - 'ready_bot/OPEN_SOURCE_NOTICES.md'
+      - 'ready_bot/multi_bot.py'
+      - 'ready_bot/multi_config.json'
+      - 'tests/test_multi_bot.py'
+      - 'tests/test_multi_bot_contract.py'
       - '.github/workflows/ready-paper-bot.yml'
   schedule:
     - cron: '*/5 * * * *'
@@ -16,6 +19,7 @@ permissions:
 
 jobs:
   run-paper-bot:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: ready-paper-bot
@@ -25,25 +29,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile
-        run: python -m py_compile ready_bot/bot.py
-      - name: Run paper bot
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python ready_bot/bot.py
-      - name: Persist paper state
+      - name: Compile and test
         run: |
-          if git diff --quiet -- ready_bot/state.json; then
-            echo "No state change"
+          python -m py_compile ready_bot/multi_bot.py
+          python -m unittest discover -s tests -p 'test_multi_bot*.py' -v
+      - name: Run multi-strategy paper bot
+        run: python ready_bot/multi_bot.py
+      - name: Persist multi-strategy paper state
+        run: |
+          if git diff --quiet -- ready_bot/multi_state.json; then
+            echo 'No state change'
             exit 0
           fi
-          cp ready_bot/state.json /tmp/ready-bot-state.json
+          cp ready_bot/multi_state.json /tmp/ready-multi-state.json
           git fetch origin main
           git reset --hard origin/main
-          cp /tmp/ready-bot-state.json ready_bot/state.json
-          git config user.name "ready-paper-bot"
-          git config user.email "ready-paper-bot@users.noreply.github.com"
-          git add ready_bot/state.json
-          git commit -m "Update ready paper bot state" || exit 0
+          cp /tmp/ready-multi-state.json ready_bot/multi_state.json
+          git config user.name 'ready-paper-bot'
+          git config user.email 'ready-paper-bot@users.noreply.github.com'
+          git add ready_bot/multi_state.json
+          git commit -m 'Update multi-strategy paper bot state' || exit 0
           git push origin HEAD:main
