@@ -4,18 +4,19 @@ on:
   push:
     branches:
       - feat/ready-multi-strategy-paper
+      - feat/wire-native-strategies-paper-20260919
     paths:
-      - 'ready_bot/multi_bot.py'
-      - 'ready_bot/multi_config.json'
-      - 'tests/test_multi_bot.py'
-      - 'tests/test_multi_bot_contract.py'
+      - 'ready_bot/**'
+      - 'src/strategies/**'
+      - 'tests/test_multi_bot*.py'
+      - 'tests/test_native_paper.py'
       - '.github/workflows/multi-paper-ci.yml'
   pull_request:
     paths:
-      - 'ready_bot/multi_bot.py'
-      - 'ready_bot/multi_config.json'
-      - 'tests/test_multi_bot.py'
-      - 'tests/test_multi_bot_contract.py'
+      - 'ready_bot/**'
+      - 'src/strategies/**'
+      - 'tests/test_multi_bot*.py'
+      - 'tests/test_native_paper.py'
       - '.github/workflows/multi-paper-ci.yml'
   workflow_dispatch:
 
@@ -30,7 +31,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: |
-          python -m py_compile ready_bot/multi_bot.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile paper routers and original JS bridge
+        run: |
+          python -m py_compile ready_bot/multi_bot.py ready_bot/native_paper.py
+          node --check ready_bot/native_js_bridge.mjs
+          node --check src/strategies/regime-adaptive-momentum.mjs
+          node --check src/strategies/small-cap-intraday.mjs
+      - name: Run paper contract tests
+        run: |
           python -m unittest discover -s tests -p 'test_multi_bot*.py' -v
+          python -m unittest discover -s tests -p 'test_native_paper.py' -v
           python -c 'import json; c=json.load(open("ready_bot/multi_config.json")); assert c["mode"] == "paper" and c["max_portfolio_risk_usdt"] <= c["max_daily_loss_usdt"]'
