@@ -1,51 +1,11 @@
 {
-  "accepted_signals": [
-    {
-      "bar_time": 1789920000000,
-      "reason": "PAPER_OPENED",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "LINKUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "PAPER_OPENED",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "FILUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "PAPER_OPENED",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "SOLUSDT"
-    }
-  ],
-  "blocked": [
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "NEARUSDT"
-    },
-    {
-      "reason": "RISK_PER_TRADE",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "SUIUSDT"
-    },
-    {
-      "reason": "MAX_OPEN_POSITIONS",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "BTCUSDT"
-    },
-    {
-      "reason": "MAX_OPEN_POSITIONS",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "SUIUSDT"
-    }
-  ],
+  "accepted_signals": [],
+  "blocked": [],
   "cash_usdt": 0.010350470150002344,
   "closed_trades": [],
   "day": "2026-09-20",
   "day_pnl": 0.0,
-  "last_run": "2026-09-20T17:29:55.532166+00:00",
+  "last_run": "2026-09-20T19:41:34.068700+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -389,8 +349,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-20T17:29:55.534598+00:00",
-    "last_run": "2026-09-20T17:29:55.532166+00:00",
+    "generated_at": "2026-09-20T19:41:34.071104+00:00",
+    "last_run": "2026-09-20T19:41:34.068700+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -446,56 +406,7 @@
     "LINKUSDT": 1789920000000,
     "SOLUSDT": 1789920000000
   },
-  "signals": [
-    {
-      "bar_time": 1789920000000,
-      "reason": "Native JS momentum; paper adapter 2R",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "BTCUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "EMA20 recovery",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "SOLUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "SUIUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "Native JS momentum; paper adapter 2R",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "SUIUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "NEARUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "EMA20 recovery",
-      "strategy": "TREND_PULLBACK",
-      "symbol": "FILUSDT"
-    },
-    {
-      "bar_time": 1789920000000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "LINKUSDT"
-    },
-    {
-      "bar_time": 1789923600000,
-      "reason": "Original JS small-cap scorer",
-      "strategy": "SMALL_CAP_INTRADAY_MOMENTUM_V1",
-      "symbol": "LINKUSDT"
-    }
-  ],
+  "signals": [],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
