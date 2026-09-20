@@ -5,7 +5,7 @@
   "closed_trades": [],
   "day": "2026-09-20",
   "day_pnl": 0.0,
-  "last_run": "2026-09-20T10:08:36.864229+00:00",
+  "last_run": "2026-09-20T14:13:01.813857+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -184,8 +184,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-20T10:08:36.866354+00:00",
-    "last_run": "2026-09-20T10:08:36.864229+00:00",
+    "generated_at": "2026-09-20T14:13:01.815981+00:00",
+    "last_run": "2026-09-20T14:13:01.813857+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
