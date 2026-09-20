@@ -1,17 +1,11 @@
 {
   "accepted_signals": [],
-  "blocked": [
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "AVAXUSDT"
-    }
-  ],
+  "blocked": [],
   "cash_usdt": 20.0,
   "closed_trades": [],
   "day": "2026-09-20",
   "day_pnl": 0.0,
-  "last_run": "2026-09-20T00:56:23.532721+00:00",
+  "last_run": "2026-09-20T05:44:19.113633+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -190,8 +184,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-20T00:56:23.534839+00:00",
-    "last_run": "2026-09-20T00:56:23.532721+00:00",
+    "generated_at": "2026-09-20T05:44:19.115812+00:00",
+    "last_run": "2026-09-20T05:44:19.113633+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -205,14 +199,7 @@
     "TREND_PULLBACK:NEARUSDT": 1789837200000
   },
   "seen_symbol": {},
-  "signals": [
-    {
-      "bar_time": 1789858800000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "AVAXUSDT"
-    }
-  ],
+  "signals": [],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
