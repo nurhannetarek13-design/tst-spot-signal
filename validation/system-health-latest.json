@@ -3,8 +3,8 @@
   "status": "PASS",
   "pass": true,
   "liveTrading": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
   "candidateStatus": "ACTIVE",
   "gateLiveReady": false,
   "checks": [
@@ -72,8 +72,8 @@
       "name": "gate_candidate_matches",
       "ok": true,
       "detail": {
-        "manifest": "5a8be2536ed727aaa38e",
-        "gate": "5a8be2536ed727aaa38e"
+        "manifest": "47d4daea870e3a1ab59c",
+        "gate": "47d4daea870e3a1ab59c"
       }
     },
     {
@@ -90,7 +90,7 @@
       "name": "derivatives_has_data",
       "ok": true,
       "detail": {
-        "usableCount": 18
+        "usableCount": 15
       }
     },
     {
@@ -209,6 +209,6 @@
       "detail": null
     }
   ],
-  "generatedAt": "2026-09-20T04:46:04.899256+00:00",
+  "generatedAt": "2026-09-20T11:13:37.801004+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
