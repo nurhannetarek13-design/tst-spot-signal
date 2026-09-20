@@ -16,7 +16,7 @@
       "openedAt": "2026-09-18T19:02:43.335Z",
       "signalBarTime": "2026-09-18T16:00:00.000Z",
       "highestClose": 2642.83,
-      "barsHeld": 8,
+      "barsHeld": 9,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -71,7 +71,7 @@
     "SPCXBUSDT:1788984000000",
     "ETHUSDT:1789747200000"
   ],
-  "lastRunAt": "2026-09-20T18:50:25.613Z",
+  "lastRunAt": "2026-09-20T22:28:21.370Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
