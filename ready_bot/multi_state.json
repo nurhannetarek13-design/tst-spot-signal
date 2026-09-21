@@ -1,11 +1,37 @@
 {
   "accepted_signals": [],
-  "blocked": [],
+  "blocked": [
+    {
+      "reason": "MAX_OPEN_POSITIONS",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "AVAXUSDT"
+    },
+    {
+      "reason": "MAX_OPEN_POSITIONS",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "BTCUSDT"
+    },
+    {
+      "reason": "MAX_OPEN_POSITIONS",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "ETHUSDT"
+    },
+    {
+      "reason": "MAX_OPEN_POSITIONS",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "SUIUSDT"
+    },
+    {
+      "reason": "MAX_OPEN_POSITIONS",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "ETHUSDT"
+    }
+  ],
   "cash_usdt": 0.010350470150002344,
   "closed_trades": [],
-  "day": "2026-09-20",
+  "day": "2026-09-21",
   "day_pnl": 0.0,
-  "last_run": "2026-09-20T23:37:33.828519+00:00",
+  "last_run": "2026-09-21T01:39:22.236463+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -179,6 +205,141 @@
         "reason": "PAPER_OPENED",
         "strategy": "TREND_PULLBACK",
         "symbol": "SOLUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238786+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|BTCUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "BTCUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238801+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|ETHUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "ETHUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238813+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|REGIME_MOMENTUM_PAPER_2R_WRAPPER|ETHUSDT|1789948800000|Native JS momentum; paper adapter 2R",
+        "kind": "SIGNAL",
+        "reason": "Native JS momentum; paper adapter 2R",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "ETHUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238822+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|SOLUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "SOLUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238830+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|REGIME_MOMENTUM_PAPER_2R_WRAPPER|SOLUSDT|1789948800000|Native JS momentum; paper adapter 2R",
+        "kind": "SIGNAL",
+        "reason": "Native JS momentum; paper adapter 2R",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "SOLUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238838+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|SUIUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "SUIUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238846+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_PULLBACK|FILUSDT|1789948800000|EMA20 recovery",
+        "kind": "SIGNAL",
+        "reason": "EMA20 recovery",
+        "strategy": "TREND_PULLBACK",
+        "symbol": "FILUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238854+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|LINKUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "LINKUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238861+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|REGIME_MOMENTUM_PAPER_2R_WRAPPER|LINKUSDT|1789948800000|Native JS momentum; paper adapter 2R",
+        "kind": "SIGNAL",
+        "reason": "Native JS momentum; paper adapter 2R",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "LINKUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238869+00:00",
+        "bar_time": 1789948800000,
+        "key": "SIGNAL|TREND_BREAKOUT|AVAXUSDT|1789948800000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "AVAXUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238879+00:00",
+        "bar_time": 1789948800000,
+        "key": "REJECTED|TREND_BREAKOUT|AVAXUSDT|1789948800000|MAX_OPEN_POSITIONS",
+        "kind": "REJECTED",
+        "reason": "MAX_OPEN_POSITIONS",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "AVAXUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238889+00:00",
+        "bar_time": 1789948800000,
+        "key": "REJECTED|TREND_BREAKOUT|BTCUSDT|1789948800000|MAX_OPEN_POSITIONS",
+        "kind": "REJECTED",
+        "reason": "MAX_OPEN_POSITIONS",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "BTCUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238898+00:00",
+        "bar_time": 1789948800000,
+        "key": "REJECTED|TREND_BREAKOUT|ETHUSDT|1789948800000|MAX_OPEN_POSITIONS",
+        "kind": "REJECTED",
+        "reason": "MAX_OPEN_POSITIONS",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "ETHUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238906+00:00",
+        "bar_time": 1789948800000,
+        "key": "REJECTED|TREND_BREAKOUT|SUIUSDT|1789948800000|MAX_OPEN_POSITIONS",
+        "kind": "REJECTED",
+        "reason": "MAX_OPEN_POSITIONS",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "SUIUSDT"
+      },
+      {
+        "at": "2026-09-21T01:39:22.238916+00:00",
+        "bar_time": 1789948800000,
+        "key": "REJECTED|REGIME_MOMENTUM_PAPER_2R_WRAPPER|ETHUSDT|1789948800000|MAX_OPEN_POSITIONS",
+        "kind": "REJECTED",
+        "reason": "MAX_OPEN_POSITIONS",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "ETHUSDT"
       }
     ],
     "started_at": "2026-09-19T21:11:53.438619+00:00",
@@ -188,10 +349,10 @@
         "opened": 0,
         "pnl_usdt": 0.0,
         "reasons": {
-          "MAX_OPEN_POSITIONS": 2
+          "MAX_OPEN_POSITIONS": 3
         },
-        "rejected": 2,
-        "signals": 2
+        "rejected": 3,
+        "signals": 5
       },
       "SMALL_CAP_INTRADAY_MOMENTUM_V1": {
         "closed": 0,
@@ -207,10 +368,11 @@
         "pnl_usdt": 0.0,
         "reasons": {
           "INVALID_STOP_DISTANCE": 2,
+          "MAX_OPEN_POSITIONS": 4,
           "RISK_PER_TRADE": 1
         },
-        "rejected": 3,
-        "signals": 4
+        "rejected": 7,
+        "signals": 10
       },
       "TREND_PULLBACK": {
         "closed": 0,
@@ -218,7 +380,7 @@
         "pnl_usdt": 0.0,
         "reasons": {},
         "rejected": 0,
-        "signals": 2
+        "signals": 3
       },
       "_SYSTEM": {
         "closed": 0,
@@ -239,12 +401,13 @@
         "id": "TREND_BREAKOUT",
         "opened": 1,
         "realized_pnl_usdt": 0.0,
-        "rejected": 3,
+        "rejected": 7,
         "rejection_reasons": {
           "INVALID_STOP_DISTANCE": 2,
+          "MAX_OPEN_POSITIONS": 4,
           "RISK_PER_TRADE": 1
         },
-        "signals": 4,
+        "signals": 10,
         "status": "PAPER_UNPROVEN"
       },
       {
@@ -255,7 +418,7 @@
         "realized_pnl_usdt": 0.0,
         "rejected": 0,
         "rejection_reasons": {},
-        "signals": 2,
+        "signals": 3,
         "status": "PAPER_UNPROVEN"
       },
       {
@@ -275,11 +438,11 @@
         "id": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
         "opened": 0,
         "realized_pnl_usdt": 0.0,
-        "rejected": 2,
+        "rejected": 3,
         "rejection_reasons": {
-          "MAX_OPEN_POSITIONS": 2
+          "MAX_OPEN_POSITIONS": 3
         },
-        "signals": 2,
+        "signals": 5,
         "status": "PAPER_UNPROVEN_WRAPPED_EXIT"
       },
       {
@@ -349,8 +512,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-20T23:37:33.830563+00:00",
-    "last_run": "2026-09-20T23:37:33.828519+00:00",
+    "generated_at": "2026-09-21T01:39:22.238984+00:00",
+    "last_run": "2026-09-21T01:39:22.236463+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -391,12 +554,15 @@
   },
   "seen": {
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:BTCUSDT": 1789920000000,
+    "REGIME_MOMENTUM_PAPER_2R_WRAPPER:ETHUSDT": 1789948800000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:SUIUSDT": 1789920000000,
-    "TREND_BREAKOUT:AVAXUSDT": 1789858800000,
+    "TREND_BREAKOUT:AVAXUSDT": 1789948800000,
+    "TREND_BREAKOUT:BTCUSDT": 1789948800000,
+    "TREND_BREAKOUT:ETHUSDT": 1789948800000,
     "TREND_BREAKOUT:FILUSDT": 1789837200000,
     "TREND_BREAKOUT:LINKUSDT": 1789920000000,
     "TREND_BREAKOUT:NEARUSDT": 1789920000000,
-    "TREND_BREAKOUT:SUIUSDT": 1789920000000,
+    "TREND_BREAKOUT:SUIUSDT": 1789948800000,
     "TREND_PULLBACK:FILUSDT": 1789920000000,
     "TREND_PULLBACK:NEARUSDT": 1789837200000,
     "TREND_PULLBACK:SOLUSDT": 1789920000000
@@ -406,7 +572,68 @@
     "LINKUSDT": 1789920000000,
     "SOLUSDT": 1789920000000
   },
-  "signals": [],
+  "signals": [
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "BTCUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "ETHUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "Native JS momentum; paper adapter 2R",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "ETHUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "SOLUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "Native JS momentum; paper adapter 2R",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "SOLUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "SUIUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "EMA20 recovery",
+      "strategy": "TREND_PULLBACK",
+      "symbol": "FILUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "LINKUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "Native JS momentum; paper adapter 2R",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "LINKUSDT"
+    },
+    {
+      "bar_time": 1789948800000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "AVAXUSDT"
+    }
+  ],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
