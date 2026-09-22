@@ -1,6 +1,12 @@
 {
   "accepted_signals": [],
-  "blocked": [],
+  "blocked": [
+    {
+      "reason": "INVALID_STOP_DISTANCE",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "AVAXUSDT"
+    }
+  ],
   "cash_usdt": 13.718390175358696,
   "closed_trades": [
     {
@@ -39,7 +45,7 @@
   ],
   "day": "2026-09-22",
   "day_pnl": 0.3462420544038425,
-  "last_run": "2026-09-22T01:11:39.961963+00:00",
+  "last_run": "2026-09-22T06:14:15.545054+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -432,6 +438,24 @@
         "reason": "2026-09-22T01:11:39.416405+00:00",
         "strategy": "TREND_PULLBACK",
         "symbol": "FILUSDT"
+      },
+      {
+        "at": "2026-09-22T06:14:15.547486+00:00",
+        "bar_time": 1790053200000,
+        "key": "SIGNAL|REGIME_MOMENTUM_PAPER_2R_WRAPPER|AVAXUSDT|1790053200000|Native JS momentum; paper adapter 2R",
+        "kind": "SIGNAL",
+        "reason": "Native JS momentum; paper adapter 2R",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "AVAXUSDT"
+      },
+      {
+        "at": "2026-09-22T06:14:15.547503+00:00",
+        "bar_time": 1790053200000,
+        "key": "REJECTED|REGIME_MOMENTUM_PAPER_2R_WRAPPER|AVAXUSDT|1790053200000|INVALID_STOP_DISTANCE",
+        "kind": "REJECTED",
+        "reason": "INVALID_STOP_DISTANCE",
+        "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+        "symbol": "AVAXUSDT"
       }
     ],
     "started_at": "2026-09-19T21:11:53.438619+00:00",
@@ -441,11 +465,11 @@
         "opened": 0,
         "pnl_usdt": 0.0,
         "reasons": {
-          "INVALID_STOP_DISTANCE": 1,
+          "INVALID_STOP_DISTANCE": 2,
           "MAX_OPEN_POSITIONS": 3
         },
-        "rejected": 4,
-        "signals": 6
+        "rejected": 5,
+        "signals": 7
       },
       "SMALL_CAP_INTRADAY_MOMENTUM_V1": {
         "closed": 0,
@@ -531,12 +555,12 @@
         "id": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
         "opened": 0,
         "realized_pnl_usdt": 0.0,
-        "rejected": 4,
+        "rejected": 5,
         "rejection_reasons": {
-          "INVALID_STOP_DISTANCE": 1,
+          "INVALID_STOP_DISTANCE": 2,
           "MAX_OPEN_POSITIONS": 3
         },
-        "signals": 6,
+        "signals": 7,
         "status": "PAPER_UNPROVEN_WRAPPED_EXIT"
       },
       {
@@ -606,8 +630,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-22T01:11:39.964583+00:00",
-    "last_run": "2026-09-22T01:11:39.961963+00:00",
+    "generated_at": "2026-09-22T06:14:15.547574+00:00",
+    "last_run": "2026-09-22T06:14:15.545054+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -627,6 +651,7 @@
     }
   },
   "seen": {
+    "REGIME_MOMENTUM_PAPER_2R_WRAPPER:AVAXUSDT": 1790053200000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:BTCUSDT": 1789920000000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:ETHUSDT": 1789948800000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:LINKUSDT": 1789995600000,
@@ -648,7 +673,14 @@
     "LINKUSDT": 1789920000000,
     "SOLUSDT": 1789995600000
   },
-  "signals": [],
+  "signals": [
+    {
+      "bar_time": 1790053200000,
+      "reason": "Native JS momentum; paper adapter 2R",
+      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
+      "symbol": "AVAXUSDT"
+    }
+  ],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
