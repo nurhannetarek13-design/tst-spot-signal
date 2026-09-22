@@ -1,12 +1,6 @@
 {
   "accepted_signals": [],
-  "blocked": [
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "AVAXUSDT"
-    }
-  ],
+  "blocked": [],
   "cash_usdt": 13.718390175358696,
   "closed_trades": [
     {
@@ -45,7 +39,7 @@
   ],
   "day": "2026-09-22",
   "day_pnl": 0.3462420544038425,
-  "last_run": "2026-09-22T06:14:15.545054+00:00",
+  "last_run": "2026-09-22T11:44:00.646008+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -630,8 +624,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-22T06:14:15.547574+00:00",
-    "last_run": "2026-09-22T06:14:15.545054+00:00",
+    "generated_at": "2026-09-22T11:44:00.648576+00:00",
+    "last_run": "2026-09-22T11:44:00.646008+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -673,14 +667,7 @@
     "LINKUSDT": 1789920000000,
     "SOLUSDT": 1789995600000
   },
-  "signals": [
-    {
-      "bar_time": 1790053200000,
-      "reason": "Native JS momentum; paper adapter 2R",
-      "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
-      "symbol": "AVAXUSDT"
-    }
-  ],
+  "signals": [],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
