@@ -31,7 +31,6 @@
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
     "vectorbt:BASE_PF_LT_1_15",
-    "vectorbt:BASE_EXPECTANCY_NONPOSITIVE",
     "vectorbt:STRESS_PF_LT_1_0",
     "vectorbt:STRESS_EXPECTANCY_NONPOSITIVE",
     "freqtrade:BASE_PF_LT_1_15",
@@ -94,12 +93,12 @@
       "candidateIdMatch": true,
       "candidateFingerprintMatch": true,
       "candidateMatch": true,
-      "trades": 47,
+      "trades": 48,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.9761793215176523,
-      "baseExpectancyUSDT": -0.002601294251651019,
-      "stressProfitFactor": 0.8367767308694726,
-      "stressExpectancyUSDT": -0.019122173629340097
+      "baseProfitFactor": 1.0303732909683891,
+      "baseExpectancyUSDT": 0.003268876088906037,
+      "stressProfitFactor": 0.8854368990168223,
+      "stressExpectancyUSDT": -0.013260821772018727
     },
     "freqtrade": {
       "status": "FAIL",
@@ -170,6 +169,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-22T06:49:31.053794+00:00",
+  "generatedAt": "2026-09-22T07:56:41.039912+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
