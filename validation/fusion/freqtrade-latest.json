@@ -17,22 +17,22 @@
     "trades": 188,
     "wins": 64,
     "winRate": 0.3404255319148936,
-    "profitFactor": 0.8261951595440203,
-    "expectancyUSDT": -0.019456812287234043,
-    "netPnlUSDT": -3.65788071,
-    "maxDrawdownUSDT": 4.388743870000002
+    "profitFactor": 0.8245382844427013,
+    "expectancyUSDT": -0.019641861861702126,
+    "netPnlUSDT": -3.69267003,
+    "maxDrawdownUSDT": 4.388281540000001
   },
   "stress2x": {
     "trades": 187,
     "wins": 62,
     "winRate": 0.3315508021390374,
-    "profitFactor": 0.7269501594276271,
-    "expectancyUSDT": -0.0336931685026738,
-    "netPnlUSDT": -6.30062251,
-    "maxDrawdownUSDT": 7.013101119999995
+    "profitFactor": 0.7250790122138157,
+    "expectancyUSDT": -0.03392342096256684,
+    "netPnlUSDT": -6.34367972,
+    "maxDrawdownUSDT": 7.012666469999996
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-21T08:13:09.205020+00:00",
+  "generatedAt": "2026-09-22T07:57:43.040210+00:00",
   "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
