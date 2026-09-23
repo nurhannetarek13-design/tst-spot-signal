@@ -567,6 +567,54 @@ async function handleTelegramWebhook(request, env) {
   return new Response("ok");
 }
 
+async function notifyExecutionReadinessTransition(env, balance) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+  const c=creds(env);
+  const lastError=balance ? null : await getState(env,"binance:balance:error");
+  const ready=Boolean(
+    c.credentialMode==="LIVE" &&
+    c.route===LIVE_ROUTE &&
+    balance?.ok &&
+    balance?.canTrade
+  );
+  const blocker=ready ? null : safeRelayDiagnostic(lastError?.error);
+  const previous=await getState(env,"live-readiness:transition-state");
+  const current={
+    ready,
+    blocker,
+    checkedAt:Date.now(),
+  };
+
+  // First observation only establishes the baseline; never spam on deploy/restart.
+  if (!previous || typeof previous.ready!=="boolean") {
+    await putState(env,"live-readiness:transition-state",current,30*24*60*60);
+    return;
+  }
+
+  if (previous.ready===ready && String(previous.blocker||"")===String(blocker||"")) {
+    await putState(env,"live-readiness:transition-state",current,30*24*60*60);
+    return;
+  }
+
+  await putState(env,"live-readiness:transition-state",current,30*24*60*60);
+
+  if (ready && previous.ready!==true) {
+    await tg(env,"sendMessage",{
+      chat_id:String(env.TELEGRAM_CHAT_ID),
+      text:"✅ LIVE EXECUTION READY\nBinance authentication on Vercel is valid now.\nالشراء مازال محتاج CONFIRM منك على Telegram — مفيش Auto Buy.",
+    });
+    return;
+  }
+
+  if (!ready && previous.ready===true) {
+    await tg(env,"sendMessage",{
+      chat_id:String(env.TELEGRAM_CHAT_ID),
+      text:`🚨 LIVE EXECUTION BLOCKED\nReason: ${String(blocker||"UNKNOWN").slice(0,80)}\nمفيش أوامر جديدة هتتنفذ لحد ما الجاهزية ترجع.`,
+    });
+  }
+}
+
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -660,53 +708,6 @@ export default {
     return baseWorker.fetch(request, env, ctx);
   },
 
-
-async function notifyExecutionReadinessTransition(env, balance) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
-  const c=creds(env);
-  const lastError=balance ? null : await getState(env,"binance:balance:error");
-  const ready=Boolean(
-    c.credentialMode==="LIVE" &&
-    c.route===LIVE_ROUTE &&
-    balance?.ok &&
-    balance?.canTrade
-  );
-  const blocker=ready ? null : safeRelayDiagnostic(lastError?.error);
-  const previous=await getState(env,"live-readiness:transition-state");
-  const current={
-    ready,
-    blocker,
-    checkedAt:Date.now(),
-  };
-
-  // First observation only establishes the baseline; never spam on deploy/restart.
-  if (!previous || typeof previous.ready!=="boolean") {
-    await putState(env,"live-readiness:transition-state",current,30*24*60*60);
-    return;
-  }
-
-  if (previous.ready===ready && String(previous.blocker||"")===String(blocker||"")) {
-    await putState(env,"live-readiness:transition-state",current,30*24*60*60);
-    return;
-  }
-
-  await putState(env,"live-readiness:transition-state",current,30*24*60*60);
-
-  if (ready && previous.ready!==true) {
-    await tg(env,"sendMessage",{
-      chat_id:String(env.TELEGRAM_CHAT_ID),
-      text:"✅ LIVE EXECUTION READY\nBinance authentication on Vercel is valid now.\nالشراء مازال محتاج CONFIRM منك على Telegram — مفيش Auto Buy.",
-    });
-    return;
-  }
-
-  if (!ready && previous.ready===true) {
-    await tg(env,"sendMessage",{
-      chat_id:String(env.TELEGRAM_CHAT_ID),
-      text:`🚨 LIVE EXECUTION BLOCKED\nReason: ${String(blocker||"UNKNOWN").slice(0,80)}\nمفيش أوامر جديدة هتتنفذ لحد ما الجاهزية ترجع.`,
-    });
-  }
-}
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
