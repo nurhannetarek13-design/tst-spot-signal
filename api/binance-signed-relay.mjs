@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-const BINANCE_BASES = [
+const BINANCE_GET_BASES = [
   "https://api.binance.com",
   "https://api-gcp.binance.com",
   "https://api1.binance.com",
@@ -8,12 +8,14 @@ const BINANCE_BASES = [
   "https://api3.binance.com",
   "https://api4.binance.com",
 ];
+const BINANCE_WRITE_BASE = "https://api.binance.com";
+const MAX_BUY_QUOTE_USDT = 10;
+const MIN_BUY_QUOTE_USDT = 5;
 
-const ALLOWED = new Set([
-  "GET /api/v3/account",
-  "POST /api/v3/order",
-  "POST /api/v3/orderList/oco",
-]);
+function json(res, status, body) {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(status).json(body);
+}
 
 function safeEqualHex(a, b) {
   const aa=String(a||"").toLowerCase(), bb=String(b||"").toLowerCase();
@@ -22,7 +24,7 @@ function safeEqualHex(a, b) {
 }
 
 function verifyEnvelope(req, raw) {
-  const secret=String(process.env.TELEGRAM_BOT_TOKEN||"");
+  const secret=String(process.env.TELEGRAM_BOT_TOKEN||"").trim();
   if (!secret) return {ok:false,status:"RELAY_SECRET_MISSING"};
   const ts=String(req.headers["x-executor-timestamp"]||"");
   const sig=String(req.headers["x-executor-signature"]||"");
@@ -34,30 +36,158 @@ function verifyEnvelope(req, raw) {
   return safeEqualHex(expected,sig) ? {ok:true} : {ok:false,status:"BAD_RELAY_SIGNATURE"};
 }
 
-function validSignedQuery(query) {
-  if (typeof query!=="string" || query.length<20 || query.length>4096) return false;
-  const q=new URLSearchParams(query);
-  const timestamp=Number(q.get("timestamp"));
-  const recvWindow=Number(q.get("recvWindow")||5000);
-  const signature=String(q.get("signature")||"");
-  if (!Number.isFinite(timestamp) || Math.abs(Date.now()-timestamp)>Math.max(60_000,recvWindow+10_000)) return false;
-  if (!Number.isFinite(recvWindow) || recvWindow<1 || recvWindow>60_000) return false;
-  return /^[a-f0-9]{64}$/i.test(signature);
+function plainObject(value) {
+  return Boolean(value) && typeof value==="object" && !Array.isArray(value) && Object.getPrototypeOf(value)===Object.prototype;
 }
 
-async function binanceForward(method,path,apiKey,query) {
+function exactKeys(params, allowed) {
+  const keys=Object.keys(params).sort();
+  const expected=[...allowed].sort();
+  return keys.length===expected.length && keys.every((k,i)=>k===expected[i]);
+}
+
+function safeSymbol(value) {
+  return /^[A-Z0-9]{1,20}USDT$/.test(String(value||""));
+}
+
+function safeClientId(value, prefix) {
+  const s=String(value||"");
+  return s.startsWith(prefix) && /^[A-Za-z0-9_-]{5,36}$/.test(s);
+}
+
+function finitePositive(value) {
+  const n=Number(value);
+  return Number.isFinite(n) && n>0 ? n : null;
+}
+
+function validateOperation(method, path, params) {
+  if (!plainObject(params)) return {ok:false,status:"BAD_PARAMS"};
+
+  if (method==="GET" && path==="/api/v3/account") {
+    if (!exactKeys(params, [])) return {ok:false,status:"ACCOUNT_PARAMS_NOT_ALLOWED"};
+    return {ok:true,params:{}};
+  }
+
+  if (method==="POST" && path==="/api/v3/order") {
+    const side=String(params.side||"");
+    const type=String(params.type||"");
+    if (type!=="MARKET" || !safeSymbol(params.symbol) || String(params.newOrderRespType||"")!=="FULL") {
+      return {ok:false,status:"ORDER_SHAPE_NOT_ALLOWED"};
+    }
+
+    if (side==="BUY") {
+      const allowed=["symbol","side","type","quoteOrderQty","newOrderRespType","newClientOrderId"];
+      if (!exactKeys(params,allowed) || !safeClientId(params.newClientOrderId,"TSTU")) {
+        return {ok:false,status:"BUY_PARAMS_NOT_ALLOWED"};
+      }
+      const quote=finitePositive(params.quoteOrderQty);
+      if (quote===null || quote<MIN_BUY_QUOTE_USDT || quote>MAX_BUY_QUOTE_USDT) {
+        return {ok:false,status:"BUY_QUOTE_OUTSIDE_LIMIT"};
+      }
+      return {ok:true,params:{
+        symbol:String(params.symbol),
+        side:"BUY",
+        type:"MARKET",
+        quoteOrderQty:Number(quote).toFixed(2),
+        newOrderRespType:"FULL",
+        newClientOrderId:String(params.newClientOrderId),
+      }};
+    }
+
+    if (side==="SELL") {
+      const allowed=["symbol","side","type","quantity","newOrderRespType","newClientOrderId"];
+      if (!exactKeys(params,allowed) || !safeClientId(params.newClientOrderId,"TSTE")) {
+        return {ok:false,status:"EMERGENCY_SELL_PARAMS_NOT_ALLOWED"};
+      }
+      const quantity=finitePositive(params.quantity);
+      if (quantity===null || quantity>1e15) return {ok:false,status:"EMERGENCY_SELL_QTY_INVALID"};
+      return {ok:true,params:{
+        symbol:String(params.symbol),
+        side:"SELL",
+        type:"MARKET",
+        quantity:String(params.quantity),
+        newOrderRespType:"FULL",
+        newClientOrderId:String(params.newClientOrderId),
+      }};
+    }
+
+    return {ok:false,status:"ORDER_SIDE_NOT_ALLOWED"};
+  }
+
+  if (method==="POST" && path==="/api/v3/orderList/oco") {
+    const allowed=[
+      "symbol","side","quantity","aboveType","abovePrice","belowType",
+      "belowStopPrice","belowPrice","belowTimeInForce","listClientOrderId",
+    ];
+    if (!exactKeys(params,allowed) || !safeSymbol(params.symbol) ||
+        String(params.side)!=="SELL" ||
+        String(params.aboveType)!=="LIMIT_MAKER" ||
+        String(params.belowType)!=="STOP_LOSS_LIMIT" ||
+        String(params.belowTimeInForce)!=="GTC" ||
+        !safeClientId(params.listClientOrderId,"TSTO")) {
+      return {ok:false,status:"OCO_PARAMS_NOT_ALLOWED"};
+    }
+    const quantity=finitePositive(params.quantity);
+    const above=finitePositive(params.abovePrice);
+    const stop=finitePositive(params.belowStopPrice);
+    const below=finitePositive(params.belowPrice);
+    if (quantity===null || above===null || stop===null || below===null || !(above>stop && stop>=below)) {
+      return {ok:false,status:"OCO_GEOMETRY_INVALID"};
+    }
+    return {ok:true,params:{
+      symbol:String(params.symbol),
+      side:"SELL",
+      quantity:String(params.quantity),
+      aboveType:"LIMIT_MAKER",
+      abovePrice:String(params.abovePrice),
+      belowType:"STOP_LOSS_LIMIT",
+      belowStopPrice:String(params.belowStopPrice),
+      belowPrice:String(params.belowPrice),
+      belowTimeInForce:"GTC",
+      listClientOrderId:String(params.listClientOrderId),
+    }};
+  }
+
+  return {ok:false,status:"OPERATION_NOT_ALLOWED"};
+}
+
+function signQuery(secret, params) {
+  const queryParams=new URLSearchParams();
+  for (const [key,value] of Object.entries(params)) queryParams.append(key,String(value));
+  queryParams.append("recvWindow","5000");
+  queryParams.append("timestamp",String(Date.now()));
+  const unsigned=queryParams.toString();
+  const signature=crypto.createHmac("sha256",secret).update(unsigned).digest("hex");
+  return `${unsigned}&signature=${signature}`;
+}
+
+async function parseBinanceResponse(r) {
+  const text=await r.text();
+  let data={};
+  try { data=JSON.parse(text||"{}"); } catch {}
+  if (r.ok && !(Number(data?.code)<0)) return {ok:true,data};
+  return {
+    ok:false,
+    upstream:{
+      status:r.status,
+      code:data?.code??null,
+      msg:String(data?.msg||"upstream rejected").slice(0,160),
+    },
+  };
+}
+
+async function forwardGet(path, apiKey, query) {
   let last={status:502,code:null,msg:"Binance unavailable"};
-  for (const base of BINANCE_BASES) {
+  for (const base of BINANCE_GET_BASES) {
     try {
       const r=await fetch(`${base}${path}?${query}`,{
-        method,
+        method:"GET",
         headers:{"X-MBX-APIKEY":apiKey,"Accept":"application/json","Cache-Control":"no-store"},
         signal:AbortSignal.timeout(12_000),
       });
-      const text=await r.text();
-      let data={}; try { data=JSON.parse(text||"{}"); } catch { data={}; }
-      if (r.ok && !(Number(data?.code)<0)) return {ok:true,data};
-      last={status:r.status,code:data?.code??null,msg:String(data?.msg||"upstream rejected").slice(0,160)};
+      const out=await parseBinanceResponse(r);
+      if (out.ok) return out;
+      last=out.upstream;
       if (Number(last.code)<0) break;
     } catch(e) {
       last={status:502,code:null,msg:String(e?.message||e).slice(0,160)};
@@ -66,33 +196,59 @@ async function binanceForward(method,path,apiKey,query) {
   return {ok:false,upstream:last};
 }
 
+async function forwardWrite(path, apiKey, query) {
+  try {
+    const r=await fetch(`${BINANCE_WRITE_BASE}${path}?${query}`,{
+      method:"POST",
+      headers:{"X-MBX-APIKEY":apiKey,"Accept":"application/json","Cache-Control":"no-store"},
+      signal:AbortSignal.timeout(12_000),
+    });
+    return await parseBinanceResponse(r);
+  } catch(e) {
+    // Never retry an unknown POST result across alternate Binance hosts.
+    return {ok:false,upstream:{status:502,code:null,msg:"WRITE_TRANSPORT_STATUS_UNKNOWN"}};
+  }
+}
+
 export default async function handler(req,res) {
-  res.setHeader("Cache-Control","no-store");
-  if (req.method!=="POST") return res.status(405).json({ok:false,status:"METHOD_NOT_ALLOWED"});
+  if (req.method!=="POST") return json(res,405,{ok:false,status:"METHOD_NOT_ALLOWED"});
 
   const raw=typeof req.body==="string" ? req.body : JSON.stringify(req.body||{});
   const auth=verifyEnvelope(req,raw);
-  if (!auth.ok) return res.status(401).json({...auth,tradingAction:"NONE"});
+  if (!auth.ok) return json(res,401,{...auth,tradingAction:"NONE"});
 
-  let body={}; try { body=typeof req.body==="object" ? req.body : JSON.parse(raw||"{}"); } catch {}
+  let body={};
+  try { body=typeof req.body==="object" ? req.body : JSON.parse(raw||"{}"); }
+  catch { return json(res,400,{ok:false,status:"BAD_JSON",tradingAction:"NONE"}); }
+
   const method=String(body.method||"").toUpperCase();
   const path=String(body.path||"");
-  const apiKey=String(body.apiKey||"");
-  const query=String(body.query||"");
   const network=String(body.network||"");
-  const op=`${method} ${path}`;
-
-  if (network!=="production") return res.status(400).json({ok:false,status:"PRODUCTION_ONLY"});
-  if (!ALLOWED.has(op)) return res.status(403).json({ok:false,status:"OPERATION_NOT_ALLOWED",tradingAction:"NONE"});
-  if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey) || !validSignedQuery(query)) {
-    return res.status(400).json({ok:false,status:"BAD_SIGNED_REQUEST",tradingAction:"NONE"});
+  if (network!=="production") return json(res,400,{ok:false,status:"PRODUCTION_ONLY",tradingAction:"NONE"});
+  if (!exactKeys(body,["method","path","network","params"])) {
+    return json(res,400,{ok:false,status:"RELAY_BODY_NOT_ALLOWED",tradingAction:"NONE"});
   }
 
-  const out=await binanceForward(method,path,apiKey,query);
-  if (!out.ok) return res.status(out.upstream?.status>=400&&out.upstream?.status<600?out.upstream.status:502)
-    .json({ok:false,status:"BINANCE_UPSTREAM_REJECTED",upstream:out.upstream});
+  const checked=validateOperation(method,path,body.params);
+  if (!checked.ok) return json(res,403,{ok:false,status:checked.status,tradingAction:"NONE"});
 
-  return res.status(200).json({
+  const apiKey=String(process.env.BINANCE_API_KEY||"").trim();
+  const apiSecret=String(process.env.BINANCE_API_SECRET||"").trim();
+  if (!apiKey || !apiSecret) {
+    return json(res,503,{ok:false,status:"VERCEL_BINANCE_CREDENTIALS_MISSING",tradingAction:"NONE"});
+  }
+
+  const query=signQuery(apiSecret,checked.params);
+  const out=method==="GET"
+    ? await forwardGet(path,apiKey,query)
+    : await forwardWrite(path,apiKey,query);
+
+  if (!out.ok) {
+    const status=out.upstream?.status>=400 && out.upstream?.status<600 ? out.upstream.status : 502;
+    return json(res,status,{ok:false,status:"BINANCE_UPSTREAM_REJECTED",upstream:out.upstream,tradingAction:"NONE"});
+  }
+
+  return json(res,200,{
     ok:true,
     status:"SIGNED_BINANCE_RELAY_OK",
     data:out.data,
