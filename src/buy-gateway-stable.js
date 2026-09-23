@@ -304,6 +304,18 @@ async function signedBinance(env, method, path, params = {}) {
   return row.data;
 }
 
+function safeRelayDiagnostic(errorText) {
+  const s=String(errorText||"");
+  if (s.includes("-2015")) return "BINANCE_CREDENTIAL_OR_IP_REJECTED";
+  if (s.includes("-1022")) return "BINANCE_SIGNATURE_REJECTED";
+  if (s.includes("-1021")) return "BINANCE_CLOCK_REJECTED";
+  if (s.includes("BAD_SIGNED_REQUEST")) return "RELAY_SIGNED_REQUEST_REJECTED";
+  if (s.includes("BAD_RELAY_SIGNATURE")) return "RELAY_HMAC_REJECTED";
+  if (s.includes("PRODUCTION_ONLY")) return "RELAY_NETWORK_REJECTED";
+  if (s.includes("BINANCE_UPSTREAM_REJECTED")) return "BINANCE_UPSTREAM_REJECTED";
+  return s ? "ACCOUNT_PREFLIGHT_FAILED" : "NONE";
+}
+
 async function refreshBalance(env) {
   const c = creds(env);
   try {
@@ -586,12 +598,14 @@ export default {
     if (url.pathname === "/balance-refresh") {
       const c = creds(env);
       const balance = await refreshBalance(env);
+      const lastError = balance ? null : await getState(env, "binance:balance:error");
       return Response.json({
         ok: Boolean(balance?.ok),
         canTrade: Boolean(balance?.canTrade),
         credentialMode: c.credentialMode,
         autoBuy: false,
         executionRoute: c.route,
+        diagnosticCode: safeRelayDiagnostic(lastError?.error),
         noBalanceValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
