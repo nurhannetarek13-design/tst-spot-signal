@@ -192,6 +192,47 @@ async function cloudflareDirectAccountRead(env) {
   throw err;
 }
 
+async function proxiedCloudflareSignedAccountRead(env) {
+  const c=creds(env);
+  if (c.credentialMode!=="LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
+
+  const q=new URLSearchParams();
+  q.append("recvWindow","5000");
+  q.append("timestamp",String(Date.now()));
+  const unsigned=q.toString();
+  const signed=await signBinancePayloadCloudflare(c.secret,unsigned);
+  q.append("signature",signed.signature);
+
+  const body=JSON.stringify({
+    apiKey:c.key,
+    query:q.toString(),
+    network:"production",
+  });
+  const ts=String(Date.now());
+  const relaySignature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+  const r=await fetch("https://tst-spot-signal.vercel.app/api/cloudflare-signed-account-relay",{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-executor-timestamp":ts,
+      "x-executor-signature":relaySignature,
+      "cache-control":"no-store",
+    },
+    body,
+  });
+  const text=await r.text();
+  let row={}; try { row=JSON.parse(text||"{}"); } catch {}
+  if (!r.ok || row.ok!==true) {
+    const e=new Error("PROXIED_ACCOUNT_PREFLIGHT_FAILED");
+    e.httpStatus=r.status;
+    e.binanceCode=row?.upstream?.code??null;
+    e.signerMode=signed.signerMode;
+    throw e;
+  }
+  return {ok:true,canTrade:Boolean(row.canTrade),accountType:row.accountType||null,signerMode:signed.signerMode};
+}
+
 async function handleFastSignalIngest(request, env) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") {
@@ -735,6 +776,43 @@ export default {
         makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
         noSecretValuesExposed: true,
       });
+    }
+
+    if (url.pathname === "/proxied-account-preflight") {
+      try {
+        const r=await proxiedCloudflareSignedAccountRead(env);
+        return Response.json({
+          ok:true,
+          canTrade:r.canTrade===true,
+          accountType:r.accountType,
+          signerMode:r.signerMode,
+          executionRoute:"CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{headers:{"cache-control":"no-store"}});
+      } catch(e) {
+        const code=Number(e?.binanceCode);
+        const diagnosticCode=code===-2015 ? "BINANCE_CREDENTIAL_OR_IP_REJECTED"
+          : code===-1022 ? "BINANCE_SIGNATURE_REJECTED"
+          : code===-1021 ? "BINANCE_CLOCK_REJECTED"
+          : Number(e?.httpStatus)===451 ? "VERCEL_BINANCE_REGION_RESTRICTED_HTTP_451"
+          : Number(e?.httpStatus)===403 ? "VERCEL_BINANCE_HTTP_403"
+          : Number(e?.httpStatus)>=500 ? "VERCEL_OR_BINANCE_5XX"
+          : "PROXIED_ACCOUNT_PREFLIGHT_FAILED";
+        return Response.json({
+          ok:false,
+          canTrade:false,
+          signerMode:e?.signerMode||"UNKNOWN",
+          diagnosticCode,
+          safeHttpStatus:Number(e?.httpStatus)||null,
+          safeBinanceCode:Number.isFinite(code)?code:null,
+          executionRoute:"CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{status:503,headers:{"cache-control":"no-store"}});
+      }
     }
 
     if (url.pathname === "/direct-account-preflight") {
