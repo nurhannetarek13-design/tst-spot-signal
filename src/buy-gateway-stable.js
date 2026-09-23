@@ -586,15 +586,14 @@ export default {
     if (url.pathname === "/balance-refresh") {
       const c = creds(env);
       const balance = await refreshBalance(env);
-      const error = balance ? null : await getState(env, "binance:balance:error");
       return Response.json({
-        ok: Boolean(balance),
-        balance,
-        error,
+        ok: Boolean(balance?.ok),
+        canTrade: Boolean(balance?.canTrade),
         credentialMode: c.credentialMode,
         autoBuy: false,
         executionRoute: c.route,
-      });
+        noBalanceValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
     }
 
     return baseWorker.fetch(request, env, ctx);
