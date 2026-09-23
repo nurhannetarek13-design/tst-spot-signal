@@ -245,7 +245,7 @@ async function signedBinance(env, method, path, params = {}) {
   }
   if (!r.ok || row.ok !== true) {
     const detail = row?.upstream?.code != null
-      ? `${row.upstream.code} ${row.upstream.msg || ""}`
+      ? `${row.upstream.code} ${row.upstream.msg || ""} signer=${row.upstream.signerMode || "UNKNOWN"}`
       : (row.reason || row.status || r.status);
     throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
   }
@@ -255,6 +255,9 @@ async function signedBinance(env, method, path, params = {}) {
 function safeRelayDiagnostic(errorText) {
   const s=String(errorText||"");
   if (s.includes("-2015")) return "BINANCE_CREDENTIAL_OR_IP_REJECTED";
+  if (s.includes("-1022") && s.includes("signer=RSA_SHA256")) return "BINANCE_SIGNATURE_REJECTED_RSA";
+  if (s.includes("-1022") && s.includes("signer=ED25519")) return "BINANCE_SIGNATURE_REJECTED_ED25519";
+  if (s.includes("-1022") && s.includes("signer=HMAC_SHA256")) return "BINANCE_SIGNATURE_REJECTED_HMAC";
   if (s.includes("-1022")) return "BINANCE_SIGNATURE_REJECTED";
   if (s.includes("-1021")) return "BINANCE_CLOCK_REJECTED";
   if (s.includes("BAD_SIGNED_REQUEST")) return "RELAY_SIGNED_REQUEST_REJECTED";

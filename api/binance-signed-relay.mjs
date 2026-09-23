@@ -151,14 +151,71 @@ function validateOperation(method, path, params) {
   return {ok:false,status:"OPERATION_NOT_ALLOWED"};
 }
 
+function normalizeCredential(value) {
+  let s=String(value||"").trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s=s.slice(1,-1).trim();
+  }
+  if (s.includes("\\n") && !s.includes("\n")) s=s.replaceAll("\\n","\n");
+  return s;
+}
+
+function privateKeyFromSecret(secret) {
+  const s=normalizeCredential(secret);
+  const candidates=[];
+  if (s.includes("BEGIN ") && s.includes("PRIVATE KEY")) candidates.push(s);
+  if (/^[A-Za-z0-9+/=\s]{48,}$/.test(s) && !s.includes(" ")) {
+    try {
+      const der=Buffer.from(s.replace(/\s+/g,""),"base64");
+      if (der.length>=32) candidates.push({key:der,format:"der",type:"pkcs8"});
+    } catch {}
+  }
+  for (const candidate of candidates) {
+    try { return crypto.createPrivateKey(candidate); } catch {}
+  }
+  return null;
+}
+
+function signPayload(secret, payload) {
+  const normalized=normalizeCredential(secret);
+  const privateKey=privateKeyFromSecret(normalized);
+  if (!privateKey) {
+    return {
+      signature:crypto.createHmac("sha256",normalized).update(payload).digest("hex"),
+      signerMode:"HMAC_SHA256",
+    };
+  }
+
+  const type=String(privateKey.asymmetricKeyType||"").toLowerCase();
+  if (type==="rsa" || type==="rsa-pss") {
+    return {
+      signature:crypto.sign("sha256",Buffer.from(payload,"utf8"),{
+        key:privateKey,
+        padding:crypto.constants.RSA_PKCS1_PADDING,
+      }).toString("base64"),
+      signerMode:"RSA_SHA256",
+    };
+  }
+  if (type==="ed25519") {
+    return {
+      signature:crypto.sign(null,Buffer.from(payload,"utf8"),privateKey).toString("base64"),
+      signerMode:"ED25519",
+    };
+  }
+  throw new Error("UNSUPPORTED_BINANCE_PRIVATE_KEY_TYPE");
+}
+
 function signQuery(secret, params) {
   const queryParams=new URLSearchParams();
   for (const [key,value] of Object.entries(params)) queryParams.append(key,String(value));
   queryParams.append("recvWindow","5000");
   queryParams.append("timestamp",String(Date.now()));
   const unsigned=queryParams.toString();
-  const signature=crypto.createHmac("sha256",secret).update(unsigned).digest("hex");
-  return `${unsigned}&signature=${signature}`;
+  const signed=signPayload(secret,unsigned);
+  return {
+    query:`${unsigned}&signature=${encodeURIComponent(signed.signature)}`,
+    signerMode:signed.signerMode,
+  };
 }
 
 async function parseBinanceResponse(r) {
@@ -232,16 +289,21 @@ export default async function handler(req,res) {
   const checked=validateOperation(method,path,body.params);
   if (!checked.ok) return json(res,403,{ok:false,status:checked.status,tradingAction:"NONE"});
 
-  const apiKey=String(process.env.BINANCE_API_KEY||"").trim();
-  const apiSecret=String(process.env.BINANCE_API_SECRET||"").trim();
+  const apiKey=normalizeCredential(process.env.BINANCE_API_KEY);
+  const apiSecret=normalizeCredential(process.env.BINANCE_API_SECRET);
   if (!apiKey || !apiSecret) {
     return json(res,503,{ok:false,status:"VERCEL_BINANCE_CREDENTIALS_MISSING",tradingAction:"NONE"});
   }
 
-  const query=signQuery(apiSecret,checked.params);
+  let signed;
+  try { signed=signQuery(apiSecret,checked.params); }
+  catch(e) {
+    return json(res,503,{ok:false,status:String(e?.message||"BINANCE_SIGNER_FAILED"),tradingAction:"NONE"});
+  }
   const out=method==="GET"
-    ? await forwardGet(path,apiKey,query)
-    : await forwardWrite(path,apiKey,query);
+    ? await forwardGet(path,apiKey,signed.query)
+    : await forwardWrite(path,apiKey,signed.query);
+  if (!out.ok && out.upstream) out.upstream.signerMode=signed.signerMode;
 
   if (!out.ok) {
     const status=out.upstream?.status>=400 && out.upstream?.status<600 ? out.upstream.status : 502;
