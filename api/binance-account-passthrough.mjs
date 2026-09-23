@@ -28,6 +28,10 @@ function verifyEnvelope(req,raw) {
   return safeEqualHex(expected,sig) ? {ok:true} : {ok:false,status:"BAD_RELAY_SIGNATURE"};
 }
 
+function validApiKey(v) {
+  return /^[A-Za-z0-9_-]{20,256}$/.test(String(v||"").trim());
+}
+
 function validSignedAccountQuery(query) {
   if (typeof query!=="string" || query.length<70 || query.length>1024) return false;
   const q=new URLSearchParams(query);
@@ -42,6 +46,50 @@ function validSignedAccountQuery(query) {
   return /^[A-Za-z0-9+/=_%-]{64,1024}$/.test(sig);
 }
 
+function signedHmacQuery(secret) {
+  const q=new URLSearchParams();
+  q.append("recvWindow","5000");
+  q.append("timestamp",String(Date.now()));
+  const unsigned=q.toString();
+  const signature=crypto.createHmac("sha256",String(secret||"").trim()).update(unsigned).digest("hex");
+  q.append("signature",signature);
+  return q.toString();
+}
+
+async function forwardAccount(apiKey,query) {
+  let last={status:502,code:null};
+  for (const base of BINANCE_BASES) {
+    try {
+      const r=await fetch(`${base}/api/v3/account?${query}`,{
+        method:"GET",
+        headers:{"X-MBX-APIKEY":apiKey,"Accept":"application/json","Cache-Control":"no-store"},
+        signal:AbortSignal.timeout(12_000),
+      });
+      const txt=await r.text();
+      let data={}; try { data=JSON.parse(txt||"{}"); } catch {}
+      if (r.ok && !(Number(data?.code)<0)) {
+        return {ok:true,status:r.status,data};
+      }
+      last={status:r.status,code:data?.code??null};
+      if (Number(last.code)<0) break;
+    } catch {
+      last={status:502,code:null};
+    }
+  }
+  return {ok:false,...last};
+}
+
+function diagnostic(last) {
+  return last.code===-1022 ? "BINANCE_SIGNATURE_REJECTED"
+    : last.code===-2015 ? "BINANCE_CREDENTIAL_OR_IP_REJECTED"
+    : last.code===-1021 ? "BINANCE_CLOCK_REJECTED"
+    : last.status===451 ? "BINANCE_REGION_RESTRICTED_HTTP_451"
+    : last.status===403 ? "BINANCE_HTTP_403"
+    : last.status>=500 ? "BINANCE_OR_NETWORK_5XX"
+    : last.code!=null ? `BINANCE_CODE_${last.code}`
+    : `BINANCE_HTTP_${last.status}`;
+}
+
 export default async function handler(req,res) {
   res.setHeader("Cache-Control","no-store");
   if (req.method!=="POST") return res.status(405).json({ok:false,status:"METHOD_NOT_ALLOWED"});
@@ -54,54 +102,52 @@ export default async function handler(req,res) {
   try { body=typeof req.body==="object" ? req.body : JSON.parse(raw||"{}"); }
   catch { return res.status(400).json({ok:false,status:"BAD_JSON",tradingAction:"NONE"}); }
 
-  const apiKey=String(body.apiKey||"").trim();
-  const query=String(body.query||"");
-  if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey) || !validSignedAccountQuery(query)) {
+  const mode=String(body.mode||"PASSTHROUGH");
+  let apiKey="",query="";
+  if (mode==="PASSTHROUGH") {
+    apiKey=String(body.apiKey||"").trim();
+    query=String(body.query||"");
+  } else if (mode==="CF_KEY_VERCEL_SECRET") {
+    apiKey=String(body.cloudflareApiKey||"").trim();
+    const secret=String(process.env.BINANCE_API_SECRET||"").trim();
+    if (!secret) return res.status(503).json({ok:false,status:"VERCEL_BINANCE_SECRET_MISSING",tradingAction:"NONE"});
+    query=signedHmacQuery(secret);
+  } else if (mode==="VERCEL_KEY_CF_SECRET") {
+    apiKey=String(process.env.BINANCE_API_KEY||"").trim();
+    query=String(body.cloudflareSignedQuery||"");
+  } else {
+    return res.status(400).json({ok:false,status:"MODE_NOT_ALLOWED",tradingAction:"NONE"});
+  }
+
+  if (!validApiKey(apiKey) || !validSignedAccountQuery(query)) {
     return res.status(400).json({ok:false,status:"BAD_READONLY_REQUEST",tradingAction:"NONE"});
   }
 
-  let last={status:502,code:null};
-  for (const base of BINANCE_BASES) {
-    try {
-      const r=await fetch(`${base}/api/v3/account?${query}`,{
-        method:"GET",
-        headers:{"X-MBX-APIKEY":apiKey,"Accept":"application/json","Cache-Control":"no-store"},
-        signal:AbortSignal.timeout(12_000),
-      });
-      const txt=await r.text();
-      let data={}; try { data=JSON.parse(txt||"{}"); } catch {}
-      if (r.ok && !(Number(data?.code)<0)) {
-        return res.status(200).json({
-          ok:true,
-          status:"SIGNED_ACCOUNT_PASSTHROUGH_OK",
-          data,
-          tradingAction:"NONE",
-          noSecretReceived:true,
-        });
-      }
-      last={status:r.status,code:data?.code??null};
-      if (Number(last.code)<0) break;
-    } catch {
-      last={status:502,code:null};
-    }
+  const out=await forwardAccount(apiKey,query);
+  if (out.ok) {
+    return res.status(200).json({
+      ok:true,
+      status:"SIGNED_ACCOUNT_PASSTHROUGH_OK",
+      mode,
+      canTrade:Boolean(out.data?.canTrade),
+      data:mode==="PASSTHROUGH" ? out.data : undefined,
+      tradingAction:"NONE",
+      noSecretReceived:true,
+      noBalanceValuesExposed:mode!=="PASSTHROUGH",
+      noSecretValuesExposed:true,
+    });
   }
 
-  const diagnostic = last.code===-1022 ? "BINANCE_SIGNATURE_REJECTED"
-    : last.code===-2015 ? "BINANCE_CREDENTIAL_OR_IP_REJECTED"
-    : last.code===-1021 ? "BINANCE_CLOCK_REJECTED"
-    : last.status===451 ? "BINANCE_REGION_RESTRICTED_HTTP_451"
-    : last.status===403 ? "BINANCE_HTTP_403"
-    : last.status>=500 ? "BINANCE_OR_NETWORK_5XX"
-    : last.code!=null ? `BINANCE_CODE_${last.code}`
-    : `BINANCE_HTTP_${last.status}`;
-
-  return res.status(last.status>=400&&last.status<600?last.status:502).json({
+  return res.status(200).json({
     ok:false,
     status:"BINANCE_ACCOUNT_PASSTHROUGH_FAILED",
-    diagnosticCode:diagnostic,
-    safeHttpStatus:last.status,
-    safeBinanceCode:last.code,
+    mode,
+    diagnosticCode:diagnostic(out),
+    safeHttpStatus:out.status,
+    safeBinanceCode:out.code,
     tradingAction:"NONE",
     noSecretReceived:true,
+    noBalanceValuesExposed:true,
+    noSecretValuesExposed:true,
   });
 }
