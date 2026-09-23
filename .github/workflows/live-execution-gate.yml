@@ -1,0 +1,64 @@
+name: Live Execution Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "api/binance-signed-relay.mjs"
+      - "src/buy-gateway-stable.js"
+      - ".github/workflows/live-execution-gate.yml"
+
+permissions:
+  contents: read
+
+env:
+  WORKER_URL: https://tst-spot-signal.nurhanne-tarek13.workers.dev
+
+jobs:
+  live-execution-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check live execution readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 25 \
+            -H 'cache-control: no-store' \
+            "$WORKER_URL/live-readiness?nonce=$(date +%s%N)" -o /tmp/readiness.json
+          cat /tmp/readiness.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/readiness.json'))
+          required=[
+            r.get('ok') is True,
+            r.get('infrastructureReady') is True,
+            r.get('executionReady') is True,
+            r.get('railwayDependency') is False,
+            r.get('binanceCredentialOwner') == 'VERCEL_ONLY',
+            r.get('cloudflareBinanceCredentialsRequired') is False,
+            r.get('telegramConfigured') is True,
+            r.get('userConfirmationRequired') is True,
+            r.get('autoBuy') is False,
+            r.get('noBalanceValuesExposed') is True,
+            r.get('noSecretValuesExposed') is True,
+          ]
+          if not all(required):
+              raise SystemExit("LIVE_EXECUTION_BLOCKED: "+str(r.get('blocker')))
+          print("LIVE_EXECUTION_READY")
+          PY
+
+      - name: Verify scanner remains confirmation-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "$WORKER_URL/scanner-status?nonce=$(date +%s%N)" -o /tmp/scanner.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/scanner.json'))
+          assert r.get('ok') is True
+          assert r.get('liveTrading') is False
+          assert r.get('executorAllowed') is False
+          PY
