@@ -10,6 +10,9 @@ on:
       - "src/edge-worker.js"
       - "src/buy-gateway-stable.js"
       - "api/binance-signed-relay.mjs"
+      - "api/binance-signed-passthrough.mjs"
+      - "lib/binance-signed-passthrough-policy.mjs"
+      - "test/binance-signed-passthrough-policy.test.mjs"
       - "api/binance-account-passthrough.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
@@ -43,6 +46,9 @@ jobs:
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
           node --check api/binance-signed-relay.mjs
+          node --check api/binance-signed-passthrough.mjs
+          node --check lib/binance-signed-passthrough-policy.mjs
+          node --test test/binance-signed-passthrough-policy.test.mjs
           node --check api/binance-account-passthrough.mjs
           grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
@@ -55,6 +61,20 @@ jobs:
           grep -q 'await scan(env,false)' src/edge-worker.js
           grep -q 'x-fast-ecdsa' src/buy-gateway-auth-wrapper.js
           grep -q 'VERCEL_BINANCE_CREDENTIALS_MISSING' api/binance-signed-relay.mjs
+          grep -q 'VERCEL_SIGNED_PASSTHROUGH_URL' src/buy-gateway-stable.js
+          grep -q 'binance-signed-passthrough' src/buy-gateway-stable.js
+          grep -q 'MAX_BUY_QUOTE_USDT = 10' lib/binance-signed-passthrough-policy.mjs
+          grep -q 'WRITE_TRANSPORT_STATUS_UNKNOWN' api/binance-signed-passthrough.mjs
+          grep -q 'OPERATION_NOT_ALLOWED' lib/binance-signed-passthrough-policy.mjs
+          grep -q 'noSecretReceived' api/binance-signed-passthrough.mjs
+          if grep -Eq 'BINANCE_API_SECRET|BINANCE_SECRET_KEY|process.env.BINANCE_SECRET' api/binance-signed-passthrough.mjs; then
+            echo "Passthrough must never own Binance secret"
+            exit 1
+          fi
+          if grep -q 'VERCEL_SIGNED_RELAY_URL' src/buy-gateway-stable.js; then
+            echo "Active runtime still depends on Vercel-owned Binance signing"
+            exit 1
+          fi
           grep -q 'HMAC_SHA256' api/binance-signed-relay.mjs
           grep -q 'RSA_SHA256' api/binance-signed-relay.mjs
           grep -q 'ED25519' api/binance-signed-relay.mjs
