@@ -40,9 +40,14 @@ jobs:
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
           node --check api/binance-signed-relay.mjs
+          node --check api/binance-signed-relay.mjs
           grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
+          grep -q 'BINANCE_API_SECRET' api/binance-signed-relay.mjs
+          grep -q 'crypto.createHmac("sha256",secret)' api/binance-signed-relay.mjs
+          ! grep -q 'RAILWAY' src/buy-gateway-stable.js
+          echo "Vercel owns Binance signing; active runtime is Railway-free."
           grep -q 'async function executionPriceGate' src/buy-gateway-stable.js
           grep -q 'STALE_PRICE_CHASE' src/buy-gateway-stable.js
           grep -q 'EXECUTION_SPREAD_TOO_WIDE' src/buy-gateway-stable.js
