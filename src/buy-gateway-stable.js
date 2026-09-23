@@ -419,8 +419,11 @@ async function sendPromptForActive(env) {
   if (c.credentialMode !== "LIVE") return;
 
   const active = (await getState(env, "paper:active")) || [];
-  const b = (await getState(env, "binance:balance:last")) || await refreshBalance(env);
-  const free = Number(b?.usdt?.free || 0);
+  const b = await refreshBalance(env);
+  if (!b?.ok || !b.canTrade || b.credentialMode !== "LIVE") {
+    return;
+  }
+  const free = Number(b.usdt?.free || 0);
   for (const p of active) {
     const id = compactId(p);
     if (await getState(env, `buy-prompt:${id}`)) continue;
