@@ -186,6 +186,79 @@ async function cloudflareSignedVercelAccountRead(env) {
   throw err;
 }
 
+async function credentialAliasMatrix(env) {
+  const keyAliases = [
+    ["BINANCE_API_KEY", env.BINANCE_API_KEY],
+    ["BINANCE_KEY", env.BINANCE_KEY],
+    ["BINANCE_APIKEY", env.BINANCE_APIKEY],
+  ].filter(([,v]) => String(v||"").trim());
+
+  const secretAliases = [
+    ["BINANCE_API_SECRET", env.BINANCE_API_SECRET],
+    ["BINANCE_SECRET", env.BINANCE_SECRET],
+    ["BINANCE_SECRET_KEY", env.BINANCE_SECRET_KEY],
+  ].filter(([,v]) => String(v||"").trim());
+
+  const attempts=[];
+  for (const [keyAlias,keyRaw] of keyAliases) {
+    for (const [secretAlias,secretRaw] of secretAliases) {
+      const key=String(keyRaw||"").trim();
+      const secret=normalizeBinanceSecret(secretRaw);
+      const q=new URLSearchParams();
+      q.append("recvWindow","5000");
+      q.append("timestamp",String(Date.now()));
+      const unsigned=q.toString();
+      const signed=await signBinancePayloadCloudflare(secret,unsigned);
+      q.append("signature",signed.signature);
+
+      const body=JSON.stringify({apiKey:key,query:q.toString()});
+      const ts=String(Date.now());
+      const relaySig=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+      let diagnosticCode="PASSTHROUGH_FAILED";
+      let ok=false, canTrade=false;
+      try {
+        const r=await fetch(VERCEL_ACCOUNT_PASSTHROUGH_URL,{
+          method:"POST",
+          headers:{
+            "content-type":"application/json",
+            "x-executor-timestamp":ts,
+            "x-executor-signature":relaySig,
+          },
+          body,
+        });
+        const txt=await r.text();
+        let row={}; try { row=JSON.parse(txt||"{}"); } catch {}
+        ok=r.ok && row.ok===true;
+        canTrade=ok && Boolean(row.data?.canTrade);
+        diagnosticCode=ok ? "ACCOUNT_OK" : String(row?.diagnosticCode||row?.status||`HTTP_${r.status}`);
+      } catch {
+        diagnosticCode="TRANSPORT_FAILED";
+      }
+      attempts.push({keyAlias,secretAlias,signerMode:signed.signerMode,ok,canTrade,diagnosticCode});
+      if (ok) {
+        return {
+          ok:true,
+          status:"VALID_CREDENTIAL_ALIAS_PAIR_FOUND",
+          working:{keyAlias,secretAlias,signerMode:signed.signerMode,canTrade},
+          attempts,
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        };
+      }
+    }
+  }
+  return {
+    ok:false,
+    status:"NO_VALID_CREDENTIAL_ALIAS_PAIR",
+    working:null,
+    attempts,
+    tradingAction:"NONE",
+    noBalanceValuesExposed:true,
+    noSecretValuesExposed:true,
+  };
+}
+
 async function cloudflareDirectAccountRead(env) {
   const c=creds(env);
   if (c.credentialMode!=="LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
@@ -772,6 +845,21 @@ export default {
         makeBuyConfigured: Boolean(env.MAKE_ONE_TAP_WEBHOOK_URL),
         makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
         noSecretValuesExposed: true,
+      });
+    }
+
+    if (url.pathname === "/credential-alias-matrix") {
+      if (!env.TELEGRAM_BOT_TOKEN) {
+        return Response.json({ok:false,status:"RELAY_SECRET_UNAVAILABLE",tradingAction:"NONE"},{status:503});
+      }
+      const claimed=await claimState(env,"credential-alias-matrix-lock",{at:Date.now()},300);
+      if (!claimed) {
+        return Response.json({ok:false,status:"DIAGNOSTIC_RATE_LIMITED",tradingAction:"NONE"},{status:429});
+      }
+      const result=await credentialAliasMatrix(env);
+      return Response.json(result,{
+        status:200,
+        headers:{"cache-control":"no-store"},
       });
     }
 
