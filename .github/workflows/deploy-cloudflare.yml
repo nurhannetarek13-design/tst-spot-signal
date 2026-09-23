@@ -166,6 +166,29 @@ jobs:
           done
           test "$ok" = 1
 
+      - name: Report safe credential alias diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 45 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/credential-alias-diagnostic?nonce=$(date +%s%N)" \
+            -o /tmp/cred-alias.json || true
+          cat /tmp/cred-alias.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/cred-alias.json'))
+          assert r.get('tradingAction') == 'NONE'
+          assert r.get('noSecretValuesExposed') is True
+          assert r.get('noBalanceValuesExposed') is True
+          print({
+            'status':r.get('status'),
+            'winner':r.get('winner'),
+            'availableKeyAliases':r.get('availableKeyAliases'),
+            'availableSecretAliases':r.get('availableSecretAliases'),
+          })
+          PY
+
       - name: Report live execution readiness
         shell: bash
         run: |
