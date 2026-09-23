@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/verify-cloudflare-runtime.yml"
       - "src/buy-gateway-stable.js"
+      - "api/binance-signed-relay.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
       - "wrangler.jsonc"
@@ -51,11 +52,10 @@ jobs:
           python - <<'PY'
           import json
           r=json.load(open('/tmp/balance.json'))
-          b=r.get('balance') or {}
           assert r.get('ok') is True
-          assert b.get('ok') is True
-          assert b.get('canTrade') is True
-          assert b.get('credentialMode') == 'LIVE'
+          assert r.get('canTrade') is True
+          assert r.get('credentialMode') == 'LIVE'
+          assert r.get('noBalanceValuesExposed') is True
           PY
 
       - name: Verify Telegram webhook ownership
