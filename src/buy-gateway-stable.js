@@ -7,7 +7,8 @@ const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
-const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";\nconst VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";
+const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
+const VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
