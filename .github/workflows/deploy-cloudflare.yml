@@ -11,6 +11,7 @@ on:
       - "src/buy-gateway-stable.js"
       - "api/binance-signed-relay.mjs"
       - "api/binance-account-passthrough.mjs"
+      - "api/binance-crosspair-preflight.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
       - "wrangler.jsonc"
@@ -44,6 +45,7 @@ jobs:
           node --check src/buy-gateway-auth-wrapper.js
           node --check api/binance-signed-relay.mjs
           node --check api/binance-account-passthrough.mjs
+          node --check api/binance-crosspair-preflight.mjs
           grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
@@ -165,6 +167,26 @@ jobs:
             sleep 3
           done
           test "$ok" = 1
+
+      - name: Report Binance cross-pair read-only diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/crosspair-account-preflight?nonce=$(date +%s%N)"             -o /tmp/crosspair.json
+          cat /tmp/crosspair.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/crosspair.json'))
+          assert r.get('ok') is True
+          assert r.get('executionRoute') == 'BINANCE_CROSSPAIR_READONLY_DIAGNOSTIC'
+          assert r.get('tradingAction') == 'NONE'
+          assert r.get('noBalanceValuesExposed') is True
+          assert r.get('noSecretValuesExposed') is True
+          print({
+            'cloudflareKeyVercelSecret': r.get('cloudflareKeyVercelSecret'),
+            'vercelKeyCloudflareSecret': r.get('vercelKeyCloudflareSecret'),
+          })
+          PY
 
       - name: Report live execution readiness
         shell: bash
