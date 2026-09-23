@@ -106,6 +106,27 @@ jobs:
           done
           test "$ok" = 1
 
+      - name: Report Cloudflare direct Binance signer (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 25             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/direct-account-preflight?nonce=$(date +%s%N)"             -o /tmp/direct.json || true
+          cat /tmp/direct.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/direct.json'))
+          assert r.get('executionRoute') == 'CLOUDFLARE_DIRECT_READONLY_DIAGNOSTIC'
+          assert r.get('tradingAction') == 'NONE'
+          assert r.get('noBalanceValuesExposed') is True
+          assert r.get('noSecretValuesExposed') is True
+          print({
+            'ok': r.get('ok'),
+            'canTrade': r.get('canTrade'),
+            'signerMode': r.get('signerMode'),
+            'diagnosticCode': r.get('diagnosticCode'),
+          })
+          PY
+
       - name: Verify Binance account read through Vercel transport
         shell: bash
         run: |
