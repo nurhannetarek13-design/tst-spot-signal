@@ -7,7 +7,7 @@ const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
-const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
+const VERCEL_SIGNED_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-passthrough";
 const VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
@@ -514,33 +514,45 @@ async function signedBinance(env, method, path, params = {}) {
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
 
-  const body = JSON.stringify({
-    method: String(method).toUpperCase(),
+  const queryParams=new URLSearchParams();
+  for (const [key,value] of Object.entries(params)) {
+    if (value===undefined || value===null || value==="") continue;
+    queryParams.append(key,String(value));
+  }
+  queryParams.append("recvWindow","5000");
+  queryParams.append("timestamp",String(Date.now()));
+  const unsigned=queryParams.toString();
+  const signed=await signBinancePayloadCloudflare(c.secret,unsigned);
+  queryParams.append("signature",signed.signature);
+
+  const body=JSON.stringify({
+    method:String(method).toUpperCase(),
     path,
-    network: "production",
-    params,
+    network:"production",
+    apiKey:c.key,
+    query:queryParams.toString(),
   });
-  const ts = String(Date.now());
-  const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
-  const r = await fetch(VERCEL_SIGNED_RELAY_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-executor-timestamp": ts,
-      "x-executor-signature": relaySignature,
+  const ts=String(Date.now());
+  const relaySignature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+  const r=await fetch(VERCEL_SIGNED_PASSTHROUGH_URL,{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-executor-timestamp":ts,
+      "x-executor-signature":relaySignature,
+      "cache-control":"no-store",
     },
     body,
   });
-  const text = await r.text();
-  let row = {};
-  try { row = JSON.parse(text || "{}"); } catch {
-    row = { ok: false, status: "BAD_RELAY_RESPONSE", relayHttpStatus: r.status };
+  const text=await r.text();
+  let row={};
+  try { row=JSON.parse(text||"{}"); } catch {
+    row={ok:false,status:"BAD_RELAY_RESPONSE",safeHttpStatus:r.status};
   }
-  if (!r.ok || row.ok !== true) {
-    const detail = row?.upstream?.code != null
-      ? `${row.upstream.code} ${row.upstream.msg || ""} signer=${row.upstream.signerMode || "UNKNOWN"}`
-      : (row.reason || row.status || r.status);
-    throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
+  if (!r.ok || row.ok!==true) {
+    const code=row?.safeBinanceCode;
+    const diagnostic=row?.diagnosticCode||row?.status||`HTTP_${r.status}`;
+    throw new Error(`BINANCE_RELAY_ERROR: ${code??"NO_CODE"} ${diagnostic} signer=${signed.signerMode}`);
   }
   return row.data;
 }
