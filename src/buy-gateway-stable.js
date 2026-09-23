@@ -8,7 +8,6 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
-const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
 function creds(env) {
@@ -246,7 +245,7 @@ async function signedBinance(env, method, path, params = {}) {
   }
   if (!r.ok || row.ok !== true) {
     const detail = row?.upstream?.code != null
-      ? `${row.upstream.code} ${row.upstream.msg || ""} signer=${row.upstream.signerMode || "UNKNOWN"}`
+      ? `${row.upstream.code} ${row.upstream.msg || ""}`
       : (row.reason || row.status || r.status);
     throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
   }
@@ -256,9 +255,6 @@ async function signedBinance(env, method, path, params = {}) {
 function safeRelayDiagnostic(errorText) {
   const s=String(errorText||"");
   if (s.includes("-2015")) return "BINANCE_CREDENTIAL_OR_IP_REJECTED";
-  if (s.includes("-1022") && s.includes("signer=RSA_SHA256")) return "BINANCE_SIGNATURE_REJECTED_RSA";
-  if (s.includes("-1022") && s.includes("signer=ED25519")) return "BINANCE_SIGNATURE_REJECTED_ED25519";
-  if (s.includes("-1022") && s.includes("signer=HMAC_SHA256")) return "BINANCE_SIGNATURE_REJECTED_HMAC";
   if (s.includes("-1022")) return "BINANCE_SIGNATURE_REJECTED";
   if (s.includes("-1021")) return "BINANCE_CLOCK_REJECTED";
   if (s.includes("BAD_SIGNED_REQUEST")) return "RELAY_SIGNED_REQUEST_REJECTED";
@@ -420,11 +416,8 @@ async function sendPromptForActive(env) {
   if (c.credentialMode !== "LIVE") return;
 
   const active = (await getState(env, "paper:active")) || [];
-  const b = await refreshBalance(env);
-  if (!b?.ok || !b.canTrade || b.credentialMode !== "LIVE") {
-    return;
-  }
-  const free = Number(b.usdt?.free || 0);
+  const b = (await getState(env, "binance:balance:last")) || await refreshBalance(env);
+  const free = Number(b?.usdt?.free || 0);
   for (const p of active) {
     const id = compactId(p);
     if (await getState(env, `buy-prompt:${id}`)) continue;
@@ -452,38 +445,6 @@ async function sendPromptForActive(env) {
     }
     await putState(env, `buy-prompt:${id}`, { sentAt: Date.now() }, SIGNAL_TTL_SEC);
   }
-}
-
-async function ensureTelegramWebhook(env) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
-    return { ok:false, status:"TELEGRAM_NOT_CONFIGURED", noSecretValuesExposed:true };
-  }
-  const info = await tg(env, "getWebhookInfo", {});
-  const current = info?.result || info || {};
-  const allowed = Array.isArray(current.allowed_updates) ? current.allowed_updates : [];
-  const matches = String(current.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
-  const callbackAllowed = allowed.includes("callback_query");
-
-  if (!matches || !callbackAllowed) {
-    await tg(env, "setWebhook", {
-      url: EXPECTED_TELEGRAM_WEBHOOK_URL,
-      allowed_updates: ["callback_query"],
-      drop_pending_updates: false,
-    });
-  }
-
-  const verified = await tg(env, "getWebhookInfo", {});
-  const v = verified?.result || verified || {};
-  const verifiedAllowed = Array.isArray(v.allowed_updates) ? v.allowed_updates : [];
-  const urlMatches = String(v.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
-  const callbackQueryAllowed = verifiedAllowed.includes("callback_query");
-  return {
-    ok: urlMatches && callbackQueryAllowed,
-    status: urlMatches && callbackQueryAllowed ? "TELEGRAM_WEBHOOK_OK" : "TELEGRAM_WEBHOOK_MISMATCH",
-    urlMatches,
-    callbackQueryAllowed,
-    noSecretValuesExposed: true,
-  };
 }
 
 async function handleTelegramWebhook(request, env) {
@@ -584,18 +545,6 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") return handleFastSignalIngest(request, env);
     if (url.pathname === "/telegram-webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
-    if (url.pathname === "/telegram-webhook-check" && request.method === "POST") {
-      try {
-        return Response.json(await ensureTelegramWebhook(env), { headers: { "cache-control": "no-store" } });
-      } catch (e) {
-        return Response.json({
-          ok:false,
-          status:"TELEGRAM_WEBHOOK_CHECK_FAILED",
-          reason:String(e?.message || e).slice(0,120),
-          noSecretValuesExposed:true,
-        }, { status:502, headers:{ "cache-control":"no-store" } });
-      }
-    }
 
     if (url.pathname === "/runtime-check") {
       const c = creds(env);
@@ -603,8 +552,8 @@ export default {
         ok: true,
         hasApiKey: Boolean(c.key),
         hasApiSecret: Boolean(c.secret),
-        keyAlias: env.BINANCE_API_KEY ? "BINANCE_API_KEY" : env.BINANCE_KEY ? "BINANCE_KEY" : env.BINANCE_APIKEY ? "BINANCE_APIKEY" : env.BINANCE_DEMO_API_KEY ? "BINANCE_DEMO_API_KEY" : null,
-        secretAlias: env.BINANCE_API_SECRET ? "BINANCE_API_SECRET" : env.BINANCE_SECRET ? "BINANCE_SECRET" : env.BINANCE_SECRET_KEY ? "BINANCE_SECRET_KEY" : env.BINANCE_DEMO_SECRET_KEY ? "BINANCE_DEMO_SECRET_KEY" : null,
+        keyAlias: env.BINANCE_API_KEY ? "BINANCE_API_KEY" : env.BINANCE_KEY ? "BINANCE_KEY" : env.BINANCE_APIKEY ? "BINANCE_APIKEY" : null,
+        secretAlias: env.BINANCE_API_SECRET ? "BINANCE_API_SECRET" : env.BINANCE_SECRET ? "BINANCE_SECRET" : env.BINANCE_SECRET_KEY ? "BINANCE_SECRET_KEY" : null,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
         executionRoute: c.route,
