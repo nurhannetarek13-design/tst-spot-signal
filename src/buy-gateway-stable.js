@@ -8,8 +8,6 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
-const RAILWAY_DEMO_ACCOUNT_URL = "https://liquidation-collector-production.up.railway.app/signed-testnet-account";
-const DEMO_ROUTE = "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
 function creds(env) {
@@ -22,18 +20,6 @@ function creds(env) {
       network: "production",
       credentialMode: "LIVE",
       route: LIVE_ROUTE,
-    };
-  }
-
-  const demoKey = env.BINANCE_DEMO_API_KEY || "";
-  const demoSecret = env.BINANCE_DEMO_SECRET_KEY || "";
-  if (demoKey && demoSecret) {
-    return {
-      key: String(demoKey).trim(),
-      secret: String(demoSecret).trim(),
-      network: "testnet",
-      credentialMode: "DEMO",
-      route: DEMO_ROUTE,
     };
   }
 
@@ -569,16 +555,11 @@ export default {
         keyAlias: env.BINANCE_API_KEY ? "BINANCE_API_KEY" : env.BINANCE_KEY ? "BINANCE_KEY" : env.BINANCE_APIKEY ? "BINANCE_APIKEY" : env.BINANCE_DEMO_API_KEY ? "BINANCE_DEMO_API_KEY" : null,
         secretAlias: env.BINANCE_API_SECRET ? "BINANCE_API_SECRET" : env.BINANCE_SECRET ? "BINANCE_SECRET" : env.BINANCE_SECRET_KEY ? "BINANCE_SECRET_KEY" : env.BINANCE_DEMO_SECRET_KEY ? "BINANCE_DEMO_SECRET_KEY" : null,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
-        demoApiKeyBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_API_KEY"),
-        demoApiKeyType: typeof env.BINANCE_DEMO_API_KEY,
-        demoSecretBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_SECRET_KEY"),
-        demoSecretType: typeof env.BINANCE_DEMO_SECRET_KEY,
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
-        demoExecutionDisabled: c.credentialMode === "DEMO",
         autoBuy: false,
         noSecretValuesExposed: true,
       });
