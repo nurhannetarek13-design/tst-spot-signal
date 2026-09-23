@@ -166,6 +166,28 @@ jobs:
           done
           test "$ok" = 1
 
+      - name: Diagnose Binance credential aliases read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 60 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/credential-alias-matrix?nonce=$(date +%s%N)" \
+            -o /tmp/matrix.json
+          cat /tmp/matrix.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/matrix.json'))
+          assert r.get('tradingAction') == 'NONE'
+          assert r.get('noBalanceValuesExposed') is True
+          assert r.get('noSecretValuesExposed') is True
+          print({
+            'status': r.get('status'),
+            'working': r.get('working'),
+            'attempts': r.get('attempts'),
+          })
+          PY
+
       - name: Report live execution readiness
         shell: bash
         run: |
