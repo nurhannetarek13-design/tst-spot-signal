@@ -13,24 +13,19 @@ const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
 function creds(env) {
-  const liveKey = env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "";
-  const liveSecret = env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "";
-  if (liveKey && liveSecret) {
-    return {
-      key: String(liveKey).trim(),
-      secret: String(liveSecret).trim(),
-      network: "production",
-      credentialMode: "LIVE",
-      route: LIVE_ROUTE,
-    };
-  }
-
+  // Binance private credentials belong to Vercel only. Cloudflare authenticates
+  // to the relay with TELEGRAM_BOT_TOKEN and never needs the Binance secret
+  // for the active execution path. Legacy local bindings remain visible only
+  // to the temporary read-only diagnostics until they are removed.
+  const legacyKey = env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "";
+  const legacySecret = env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "";
+  const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN);
   return {
-    key: "",
-    secret: "",
-    network: "none",
-    credentialMode: "MISSING",
-    route: "BINANCE_CREDENTIALS_MISSING",
+    key: String(legacyKey || "").trim(),
+    secret: String(legacySecret || "").trim(),
+    network: relayReady ? "production" : "none",
+    credentialMode: relayReady ? "LIVE" : "MISSING",
+    route: relayReady ? LIVE_ROUTE : "VERCEL_RELAY_AUTH_MISSING",
   };
 }
 
@@ -900,6 +895,8 @@ export default {
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
         executionRoute: c.route,
+        binanceCredentialOwner: "VERCEL_ONLY",
+        cloudflareBinanceCredentialsRequired: false,
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
@@ -1020,6 +1017,8 @@ export default {
         userConfirmationRequired: true,
         autoBuy: false,
         railwayDependency: false,
+        binanceCredentialOwner: "VERCEL_ONLY",
+        cloudflareBinanceCredentialsRequired: false,
         maxRiskUSDT: MAX_RISK_USDT,
         maxBuyUSDT: 10,
         noBalanceValuesExposed: true,
