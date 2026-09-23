@@ -51,6 +51,9 @@ jobs:
           grep -q 'await scan(env,false)' src/edge-worker.js
           grep -q 'x-fast-ecdsa' src/buy-gateway-auth-wrapper.js
           grep -q 'VERCEL_BINANCE_CREDENTIALS_MISSING' api/binance-signed-relay.mjs
+          grep -q 'HMAC_SHA256' api/binance-signed-relay.mjs
+          grep -q 'RSA_SHA256' api/binance-signed-relay.mjs
+          grep -q 'ED25519' api/binance-signed-relay.mjs
           grep -q 'MAX_BUY_QUOTE_USDT = 10' api/binance-signed-relay.mjs
           grep -q 'OPERATION_NOT_ALLOWED' api/binance-signed-relay.mjs
           grep -q 'WRITE_TRANSPORT_STATUS_UNKNOWN' api/binance-signed-relay.mjs
