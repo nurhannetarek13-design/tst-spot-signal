@@ -8,8 +8,6 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
-const RAILWAY_DEMO_ACCOUNT_URL = "https://liquidation-collector-production.up.railway.app/signed-testnet-account";
-const DEMO_ROUTE = "CLOUDFLARE_SIGNED_RAILWAY_TESTNET_READONLY";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
 function creds(env) {
@@ -22,18 +20,6 @@ function creds(env) {
       network: "production",
       credentialMode: "LIVE",
       route: LIVE_ROUTE,
-    };
-  }
-
-  const demoKey = env.BINANCE_DEMO_API_KEY || "";
-  const demoSecret = env.BINANCE_DEMO_SECRET_KEY || "";
-  if (demoKey && demoSecret) {
-    return {
-      key: String(demoKey).trim(),
-      secret: String(demoSecret).trim(),
-      network: "testnet",
-      credentialMode: "DEMO",
-      route: DEMO_ROUTE,
     };
   }
 
@@ -169,7 +155,7 @@ function dynamicQuote(freeUSDT, entry, stop, requested = null) {
   if (!(stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
   const riskSized = MAX_RISK_USDT / stopPct;
   const balanceCap = freeUSDT * MAX_BALANCE_FRACTION;
-  let size = Math.min(riskSized, balanceCap);
+  let size = Math.min(riskSized, balanceCap, 10);
   const req = Number(requested);
   if (Number.isFinite(req) && req > 0) size = Math.min(size, req);
   return Math.floor(size * 100) / 100;
@@ -232,43 +218,14 @@ async function executionPriceGate(symbol, referenceEntry, referenceStop, referen
 
 async function signedBinance(env, method, path, params = {}) {
   const c = creds(env);
-  if (!c.key || !c.secret) throw new Error("BINANCE_CLOUDFLARE_KEYS_MISSING");
-
-  const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
-  const qs = new URLSearchParams(Object.entries(all).map(([k, v]) => [k, String(v)])).toString();
-  const binanceSignature = await hmacHex(c.secret, qs);
-  const signedQuery = `${qs}&signature=${binanceSignature}`;
-
-  if (c.credentialMode === "DEMO") {
-    if (String(method).toUpperCase() !== "GET" || path !== "/api/v3/account") {
-      throw new Error("DEMO_EXECUTION_DISABLED");
-    }
-    const r = await fetch(RAILWAY_DEMO_ACCOUNT_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-      body: JSON.stringify({ apiKey: c.key, query: signedQuery }),
-    });
-    const text = await r.text();
-    let row = {};
-    try { row = JSON.parse(text || "{}"); } catch { row = { ok: false, status: "NON_JSON_RAILWAY_RESPONSE" }; }
-    if (!r.ok || row.ok !== true) {
-      const detail = row?.upstream?.code != null
-        ? `${row.upstream.code} ${row.upstream.msg || ""}`
-        : (row.reason || row.status || r.status);
-      throw new Error(`BINANCE_RAILWAY_DEMO_ERROR: ${detail}`);
-    }
-    return row.data;
-  }
-
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
 
   const body = JSON.stringify({
     method: String(method).toUpperCase(),
     path,
-    apiKey: c.key,
     network: "production",
-    query: signedQuery,
+    params,
   });
   const ts = String(Date.now());
   const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
@@ -284,21 +241,12 @@ async function signedBinance(env, method, path, params = {}) {
   const text = await r.text();
   let row = {};
   try { row = JSON.parse(text || "{}"); } catch {
-    const preview = String(text || "").replace(/[A-Za-z0-9_-]{20,}/g, "[redacted]").slice(0, 240);
-    row = {
-      ok: false,
-      status: "BAD_RELAY_RESPONSE",
-      relayHttpStatus: r.status,
-      relayContentType: r.headers.get("content-type") || "",
-      relayBodyPreview: preview,
-    };
+    row = { ok: false, status: "BAD_RELAY_RESPONSE", relayHttpStatus: r.status };
   }
   if (!r.ok || row.ok !== true) {
     const detail = row?.upstream?.code != null
       ? `${row.upstream.code} ${row.upstream.msg || ""}`
-      : row.status === "BAD_RELAY_RESPONSE"
-        ? `BAD_RELAY_RESPONSE http=${row.relayHttpStatus} type=${row.relayContentType} body=${row.relayBodyPreview}`
-        : (row.reason || row.status || r.status);
+      : (row.reason || row.status || r.status);
     throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
   }
   return row.data;
@@ -311,6 +259,7 @@ function safeRelayDiagnostic(errorText) {
   if (s.includes("-1021")) return "BINANCE_CLOCK_REJECTED";
   if (s.includes("BAD_SIGNED_REQUEST")) return "RELAY_SIGNED_REQUEST_REJECTED";
   if (s.includes("BAD_RELAY_SIGNATURE")) return "RELAY_HMAC_REJECTED";
+  if (s.includes("VERCEL_BINANCE_CREDENTIALS_MISSING")) return "VERCEL_BINANCE_CREDENTIALS_MISSING";
   if (s.includes("PRODUCTION_ONLY")) return "RELAY_NETWORK_REJECTED";
   if (s.includes("BINANCE_UPSTREAM_REJECTED")) return "BINANCE_UPSTREAM_REJECTED";
   return s ? "ACCOUNT_PREFLIGHT_FAILED" : "NONE";
@@ -385,7 +334,7 @@ async function executeConfirmedBuy(env, s) {
     type: "MARKET",
     quoteOrderQty: quoteUSDT.toFixed(2),
     newOrderRespType: "FULL",
-    newClientOrderId: `TSTU${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+    newClientOrderId: `TSTU${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
   });
   const executedQty = Number(buy.executedQty || 0);
   const quoteQty = Number(buy.cummulativeQuoteQty || 0);
@@ -418,14 +367,32 @@ async function executeConfirmedBuy(env, s) {
       belowStopPrice: stop,
       belowPrice: stopLimit,
       belowTimeInForce: "GTC",
+      listClientOrderId: `TSTO${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
     });
   } catch (e) {
     ocoError = String(e?.message || e);
   }
 
+  let emergencyClose = null;
+  let emergencyCloseError = null;
+  if (!oco) {
+    try {
+      emergencyClose = await signedBinance(env, "POST", "/api/v3/order", {
+        symbol,
+        side: "SELL",
+        type: "MARKET",
+        quantity: sellQty,
+        newOrderRespType: "FULL",
+        newClientOrderId: `TSTE${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
+      });
+    } catch (e) {
+      emergencyCloseError = String(e?.message || e);
+    }
+  }
+
   return {
     ok: true,
-    status: oco ? "BOUGHT_AND_PROTECTED" : "BOUGHT_PROTECTION_FAILED",
+    status: oco ? "BOUGHT_AND_PROTECTED" : (emergencyClose ? "PROTECTION_FAILED_EMERGENCY_CLOSED" : "PROTECTION_FAILED_EMERGENCY_CLOSE_FAILED"),
     symbol,
     quoteUSDT: quoteQty,
     recommendedUSDT: quoteUSDT,
@@ -436,6 +403,8 @@ async function executeConfirmedBuy(env, s) {
     stopLimit,
     ocoPlaced: Boolean(oco),
     ocoError,
+    emergencyClosed: Boolean(emergencyClose),
+    emergencyCloseError,
     autoBuy: false,
     userConfirmed: true,
   };
@@ -549,11 +518,17 @@ async function handleTelegramWebhook(request, env) {
         symbol: p.symbol,
         quoteUSDT: r.quoteUSDT,
         ocoPlaced: r.ocoPlaced,
+        emergencyClosed: r.emergencyClosed,
       }, 86400);
       await putState(env, `prepared:${id}`, null, 1);
+      const resultText = r.ocoPlaced
+        ? `✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}`
+        : r.emergencyClosed
+          ? `⚠️ ${p.symbol}: الشراء اتنفذ لكن حماية OCO فشلت، فالبوت قفل المركز فورًا Market كإجراء طوارئ. مفيش مركز مقصود يفضل مفتوح من العملية دي.`
+          : `🚨 CRITICAL — ${p.symbol}: الشراء اتنفذ، وحماية OCO فشلت، ومحاولة الإغلاق الطارئ فشلت. راجعي Binance فورًا.`;
       await tg(env, "sendMessage", {
         chat_id: String(env.TELEGRAM_CHAT_ID),
-        text: `✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n${r.ocoPlaced ? `✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}` : `⚠️ OCO failed: ${r.ocoError}`}`,
+        text: resultText,
       });
     } catch (e) {
       await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), error: String(e?.message || e) }, 86400);
@@ -580,16 +555,11 @@ export default {
         keyAlias: env.BINANCE_API_KEY ? "BINANCE_API_KEY" : env.BINANCE_KEY ? "BINANCE_KEY" : env.BINANCE_APIKEY ? "BINANCE_APIKEY" : env.BINANCE_DEMO_API_KEY ? "BINANCE_DEMO_API_KEY" : null,
         secretAlias: env.BINANCE_API_SECRET ? "BINANCE_API_SECRET" : env.BINANCE_SECRET ? "BINANCE_SECRET" : env.BINANCE_SECRET_KEY ? "BINANCE_SECRET_KEY" : env.BINANCE_DEMO_SECRET_KEY ? "BINANCE_DEMO_SECRET_KEY" : null,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
-        demoApiKeyBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_API_KEY"),
-        demoApiKeyType: typeof env.BINANCE_DEMO_API_KEY,
-        demoSecretBindingPresent: Object.prototype.hasOwnProperty.call(env, "BINANCE_DEMO_SECRET_KEY"),
-        demoSecretType: typeof env.BINANCE_DEMO_SECRET_KEY,
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
-        demoExecutionDisabled: c.credentialMode === "DEMO",
         autoBuy: false,
         noSecretValuesExposed: true,
       });
