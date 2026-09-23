@@ -1,7 +1,14 @@
 {
-  "accepted_signals": [],
+  "accepted_signals": [
+    {
+      "bar_time": 1790118000000,
+      "reason": "PAPER_OPENED",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "AVAXUSDT"
+    }
+  ],
   "blocked": [],
-  "cash_usdt": 13.718390175358696,
+  "cash_usdt": 6.7596241911886965,
   "closed_trades": [
     {
       "closed_at": "2026-09-21T14:07:54.529396+00:00",
@@ -37,9 +44,9 @@
       "symbol": "FILUSDT"
     }
   ],
-  "day": "2026-09-22",
-  "day_pnl": 0.3462420544038425,
-  "last_run": "2026-09-22T22:16:22.693295+00:00",
+  "day": "2026-09-23",
+  "day_pnl": 0.0,
+  "last_run": "2026-09-23T00:40:10.897624+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -450,6 +457,24 @@
         "reason": "INVALID_STOP_DISTANCE",
         "strategy": "REGIME_MOMENTUM_PAPER_2R_WRAPPER",
         "symbol": "AVAXUSDT"
+      },
+      {
+        "at": "2026-09-23T00:40:10.900272+00:00",
+        "bar_time": 1790118000000,
+        "key": "SIGNAL|TREND_BREAKOUT|AVAXUSDT|1790118000000|20-bar high breakout",
+        "kind": "SIGNAL",
+        "reason": "20-bar high breakout",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "AVAXUSDT"
+      },
+      {
+        "at": "2026-09-23T00:40:10.900289+00:00",
+        "bar_time": 1790118000000,
+        "key": "OPEN|TREND_BREAKOUT|AVAXUSDT|1790118000000|PAPER_OPENED",
+        "kind": "OPEN",
+        "reason": "PAPER_OPENED",
+        "strategy": "TREND_BREAKOUT",
+        "symbol": "AVAXUSDT"
       }
     ],
     "started_at": "2026-09-19T21:11:53.438619+00:00",
@@ -475,7 +500,7 @@
       },
       "TREND_BREAKOUT": {
         "closed": 1,
-        "opened": 2,
+        "opened": 3,
         "pnl_usdt": 0.19599274024311963,
         "reasons": {
           "INVALID_STOP_DISTANCE": 2,
@@ -483,7 +508,7 @@
           "RISK_PER_TRADE": 1
         },
         "rejected": 8,
-        "signals": 12
+        "signals": 13
       },
       "TREND_PULLBACK": {
         "closed": 2,
@@ -508,9 +533,9 @@
     "by_strategy": [
       {
         "closed": 1,
-        "currently_open": 1,
+        "currently_open": 2,
         "id": "TREND_BREAKOUT",
-        "opened": 2,
+        "opened": 3,
         "realized_pnl_usdt": 0.19599274,
         "rejected": 8,
         "rejection_reasons": {
@@ -518,7 +543,7 @@
           "MAX_OPEN_POSITIONS": 5,
           "RISK_PER_TRADE": 1
         },
-        "signals": 12,
+        "signals": 13,
         "status": "PAPER_UNPROVEN"
       },
       {
@@ -624,15 +649,25 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-22T22:16:22.695712+00:00",
-    "last_run": "2026-09-22T22:16:22.693295+00:00",
+    "generated_at": "2026-09-23T00:40:10.900369+00:00",
+    "last_run": "2026-09-23T00:40:10.897624+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
     "total_realized_pnl_from_audit_usdt": 0.67015567,
-    "wallet_cash_usdt": 13.718390175358696
+    "wallet_cash_usdt": 6.7596241911886965
   },
   "positions": {
+    "AVAXUSDT": {
+      "bar_time": 1790118000000,
+      "cost": 6.958765984169999,
+      "entry": 11.2126035,
+      "opened_at": "2026-09-23T00:40:10.897590+00:00",
+      "qty": 0.62,
+      "stop": 10.97526432488067,
+      "strategy": "TREND_BREAKOUT",
+      "target": 11.687281850238664
+    },
     "SOLUSDT": {
       "bar_time": 1789995600000,
       "cost": 6.951765495675,
@@ -650,7 +685,7 @@
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:ETHUSDT": 1789948800000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:LINKUSDT": 1789995600000,
     "REGIME_MOMENTUM_PAPER_2R_WRAPPER:SUIUSDT": 1789920000000,
-    "TREND_BREAKOUT:AVAXUSDT": 1789948800000,
+    "TREND_BREAKOUT:AVAXUSDT": 1790118000000,
     "TREND_BREAKOUT:BTCUSDT": 1789948800000,
     "TREND_BREAKOUT:ETHUSDT": 1789948800000,
     "TREND_BREAKOUT:FILUSDT": 1789837200000,
@@ -663,11 +698,19 @@
     "TREND_PULLBACK:SOLUSDT": 1789920000000
   },
   "seen_symbol": {
+    "AVAXUSDT": 1790118000000,
     "FILUSDT": 1789920000000,
     "LINKUSDT": 1789920000000,
     "SOLUSDT": 1789995600000
   },
-  "signals": [],
+  "signals": [
+    {
+      "bar_time": 1790118000000,
+      "reason": "20-bar high breakout",
+      "strategy": "TREND_BREAKOUT",
+      "symbol": "AVAXUSDT"
+    }
+  ],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
