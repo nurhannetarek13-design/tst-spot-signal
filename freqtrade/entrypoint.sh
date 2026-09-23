@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Railway live-start deployment trigger: 2026-09-23
 set -euo pipefail
 
 # Production priority: keep the live signal/execution path alive. The full NFI
