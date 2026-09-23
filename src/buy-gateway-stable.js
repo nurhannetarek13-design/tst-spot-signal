@@ -8,6 +8,7 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
+const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
 function creds(env) {
@@ -453,6 +454,38 @@ async function sendPromptForActive(env) {
   }
 }
 
+async function ensureTelegramWebhook(env) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    return { ok:false, status:"TELEGRAM_NOT_CONFIGURED", noSecretValuesExposed:true };
+  }
+  const info = await tg(env, "getWebhookInfo", {});
+  const current = info?.result || info || {};
+  const allowed = Array.isArray(current.allowed_updates) ? current.allowed_updates : [];
+  const matches = String(current.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
+  const callbackAllowed = allowed.includes("callback_query");
+
+  if (!matches || !callbackAllowed) {
+    await tg(env, "setWebhook", {
+      url: EXPECTED_TELEGRAM_WEBHOOK_URL,
+      allowed_updates: ["callback_query"],
+      drop_pending_updates: false,
+    });
+  }
+
+  const verified = await tg(env, "getWebhookInfo", {});
+  const v = verified?.result || verified || {};
+  const verifiedAllowed = Array.isArray(v.allowed_updates) ? v.allowed_updates : [];
+  const urlMatches = String(v.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
+  const callbackQueryAllowed = verifiedAllowed.includes("callback_query");
+  return {
+    ok: urlMatches && callbackQueryAllowed,
+    status: urlMatches && callbackQueryAllowed ? "TELEGRAM_WEBHOOK_OK" : "TELEGRAM_WEBHOOK_MISMATCH",
+    urlMatches,
+    callbackQueryAllowed,
+    noSecretValuesExposed: true,
+  };
+}
+
 async function handleTelegramWebhook(request, env) {
   const u = await request.json().catch(() => null);
   const q = u?.callback_query;
@@ -551,6 +584,18 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") return handleFastSignalIngest(request, env);
     if (url.pathname === "/telegram-webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
+    if (url.pathname === "/telegram-webhook-check" && request.method === "POST") {
+      try {
+        return Response.json(await ensureTelegramWebhook(env), { headers: { "cache-control": "no-store" } });
+      } catch (e) {
+        return Response.json({
+          ok:false,
+          status:"TELEGRAM_WEBHOOK_CHECK_FAILED",
+          reason:String(e?.message || e).slice(0,120),
+          noSecretValuesExposed:true,
+        }, { status:502, headers:{ "cache-control":"no-store" } });
+      }
+    }
 
     if (url.pathname === "/runtime-check") {
       const c = creds(env);

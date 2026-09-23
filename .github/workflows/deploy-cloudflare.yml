@@ -58,6 +58,8 @@ jobs:
           grep -q 'OPERATION_NOT_ALLOWED' api/binance-signed-relay.mjs
           grep -q 'WRITE_TRANSPORT_STATUS_UNKNOWN' api/binance-signed-relay.mjs
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
+          grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
+          grep -q 'TELEGRAM_WEBHOOK_OK' src/buy-gateway-stable.js
           if grep -Eq 'withdraw|fapi|leverage|margin' api/binance-signed-relay.mjs; then
             echo "Forbidden non-Spot capability found in Vercel relay"
             exit 1
