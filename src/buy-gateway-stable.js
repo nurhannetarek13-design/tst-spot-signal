@@ -730,6 +730,8 @@ export default {
         fastSignalIngest: true,
         oneTapConfirm: true,
         autoBuy: false,
+        makeBuyConfigured: Boolean(env.MAKE_ONE_TAP_WEBHOOK_URL),
+        makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
         noSecretValuesExposed: true,
       });
     }
