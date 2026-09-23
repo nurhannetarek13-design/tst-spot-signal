@@ -8,6 +8,7 @@ on:
       - "src/edge-worker.js"
       - "src/buy-gateway-stable.js"
       - "api/binance-signed-relay.mjs"
+      - "api/binance-account-passthrough.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
       - "wrangler.jsonc"
@@ -40,6 +41,7 @@ jobs:
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
           node --check api/binance-signed-relay.mjs
+          node --check api/binance-account-passthrough.mjs
           grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
@@ -126,6 +128,41 @@ jobs:
             'diagnosticCode': r.get('diagnosticCode'),
           })
           PY
+
+      - name: Verify Cloudflare signature via Vercel read-only passthrough
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 20); do
+            curl --silent --show-error --max-time 25               -H 'cache-control: no-store'               "https://tst-spot-signal.nurhanne-tarek13.workers.dev/signed-vercel-account-preflight?attempt=${attempt}&nonce=$(date +%s%N)"               -o /tmp/passthrough.json || true
+            cat /tmp/passthrough.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/passthrough.json'))
+          except Exception: sys.exit(1)
+          required=[
+            r.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC',
+            r.get('tradingAction') == 'NONE',
+            r.get('noBalanceValuesExposed') is True,
+            r.get('noSecretValuesExposed') is True,
+          ]
+          if not all(required): sys.exit(1)
+          print({
+            'ok':r.get('ok'),
+            'canTrade':r.get('canTrade'),
+            'signerMode':r.get('signerMode'),
+            'diagnosticCode':r.get('diagnosticCode'),
+            'safeHttpStatus':r.get('safeHttpStatus'),
+            'safeBinanceCode':r.get('safeBinanceCode'),
+          })
+          sys.exit(0)
+          PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
 
       - name: Verify Binance account read through Vercel transport
         shell: bash

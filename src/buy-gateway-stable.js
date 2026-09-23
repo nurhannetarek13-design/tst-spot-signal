@@ -7,7 +7,7 @@ const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
-const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
+const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";\nconst VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
@@ -146,6 +146,43 @@ async function signBinancePayloadCloudflare(secret, payload) {
   }
 
   return {signature:await hmacHex(normalized,payload),signerMode:"HMAC_SHA256"};
+}
+
+async function cloudflareSignedVercelAccountRead(env) {
+  const c=creds(env);
+  if (c.credentialMode!=="LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
+
+  const q=new URLSearchParams();
+  q.append("recvWindow","5000");
+  q.append("timestamp",String(Date.now()));
+  const unsigned=q.toString();
+  const signed=await signBinancePayloadCloudflare(c.secret,unsigned);
+  q.append("signature",signed.signature);
+
+  const body=JSON.stringify({apiKey:c.key,query:q.toString()});
+  const ts=String(Date.now());
+  const relaySig=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+  const r=await fetch(VERCEL_ACCOUNT_PASSTHROUGH_URL,{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-executor-timestamp":ts,
+      "x-executor-signature":relaySig,
+    },
+    body,
+  });
+  const txt=await r.text();
+  let row={}; try { row=JSON.parse(txt||"{}"); } catch {}
+  if (r.ok && row.ok===true) {
+    return {ok:true,canTrade:Boolean(row.data?.canTrade),signerMode:signed.signerMode};
+  }
+  const err=new Error(String(row?.diagnosticCode||row?.status||"PASSTHROUGH_FAILED"));
+  err.diagnosticCode=String(row?.diagnosticCode||"PASSTHROUGH_FAILED");
+  err.safeHttpStatus=Number(row?.safeHttpStatus||r.status)||null;
+  err.safeBinanceCode=row?.safeBinanceCode??null;
+  err.signerMode=signed.signerMode;
+  throw err;
 }
 
 async function cloudflareDirectAccountRead(env) {
@@ -735,6 +772,34 @@ export default {
         makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
         noSecretValuesExposed: true,
       });
+    }
+
+    if (url.pathname === "/signed-vercel-account-preflight") {
+      try {
+        const r=await cloudflareSignedVercelAccountRead(env);
+        return Response.json({
+          ok:r.ok===true,
+          canTrade:r.canTrade===true,
+          signerMode:r.signerMode,
+          executionRoute:"CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{headers:{"cache-control":"no-store"}});
+      } catch(e) {
+        return Response.json({
+          ok:false,
+          canTrade:false,
+          signerMode:e?.signerMode||"UNKNOWN",
+          diagnosticCode:e?.diagnosticCode||"SIGNED_PASSTHROUGH_FAILED",
+          safeHttpStatus:Number(e?.safeHttpStatus)||null,
+          safeBinanceCode:e?.safeBinanceCode??null,
+          executionRoute:"CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{status:503,headers:{"cache-control":"no-store"}});
+      }
     }
 
     if (url.pathname === "/direct-account-preflight") {
