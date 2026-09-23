@@ -169,7 +169,7 @@ function dynamicQuote(freeUSDT, entry, stop, requested = null) {
   if (!(stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
   const riskSized = MAX_RISK_USDT / stopPct;
   const balanceCap = freeUSDT * MAX_BALANCE_FRACTION;
-  let size = Math.min(riskSized, balanceCap);
+  let size = Math.min(riskSized, balanceCap, 10);
   const req = Number(requested);
   if (Number.isFinite(req) && req > 0) size = Math.min(size, req);
   return Math.floor(size * 100) / 100;
@@ -232,43 +232,14 @@ async function executionPriceGate(symbol, referenceEntry, referenceStop, referen
 
 async function signedBinance(env, method, path, params = {}) {
   const c = creds(env);
-  if (!c.key || !c.secret) throw new Error("BINANCE_CLOUDFLARE_KEYS_MISSING");
-
-  const all = { ...params, recvWindow: 5000, timestamp: Date.now() };
-  const qs = new URLSearchParams(Object.entries(all).map(([k, v]) => [k, String(v)])).toString();
-  const binanceSignature = await hmacHex(c.secret, qs);
-  const signedQuery = `${qs}&signature=${binanceSignature}`;
-
-  if (c.credentialMode === "DEMO") {
-    if (String(method).toUpperCase() !== "GET" || path !== "/api/v3/account") {
-      throw new Error("DEMO_EXECUTION_DISABLED");
-    }
-    const r = await fetch(RAILWAY_DEMO_ACCOUNT_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-      body: JSON.stringify({ apiKey: c.key, query: signedQuery }),
-    });
-    const text = await r.text();
-    let row = {};
-    try { row = JSON.parse(text || "{}"); } catch { row = { ok: false, status: "NON_JSON_RAILWAY_RESPONSE" }; }
-    if (!r.ok || row.ok !== true) {
-      const detail = row?.upstream?.code != null
-        ? `${row.upstream.code} ${row.upstream.msg || ""}`
-        : (row.reason || row.status || r.status);
-      throw new Error(`BINANCE_RAILWAY_DEMO_ERROR: ${detail}`);
-    }
-    return row.data;
-  }
-
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
 
   const body = JSON.stringify({
     method: String(method).toUpperCase(),
     path,
-    apiKey: c.key,
     network: "production",
-    query: signedQuery,
+    params,
   });
   const ts = String(Date.now());
   const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
@@ -284,21 +255,12 @@ async function signedBinance(env, method, path, params = {}) {
   const text = await r.text();
   let row = {};
   try { row = JSON.parse(text || "{}"); } catch {
-    const preview = String(text || "").replace(/[A-Za-z0-9_-]{20,}/g, "[redacted]").slice(0, 240);
-    row = {
-      ok: false,
-      status: "BAD_RELAY_RESPONSE",
-      relayHttpStatus: r.status,
-      relayContentType: r.headers.get("content-type") || "",
-      relayBodyPreview: preview,
-    };
+    row = { ok: false, status: "BAD_RELAY_RESPONSE", relayHttpStatus: r.status };
   }
   if (!r.ok || row.ok !== true) {
     const detail = row?.upstream?.code != null
       ? `${row.upstream.code} ${row.upstream.msg || ""}`
-      : row.status === "BAD_RELAY_RESPONSE"
-        ? `BAD_RELAY_RESPONSE http=${row.relayHttpStatus} type=${row.relayContentType} body=${row.relayBodyPreview}`
-        : (row.reason || row.status || r.status);
+      : (row.reason || row.status || r.status);
     throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
   }
   return row.data;
@@ -385,7 +347,7 @@ async function executeConfirmedBuy(env, s) {
     type: "MARKET",
     quoteOrderQty: quoteUSDT.toFixed(2),
     newOrderRespType: "FULL",
-    newClientOrderId: `TSTU${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+    newClientOrderId: `TSTU${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
   });
   const executedQty = Number(buy.executedQty || 0);
   const quoteQty = Number(buy.cummulativeQuoteQty || 0);
@@ -418,14 +380,32 @@ async function executeConfirmedBuy(env, s) {
       belowStopPrice: stop,
       belowPrice: stopLimit,
       belowTimeInForce: "GTC",
+      listClientOrderId: `TSTO${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
     });
   } catch (e) {
     ocoError = String(e?.message || e);
   }
 
+  let emergencyClose = null;
+  let emergencyCloseError = null;
+  if (!oco) {
+    try {
+      emergencyClose = await signedBinance(env, "POST", "/api/v3/order", {
+        symbol,
+        side: "SELL",
+        type: "MARKET",
+        quantity: sellQty,
+        newOrderRespType: "FULL",
+        newClientOrderId: `TSTE${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
+      });
+    } catch (e) {
+      emergencyCloseError = String(e?.message || e);
+    }
+  }
+
   return {
     ok: true,
-    status: oco ? "BOUGHT_AND_PROTECTED" : "BOUGHT_PROTECTION_FAILED",
+    status: oco ? "BOUGHT_AND_PROTECTED" : (emergencyClose ? "PROTECTION_FAILED_EMERGENCY_CLOSED" : "PROTECTION_FAILED_EMERGENCY_CLOSE_FAILED"),
     symbol,
     quoteUSDT: quoteQty,
     recommendedUSDT: quoteUSDT,
@@ -436,6 +416,8 @@ async function executeConfirmedBuy(env, s) {
     stopLimit,
     ocoPlaced: Boolean(oco),
     ocoError,
+    emergencyClosed: Boolean(emergencyClose),
+    emergencyCloseError,
     autoBuy: false,
     userConfirmed: true,
   };
