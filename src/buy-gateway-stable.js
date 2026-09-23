@@ -8,7 +8,7 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
-const VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";
+const VERCEL_ACCOUNT_PASSTHROUGH_URL = "https://tst-spot-signal.vercel.app/api/binance-account-passthrough";\nconst VERCEL_CROSSPAIR_PREFLIGHT_URL = "https://tst-spot-signal.vercel.app/api/binance-crosspair-preflight";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
 
@@ -147,6 +147,50 @@ async function signBinancePayloadCloudflare(secret, payload) {
   }
 
   return {signature:await hmacHex(normalized,payload),signerMode:"HMAC_SHA256"};
+}
+
+async function crossPairReadOnly(env, mode) {
+  const cr=creds(env);
+  if(cr.credentialMode!=="LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
+  if(!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
+
+  let payload={mode};
+  if(mode==="CF_KEY_VERCEL_SECRET"){
+    payload.cloudflareApiKey=cr.key;
+  }else if(mode==="VERCEL_KEY_CF_SECRET"){
+    const q=new URLSearchParams();
+    q.append("recvWindow","5000");
+    q.append("timestamp",String(Date.now()));
+    const unsigned=q.toString();
+    const signed=await signBinancePayloadCloudflare(cr.secret,unsigned);
+    q.append("signature",signed.signature);
+    payload.cloudflareSignedQuery=q.toString();
+  }else{
+    throw new Error("MODE_NOT_ALLOWED");
+  }
+
+  const body=JSON.stringify(payload);
+  const ts=String(Date.now());
+  const relaySig=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${body}`);
+  const r=await fetch(VERCEL_CROSSPAIR_PREFLIGHT_URL,{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-executor-timestamp":ts,
+      "x-executor-signature":relaySig,
+    },
+    body,
+  });
+  const txt=await r.text();
+  let row={};try{row=JSON.parse(txt||"{}");}catch{}
+  return {
+    ok:row?.ok===true,
+    canTrade:row?.canTrade===true,
+    diagnosticCode:String(row?.diagnosticCode||row?.status||"CROSSPAIR_FAILED"),
+    safeHttpStatus:Number(row?.safeHttpStatus||r.status)||null,
+    safeBinanceCode:row?.safeBinanceCode??null,
+    mode,
+  };
 }
 
 async function cloudflareSignedVercelAccountRead(env) {
@@ -773,6 +817,24 @@ export default {
         makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
         noSecretValuesExposed: true,
       });
+    }
+
+    if (url.pathname === "/crosspair-account-preflight") {
+      const a=await crossPairReadOnly(env,"CF_KEY_VERCEL_SECRET").catch((e)=>({
+        ok:false,canTrade:false,diagnosticCode:String(e?.message||e),mode:"CF_KEY_VERCEL_SECRET"
+      }));
+      const b=await crossPairReadOnly(env,"VERCEL_KEY_CF_SECRET").catch((e)=>({
+        ok:false,canTrade:false,diagnosticCode:String(e?.message||e),mode:"VERCEL_KEY_CF_SECRET"
+      }));
+      return Response.json({
+        ok:true,
+        executionRoute:"BINANCE_CROSSPAIR_READONLY_DIAGNOSTIC",
+        cloudflareKeyVercelSecret:a,
+        vercelKeyCloudflareSecret:b,
+        tradingAction:"NONE",
+        noBalanceValuesExposed:true,
+        noSecretValuesExposed:true,
+      },{headers:{"cache-control":"no-store"}});
     }
 
     if (url.pathname === "/signed-vercel-account-preflight") {
