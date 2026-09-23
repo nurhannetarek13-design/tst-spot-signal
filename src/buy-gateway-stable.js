@@ -73,6 +73,124 @@ async function hmacHex(secret, text) {
 }
 
 
+
+function normalizeBinanceSecret(value) {
+  let s=String(value||"").trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s=s.slice(1,-1).trim();
+  }
+  if (s.includes("\\n") && !s.includes("\n")) s=s.replaceAll("\\n","\n");
+  return s;
+}
+
+function base64ToBytes(b64) {
+  const raw=atob(String(b64||"").replace(/\s+/g,""));
+  const out=new Uint8Array(raw.length);
+  for (let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+
+function bytesToBase64(bytes) {
+  let s="";
+  const a=bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]);
+  return btoa(s);
+}
+
+function privateKeyBytes(secret) {
+  const s=normalizeBinanceSecret(secret);
+  if (s.includes("BEGIN ") && s.includes("PRIVATE KEY")) {
+    const body=s.replace(/-----BEGIN [^-]+-----/g,"")
+      .replace(/-----END [^-]+-----/g,"")
+      .replace(/\s+/g,"");
+    try { return base64ToBytes(body); } catch {}
+  }
+  if (/^[A-Za-z0-9+/=\s]{48,}$/.test(s) && !/[{}:]/.test(s)) {
+    try {
+      const b=base64ToBytes(s);
+      if (b.length>=32) return b;
+    } catch {}
+  }
+  return null;
+}
+
+async function signBinancePayloadCloudflare(secret, payload) {
+  const normalized=normalizeBinanceSecret(secret);
+  const pkcs8=privateKeyBytes(normalized);
+  const data=new TextEncoder().encode(payload);
+
+  if (pkcs8) {
+    try {
+      const key=await crypto.subtle.importKey(
+        "pkcs8",
+        pkcs8,
+        {name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},
+        false,
+        ["sign"],
+      );
+      const sig=await crypto.subtle.sign({name:"RSASSA-PKCS1-v1_5"},key,data);
+      return {signature:bytesToBase64(sig),signerMode:"RSA_SHA256"};
+    } catch {}
+
+    try {
+      const key=await crypto.subtle.importKey(
+        "pkcs8",
+        pkcs8,
+        {name:"Ed25519"},
+        false,
+        ["sign"],
+      );
+      const sig=await crypto.subtle.sign({name:"Ed25519"},key,data);
+      return {signature:bytesToBase64(sig),signerMode:"ED25519"};
+    } catch {}
+  }
+
+  return {signature:await hmacHex(normalized,payload),signerMode:"HMAC_SHA256"};
+}
+
+async function cloudflareDirectAccountRead(env) {
+  const c=creds(env);
+  if (c.credentialMode!=="LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
+
+  const q=new URLSearchParams();
+  q.append("recvWindow","5000");
+  q.append("timestamp",String(Date.now()));
+  const unsigned=q.toString();
+  const signed=await signBinancePayloadCloudflare(c.secret,unsigned);
+  q.append("signature",signed.signature);
+
+  const bases=[
+    "https://api.binance.com",
+    "https://api-gcp.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+  ];
+  let last={code:null,status:502,msg:"BINANCE_UNAVAILABLE"};
+  for (const base of bases) {
+    try {
+      const r=await fetch(base+"/api/v3/account?"+q.toString(),{
+        method:"GET",
+        headers:{"X-MBX-APIKEY":c.key,"cache-control":"no-store"},
+      });
+      const text=await r.text();
+      let row={}; try { row=JSON.parse(text||"{}"); } catch {}
+      if (r.ok && !(Number(row?.code)<0)) {
+        return {ok:true,canTrade:Boolean(row.canTrade),signerMode:signed.signerMode};
+      }
+      last={code:row?.code??null,status:r.status,msg:String(row?.msg||"UPSTREAM_REJECTED").slice(0,120)};
+      if (Number(last.code)<0) break;
+    } catch(e) {
+      last={code:null,status:502,msg:String(e?.message||e).slice(0,120)};
+    }
+  }
+  const err=new Error(`DIRECT_BINANCE_ACCOUNT_FAILED:${last.code??"NO_CODE"}:${signed.signerMode}`);
+  err.code=last.code;
+  err.signerMode=signed.signerMode;
+  throw err;
+}
+
 async function handleFastSignalIngest(request, env) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") {
@@ -614,6 +732,37 @@ export default {
         autoBuy: false,
         noSecretValuesExposed: true,
       });
+    }
+
+    if (url.pathname === "/direct-account-preflight") {
+      try {
+        const r=await cloudflareDirectAccountRead(env);
+        return Response.json({
+          ok:r.ok===true,
+          canTrade:r.canTrade===true,
+          signerMode:r.signerMode,
+          executionRoute:"CLOUDFLARE_DIRECT_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{headers:{"cache-control":"no-store"}});
+      } catch(e) {
+        const msg=String(e?.message||e);
+        const code=msg.includes("-2015") ? "BINANCE_CREDENTIAL_OR_IP_REJECTED"
+          : msg.includes("-1022") ? "BINANCE_SIGNATURE_REJECTED"
+          : msg.includes("-1021") ? "BINANCE_CLOCK_REJECTED"
+          : "DIRECT_ACCOUNT_PREFLIGHT_FAILED";
+        return Response.json({
+          ok:false,
+          canTrade:false,
+          signerMode:e?.signerMode||"UNKNOWN",
+          diagnosticCode:code,
+          executionRoute:"CLOUDFLARE_DIRECT_READONLY_DIAGNOSTIC",
+          tradingAction:"NONE",
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        },{status:503,headers:{"cache-control":"no-store"}});
+      }
     }
 
     if (url.pathname === "/balance-refresh") {
