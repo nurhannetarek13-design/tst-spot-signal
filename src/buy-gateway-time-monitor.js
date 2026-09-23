@@ -1,4 +1,4 @@
-import canonicalWorker, { SignalState } from "./buy-gateway-canonical.js";
+import canonicalWorker, { SignalState } from "./buy-gateway-stable.js";
 export { SignalState };
 
 const REVIEW_45_MS = 45 * 60 * 1000;

@@ -214,6 +214,22 @@ async function publicBinance(path) {
   throw new Error(`BINANCE_PUBLIC_FAILED: ${last}`);
 }
 
+async function executionPriceGate(symbol, referenceEntry, referenceStop, referenceTarget) {
+  const book = await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  const ask=Number(book.askPrice||0), bid=Number(book.bidPrice||0);
+  const ref=Number(referenceEntry||0), stop=Number(referenceStop||0), target=Number(referenceTarget||0);
+  if(!(ask>0 && bid>0 && ask>=bid && ref>0 && stop>0 && target>ref)) throw new Error("EXECUTION_BOOK_INVALID");
+  const mid=(ask+bid)/2;
+  const spread=(ask-bid)/mid;
+  const deviation=ask/ref-1;
+  if(spread>0.0012) throw new Error(`EXECUTION_SPREAD_TOO_WIDE:${(spread*100).toFixed(3)}%`);
+  if(ask>=target) throw new Error("SETUP_ALREADY_AT_OR_ABOVE_TARGET");
+  if(ask<=stop) throw new Error("SETUP_ALREADY_AT_OR_BELOW_STOP");
+  if(deviation>0.0035) throw new Error(`STALE_PRICE_CHASE:${(deviation*100).toFixed(3)}%`);
+  if(deviation<-0.0060) throw new Error(`SETUP_DETERIORATED:${(deviation*100).toFixed(3)}%`);
+  return {ask,bid,spreadPct:spread*100,deviationPct:deviation*100};
+}
+
 async function signedBinance(env, method, path, params = {}) {
   const c = creds(env);
   if (!c.key || !c.secret) throw new Error("BINANCE_CLOUDFLARE_KEYS_MISSING");
@@ -342,6 +358,8 @@ async function executeConfirmedBuy(env, s) {
     throw new Error("PAIR_NOT_TRADABLE_SPOT");
   }
 
+  await executionPriceGate(symbol, entryRef, stopRef, targetRef);
+
   const account = await signedBinance(env, "GET", "/api/v3/account", {});
   if (!account.canTrade) throw new Error("ACCOUNT_CANNOT_TRADE");
   const freeUSDT = Number((account.balances || []).find((b) => b.asset === "USDT")?.free || 0);
@@ -366,10 +384,15 @@ async function executeConfirmedBuy(env, s) {
   const pf = market.filters.find((x) => x.filterType === "PRICE_FILTER");
   const step = Number(lot?.stepSize || "0.00000001");
   const tick = Number(pf?.tickSize || "0.00000001");
-  const stop = roundTo(avg * (stopRef / entryRef), tick);
-  const tp = roundTo(avg * (targetRef / entryRef), tick);
-  const stopLimit = roundTo(stop * 0.997, tick);
+  const modelTp = avg * (targetRef / entryRef);
+  let tp = floorTo(modelTp, tick);
+  if (tick / modelTp <= 0.001 && tp - tick > avg) tp = floorTo(tp - tick, tick);
+  const stop = floorTo(avg * (stopRef / entryRef), tick);
+  const stopLimit = floorTo(stop * 0.997, tick);
   const sellQty = floorTo(executedQty * 0.999, step);
+  if (!(sellQty > 0 && stopLimit <= stop && stop < avg && tp > avg && tp <= modelTp + 1e-12)) {
+    throw new Error("PROTECTION_LEVEL_CALC_FAILED");
+  }
 
   let oco = null, ocoError = null;
   try {
