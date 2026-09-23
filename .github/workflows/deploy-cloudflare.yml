@@ -127,6 +127,32 @@ jobs:
           })
           PY
 
+      - name: Report Cloudflare-signed Vercel account preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 25 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/proxied-account-preflight?nonce=$(date +%s%N)" \
+            -o /tmp/proxied.json || true
+          cat /tmp/proxied.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/proxied.json'))
+          assert r.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_READONLY_DIAGNOSTIC'
+          assert r.get('tradingAction') == 'NONE'
+          assert r.get('noBalanceValuesExposed') is True
+          assert r.get('noSecretValuesExposed') is True
+          print({
+            'ok': r.get('ok'),
+            'canTrade': r.get('canTrade'),
+            'signerMode': r.get('signerMode'),
+            'diagnosticCode': r.get('diagnosticCode'),
+            'safeHttpStatus': r.get('safeHttpStatus'),
+            'safeBinanceCode': r.get('safeBinanceCode'),
+          })
+          PY
+
       - name: Verify Binance account read through Vercel transport
         shell: bash
         run: |
