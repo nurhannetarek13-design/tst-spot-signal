@@ -47,6 +47,8 @@ jobs:
           grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
+          grep -q 'binanceCredentialOwner: "VERCEL_ONLY"' src/buy-gateway-stable.js
+          grep -q 'cloudflareBinanceCredentialsRequired: false' src/buy-gateway-stable.js
           grep -q 'async function executionPriceGate' src/buy-gateway-stable.js
           grep -q 'STALE_PRICE_CHASE' src/buy-gateway-stable.js
           grep -q 'EXECUTION_SPREAD_TOO_WIDE' src/buy-gateway-stable.js
@@ -96,6 +98,8 @@ jobs:
             r.get('ok') is True,
             r.get('credentialMode') == 'LIVE',
             r.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT',
+            r.get('binanceCredentialOwner') == 'VERCEL_ONLY',
+            r.get('cloudflareBinanceCredentialsRequired') is False,
             r.get('telegramConfigured') is True,
             r.get('atomicConfirmClaim') is True,
             r.get('fastSignalIngest') is True,
