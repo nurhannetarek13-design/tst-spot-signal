@@ -273,6 +273,7 @@ function safeRelayDiagnostic(errorText) {
   if (s.includes("-1021")) return "BINANCE_CLOCK_REJECTED";
   if (s.includes("BAD_SIGNED_REQUEST")) return "RELAY_SIGNED_REQUEST_REJECTED";
   if (s.includes("BAD_RELAY_SIGNATURE")) return "RELAY_HMAC_REJECTED";
+  if (s.includes("VERCEL_BINANCE_CREDENTIALS_MISSING")) return "VERCEL_BINANCE_CREDENTIALS_MISSING";
   if (s.includes("PRODUCTION_ONLY")) return "RELAY_NETWORK_REJECTED";
   if (s.includes("BINANCE_UPSTREAM_REJECTED")) return "BINANCE_UPSTREAM_REJECTED";
   return s ? "ACCOUNT_PREFLIGHT_FAILED" : "NONE";
@@ -531,11 +532,17 @@ async function handleTelegramWebhook(request, env) {
         symbol: p.symbol,
         quoteUSDT: r.quoteUSDT,
         ocoPlaced: r.ocoPlaced,
+        emergencyClosed: r.emergencyClosed,
       }, 86400);
       await putState(env, `prepared:${id}`, null, 1);
+      const resultText = r.ocoPlaced
+        ? `✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}`
+        : r.emergencyClosed
+          ? `⚠️ ${p.symbol}: الشراء اتنفذ لكن حماية OCO فشلت، فالبوت قفل المركز فورًا Market كإجراء طوارئ. مفيش مركز مقصود يفضل مفتوح من العملية دي.`
+          : `🚨 CRITICAL — ${p.symbol}: الشراء اتنفذ، وحماية OCO فشلت، ومحاولة الإغلاق الطارئ فشلت. راجعي Binance فورًا.`;
       await tg(env, "sendMessage", {
         chat_id: String(env.TELEGRAM_CHAT_ID),
-        text: `✅ BUY تم — ${p.symbol}\n💵 ${fmt(r.quoteUSDT)} USDT\n💲 ${fmt(r.avg)}\n${r.ocoPlaced ? `✅ TP ${fmt(r.tp)} | SL ${fmt(r.stop)}` : `⚠️ OCO failed: ${r.ocoError}`}`,
+        text: resultText,
       });
     } catch (e) {
       await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), error: String(e?.message || e) }, 86400);
