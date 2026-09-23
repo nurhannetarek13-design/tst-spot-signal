@@ -187,6 +187,7 @@ async function cloudflareDirectAccountRead(env) {
   }
   const err=new Error(`DIRECT_BINANCE_ACCOUNT_FAILED:${last.code??"NO_CODE"}:${signed.signerMode}`);
   err.code=last.code;
+  err.httpStatus=Number(last.status||0)||null;
   err.signerMode=signed.signerMode;
   throw err;
 }
@@ -753,12 +754,18 @@ export default {
         const code=msg.includes("-2015") ? "BINANCE_CREDENTIAL_OR_IP_REJECTED"
           : msg.includes("-1022") ? "BINANCE_SIGNATURE_REJECTED"
           : msg.includes("-1021") ? "BINANCE_CLOCK_REJECTED"
-          : "DIRECT_ACCOUNT_PREFLIGHT_FAILED";
+          : Number(e?.httpStatus)===451 ? "BINANCE_REGION_RESTRICTED_HTTP_451"
+          : Number(e?.httpStatus)===403 ? "BINANCE_HTTP_403"
+          : Number(e?.httpStatus)===429 ? "BINANCE_RATE_LIMIT_HTTP_429"
+          : Number(e?.httpStatus)>=500 ? "BINANCE_OR_NETWORK_5XX"
+          : Number(e?.httpStatus)>0 ? `BINANCE_HTTP_${Number(e.httpStatus)}`
+          : "DIRECT_NETWORK_OR_DNS_FAILED";
         return Response.json({
           ok:false,
           canTrade:false,
           signerMode:e?.signerMode||"UNKNOWN",
           diagnosticCode:code,
+          safeHttpStatus:Number(e?.httpStatus)||null,
           executionRoute:"CLOUDFLARE_DIRECT_READONLY_DIAGNOSTIC",
           tradingAction:"NONE",
           noBalanceValuesExposed:true,
