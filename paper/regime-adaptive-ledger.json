@@ -16,7 +16,7 @@
       "openedAt": "2026-09-18T19:02:43.335Z",
       "signalBarTime": "2026-09-18T16:00:00.000Z",
       "highestClose": 2799.47,
-      "barsHeld": 17,
+      "barsHeld": 18,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     },
@@ -31,7 +31,7 @@
       "openedAt": "2026-09-21T15:07:48.965Z",
       "signalBarTime": "2026-09-21T12:00:00.000Z",
       "highestClose": 0.11329,
-      "barsHeld": 6,
+      "barsHeld": 7,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -87,7 +87,7 @@
     "ETHUSDT:1789747200000",
     "POLUSDT:1789992000000"
   ],
-  "lastRunAt": "2026-09-23T04:48:14.962Z",
+  "lastRunAt": "2026-09-23T13:40:16.402Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
