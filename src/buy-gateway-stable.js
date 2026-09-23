@@ -839,6 +839,42 @@ export default {
       }
     }
 
+    if (url.pathname === "/live-readiness") {
+      const c = creds(env);
+      const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+      const balance = await refreshBalance(env);
+      const lastError = balance ? null : await getState(env, "binance:balance:error");
+      const blocker = balance?.ok && balance?.canTrade
+        ? null
+        : safeRelayDiagnostic(lastError?.error);
+      const infrastructureReady =
+        c.credentialMode === "LIVE" &&
+        c.route === LIVE_ROUTE &&
+        telegramConfigured;
+      const executionReady =
+        infrastructureReady &&
+        Boolean(balance?.ok) &&
+        Boolean(balance?.canTrade);
+      return Response.json({
+        ok: true,
+        status: executionReady ? "LIVE_EXECUTION_READY" : "LIVE_EXECUTION_BLOCKED",
+        infrastructureReady,
+        executionReady,
+        blocker,
+        credentialMode: c.credentialMode,
+        executionRoute: c.route,
+        telegramConfigured,
+        scannerRunning: true,
+        userConfirmationRequired: true,
+        autoBuy: false,
+        railwayDependency: false,
+        maxRiskUSDT: MAX_RISK_USDT,
+        maxBuyUSDT: 10,
+        noBalanceValuesExposed: true,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+
     if (url.pathname === "/balance-refresh") {
       const c = creds(env);
       const balance = await refreshBalance(env);
