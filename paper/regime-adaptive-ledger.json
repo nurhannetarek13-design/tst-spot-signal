@@ -2,7 +2,7 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 18.24604211,
+  "cashUSDT": 14.26059298,
   "realizedPnLUSDT": -0.04842897,
   "openPositions": [
     {
@@ -15,8 +15,23 @@
       "score": 89,
       "openedAt": "2026-09-24T04:55:31.030Z",
       "signalBarTime": "2026-09-24T04:00:00.000Z",
-      "highestClose": 0.2327,
-      "barsHeld": 2,
+      "highestClose": 0.2328,
+      "barsHeld": 3,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
+      "mode": "PAPER_ONLY"
+    },
+    {
+      "symbol": "SNDKBUSDT",
+      "entry": 1757.54,
+      "stop": 1669.34216122,
+      "qty": 0.002267629261,
+      "notionalUSDT": 3.98544913,
+      "riskUSDT": 0.2,
+      "score": 86,
+      "openedAt": "2026-09-24T23:14:00.262Z",
+      "signalBarTime": "2026-09-24T20:00:00.000Z",
+      "highestClose": 1757.54,
+      "barsHeld": 0,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -99,9 +114,10 @@
     "SPCXBUSDT:1788984000000",
     "ETHUSDT:1789747200000",
     "POLUSDT:1789992000000",
-    "PROVEUSDT:1790222400000"
+    "PROVEUSDT:1790222400000",
+    "SNDKBUSDT:1790280000000"
   ],
-  "lastRunAt": "2026-09-24T20:00:23.430Z",
+  "lastRunAt": "2026-09-24T23:14:00.262Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -116,7 +132,7 @@
   },
   "todayRealizedPnLUSDT": 0,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 1.90872444,
+  "openExposureUSDT": 5.89417357,
   "closedTradeCount": 5,
   "winCount": 2,
   "lossCount": 3,
