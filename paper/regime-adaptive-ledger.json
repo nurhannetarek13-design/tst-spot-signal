@@ -8,15 +8,15 @@
     {
       "symbol": "PROVEUSDT",
       "entry": 0.232,
-      "stop": 0.20769057,
+      "stop": 0.2100120553057958,
       "qty": 8.227260513654,
       "notionalUSDT": 1.90872444,
       "riskUSDT": 0.2,
       "score": 89,
       "openedAt": "2026-09-24T04:55:31.030Z",
       "signalBarTime": "2026-09-24T04:00:00.000Z",
-      "highestClose": 0.232,
-      "barsHeld": 1,
+      "highestClose": 0.2327,
+      "barsHeld": 2,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -101,7 +101,7 @@
     "POLUSDT:1789992000000",
     "PROVEUSDT:1790222400000"
   ],
-  "lastRunAt": "2026-09-24T13:34:34.272Z",
+  "lastRunAt": "2026-09-24T20:00:23.430Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
