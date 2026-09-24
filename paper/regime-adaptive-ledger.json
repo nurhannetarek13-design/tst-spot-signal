@@ -16,7 +16,7 @@
       "openedAt": "2026-09-24T04:55:31.030Z",
       "signalBarTime": "2026-09-24T04:00:00.000Z",
       "highestClose": 0.232,
-      "barsHeld": 0,
+      "barsHeld": 1,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -101,7 +101,7 @@
     "POLUSDT:1789992000000",
     "PROVEUSDT:1790222400000"
   ],
-  "lastRunAt": "2026-09-24T04:55:31.030Z",
+  "lastRunAt": "2026-09-24T13:34:34.272Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
