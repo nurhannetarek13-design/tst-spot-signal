@@ -14,25 +14,25 @@
   "excludedConfirmations": [],
   "eligibleOutcome": "CANDIDATE_VALIDATION",
   "base": {
-    "trades": 188,
-    "wins": 63,
-    "winRate": 0.3351063829787234,
-    "profitFactor": 0.8059573944598772,
-    "expectancyUSDT": -0.02175195037234043,
-    "netPnlUSDT": -4.08936667,
-    "maxDrawdownUSDT": 4.422145270000002
+    "trades": 182,
+    "wins": 61,
+    "winRate": 0.33516483516483514,
+    "profitFactor": 0.7963293339681105,
+    "expectancyUSDT": -0.0229353610989011,
+    "netPnlUSDT": -4.17423572,
+    "maxDrawdownUSDT": 4.174235720000002
   },
   "stress2x": {
-    "trades": 187,
-    "wins": 60,
-    "winRate": 0.32085561497326204,
-    "profitFactor": 0.7086868453985713,
-    "expectancyUSDT": -0.03602925171122994,
-    "netPnlUSDT": -6.73747007,
-    "maxDrawdownUSDT": 7.070265819999996
+    "trades": 181,
+    "wins": 58,
+    "winRate": 0.32044198895027626,
+    "profitFactor": 0.6994947554501252,
+    "expectancyUSDT": -0.03732733364640884,
+    "netPnlUSDT": -6.7562473899999995,
+    "maxDrawdownUSDT": 6.756247389999997
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-23T18:48:02.431680+00:00",
+  "generatedAt": "2026-09-24T07:49:46.598385+00:00",
   "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
