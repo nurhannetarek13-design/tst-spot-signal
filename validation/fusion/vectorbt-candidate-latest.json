@@ -22,25 +22,25 @@
     "tp": 0.06
   },
   "base": {
-    "trades": 47,
+    "trades": 48,
     "wins": 25,
-    "winRate": 0.5319148936170213,
-    "netPnlUSDT": 0.6330217998072016,
-    "expectancyUSDT": 0.01346854893206812,
-    "profitFactor": 1.1284962801520826,
+    "winRate": 0.5208333333333334,
+    "netPnlUSDT": 0.44816158082909935,
+    "expectancyUSDT": 0.009336699600606237,
+    "profitFactor": 1.0876815332874152,
     "maxDrawdownUSDT": 1.2181183625093817
   },
   "stress2x": {
-    "trades": 47,
+    "trades": 48,
     "wins": 24,
-    "winRate": 0.5106382978723404,
-    "netPnlUSDT": -0.14459415682746204,
-    "expectancyUSDT": -0.0030764714218608946,
-    "profitFactor": 0.9726345954289065,
+    "winRate": 0.5,
+    "netPnlUSDT": -0.34570145609753544,
+    "expectancyUSDT": -0.007202113668698655,
+    "profitFactor": 0.936972583011108,
     "maxDrawdownUSDT": 1.7285568426858826
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-23T07:57:00.855708+00:00",
+  "generatedAt": "2026-09-24T07:47:39.089567+00:00",
   "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
 }
