@@ -110,12 +110,12 @@
       "candidateIdMatch": true,
       "candidateFingerprintMatch": true,
       "candidateMatch": true,
-      "trades": 188,
+      "trades": 182,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.8059573944598772,
-      "baseExpectancyUSDT": -0.02175195037234043,
-      "stressProfitFactor": 0.7086868453985713,
-      "stressExpectancyUSDT": -0.03602925171122994
+      "baseProfitFactor": 0.7963293339681105,
+      "baseExpectancyUSDT": -0.0229353610989011,
+      "stressProfitFactor": 0.6994947554501252,
+      "stressExpectancyUSDT": -0.03732733364640884
     },
     "jesse": {
       "status": "FAIL",
@@ -169,6 +169,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-24T07:47:52.936557+00:00",
+  "generatedAt": "2026-09-24T07:49:57.570087+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
