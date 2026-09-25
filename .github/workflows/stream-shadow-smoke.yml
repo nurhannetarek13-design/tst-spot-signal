@@ -7,6 +7,14 @@ on:
     paths:
       - 'ready_bot/stream_shadow.mjs'
       - '.github/workflows/stream-shadow-smoke.yml'
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'ready_bot/stream_shadow.mjs'
+      - 'api/binance-public.mjs'
+      - 'scripts/binance-public-proxy.mjs'
+      - 'test/stream-shadow.test.mjs'
+      - '.github/workflows/stream-shadow-smoke.yml'
   schedule:
     - cron: '17 * * * *'
 
