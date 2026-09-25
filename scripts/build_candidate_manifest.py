@@ -25,8 +25,8 @@ def fingerprint(x):
     return hashlib.sha256(raw).hexdigest()[:20]
 
 def enrich(c):
-    core={k:c[k] for k in ["source","symbol","family","timeframe","params"]}
     c=dict(c)
+    core={k:c.get(k) for k in ["source","symbol","family","timeframe","params","scope","symbols"] if c.get(k) is not None}
     c["candidateId"]=f"{c['source']}:{c['symbol']}:{c['family']}"
     c["candidateFingerprint"]=fingerprint(core)
     return c
@@ -71,7 +71,41 @@ if EDGE.exists():
           "source":"PUBLIC_EDGE_LAB","sourceGeneratedAt":e.get("generatedAt"),"symbol":sym,"family":fam,
           "timeframe":spec["timeframe"],"params":spec["params"],"sourceMetrics":{"base":base,"stress2x":stress},
           "liquidity":{"quoteVolume24h":qv,"priceUSDT":price},
-          "rankKey":[1,float(stress.get("expectancyUSDT",0)),float(stress.get("profitFactor",0)),int(stress.get("trades",0))]
+          "rankKey":[1,float(stress.get("expectancyUSDT",0)),float(stress.get("profitFactor",0)),int(stress.get("trades",0))],
+          "scope":"SINGLE_SYMBOL"
+        }))
+
+    # Family-level basket candidates preserve the exact multi-symbol scope used
+    # by Public Edge Lab. We never pretend the pooled trade count belongs to one
+    # symbol, and we do not lower the per-symbol validation floor.
+    basket_symbols=[s for s in e.get("symbolsTested",[]) if s in meta]
+    for fam_row in e.get("families",[]):
+        fam=fam_row.get("family")
+        if fam!="LIQUIDITY_REVERSAL" or fam not in COMPATIBLE_EDGE or fam_row.get("edgePass") is not True:
+            continue
+        base=fam_row.get("base") or {}; stress=fam_row.get("stress2x") or {}
+        if not (len(basket_symbols)>=3
+                and int(base.get("trades",0))>=40 and int(stress.get("trades",0))>=40
+                and float(base.get("expectancyUSDT",0))>0 and float(base.get("profitFactor",0))>=1.15
+                and float(stress.get("expectancyUSDT",0))>0 and float(stress.get("profitFactor",0))>=1.0):
+            continue
+        spec=COMPATIBLE_EDGE[fam]
+        candidates.append(enrich({
+          "source":"PUBLIC_EDGE_LAB","sourceGeneratedAt":e.get("generatedAt"),
+          "symbol":"BASKET","symbols":basket_symbols,"scope":"MULTI_SYMBOL_BASKET",
+          "family":fam,"timeframe":spec["timeframe"],"params":spec["params"],
+          "sourceMetrics":{"base":base,"stress2x":stress},
+          "liquidity":{"universeSize":len(basket_symbols)},
+          # Single-symbol candidates rank first; basket is the truthful fallback
+          # after those independent candidates are exhausted.
+          "rankKey":[0.5,float(stress.get("expectancyUSDT",0)),float(stress.get("profitFactor",0)),int(stress.get("trades",0))],
+          "validatorsRequired":["vectorbt","freqtrade","nautilus","forward"],
+          "validation":{
+            "historicalScope":"FULL_CANDIDATE",
+            "forwardScope":"FULL_CANDIDATE",
+            "historicalValidators":["vectorbt","freqtrade","nautilus"],
+            "forwardValidators":["forward"]
+          }
         }))
 
 if VBT.exists():
@@ -123,7 +157,8 @@ if selected:
       "recentRejectedFingerprints":sorted(rejected),
       "authorization":"VALIDATION_AND_FORWARD_PAPER_ONLY",
       "liveTrading":False,
-      "validatorsRequired":["vectorbt","freqtrade","jesse","nautilus","forward"],
+      "validatorsRequired":selected.get("validatorsRequired",["vectorbt","freqtrade","jesse","nautilus","forward"]),
+      "validation":selected.get("validation",{}),
       "generatedAt":now,
     }
 else:
