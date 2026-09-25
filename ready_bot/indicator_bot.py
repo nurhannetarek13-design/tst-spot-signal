@@ -284,6 +284,19 @@ def recent_aggtrades(symbol, limit=500):
     return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
 
 
+def stream_shadow_micro_snapshot(symbol):
+    base=str(os.getenv("TST_STREAM_SHADOW_URL") or "").rstrip("/")
+    if not base:
+        return None
+    url=base+"/snapshot?"+urllib.parse.urlencode({"symbol":symbol})
+    row=request_json(url)
+    snap=(row or {}).get("snapshot") or {}
+    health=(row or {}).get("health") or {}
+    if health.get("ok") is not True or snap.get("synced") is not True or snap.get("fresh") is not True or snap.get("warmed") is not True:
+        raise RuntimeError("STREAM_SHADOW_NOT_HEALTHY")
+    return snap
+
+
 def symbol_filters(symbol):
     data = market(f"/api/v3/exchangeInfo?symbol={symbol}")
     entry = next((s for s in data.get("symbols", []) if s.get("symbol") == symbol), None)
@@ -904,20 +917,58 @@ def enrich_microstructure(symbol, snap):
     obi_samples = []
     spreads = []
     depth_samples = []
+    stream_samples = []
     samples = int(cfg["obi_samples"])
     interval = float(cfg["obi_sample_interval_seconds"])
+    use_stream=bool(str(os.getenv("TST_STREAM_SHADOW_URL") or "").strip())
     for i in range(samples):
-        depth = depth5(symbol)
-        dm = depth_snapshot_metrics(depth, int(cfg["obi_levels"]))
-        depth_samples.append(dm)
-        obi_samples.append(dm.get("obi"))
-        if dm.get("spread_bps") is not None:
-            spreads.append(dm["spread_bps"])
+        if use_stream:
+            ss=stream_shadow_micro_snapshot(symbol)
+            stream_samples.append(ss)
+            obi_samples.append(ss.get("obi"))
+            if ss.get("spreadBps") is not None:
+                spreads.append(ss["spreadBps"])
+        else:
+            depth = depth5(symbol)
+            dm = depth_snapshot_metrics(depth, int(cfg["obi_levels"]))
+            depth_samples.append(dm)
+            obi_samples.append(dm.get("obi"))
+            if dm.get("spread_bps") is not None:
+                spreads.append(dm["spread_bps"])
         if i < samples - 1 and interval > 0:
             time.sleep(interval)
 
-    agg = aggtrade_delta(recent_aggtrades(symbol, 500))
-    depth_flow = depth_flow_metrics(depth_samples)
+    if use_stream:
+        first,last=stream_samples[0],stream_samples[-1]
+        def pct(a,b):
+            return (float(b)/float(a)-1.0) if a not in {None,0} and b is not None else None
+        depth_flow={
+            "bid_liquidity_change_pct":pct(first.get("bidLiquidityQuote5"),last.get("bidLiquidityQuote5")),
+            "ask_liquidity_change_pct":pct(first.get("askLiquidityQuote5"),last.get("askLiquidityQuote5")),
+            "microprice_bias_bps":last.get("micropriceBiasBps"),
+            "cancellation_rate_10s":last.get("cancellationRate10s"),
+            "bid_cancel_quote_10s":last.get("bidCancelQuote10s"),
+            "ask_cancel_quote_10s":last.get("askCancelQuote10s"),
+            "source":"BINANCE_SPOT_WEBSOCKET_SIDECAR",
+        }
+        if depth_flow["bid_liquidity_change_pct"] is not None and depth_flow["ask_liquidity_change_pct"] is not None:
+            depth_flow["pressure_change"]=depth_flow["bid_liquidity_change_pct"]-depth_flow["ask_liquidity_change_pct"]
+        else:
+            depth_flow["pressure_change"]=None
+        last_trade_age=last.get("tradeAgeMs")
+        latest_event_ms=(time.time()*1000-float(last_trade_age)) if last_trade_age is not None else None
+        agg={
+            "delta_quote":float(last.get("deltaQuote60s") or 0.0),
+            "buy_quote":None,
+            "sell_quote":None,
+            "ratio":last.get("takerBuyRatio60s"),
+            "slope_positive":bool(last.get("cvdSlopePositive10s")),
+            "latest_event_ms":latest_event_ms,
+            "source":"BINANCE_SPOT_WEBSOCKET_SIDECAR",
+        }
+    else:
+        agg = aggtrade_delta(recent_aggtrades(symbol, 500))
+        depth_flow = depth_flow_metrics(depth_samples)
     micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg, depth_flow)
     decision_ms = time.time() * 1000
 
@@ -961,6 +1012,7 @@ def enrich_microstructure(symbol, snap):
         "liquidity_disappearance": liquidity,
         "decision_latency_ms": max(0.0, decision_ms-detected_ms),
         "session": utc_session_label(),
+        "microstructure_source": "BINANCE_SPOT_WEBSOCKET_SIDECAR" if use_stream else "REST_DEPTH_SAMPLING",
     }
     production_ok = freshness["ok"] and warmup["ok"] and adverse["ok"] and liquidity["ok"]
     snap["micro"] = micro
