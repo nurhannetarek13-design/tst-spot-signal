@@ -22,6 +22,8 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.CFG["engine"],"INDICATOR_ONLY_V1")
         self.assertNotIn("strategies",bot.CFG)
         self.assertEqual(bot.CFG["entry"]["min_score"],90)
+        self.assertTrue(bot.CFG["evidence_gate"]["required"])
+        self.assertEqual(bot.CFG["evidence_gate"]["minimum_win_rate"],0.99)
 
     def test_indicator_score_is_bounded_and_grouped(self):
         snap=bot.indicator_snapshot("TESTUSDT",bars(taker=.62),bars(drift=.0015,taker=.58),
@@ -57,6 +59,14 @@ class IndicatorBotTests(unittest.TestCase):
         snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{}}
         filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001}
         self.assertEqual(bot.open_position(state,snap,filters),"DAILY_LOSS_CAP")
+
+
+    def test_precision_evidence_gate_fails_closed_on_current_report(self):
+        status=bot.precision_evidence_status()
+        self.assertFalse(status["ok"])
+        self.assertEqual(status["reason"],"PRECISION_EVIDENCE_NOT_MET")
+        self.assertEqual(status["requiredWinRate"],0.99)
+        self.assertGreaterEqual(status["requiredTrades"],100)
 
 
 if __name__=="__main__":
