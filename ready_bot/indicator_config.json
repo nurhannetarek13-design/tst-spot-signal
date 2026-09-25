@@ -142,7 +142,8 @@
     "min_fill_ratio": 0.999,
     "max_latency_ms": 6500,
     "cancel_after_ms": 1500,
-    "max_cancel_replace": 2
+    "max_cancel_replace": 2,
+    "min_symbol_slippage_samples": 3
   },
   "security": {
     "live_require_withdrawals_disabled": true,
