@@ -17,6 +17,10 @@ on:
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - '.github/workflows/binance-spot-point-in-time-universe.yml'
 
+concurrency:
+  group: spot-pit-universe-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
