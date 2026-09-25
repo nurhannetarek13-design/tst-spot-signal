@@ -80,6 +80,36 @@ def reset_day(state):
         state["day"] = today
         state["day_pnl"] = 0.0
 
+def precision_evidence_status(config=None):
+    config = config or CFG
+    gate = config.get("evidence_gate", {})
+    if not gate.get("required", False):
+        return {"ok": True, "reason": "NOT_REQUIRED"}
+    path = ROOT.parent / str(gate.get("report_path", ""))
+    try:
+        report = json.loads(path.read_text())
+    except Exception as exc:
+        return {"ok": False, "reason": "EVIDENCE_REPORT_UNAVAILABLE", "detail": str(exc)[:120]}
+    holdout = report.get("holdout") or {}
+    trades = int(holdout.get("trades") or 0)
+    win_rate = float(holdout.get("winRate") or 0.0)
+    net = float(holdout.get("netPnlPerUnit") or 0.0)
+    claim = bool(report.get("claimSupported"))
+    required_rate = float(gate.get("minimum_win_rate", 0.99))
+    required_trades = int(gate.get("minimum_holdout_trades", 100))
+    positive_net_ok = (net > 0) if gate.get("require_positive_net", True) else True
+    ok = bool(claim and trades >= required_trades and win_rate >= required_rate and positive_net_ok)
+    return {
+        "ok": ok,
+        "reason": "EVIDENCE_CONFIRMED" if ok else "PRECISION_EVIDENCE_NOT_MET",
+        "claimSupported": claim,
+        "holdoutTrades": trades,
+        "holdoutWinRate": win_rate,
+        "holdoutNetPnlPerUnit": net,
+        "requiredWinRate": required_rate,
+        "requiredTrades": required_trades,
+    }
+
 
 def universe():
     uc = CFG["universe"]
@@ -515,8 +545,11 @@ def main():
             continue
         manage_position(state, symbol, snap["bid"], snap["atr_1h"])
 
+    evidence = precision_evidence_status()
     signals = []
-    if not btc.get("ok"):
+    if not evidence.get("ok"):
+        blocked.append({"reason": "PRECISION_EVIDENCE_GATE", "detail": evidence})
+    elif not btc.get("ok"):
         blocked.append({"reason": "BTC_REGIME_VETO", "detail": btc})
     else:
         for symbol in [x["symbol"] for x in uni]:
@@ -553,13 +586,14 @@ def main():
     } for x in signals]
     state["blocked"] = blocked
     state["btc_regime"] = btc
+    state["precision_evidence"] = evidence
     state["universe"] = [x["symbol"] for x in uni]
     state["last_run"] = now_iso()
     save_state(state)
 
     print(json.dumps({
         "mode": "PAPER_ONLY", "engine": CFG["engine"], "cash_usdt": state["cash_usdt"],
-        "day_pnl": state["day_pnl"], "btc_regime": btc, "positions": state["positions"],
+        "day_pnl": state["day_pnl"], "btc_regime": btc, "precision_evidence": evidence, "positions": state["positions"],
         "signals": state["signals"], "blocked": blocked, "last_run": state["last_run"],
     }, indent=2))
     return state
