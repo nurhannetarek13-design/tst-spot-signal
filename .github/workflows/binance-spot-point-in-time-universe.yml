@@ -1,0 +1,78 @@
+name: Binance Spot Point-in-Time Universe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 3 2 * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - '.github/workflows/binance-spot-point-in-time-universe.yml'
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - '.github/workflows/binance-spot-point-in-time-universe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
+      - name: Install pinned archive lister
+        run: pip install 'binance-datatool==0.1.1'
+      - name: List all archived Spot USDT symbols
+        run: |
+          binance-datatool list-symbols spot --freq monthly --type klines --quote USDT --exclude-leverage --exclude-stables > /tmp/symbols.txt
+          test -s /tmp/symbols.txt
+          wc -l /tmp/symbols.txt
+      - name: List monthly 15m files for full archived universe
+        run: |
+          cat /tmp/symbols.txt | binance-datatool list-files spot --freq monthly --type klines --interval 15m --only-zip > /tmp/files.txt
+          test -s /tmp/files.txt
+          wc -l /tmp/files.txt
+      - name: Fetch current Binance Spot metadata
+        run: |
+          curl -fLsS --retry 3 --retry-delay 2 'https://data-api.binance.vision/api/v3/exchangeInfo' -o /tmp/exchangeInfo.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/exchangeInfo.json'))
+          assert len(d.get('symbols',[]))>100
+          PY
+      - name: Build point-in-time universe
+        run: |
+          python research/binance_spot_point_in_time_universe.py \
+            --symbols /tmp/symbols.txt \
+            --files /tmp/files.txt \
+            --exchange-info /tmp/exchangeInfo.json \
+            --output validation/indicator-v3/point-in-time-universe.json
+          python - <<'PY'
+          import json
+          d=json.load(open('validation/indicator-v3/point-in-time-universe.json'))
+          assert d['pointInTimeUniverse'] is True
+          assert d['historicalSymbolCount']>=20
+          assert len(d['pointInTimeUniverseByMonth'])>=12
+          print(json.dumps({
+            'historicalSymbolCount':d['historicalSymbolCount'],
+            'delistedSymbolCount':d['delistedSymbolCount'],
+            'months':len(d['pointInTimeUniverseByMonth']),
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binance-spot-point-in-time-universe
+          path: validation/indicator-v3/point-in-time-universe.json
+          if-no-files-found: error
+          retention-days: 30
