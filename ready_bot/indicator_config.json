@@ -13,12 +13,12 @@
     "max_symbols": 25
   },
   "entry": {
-    "min_score": 90,
-    "max_spread_bps": 12,
-    "min_taker_buy_ratio": 0.56,
-    "hard_taker_floor": 0.5,
-    "min_relative_quote_volume": 1.5,
-    "hard_relative_volume_floor": 0.8,
+    "min_score": 85,
+    "max_spread_bps": 15,
+    "min_taker_buy_ratio": 0.54,
+    "hard_taker_floor": 0.48,
+    "min_relative_quote_volume": 1.2,
+    "hard_relative_volume_floor": 0.7,
     "rsi_min": 52,
     "rsi_max": 70,
     "rsi_veto": 78,
@@ -48,6 +48,8 @@
     "report_path": "validation/indicator-only-precision-calibration-latest.json",
     "minimum_win_rate": 0.99,
     "minimum_holdout_trades": 100,
-    "require_positive_net": true
+    "require_positive_net": true,
+    "scope": "live_only",
+    "paper_observation_allowed": true
   }
 }
