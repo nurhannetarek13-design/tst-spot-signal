@@ -105,5 +105,17 @@ class ProductionGuardTests(unittest.TestCase):
         self.assertGreater(x["slippage_bps"],0)
 
 
+    def test_bid_cancellation_spike_is_rejected(self):
+        x=liquidity_disappearance_status({
+            "bid_liquidity_change_pct":-0.10,
+            "ask_liquidity_change_pct":0.05,
+            "cancellation_rate_10s":0.90,
+            "bid_cancel_quote_10s":3000,
+            "ask_cancel_quote_10s":500,
+        },max_cancellation_rate=0.75,bid_cancel_imbalance_ratio=1.5)
+        self.assertFalse(x["ok"])
+        self.assertIn("BID_CANCELLATION_SPIKE",x["reasons"])
+
+
 if __name__=="__main__":
     unittest.main()
