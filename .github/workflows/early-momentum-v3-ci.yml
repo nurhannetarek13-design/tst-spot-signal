@@ -112,6 +112,7 @@ jobs:
           assert c['risk']['consecutive_loss_cooldown_count']==3
           assert c['data_integrity']['fail_closed'] is True
           assert c['production_guard']['max_signal_age_ms']<=12000
+          assert c['production_guard']['max_stream_signal_age_ms']<=5000
           assert c['production_guard']['max_decision_latency_ms']<=6500
           assert c['smart_execution']['enabled'] is True
           assert c['security']['live_require_withdrawals_disabled'] is True
