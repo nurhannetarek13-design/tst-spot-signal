@@ -1,0 +1,113 @@
+{
+  "engine": "INDICATOR_ONLY_PRECISION_CALIBRATION_V1",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "runtimeChanged": false,
+  "target": {
+    "winRate": 0.99,
+    "minimumHoldoutTrades": 100,
+    "requiresPositiveNet": true
+  },
+  "windows": {
+    "train": [
+      "2025-09-30T19:33:56.177523+00:00",
+      "2025-12-29T19:33:56.177523+00:00"
+    ],
+    "validation": [
+      "2025-12-29T19:33:56.177523+00:00",
+      "2026-02-12T19:33:56.177523+00:00"
+    ],
+    "holdout": [
+      "2026-02-12T19:33:56.177523+00:00",
+      "2026-03-29T19:33:56.177523+00:00"
+    ],
+    "recentExcluded": [
+      "2026-03-29T19:33:56.177523+00:00",
+      "2026-09-25T19:33:56.177523+00:00"
+    ]
+  },
+  "gridSize": 1296,
+  "symbolsRequested": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "symbolsAudited": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "dataFailures": {},
+  "baseRecordCounts": {
+    "train": 0,
+    "validation": 112,
+    "holdout": 26
+  },
+  "trainQualifiedConfigs": 0,
+  "validationQualifiedConfigs": 0,
+  "selected": null,
+  "holdout": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "winRate": 0.0,
+    "netPnlPerUnit": 0.0,
+    "expectancyPerUnit": 0.0,
+    "profitFactor": 0.0
+  },
+  "claimSupported": false,
+  "diagnosticBestHoldoutPeekingNotEligible": null,
+  "notes": [
+    "The final holdout is not used to select parameters.",
+    "Recent 180 days are excluded because they were already inspected in the prior audit.",
+    "Current-universe historical testing has survivorship bias.",
+    "Historical spread is unavailable; this calibration does not add a spread penalty, which favors the strategy.",
+    "Profitability includes configured buy/sell fee and slippage assumptions.",
+    "A 99% claim is accepted only with >=100 profitable-trade observations on untouched holdout and positive net PnL."
+  ],
+  "generatedAt": "2026-09-25T19:36:13.532971+00:00"
+}
