@@ -667,24 +667,65 @@ def open_position(state, snap, filters):
     return "PAPER_OPENED"
 
 
-def manage_position(state, symbol, bid, atr_now):
+def manage_position(state, symbol, snap):
     p = state["positions"][symbol]
-    p["peak_price"]=max(float(p.get("peak_price") or p["entry"]),float(bid))
-    p["trough_price"]=min(float(p.get("trough_price") or p["entry"]),float(bid))
+    bid=float(snap["bid"])
+    atr_now=snap.get("atr_15m")
+    p["peak_price"]=max(float(p.get("peak_price") or p["entry"]),bid)
+    p["trough_price"]=min(float(p.get("trough_price") or p["entry"]),bid)
     r0=max(float(p.get("initial_risk_abs") or 0),1e-12)
     p["mfe_r"]=max(float(p.get("mfe_r") or 0.0),(p["peak_price"]-p["entry"])/r0)
     p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
+
     if bid <= p["stop"]:
         close_position(state, symbol, bid, "STOP")
         return
     if bid >= p["target"]:
         close_position(state, symbol, bid, "TARGET")
         return
+
+    exit_cfg=CFG.get("exit",{})
+    try:
+        opened=datetime.fromisoformat(str(p["opened_at"]).replace("Z","+00:00"))
+        age_minutes=max(0.0,(datetime.now(timezone.utc)-opened).total_seconds()/60.0)
+    except Exception:
+        age_minutes=0.0
+
+    pre=snap.get("micro_pre") or {}
+    taker_latest=pre.get("taker_latest")
+    vwap_now=pre.get("vwap")
+    cvd_positive=bool(pre.get("cvd_positive"))
+
+    # Thesis invalidation: buyers lose control and price slips back under VWAP.
+    if age_minutes>=float(exit_cfg.get("momentum_fade_min_age_minutes",5)):
+        fade=(
+            taker_latest is not None
+            and float(taker_latest)<float(exit_cfg.get("momentum_fade_taker_below",0.48))
+            and not cvd_positive
+            and vwap_now is not None
+            and bid<float(vwap_now)
+        )
+        if fade:
+            close_position(state, symbol, bid, "MOMENTUM_FADE")
+            return
+
+    # If the trade never produces meaningful favorable excursion, free capital.
+    if (
+        age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
+        and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
+    ):
+        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH")
+        return
+
+    if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
+        close_position(state, symbol, bid, "HARD_TIME_STOP")
+        return
+
     if p["initial_risk_abs"] > 0 and bid >= p["entry"] + float(CFG["risk"]["breakeven_at_r"]) * p["initial_risk_abs"]:
         p["stop"] = max(p["stop"], p["entry"])
         p["breakeven"] = True
     if p["breakeven"] and atr_now and atr_now > 0:
-        trail = bid - float(CFG["risk"]["trailing_atr_multiplier"]) * atr_now
+        trail = bid - float(CFG["risk"]["trailing_atr_multiplier"]) * float(atr_now)
         p["stop"] = max(p["stop"], trail)
 
 
@@ -900,6 +941,7 @@ def main():
                 "obi": micro["obi"],
                 "spread_stable_or_tightening": micro["spread_stable_or_tightening"],
                 "agg_cvd": micro["agg_cvd"],
+                "depth_flow": micro.get("depth_flow"),
                 "breakout": micro["breakout"],
                 "micro_breakout_hold": micro["micro_breakout_hold"],
                 "vwap_distance_atr": micro["vwap_distance_atr"],
@@ -917,7 +959,7 @@ def main():
             blocked.append({"symbol": symbol, "reason": "OPEN_POSITION_UNPRICED"})
             unpriced = True
             continue
-        manage_position(state, symbol, snap["bid"], snap["atr_15m"])
+        manage_position(state, symbol, snap)
 
     evidence = precision_evidence_status()
     cooldown = consecutive_loss_cooldown(state)
@@ -984,6 +1026,7 @@ def main():
         "taker_last3": x.get("micro", {}).get("taker_last3"),
         "obi": x.get("micro", {}).get("obi"),
         "agg_cvd": x.get("micro", {}).get("agg_cvd"),
+        "depth_flow": x.get("micro", {}).get("depth_flow"),
         "micro_breakout_hold": x.get("micro", {}).get("micro_breakout_hold"),
         "context_score_15m": x["score"],
         "context_checks_15m": x["checks"],
