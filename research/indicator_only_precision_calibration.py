@@ -26,27 +26,27 @@ import pandas as pd
 
 CFG=json.loads(pathlib.Path("ready_bot/indicator_config.json").read_text())
 BASE="https://data-api.binance.vision"
-DAYS=360
+DAYS=540
 DEV_EXCLUDE_DAYS=180
-CAL_WINDOW_DAYS=180
-TRAIN_DAYS=90
-VALIDATION_DAYS=45
-HOLDOUT_DAYS=45
+CAL_WINDOW_DAYS=360
+TRAIN_DAYS=180
+VALIDATION_DAYS=90
+HOLDOUT_DAYS=90
 OUT=pathlib.Path("validation/indicator-only-precision-calibration-latest.json")
 FEE=float(CFG["risk"]["fee_rate"])
 SLIP=float(CFG["risk"]["slippage_rate"])
 MAX_FORWARD_BARS=7*24*4
 
-SCORE_MIN=[95,100]
-TAKER_MIN=[0.60,0.64,0.68]
+SCORE_MIN=[90,95,100]
+TAKER_MIN=[0.60,0.64,0.68,0.72]
 TAKER3_MIN=[0.57,0.60,0.63]
-RVOL_MIN=[1.5,2.0,2.5]
-RSI_MAX=[64,68,72]
-STOP_MULT=[1.5,2.0]
-REWARD_RISK=[0.25,0.5,0.75,1.0]
+RVOL_MIN=[1.5,2.0,2.5,3.0]
+RSI_MAX=[62,66,70]
+STOP_MULT=[1.5,2.0,2.5]
+REWARD_RISK=[0.35,0.5,0.75,1.0]
 
-MIN_TRAIN_TRADES=60
-MIN_VALIDATION_TRADES=30
+MIN_TRAIN_TRADES=100
+MIN_VALIDATION_TRADES=50
 MIN_HOLDOUT_CLAIM_TRADES=100
 
 
