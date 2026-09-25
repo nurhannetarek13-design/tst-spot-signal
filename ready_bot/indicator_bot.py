@@ -18,6 +18,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from .early_momentum import (
+        aggtrade_delta,
+        combine_microstructure,
+        depth_imbalance,
+        micro_breakout_hold,
+        prefilter_snapshot,
+    )
+except ImportError:
+    from early_momentum import (
+        aggtrade_delta,
+        combine_microstructure,
+        depth_imbalance,
+        micro_breakout_hold,
+        prefilter_snapshot,
+    )
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("TST_INDICATOR_CONFIG", str(ROOT / "indicator_config.json")))
 STATE_PATH = Path(os.getenv("TST_INDICATOR_STATE", str(ROOT / "indicator_state.json")))
@@ -175,7 +192,7 @@ def closed_bars(symbol, timeframe, limit=None):
             continue
         out.append({
             "t": int(r[0]), "o": float(r[1]), "h": float(r[2]), "l": float(r[3]),
-            "c": float(r[4]), "v": float(r[5]), "qv": float(r[7]), "tq": float(r[10])
+            "c": float(r[4]), "v": float(r[5]), "qv": float(r[7]), "n": int(r[8]), "tq": float(r[10])
         })
     return out
 
@@ -186,6 +203,14 @@ def book(symbol):
     if not (bid > 0 and ask > 0 and ask >= bid):
         raise RuntimeError("INVALID_BOOK")
     return bid, ask
+
+
+def depth5(symbol):
+    return market("/api/v3/depth?" + urllib.parse.urlencode({"symbol": symbol, "limit": 5}))
+
+
+def recent_aggtrades(symbol, limit=500):
+    return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
 
 
 def symbol_filters(symbol):
@@ -445,7 +470,9 @@ def indicator_snapshot(symbol, bars15, bars1h, bars4h, bid, ask, quote_volume_24
         "score_total": int(ec["score_total"]),
         "checks": checks,
         "vetoes": vetoes,
-        "eligible": score >= int(ec["score_required"]) and not vetoes,
+        "context_pass_5of6": score >= int(ec["score_required"]),
+        "eligible": False,
+        "guard_ok": not vetoes,
         "bar_time": last15["t"],
         "bid": bid,
         "ask": ask,
@@ -573,6 +600,8 @@ def open_position(state, snap, filters):
         "opened_at": now_iso(), "bar_time": snap["bar_time"], "score": snap["score"],
         "score_total": snap.get("score_total", 6), "checks": snap.get("checks", {}),
         "confirmed_swing_low": swing_low,
+        "momentum_score": snap.get("micro", {}).get("score"),
+        "momentum_stage": snap.get("micro", {}).get("stage"),
     }
     actual = stop_risk(pos)
     if actual > float(risk_cfg["max_risk_per_trade_usdt"]) + 1e-9:
@@ -605,6 +634,8 @@ def manage_position(state, symbol, bid, atr_now):
 
 
 def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
+    b1m = closed_bars(symbol, CFG["timeframes"]["micro"])
+    b3m = closed_bars(symbol, CFG["timeframes"]["micro_secondary"])
     b15 = closed_bars(symbol, CFG["timeframes"]["trigger"])
     b1 = closed_bars(symbol, CFG["timeframes"]["trend"])
     b4 = closed_bars(symbol, CFG["timeframes"]["macro"])
@@ -615,6 +646,36 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
         qv = float(t.get("quoteVolume") or 0)
     snap = indicator_snapshot(symbol, b15, b1, b4, bid, ask, qv)
     snap["filters"] = symbol_filters(symbol)
+    snap["micro_pre"] = prefilter_snapshot(b1m, b3m, CFG["momentum"])
+    snap["micro_pre"]["micro_breakout_hold"] = micro_breakout_hold(
+        b1m,
+        lookback=int(CFG["momentum"]["recent_resistance_lookback_1m"]),
+        tolerance_pct=float(CFG["momentum"]["micro_hold_tolerance_pct"]),
+    )
+    snap["_bars1m"] = b1m
+    snap["_bars3m"] = b3m
+    return snap
+
+
+def enrich_microstructure(symbol, snap):
+    cfg = CFG["momentum"]
+    obi_samples = []
+    spreads = []
+    samples = int(cfg["obi_samples"])
+    interval = float(cfg["obi_sample_interval_seconds"])
+    for i in range(samples):
+        depth = depth5(symbol)
+        obi_samples.append(depth_imbalance(depth, int(cfg["obi_levels"])))
+        bids = depth.get("bids") or []
+        asks = depth.get("asks") or []
+        if bids and asks:
+            spreads.append(spread_bps(float(bids[0][0]), float(asks[0][0])))
+        if i < samples - 1 and interval > 0:
+            time.sleep(interval)
+    agg = aggtrade_delta(recent_aggtrades(symbol, 500))
+    micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg)
+    snap["micro"] = micro
+    snap["eligible"] = bool(micro["stage"] == "ENTRY_CANDIDATE" and snap.get("guard_ok"))
     return snap
 
 
@@ -623,7 +684,7 @@ def validate_config():
         raise RuntimeError("SPOT_ONLY_CONFIG_VIOLATION")
     if CFG.get("mode") != "paper":
         raise RuntimeError("Indicator runtime is PAPER only")
-    if CFG.get("engine") != "INDICATOR_ONLY_V2_5OF6":
+    if CFG.get("engine") != "INDICATOR_ONLY_V3_EARLY_MOMENTUM":
         raise RuntimeError("Unexpected engine id")
     if int(CFG["entry"]["score_total"]) != 6 or int(CFG["entry"]["score_required"]) != 5:
         raise RuntimeError("Invalid 5-of-6 score contract")
@@ -678,6 +739,57 @@ def main():
             except Exception as exc:
                 blocked.append({"symbol": symbol, "reason": "DATA_UNAVAILABLE", "detail": str(exc)[:160]})
 
+    # EARLY MOMENTUM: score all symbols cheaply on 1m/3m first, then spend
+    # order-book/aggTrade calls only on the strongest few.
+    micro_candidates = [
+        (symbol, snap) for symbol, snap in snapshots.items()
+        if symbol not in state["positions"]
+        and snap.get("guard_ok")
+        and float(snap.get("micro_pre", {}).get("prefilter_score", 0)) >= float(CFG["momentum"]["prefilter_min_without_orderbook"])
+    ]
+    micro_candidates.sort(
+        key=lambda item: (
+            -float(item[1]["micro_pre"].get("prefilter_score", 0)),
+            -float(item[1]["micro_pre"].get("taker_latest") or 0),
+            item[0],
+        )
+    )
+    micro_candidates = micro_candidates[: int(CFG["momentum"]["max_microstructure_candidates"])]
+    if micro_candidates:
+        with ThreadPoolExecutor(max_workers=min(4, len(micro_candidates))) as pool:
+            futures = {pool.submit(enrich_microstructure, symbol, snap): symbol for symbol, snap in micro_candidates}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                try:
+                    snapshots[symbol] = future.result()
+                except Exception as exc:
+                    blocked.append({"symbol": symbol, "reason": "MICROSTRUCTURE_UNAVAILABLE", "detail": str(exc)[:160]})
+
+    momentum_watchlist = []
+    for symbol, snap in snapshots.items():
+        micro = snap.get("micro")
+        if micro and micro.get("stage") in {"WATCH", "ARMED", "ENTRY_CANDIDATE"}:
+            momentum_watchlist.append({
+                "symbol": symbol,
+                "stage": micro["stage"],
+                "score": micro["score"],
+                "prefilter_score": micro["prefilter_score"],
+                "rvol_1m": micro["rvol_1m"],
+                "rvol_3m": micro["rvol_3m"],
+                "trade_count_accel": micro["trade_count_accel"],
+                "taker_last3": micro["taker_last3"],
+                "taker_rising": micro["taker_rising"],
+                "obi": micro["obi"],
+                "spread_stable_or_tightening": micro["spread_stable_or_tightening"],
+                "agg_cvd": micro["agg_cvd"],
+                "breakout": micro["breakout"],
+                "micro_breakout_hold": micro["micro_breakout_hold"],
+                "vwap_distance_atr": micro["vwap_distance_atr"],
+                "price_velocity": micro["price_velocity"],
+                "chase_veto": micro["chase_veto"],
+            })
+    momentum_watchlist.sort(key=lambda x: (-x["score"], x["symbol"]))
+
     unpriced = False
     for symbol in list(state["positions"]):
         snap = snapshots.get(symbol)
@@ -700,10 +812,15 @@ def main():
             snap = snapshots.get(symbol)
             if not snap:
                 continue
-            if snap["eligible"]:
+            if snap.get("eligible") is True:
                 signals.append(snap)
 
-    signals.sort(key=lambda x: (-x["score"], -x["taker_buy_ratio"], -x["relative_quote_volume"], x["symbol"]))
+    signals.sort(key=lambda x: (
+        -float(x.get("micro", {}).get("score", 0)),
+        -float(x.get("micro", {}).get("taker_latest") or 0),
+        -float(x.get("micro", {}).get("rvol_1m") or 0),
+        x["symbol"],
+    ))
 
     if unpriced:
         blocked.append({"reason": "GLOBAL_ENTRY_HALT_UNPRICED_POSITION"})
@@ -722,11 +839,22 @@ def main():
                 blocked.append({"symbol": key, "score": snap["score"], "reason": result})
 
     state["signals"] = [{
-        "symbol": x["symbol"], "score": x["score"], "score_total": x["score_total"], "checks": x["checks"],
-        "taker_buy_ratio": x["taker_buy_ratio"], "relative_quote_volume": x["relative_quote_volume"],
-        "adx_15m": x["adx_15m"], "rsi_15m": x["rsi_15m"], "vwap_retest": x["vwap_retest"],
-        "spread_bps": x["spread_bps"], "bar_time": x["bar_time"],
+        "symbol": x["symbol"],
+        "momentum_stage": x.get("micro", {}).get("stage"),
+        "momentum_score": x.get("micro", {}).get("score"),
+        "prefilter_score": x.get("micro", {}).get("prefilter_score"),
+        "rvol_1m": x.get("micro", {}).get("rvol_1m"),
+        "rvol_3m": x.get("micro", {}).get("rvol_3m"),
+        "trade_count_accel": x.get("micro", {}).get("trade_count_accel"),
+        "taker_last3": x.get("micro", {}).get("taker_last3"),
+        "obi": x.get("micro", {}).get("obi"),
+        "agg_cvd": x.get("micro", {}).get("agg_cvd"),
+        "micro_breakout_hold": x.get("micro", {}).get("micro_breakout_hold"),
+        "context_score_15m": x["score"],
+        "context_checks_15m": x["checks"],
+        "bar_time": x["bar_time"],
     } for x in signals]
+    state["momentum_watchlist"] = momentum_watchlist
     state["blocked"] = blocked
     state["btc_regime"] = btc
     state["precision_evidence"] = evidence
@@ -737,7 +865,8 @@ def main():
     print(json.dumps({
         "mode": "PAPER_ONLY", "engine": CFG["engine"], "cash_usdt": state["cash_usdt"],
         "day_pnl": state["day_pnl"], "btc_regime": btc, "precision_evidence": evidence, "positions": state["positions"],
-        "signals": state["signals"], "blocked": blocked, "last_run": state["last_run"],
+        "signals": state["signals"], "momentum_watchlist": momentum_watchlist,
+        "blocked": blocked, "last_run": state["last_run"],
     }, indent=2))
     return state
 
