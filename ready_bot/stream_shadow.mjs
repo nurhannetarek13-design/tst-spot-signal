@@ -25,16 +25,20 @@ const runtime={
   reconnects:0,resyncs:0,lastError:null,clock:{ok:false},universe:[],books:new Map()
 };
 const now=()=>Date.now();
-async function get(path){
+export function publicRestTargets(path,relay=PUBLIC_RELAY){
   const targets=[];
   if(path==="/api/v3/time"){
     // Clock sync must never prefer a CDN/relay response that may be cached.
     for(const base of REST_BASES) targets.push(base+path);
-    if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
+    if(relay) targets.push(String(relay).replace(/\/$/,"")+"?path="+encodeURIComponent(path));
   }else{
-    if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
+    if(relay) targets.push(String(relay).replace(/\/$/,"")+"?path="+encodeURIComponent(path));
     for(const base of REST_BASES) targets.push(base+path);
   }
+  return targets;
+}
+async function get(path){
+  const targets=publicRestTargets(path);
   let last="unavailable";
   for(const url of targets){
     try{
