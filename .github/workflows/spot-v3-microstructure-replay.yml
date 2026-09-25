@@ -67,18 +67,18 @@ jobs:
         run: |
           mkdir -p validation/indicator-v3/spot-replay
           PYTHONPATH=. python research/tardis_spot_microstructure_v3.py \
-            --symbol '\${{ matrix.symbol }}' \
-            --date '\${{ matrix.date }}' \
-            --start-offset '\${{ matrix.offset }}' \
+            --symbol '${{ matrix.symbol }}' \
+            --date '${{ matrix.date }}' \
+            --start-offset '${{ matrix.offset }}' \
             --minutes 5 \
             --quote-usdt 10 \
-            --output 'validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json' \
+            --output 'validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json' \
             --assert-replay
       - name: Assert replay scope cannot authorize live
         run: |
           python - <<'PY'
           import json
-          p='validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json'
+          p='validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json'
           d=json.load(open(p))
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
@@ -96,8 +96,8 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: spot-v3-replay-\${{ matrix.symbol }}
-          path: validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json
+          name: spot-v3-replay-${{ matrix.symbol }}
+          path: validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json
           if-no-files-found: error
 
   aggregate:
