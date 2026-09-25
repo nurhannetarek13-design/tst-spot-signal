@@ -182,9 +182,13 @@ def parameter_grid():
 def base_candidate_mask(f,btc_ok,start,end):
     ec=CFG["entry"]
     time_mask=(f.index>=start)&(f.index<end)
-    hard=(f["taker_ratio"]>=float(ec["hard_taker_floor"]))&(f["rvol"]>=float(ec["hard_relative_volume_floor"]))&
-         (f["h1_rsi"]<=float(ec["rsi_veto"]))&(f["h1_atr_pct"]<=float(ec["atr_pct_veto"]))&
-         (f["qv24"]>=float(CFG["universe"]["min_quote_volume_24h"]))
+    hard=(
+        (f["taker_ratio"]>=float(ec["hard_taker_floor"]))
+        & (f["rvol"]>=float(ec["hard_relative_volume_floor"]))
+        & (f["h1_rsi"]<=float(ec["rsi_veto"]))
+        & (f["h1_atr_pct"]<=float(ec["atr_pct_veto"]))
+        & (f["qv24"]>=float(CFG["universe"]["min_quote_volume_24h"]))
+    )
     return time_mask&hard.fillna(False)&btc_ok.reindex(f.index,method="ffill").fillna(False)&(f["score"]>=90)
 
 
