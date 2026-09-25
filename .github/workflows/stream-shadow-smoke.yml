@@ -33,6 +33,8 @@ jobs:
           STREAM_MAX_SYMBOLS: '10'
           STREAM_MIN_QUOTE_VOLUME_USDT: '20000000'
           PUBLIC_MARKET_RELAY_URL: 'https://tst-spot-signal.vercel.app/api/binance-public'
+          PUBLIC_WS_BASE: 'wss://data-stream.binance.vision:443/stream?streams='
+          STREAM_MAX_CLOCK_RTT_MS: '5000'
           PORT: '8080'
         run: |
           nohup node ready_bot/stream_shadow.mjs >/tmp/stream-shadow.log 2>&1 &
