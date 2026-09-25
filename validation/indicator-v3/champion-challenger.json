@@ -1,0 +1,32 @@
+{
+  "engine": "INDICATOR_V3_CHAMPION_CHALLENGER_V1",
+  "authorization": "PAPER_SHADOW_ONLY",
+  "liveTrading": false,
+  "autoPromotion": false,
+  "paperChampion": {
+    "engine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
+    "activeConfigPath": "ready_bot/indicator_config.json",
+    "frozenConfigPath": "ready_bot/champion_config.json",
+    "configBlobSha": "5d8d80622562842d8a6aac4942be21fa538f553a",
+    "status": "PAPER_CHAMPION_NOT_LIVE_VALIDATED"
+  },
+  "shadowChallenger": {
+    "configPath": "ready_bot/challenger_config.json",
+    "statePath": "validation/indicator-v3/challenger-state.json",
+    "enabled": false
+  },
+  "promotionPolicy": {
+    "minimumClosedTrades": 100,
+    "minimumProfitFactor": 1.2,
+    "expectancyMustBePositive": true,
+    "maximumDrawdownUSDT": 2,
+    "maximumMedianEntrySlippageBps": 12,
+    "requireSpotMicrostructureReplay": true,
+    "requireNoCriticalDataIncidents": true,
+    "requireNoLiveOrdersDuringEvaluation": true,
+    "challengerMustBeatChampionProfitFactorByFraction": 0.05,
+    "challengerMustNotIncreaseDrawdownByFraction": 0.1,
+    "automaticPromotion": false
+  },
+  "note": "Champion means active PAPER configuration only. It is not a claim of profitable or live-ready edge."
+}
