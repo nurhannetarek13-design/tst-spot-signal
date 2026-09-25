@@ -56,6 +56,33 @@ except ImportError:
         validate_bar_integrity,
     )
 
+try:
+    from .production_guard import (
+        adverse_selection_status,
+        btc_shock_status,
+        clock_sync_status,
+        execution_quality_status,
+        liquidity_disappearance_status,
+        load_event_risk,
+        signal_freshness_status,
+        utc_session_label,
+        warmup_status,
+    )
+    from .smart_execution import choose_execution_plan
+except ImportError:
+    from production_guard import (
+        adverse_selection_status,
+        btc_shock_status,
+        clock_sync_status,
+        execution_quality_status,
+        liquidity_disappearance_status,
+        load_event_risk,
+        signal_freshness_status,
+        utc_session_label,
+        warmup_status,
+    )
+    from smart_execution import choose_execution_plan
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("TST_INDICATOR_CONFIG", str(ROOT / "indicator_config.json")))
 STATE_PATH = Path(os.getenv("TST_INDICATOR_STATE", str(ROOT / "indicator_state.json")))
@@ -233,6 +260,10 @@ def depth5(symbol):
     return market("/api/v3/depth?" + urllib.parse.urlencode({"symbol": symbol, "limit": 5}))
 
 
+def depth20(symbol):
+    return market("/api/v3/depth?" + urllib.parse.urlencode({"symbol": symbol, "limit": 20}))
+
+
 def recent_aggtrades(symbol, limit=500):
     return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
 
@@ -247,7 +278,8 @@ def symbol_filters(symbol):
     fs = {x["filterType"]: x for x in entry.get("filters", [])}
     lot = fs.get("LOT_SIZE")
     notion = fs.get("NOTIONAL") or fs.get("MIN_NOTIONAL")
-    if not lot or not notion:
+    price_filter = fs.get("PRICE_FILTER")
+    if not lot or not notion or not price_filter:
         raise RuntimeError("EXCHANGE_FILTERS_MISSING")
     return {
         "min_notional": float(notion["minNotional"]),
@@ -255,6 +287,7 @@ def symbol_filters(symbol):
         "min_qty": float(lot["minQty"]),
         "max_qty": float(lot["maxQty"]),
         "step_size": float(lot["stepSize"]),
+        "tick_size": float(price_filter["tickSize"]),
         "spot_verified": True,
         "quote_asset": entry.get("quoteAsset"),
         "symbol": entry.get("symbol"),
