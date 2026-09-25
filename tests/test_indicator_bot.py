@@ -242,5 +242,42 @@ class IndicatorBotTests(unittest.TestCase):
                     bot.stream_shadow_micro_snapshot("SOLUSDT")
 
 
+    def test_signal_id_dedupes_same_market_minute_only(self):
+        base={
+            "symbol":"SOLUSDT","bar_time":900_000,
+            "micro":{"score":90,"agg_cvd":{"latest_event_ms":120_100}},
+        }
+        same=dict(base)
+        same["micro"]={"score":99,"agg_cvd":{"latest_event_ms":120_999}}
+        nxt=dict(base)
+        nxt["micro"]={"score":90,"agg_cvd":{"latest_event_ms":180_001}}
+        self.assertEqual(bot.signal_id_for_snapshot(base),bot.signal_id_for_snapshot(same))
+        self.assertNotEqual(bot.signal_id_for_snapshot(base),bot.signal_id_for_snapshot(nxt))
+
+    def test_stream_samples_satisfy_microstructure_warmup_count(self):
+        snap={
+            "_bars1m":[{}]*60,
+            "_bars3m":[{}]*30,
+            "_bars15":[{}]*220,
+            "_bars1h":[{}]*220,
+            "micro_pre":{"prefilter_score":70},
+            "guard_ok":True,
+        }
+        stream_row={
+            "obi":0.60,"spreadBps":2.0,
+            "bidLiquidityQuote5":1000.0,"askLiquidityQuote5":900.0,
+            "micropriceBiasBps":0.2,"cancellationRate10s":0.2,
+            "bidCancelQuote10s":10.0,"askCancelQuote10s":5.0,
+            "deltaQuote60s":100.0,"takerBuyRatio60s":0.58,
+            "cvdSlopePositive10s":True,"tradeAgeMs":100.0,
+        }
+        micro={"stage":"WATCH","score":70,"agg_cvd":{"delta_quote":100},"depth_flow":{}}
+        with patch.dict(os.environ,{"TST_STREAM_SHADOW_URL":"http://shadow"}):
+            with patch.object(bot,"stream_shadow_micro_snapshot",return_value=stream_row),                  patch.object(bot.time,"sleep",return_value=None),                  patch.object(bot,"combine_microstructure",return_value=micro),                  patch.object(bot,"signal_freshness_status",return_value={"ok":True}),                  patch.object(bot,"adverse_selection_status",return_value={"ok":True}),                  patch.object(bot,"liquidity_disappearance_status",return_value={"ok":True}),                  patch.object(bot,"warmup_status",wraps=bot.warmup_status) as warm:
+                bot.enrich_microstructure("SOLUSDT",snap)
+                self.assertEqual(warm.call_args.kwargs["depth_samples"],bot.CFG["momentum"]["obi_samples"])
+                self.assertTrue(snap["micro"]["production_guard"]["warmup"]["ok"])
+
+
 if __name__=="__main__":
     unittest.main()
