@@ -16,6 +16,9 @@ function intent(style="AGGRESSIVE_LIMIT"){
     authorization:"SHADOW_ONLY",
     liveApproved:false,
     signalId:"sig123",
+    createdAtMs:Date.now(),
+    decisionLatencyMs:1000,
+    maxTotalLatencyMs:8000,
     symbol:"SOLUSDT",
     side:"BUY",
     quoteAmountUsdt:10,
@@ -273,4 +276,26 @@ test("crash recovery cancels open remainder before protecting partial fill", asy
   assert.equal(out.ok,true);
   assert.equal(cancelled,1);
   assert.equal(protected,0.04);
+});
+
+
+test("stale intent is rejected before any exchange order", async()=>{
+  let calls=0;
+  const x=intent("MARKET");
+  x.createdAtMs=10_000;
+  x.decisionLatencyMs=6_000;
+  x.maxTotalLatencyMs=8_000;
+  const exchange={
+    async placeMarketBuy(){calls++;return {};},
+  };
+  await assert.rejects(
+    ()=>executeV3ShadowIntent({
+      intent:x,
+      exchange,
+      reservations:createV3ShadowReservationStore(),
+      now:()=>13_000,
+    }),
+    /STALE_EXECUTION_INTENT/
+  );
+  assert.equal(calls,0);
 });
