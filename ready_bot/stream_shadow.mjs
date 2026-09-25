@@ -5,6 +5,7 @@ const PORT=Number(process.env.PORT||8080);
 const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||25)));
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
 const REST="https://api.binance.com";
+const RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
 const WS="wss://stream.binance.com:443/stream?streams=";
 const STABLES=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"]);
 const LEV=["UP","DOWN","BULL","BEAR"];
@@ -15,9 +16,18 @@ const runtime={
 };
 const now=()=>Date.now();
 async function get(path){
-  const r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
-  if(!r.ok)throw new Error("REST_"+r.status+":"+path);
-  return await r.json();
+  let r;
+  try{
+    r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
+    if(r.ok)return await r.json();
+    if(!RELAY || ![403,451].includes(r.status))throw new Error("REST_"+r.status+":"+path);
+  }catch(e){
+    if(!RELAY)throw e;
+  }
+  const relayUrl=RELAY+"?path="+encodeURIComponent(path);
+  const rr=await fetch(relayUrl,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
+  if(!rr.ok)throw new Error("RELAY_"+rr.status+":"+path);
+  return await rr.json();
 }
 function eligible(s){
   const b=String(s.baseAsset||"");
