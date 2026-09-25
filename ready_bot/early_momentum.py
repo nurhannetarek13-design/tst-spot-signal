@@ -143,6 +143,10 @@ def prefilter_snapshot(bars1m,bars3m,cfg):
 
     velocity_lb=int(cfg["price_velocity_lookback_1m"])
     velocity=(price/bars1m[-1-velocity_lb]["c"]-1.0) if len(bars1m)>velocity_lb else 0.0
+    move_abs=abs(price-bars1m[-1-velocity_lb]["c"]) if len(bars1m)>velocity_lb else 0.0
+    move_atr=(move_abs/atr_now) if atr_now and atr_now>0 else None
+    previous_qv=float(bars1m[-2].get("qv") or 0)
+    volume_hold_ratio=(float(bars1m[-1].get("qv") or 0)/previous_qv) if previous_qv>0 else None
 
     points=0
     if rvol1 is not None and rvol1>=float(cfg["volume_acceleration_1m_watch"]):
@@ -186,6 +190,8 @@ def prefilter_snapshot(bars1m,bars3m,cfg):
         "breakout":prox,
         "breakout_proximity_ok":near_breakout,
         "price_velocity":velocity,
+        "move_atr":move_atr,
+        "volume_hold_ratio":volume_hold_ratio,
     }
 
 
@@ -269,8 +275,26 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
     distance=pre.get("vwap_distance_atr")
     if distance is not None:
         chase=distance>float(cfg["vwap_max_atr_distance"])
+    if (
+        pre.get("move_atr") is not None
+        and pre["move_atr"]>float(cfg["chase_move_atr"])
+        and (not pre.get("taker_rising") or not agg.get("slope_positive"))
+    ):
+        chase=True
 
     stage=classify(score,cfg)
+    # ARMED should represent real ignition, not merely a high arithmetic score.
+    if stage in {"ARMED","ENTRY_CANDIDATE"}:
+        ignition=(
+            pre.get("rvol_1m") is not None and pre["rvol_1m"]>=float(cfg["volume_acceleration_1m_armed"])
+            and pre.get("rvol_3m") is not None and pre["rvol_3m"]>=float(cfg["volume_acceleration_3m_armed"])
+            and pre.get("taker_latest") is not None and pre["taker_latest"]>=float(cfg["taker_armed_min"])
+            and obi_armed
+            and pre.get("vwap_position_ok")
+        )
+        if not ignition:
+            stage="WATCH"
+
     micro_hold=pre.get("micro_breakout_hold") or {"ok":False}
     if stage=="ENTRY_CANDIDATE":
         required=(
@@ -281,6 +305,8 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
             and obi_armed
             and spread_tight
             and pre.get("vwap_position_ok")
+            and pre.get("volume_hold_ratio") is not None
+            and pre["volume_hold_ratio"]>=float(cfg["volume_not_collapsing_ratio"])
             and micro_hold.get("ok")
             and not chase
         )
