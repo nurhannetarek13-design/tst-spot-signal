@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
 import ready_bot.indicator_bot as bot
@@ -218,6 +220,26 @@ class IndicatorBotTests(unittest.TestCase):
         state["cash_usdt"]=20.08
         second=bot.open_position(state,snap,spot_filters())
         self.assertEqual(second,"DUPLICATE_SIGNAL_ID")
+
+
+    def test_stream_sidecar_is_fail_closed_and_parses_snapshot(self):
+        healthy={
+            "health":{"ok":True},
+            "snapshot":{
+                "synced":True,"fresh":True,"warmed":True,
+                "obi":0.61,"spreadBps":2.0,
+                "bidLiquidityQuote5":1000.0,"askLiquidityQuote5":800.0,
+                "deltaQuote60s":500.0,"takerBuyRatio60s":0.59,
+                "cvdSlopePositive10s":True,"tradeAgeMs":100.0,
+            }
+        }
+        with patch.dict(os.environ,{"TST_STREAM_SHADOW_URL":"http://127.0.0.1:8080"}):
+            with patch.object(bot,"request_json",return_value=healthy):
+                x=bot.stream_shadow_micro_snapshot("SOLUSDT")
+                self.assertEqual(x["obi"],0.61)
+            with patch.object(bot,"request_json",return_value={"health":{"ok":False},"snapshot":{}}):
+                with self.assertRaisesRegex(RuntimeError,"STREAM_SHADOW_NOT_HEALTHY"):
+                    bot.stream_shadow_micro_snapshot("SOLUSDT")
 
 
 if __name__=="__main__":
