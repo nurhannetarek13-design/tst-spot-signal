@@ -49,6 +49,11 @@ MIN_TRAIN_TRADES=100
 MIN_VALIDATION_TRADES=50
 MIN_HOLDOUT_CLAIM_TRADES=100
 
+# This legacy calibration downloads only today's listed symbols from public REST.
+# It is useful diagnostically, but cannot support a production precision claim.
+POINT_IN_TIME_UNIVERSE=False
+DELISTED_COVERAGE=False
+
 
 def api(path):
     req=urllib.request.Request(BASE+path,headers={"User-Agent":"tst-precision-calibration/1.0"})
@@ -330,10 +335,19 @@ def main():
         "trades":0,"wins":0,"losses":0,"winRate":0.0,"netPnlPerUnit":0.0,
         "expectancyPerUnit":0.0,"profitFactor":0.0,
     }
-    claim=bool(
+    statistical_claim=bool(
         selected and holdout["trades"]>=MIN_HOLDOUT_CLAIM_TRADES and
         holdout["winRate"]>=0.99 and holdout["netPnlPerUnit"]>0 and holdout["profitFactor"]>1
     )
+    universe_integrity=bool(POINT_IN_TIME_UNIVERSE and DELISTED_COVERAGE)
+    claim=bool(statistical_claim and universe_integrity)
+    claim_blocked_reasons=[]
+    if not statistical_claim:
+        claim_blocked_reasons.append("STATISTICAL_99_PERCENT_HOLDOUT_NOT_MET")
+    if not POINT_IN_TIME_UNIVERSE:
+        claim_blocked_reasons.append("POINT_IN_TIME_UNIVERSE_NOT_USED")
+    if not DELISTED_COVERAGE:
+        claim_blocked_reasons.append("DELISTED_SYMBOL_COVERAGE_NOT_USED")
 
     # Also report the absolute highest holdout win rate among all configs only
     # as a diagnostic. It is NOT eligible for selection because that would peek.
@@ -357,12 +371,19 @@ def main():
         "baseRecordCounts":{k:len(v) for k,v in records.items()},
         "trainQualifiedConfigs":len(train_rows),"validationQualifiedConfigs":len(validation_rows),
         "selected":selected,"holdout":holdout,
+        "statisticalClaimBeforeUniverseIntegrity":statistical_claim,
+        "universeIntegrity":{
+            "pointInTime":POINT_IN_TIME_UNIVERSE,
+            "delistedCoverage":DELISTED_COVERAGE,
+            "productionGrade":universe_integrity,
+        },
         "claimSupported":claim,
+        "claimBlockedReasons":claim_blocked_reasons,
         "diagnosticBestHoldoutPeekingNotEligible":diagnostic_best,
         "notes":[
             "The final holdout is not used to select parameters.",
             "Recent 180 days are excluded because they were already inspected in the prior audit.",
-            "Current-universe historical testing has survivorship bias.",
+            "Current-universe historical testing has survivorship bias and can never set claimSupported=true.",
             "Historical spread is unavailable; this calibration does not add a spread penalty, which favors the strategy.",
             "Profitability includes configured buy/sell fee and slippage assumptions.",
             "A 99% claim is accepted only with >=100 profitable-trade observations on untouched holdout and positive net PnL."
