@@ -34,8 +34,8 @@
     "max_quote_per_trade_usdt": 10,
     "max_open_positions": 3,
     "max_daily_loss_usdt": 2,
-    "max_risk_per_trade_usdt": 0.2,
-    "max_portfolio_stop_risk_usdt": 0.6,
+    "max_risk_per_trade_usdt": 0.11,
+    "max_portfolio_stop_risk_usdt": 0.33,
     "stop_atr_multiplier": 1.5,
     "min_stop_fraction": 0.006,
     "max_stop_fraction": 0.03,
@@ -47,7 +47,11 @@
     "swing_lookback_bars": 20,
     "swing_pivot_left": 2,
     "swing_pivot_right": 2,
-    "swing_atr_buffer": 0.25
+    "swing_atr_buffer": 0.25,
+    "max_risk_per_trade_fraction": 0.005,
+    "allow_averaging_down": false,
+    "allow_martingale": false,
+    "leverage": 1
   },
   "evidence_gate": {
     "required": true,
