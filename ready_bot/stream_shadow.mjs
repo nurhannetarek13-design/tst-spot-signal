@@ -4,8 +4,17 @@ import { pathToFileURL } from "node:url";
 const PORT=Number(process.env.PORT||8080);
 const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||25)));
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
-const REST="https://api.binance.com";
-const WS="wss://stream.binance.com:443/stream?streams=";
+const PUBLIC_RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
+const REST_BASES=[
+  "https://data-api.binance.vision",
+  "https://api.binance.com",
+  "https://api-gcp.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://api4.binance.com",
+];
+const WS=String(process.env.PUBLIC_WS_BASE||"wss://data-stream.binance.vision:443/stream?streams=");
 const STABLES=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"]);
 const LEV=["UP","DOWN","BULL","BEAR"];
 
@@ -15,9 +24,18 @@ const runtime={
 };
 const now=()=>Date.now();
 async function get(path){
-  const r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
-  if(!r.ok)throw new Error("REST_"+r.status+":"+path);
-  return await r.json();
+  const targets=[];
+  if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
+  for(const base of REST_BASES) targets.push(base+path);
+  let last="unavailable";
+  for(const url of targets){
+    try{
+      const r=await fetch(url,{headers:{"cache-control":"no-store","accept":"application/json"},signal:AbortSignal.timeout(10000)});
+      if(r.ok)return await r.json();
+      last="HTTP_"+r.status+":"+url;
+    }catch(e){last=String(e?.message||e);}
+  }
+  throw new Error("PUBLIC_REST_UNAVAILABLE:"+path+":"+last);
 }
 function eligible(s){
   const b=String(s.baseAsset||"");
