@@ -1,0 +1,421 @@
+{
+  "engine": "INDICATOR_ONLY_FIXED_CONFIRMATION",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "runtimeChanged": false,
+  "days": 180,
+  "params": {
+    "scoreMin": 95,
+    "takerMin": 0.6,
+    "taker3Min": 0.58,
+    "rvolMin": 1.5,
+    "rsiMax": 70,
+    "stopMult": 1.5,
+    "minStop": 0.03,
+    "rewardRisk": 0.15
+  },
+  "symbolsRequested": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "symbolsAudited": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "dataFailures": {},
+  "aggregate": {
+    "trades": 119,
+    "wins": 100,
+    "losses": 19,
+    "winRate": 0.8403361344537815,
+    "netPnlPerUnit": -4414.789026235916
+  },
+  "perSymbol": {
+    "BTCUSDT": {
+      "trades": 9,
+      "wins": 7,
+      "losses": 2,
+      "winRate": 0.7777777777777778,
+      "netPnlPerUnit": -4193.833767676289,
+      "expectancyPerUnit": -465.98152974180994,
+      "profitFactor": 0.2115658821969068,
+      "reasons": {
+        "TARGET": 7,
+        "STOP": 2
+      },
+      "rawAccepted": 9
+    },
+    "ETHUSDT": {
+      "trades": 8,
+      "wins": 6,
+      "losses": 2,
+      "winRate": 0.75,
+      "netPnlPerUnit": -143.34518720537199,
+      "expectancyPerUnit": -17.918148400671498,
+      "profitFactor": 0.16427752462017187,
+      "reasons": {
+        "TARGET": 6,
+        "STOP": 2
+      },
+      "rawAccepted": 8
+    },
+    "XRPUSDT": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0028449112036796897,
+      "expectancyPerUnit": 0.0028449112036796897,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 1
+      },
+      "rawAccepted": 1
+    },
+    "SOLUSDT": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.4020017913879883,
+      "expectancyPerUnit": 0.20100089569399415,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 2
+      },
+      "rawAccepted": 2
+    },
+    "ZECUSDT": {
+      "trades": 15,
+      "wins": 12,
+      "losses": 3,
+      "winRate": 0.8,
+      "netPnlPerUnit": -68.23346421190831,
+      "expectancyPerUnit": -4.548897614127221,
+      "profitFactor": 0.21356900065831286,
+      "reasons": {
+        "TARGET": 12,
+        "STOP": 3
+      },
+      "rawAccepted": 15
+    },
+    "NEARUSDT": {
+      "trades": 5,
+      "wins": 4,
+      "losses": 1,
+      "winRate": 0.8,
+      "netPnlPerUnit": -0.05823958906065796,
+      "expectancyPerUnit": -0.011647917812131592,
+      "profitFactor": 0.24128509948134783,
+      "reasons": {
+        "TARGET": 4,
+        "STOP": 1
+      },
+      "rawAccepted": 5
+    },
+    "SUIUSDT": {
+      "trades": 3,
+      "wins": 1,
+      "losses": 2,
+      "winRate": 0.3333333333333333,
+      "netPnlPerUnit": -0.050899312165939126,
+      "expectancyPerUnit": -0.016966437388646376,
+      "profitFactor": 0.03583230106623966,
+      "reasons": {
+        "TARGET": 1,
+        "STOP": 2
+      },
+      "rawAccepted": 3
+    },
+    "VTHOUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0.0,
+      "netPnlPerUnit": 0.0,
+      "expectancyPerUnit": 0.0,
+      "profitFactor": 0.0,
+      "reasons": {},
+      "rawAccepted": 0
+    },
+    "ENAUSDT": {
+      "trades": 3,
+      "wins": 3,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0008092697204689359,
+      "expectancyPerUnit": 0.00026975657348964527,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 3
+      },
+      "rawAccepted": 3
+    },
+    "BNBUSDT": {
+      "trades": 8,
+      "wins": 7,
+      "losses": 1,
+      "winRate": 0.875,
+      "netPnlPerUnit": -12.294875558508124,
+      "expectancyPerUnit": -1.5368594448135156,
+      "profitFactor": 0.4505387540574003,
+      "reasons": {
+        "TARGET": 7,
+        "STOP": 1
+      },
+      "rawAccepted": 8
+    },
+    "DOGEUSDT": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0003994684599977899,
+      "expectancyPerUnit": 0.00019973422999889495,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 2
+      },
+      "rawAccepted": 2
+    },
+    "UNIUSDT": {
+      "trades": 11,
+      "wins": 10,
+      "losses": 1,
+      "winRate": 0.9090909090909091,
+      "netPnlPerUnit": -0.1635997840147443,
+      "expectancyPerUnit": -0.014872707637704026,
+      "profitFactor": 0.4640026333868564,
+      "reasons": {
+        "TARGET": 10,
+        "STOP": 1
+      },
+      "rawAccepted": 11
+    },
+    "SAGAUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0.0,
+      "netPnlPerUnit": 0.0,
+      "expectancyPerUnit": 0.0,
+      "profitFactor": 0.0,
+      "reasons": {},
+      "rawAccepted": 0
+    },
+    "LINKUSDT": {
+      "trades": 6,
+      "wins": 4,
+      "losses": 2,
+      "winRate": 0.6666666666666666,
+      "netPnlPerUnit": -0.6400321451457369,
+      "expectancyPerUnit": -0.10667202419095616,
+      "profitFactor": 0.1339232212857432,
+      "reasons": {
+        "STOP": 2,
+        "TARGET": 4
+      },
+      "rawAccepted": 6
+    },
+    "ONDOUSDT": {
+      "trades": 7,
+      "wins": 7,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.005673066514699954,
+      "expectancyPerUnit": 0.0008104380735285648,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 7
+      },
+      "rawAccepted": 7
+    },
+    "XPLUSDT": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0004163839325873331,
+      "expectancyPerUnit": 0.00020819196629366654,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 2
+      },
+      "rawAccepted": 2
+    },
+    "BABYUSDT": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 2.62309510085431e-05,
+      "expectancyPerUnit": 2.62309510085431e-05,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 1
+      },
+      "rawAccepted": 1
+    },
+    "LTCUSDT": {
+      "trades": 3,
+      "wins": 3,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.37122281237187593,
+      "expectancyPerUnit": 0.12374093745729198,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 3
+      },
+      "rawAccepted": 3
+    },
+    "AVAXUSDT": {
+      "trades": 5,
+      "wins": 2,
+      "losses": 3,
+      "winRate": 0.4,
+      "netPnlPerUnit": -0.9023556867859517,
+      "expectancyPerUnit": -0.18047113735719034,
+      "profitFactor": 0.033263486743853855,
+      "reasons": {
+        "STOP": 3,
+        "TARGET": 2
+      },
+      "rawAccepted": 5
+    },
+    "TAOUSDT": {
+      "trades": 7,
+      "wins": 7,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 3.9669575871249094,
+      "expectancyPerUnit": 0.56670822673213,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 7
+      },
+      "rawAccepted": 7
+    },
+    "ADAUSDT": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0009337420659392137,
+      "expectancyPerUnit": 0.00046687103296960686,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 2
+      },
+      "rawAccepted": 2
+    },
+    "XLMUSDT": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 0.0008334061848950802,
+      "expectancyPerUnit": 0.0004167030924475401,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 2
+      },
+      "rawAccepted": 2
+    },
+    "PEPEUSDT": {
+      "trades": 10,
+      "wins": 10,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 7.530177951122265e-08,
+      "expectancyPerUnit": 7.530177951122264e-09,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 10
+      },
+      "rawAccepted": 10
+    },
+    "WLDUSDT": {
+      "trades": 5,
+      "wins": 4,
+      "losses": 1,
+      "winRate": 0.8,
+      "netPnlPerUnit": -0.011897366470804971,
+      "expectancyPerUnit": -0.002379473294160994,
+      "profitFactor": 0.2103390858352339,
+      "reasons": {
+        "TARGET": 4,
+        "STOP": 1
+      },
+      "rawAccepted": 5
+    },
+    "ARBUSDT": {
+      "trades": 2,
+      "wins": 1,
+      "losses": 1,
+      "winRate": 0.5,
+      "netPnlPerUnit": -0.006826445414098492,
+      "expectancyPerUnit": -0.003413222707049246,
+      "profitFactor": 0.06312952439682758,
+      "reasons": {
+        "STOP": 1,
+        "TARGET": 1
+      },
+      "rawAccepted": 2
+    }
+  },
+  "observed99": false,
+  "notes": [
+    "Configuration was frozen before this run; no search/tuning occurs here.",
+    "Fees and slippage are included by the imported simulator.",
+    "Historical spread snapshots are unavailable, so no spread penalty is added.",
+    "Current-universe historical testing still has survivorship bias."
+  ],
+  "generatedAt": "2026-09-25T19:59:44.218053+00:00"
+}
