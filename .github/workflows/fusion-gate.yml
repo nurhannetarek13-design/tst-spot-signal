@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: unified-fusion-gate
@@ -60,3 +61,9 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Dispatch candidate rotation
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run candidate-rotation.yml --ref main

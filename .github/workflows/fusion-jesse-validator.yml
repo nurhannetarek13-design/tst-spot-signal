@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: unified-candidate-jesse
@@ -92,6 +93,12 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Dispatch unified fusion gate
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fusion-gate.yml --ref main
 
       - name: Surface Jesse infrastructure failure
         if: env.HAS_CANDIDATE == 'true' && steps.jesse_run.outcome == 'failure'
