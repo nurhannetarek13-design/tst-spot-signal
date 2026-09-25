@@ -60,12 +60,16 @@
   },
   "evidence_gate": {
     "required": true,
-    "report_path": "validation/indicator-only-precision-calibration-latest.json",
+    "report_path": "validation/indicator-v3/precision-evidence-latest.json",
     "minimum_win_rate": 0.99,
     "minimum_holdout_trades": 100,
     "require_positive_net": true,
     "scope": "live_only",
-    "paper_observation_allowed": true
+    "paper_observation_allowed": true,
+    "require_untouched_holdout": true,
+    "require_point_in_time_universe": true,
+    "require_delisted_coverage": true,
+    "require_spot_execution_replay": true
   },
   "market_type": "spot",
   "momentum": {

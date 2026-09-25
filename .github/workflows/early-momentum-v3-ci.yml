@@ -12,6 +12,9 @@ on:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_backtest_integrity_gate.py'
       - 'research/backtest_integrity_gate.py'
+      - 'validation/indicator-v3/precision-evidence-latest.json'
+      - 'tests/test_v3_precision_evidence.py'
+      - 'scripts/build_v3_precision_evidence.py'
       - 'test/v3-execution-intent.test.mjs'
       - 'src/execution/v3-execution-intent.mjs'
       - 'test/v3-shadow-execution-runtime.test.mjs'
@@ -40,6 +43,9 @@ on:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_backtest_integrity_gate.py'
       - 'research/backtest_integrity_gate.py'
+      - 'validation/indicator-v3/precision-evidence-latest.json'
+      - 'tests/test_v3_precision_evidence.py'
+      - 'scripts/build_v3_precision_evidence.py'
       - 'test/v3-execution-intent.test.mjs'
       - 'src/execution/v3-execution-intent.mjs'
       - 'test/v3-shadow-execution-runtime.test.mjs'
@@ -86,6 +92,7 @@ jobs:
           python -m py_compile ready_bot/production_guard.py
           python -m py_compile ready_bot/smart_execution.py
           python -m py_compile research/backtest_integrity_gate.py
+          python -m py_compile scripts/build_v3_precision_evidence.py
           python -m py_compile research/binance_spot_point_in_time_universe.py
           python -m py_compile scripts/v3_session_performance.py
           node --check ready_bot/stream_shadow.mjs
@@ -99,6 +106,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
           python -m unittest discover -s tests -p 'test_production_guard.py' -v
           python -m unittest -v tests/test_backtest_integrity_gate.py
+          python -m unittest -v tests/test_v3_precision_evidence.py
           python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
           python -m unittest -v tests/test_v3_champion_challenger.py
           node --test test/stream-shadow.test.mjs
@@ -121,6 +129,10 @@ jobs:
           assert c['risk']['max_pair_correlation']==0.85
           assert c['risk']['consecutive_loss_cooldown_count']==3
           assert c['data_integrity']['fail_closed'] is True
+          assert c['evidence_gate']['scope']=='live_only'
+          assert c['evidence_gate']['report_path']=='validation/indicator-v3/precision-evidence-latest.json'
+          assert c['evidence_gate']['minimum_win_rate']>=0.99
+          assert c['evidence_gate']['minimum_holdout_trades']>=100
           assert c['production_guard']['max_signal_age_ms']<=12000
           assert c['production_guard']['max_stream_signal_age_ms']<=5000
           assert c['production_guard']['max_decision_latency_ms']<=6500
