@@ -76,11 +76,16 @@ for name,p in FILES.items():
 # Historical CORE_TRIGGER_ONLY can only advance to forward-paper collection.
 # It is never equivalent to validating the complete L2 strategy.
 core_only=(historical_scope=="CORE_TRIGGER_ONLY")
+pooled_basket_only=(historical_scope=="MULTI_SYMBOL_POOLED_RESEARCH")
+restricted_history=core_only or pooled_basket_only
 if core_only:
     reasons.append("FULL_STRATEGY_L2:NOT_HISTORICALLY_VALIDATED")
+if pooled_basket_only:
+    reasons.append("GLOBAL_SINGLE_POSITION_BASKET:NOT_HISTORICALLY_VALIDATED")
 
-# Full production-review gate remains intentionally strict and fail-closed.
-full_ready=(len(reasons)==0) and not core_only
+# Restricted historical scopes may authorize forward evidence collection only.
+# They never authorize live or small-live review by themselves.
+full_ready=(len(reasons)==0) and not restricted_history
 
 small_reasons=[]
 if not cid or not fp:
@@ -88,6 +93,9 @@ if not cid or not fp:
 if core_only:
     small_reasons.append("CORE_TRIGGER_ONLY:CANNOT_AUTHORIZE_SMALL_LIVE_REVIEW")
     small_reasons.append("FULL_STRATEGY_L2:FORWARD_VALIDATION_REQUIRED")
+if pooled_basket_only:
+    small_reasons.append("MULTI_SYMBOL_POOLED_RESEARCH:CANNOT_AUTHORIZE_SMALL_LIVE_REVIEW")
+    small_reasons.append("GLOBAL_SINGLE_POSITION_BASKET:FORWARD_VALIDATION_REQUIRED")
 
 independent_pass_count=0
 for name in historical_required:
@@ -100,7 +108,7 @@ for name in historical_required:
         small_reasons.append(f"{name}:CANDIDATE_FINGERPRINT_MISMATCH")
     if v.get("candidateMatch") is not True:
         continue
-    if core_only and v.get("validationScope") not in ("CORE_TRIGGER_ONLY",None):
+    if restricted_history and v.get("validationScope") not in (historical_scope,None):
         small_reasons.append(f"{name}:VALIDATION_SCOPE_MISMATCH")
     base=v.get("base") or {}
     stress=v.get("stress2x") or {}
@@ -127,7 +135,7 @@ if independent_pass_count<min_independent:
     small_reasons.append(f"HISTORICAL:LT_{min_independent}_INDEPENDENT_ENGINE_PASSES")
 
 # Even a perfect CORE-only history is merely permission to collect full forward evidence.
-small_ready=(len(small_reasons)==0) and not core_only
+small_ready=(len(small_reasons)==0) and not restricted_history
 
 historical_core_pass=bool(historical_required) and all(
     (validators.get(name) or {}).get("candidateMatch") is True
@@ -153,8 +161,8 @@ report={
   "historicalValidatorsRequired":historical_required,
   "forwardValidatorsRequired":forward_required,
   "historicalCorePass":historical_core_pass,
-  "fullStrategyValidated":forward_full_pass if core_only else full_ready,
-  "eligibleForForwardPaperCollection":historical_core_pass if core_only else False,
+  "fullStrategyValidated":forward_full_pass if restricted_history else full_ready,
+  "eligibleForForwardPaperCollection":historical_core_pass if restricted_history else False,
   "allValidatorsCurrentCandidate":bool(cid and fp) and all((validators.get(k) or {}).get("candidateMatch") is True for k in required),
   "liveReady":full_ready,
   "smallLiveReviewReady":small_ready,
@@ -169,8 +177,8 @@ report={
       "baseExpectancyPositive":True,
       "stressProfitFactorMin":1.0,
       "stressExpectancyPositive":True,
-      "forwardTradesRequired":50 if core_only else 0,
-      "coreTriggerOnlyCannotAuthorizeLive":True,
+      "forwardTradesRequired":50 if restricted_history else 0,
+      "restrictedHistoryCannotAuthorizeLive":True,
       "suggestedMaxPositionUSDT":7,
       "suggestedMaxConcurrentPositions":1,
       "suggestedDailyLossCapUSDT":0.5
@@ -198,7 +206,7 @@ report={
       } for k,v in validators.items()
   },
   "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
-  "note":"CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
+  "note":"Restricted historical scopes (CORE_TRIGGER_ONLY or MULTI_SYMBOL_POOLED_RESEARCH) can unlock forward-paper collection only. They never enable small-live review or live execution."
 }
 OUT.parent.mkdir(parents=True,exist_ok=True)
 OUT.write_text(json.dumps(report,indent=2))
