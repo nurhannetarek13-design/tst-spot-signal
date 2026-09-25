@@ -4,7 +4,9 @@ from ready_bot.early_momentum import (
     WEIGHTS,
     aggtrade_delta,
     combine_microstructure,
+    depth_flow_metrics,
     depth_imbalance,
+    depth_snapshot_metrics,
     micro_breakout_hold,
     prefilter_snapshot,
 )
@@ -79,6 +81,17 @@ class EarlyMomentumTests(unittest.TestCase):
         d={"bids":[["100","2"],["99","2"],["98","2"],["97","2"],["96","2"]],
            "asks":[["101","1"],["102","1"],["103","1"],["104","1"],["105","1"]]}
         self.assertGreater(depth_imbalance(d,5),.60)
+
+    def test_depth_flow_and_microprice_are_measured(self):
+        first={"bids":[["100","2"],["99","1"]],"asks":[["101","2"],["102","1"]]}
+        last={"bids":[["100","3"],["99","2"]],"asks":[["101","1"],["102","1"]]}
+        a=depth_snapshot_metrics(first,2)
+        b=depth_snapshot_metrics(last,2)
+        flow=depth_flow_metrics([a,b])
+        self.assertIsNotNone(a["microprice"])
+        self.assertGreater(flow["bid_liquidity_change_pct"],0)
+        self.assertLess(flow["ask_liquidity_change_pct"],0)
+        self.assertGreater(flow["pressure_change"],0)
 
     def test_aggtrade_delta_recognizes_aggressive_buying(self):
         rows=[
