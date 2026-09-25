@@ -45,7 +45,7 @@ jobs:
           wc -l /tmp/files.txt
       - name: Fetch current Binance Spot metadata
         run: |
-          curl -fLsS --retry 3 --retry-delay 2 'https://api.binance.com/api/v3/exchangeInfo' -o /tmp/exchangeInfo.json
+          curl -fLsS --retry 3 --retry-delay 2 'https://data-api.binance.vision/api/v3/exchangeInfo' -o /tmp/exchangeInfo.json
           python - <<'PY'
           import json
           d=json.load(open('/tmp/exchangeInfo.json'))
