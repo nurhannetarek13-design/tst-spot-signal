@@ -256,24 +256,6 @@ def atr(bars, n=14):
     return sum(vals) / len(vals)
 
 
-def macd_hist(values, fast=12, slow=26, signal=9):
-    ef = ema_series(values, fast)
-    es = ema_series(values, slow)
-    if not ef or not es:
-        return []
-    m = []
-    start = max(fast, slow) - 1
-    for i in range(start, len(values)):
-        if ef[i] is None or es[i] is None:
-            continue
-        m.append(ef[i] - es[i])
-    sig = ema_series(m, signal)
-    out = []
-    for i in range(len(m)):
-        out.append(None if i >= len(sig) or sig[i] is None else m[i] - sig[i])
-    return out
-
-
 def relative_quote_volume(bars, n=20):
     if len(bars) < n + 1:
         return None
@@ -289,16 +271,6 @@ def taker_ratio(bar):
 def spread_bps(bid, ask):
     mid = (bid + ask) / 2
     return ((ask - bid) / mid) * 10000 if mid > 0 else float("inf")
-
-
-def bollinger_width(values, n=20):
-    if len(values) < n:
-        return None
-    x = values[-n:]
-    mean = sum(x) / n
-    var = sum((v - mean) ** 2 for v in x) / n
-    sd = math.sqrt(var)
-    return (4 * sd / mean) if mean > 0 else None
 
 
 
