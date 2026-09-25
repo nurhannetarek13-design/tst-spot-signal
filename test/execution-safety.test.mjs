@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder, evaluateApiRestrictions } from "../server.mjs";
+import { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder, evaluateApiRestrictions, evaluateAccountTradingSafety } from "../server.mjs";
 
 const symbolInfo = {
   filters: [
@@ -81,4 +81,18 @@ test("API key safety rejects withdrawals futures margin and missing IP restricti
   assert.ok(bad.reasons.includes("WITHDRAWALS_MUST_BE_DISABLED"));
   assert.ok(bad.reasons.includes("FUTURES_MUST_BE_DISABLED"));
   assert.ok(bad.reasons.includes("IP_RESTRICTION_REQUIRED"));
+});
+
+
+test("Account trading safety blocks locked or non-normal accounts", () => {
+  const safe=evaluateAccountTradingSafety({data:"Normal"},{data:{isLocked:false,plannedRecoverTime:0}});
+  assert.equal(safe.ok,true);
+
+  const locked=evaluateAccountTradingSafety({data:"Normal"},{data:{isLocked:true,plannedRecoverTime:123}});
+  assert.equal(locked.ok,false);
+  assert.ok(locked.reasons.includes("API_TRADING_LOCKED"));
+
+  const abnormal=evaluateAccountTradingSafety({data:"Maintenance"},{data:{isLocked:false,plannedRecoverTime:0}});
+  assert.equal(abnormal.ok,false);
+  assert.ok(abnormal.reasons.includes("ACCOUNT_STATUS_NOT_NORMAL"));
 });
