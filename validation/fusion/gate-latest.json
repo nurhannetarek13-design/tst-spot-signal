@@ -76,8 +76,6 @@
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
     "nautilus:FAIL",
-    "forward:CANDIDATE_ID_MISMATCH",
-    "forward:CANDIDATE_FINGERPRINT_MISMATCH",
     "forward:FAIL",
     "forward:LT_50_FORWARD_TRADES"
   ],
@@ -94,10 +92,10 @@
       "candidateMatch": true,
       "trades": 49,
       "independentEnginePass": false,
-      "baseProfitFactor": 1.0841816022276265,
-      "baseExpectancyUSDT": 0.008809420016920394,
-      "stressProfitFactor": 0.9313690229721828,
-      "stressExpectancyUSDT": -0.007728601144847662
+      "baseProfitFactor": 1.0739576413444178,
+      "baseExpectancyUSDT": 0.007813184189256004,
+      "stressProfitFactor": 0.9232138934415811,
+      "stressExpectancyUSDT": -0.008723340373872599
     },
     "freqtrade": {
       "status": "FAIL",
@@ -111,10 +109,10 @@
       "candidateMatch": true,
       "trades": 182,
       "independentEnginePass": false,
-      "baseProfitFactor": 0.8014255019850597,
-      "baseExpectancyUSDT": -0.022219287472527473,
-      "stressProfitFactor": 0.7035657242174378,
-      "stressExpectancyUSDT": -0.03660859994475138
+      "baseProfitFactor": 0.7963278279604727,
+      "baseExpectancyUSDT": -0.022935574065934067,
+      "stressProfitFactor": 0.6994923436392916,
+      "stressExpectancyUSDT": -0.03732776193370166
     },
     "jesse": {
       "status": "FAIL",
@@ -151,15 +149,15 @@
       "stressExpectancyUSDT": -0.04840863117647059
     },
     "forward": {
-      "status": "NO_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
       "trades": 0,
       "independentEnginePass": null,
       "baseProfitFactor": null,
@@ -168,6 +166,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-09-25T18:12:41.229074+00:00",
+  "generatedAt": "2026-09-25T18:14:30.504840+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
