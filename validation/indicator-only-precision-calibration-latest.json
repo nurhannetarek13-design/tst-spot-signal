@@ -10,20 +10,20 @@
   },
   "windows": {
     "train": [
-      "2025-04-03T19:37:44.902307+00:00",
-      "2025-09-30T19:37:44.902307+00:00"
+      "2025-04-03T20:46:53.848046+00:00",
+      "2025-09-30T20:46:53.848046+00:00"
     ],
     "validation": [
-      "2025-09-30T19:37:44.902307+00:00",
-      "2025-12-29T19:37:44.902307+00:00"
+      "2025-09-30T20:46:53.848046+00:00",
+      "2025-12-29T20:46:53.848046+00:00"
     ],
     "holdout": [
-      "2025-12-29T19:37:44.902307+00:00",
-      "2026-03-29T19:37:44.902307+00:00"
+      "2025-12-29T20:46:53.848046+00:00",
+      "2026-03-29T20:46:53.848046+00:00"
     ],
     "recentExcluded": [
-      "2026-03-29T19:37:44.902307+00:00",
-      "2026-09-25T19:37:44.902307+00:00"
+      "2026-03-29T20:46:53.848046+00:00",
+      "2026-09-25T20:46:53.848046+00:00"
     ]
   },
   "gridSize": 5184,
@@ -50,8 +50,8 @@
     "TAOUSDT",
     "ADAUSDT",
     "XLMUSDT",
-    "PEPEUSDT",
     "WLDUSDT",
+    "PEPEUSDT",
     "ARBUSDT"
   ],
   "symbolsAudited": [
@@ -77,17 +77,17 @@
     "TAOUSDT",
     "ADAUSDT",
     "XLMUSDT",
-    "PEPEUSDT",
     "WLDUSDT",
+    "PEPEUSDT",
     "ARBUSDT"
   ],
   "dataFailures": {},
   "baseRecordCounts": {
-    "train": 1474,
+    "train": 1471,
     "validation": 109,
     "holdout": 140
   },
-  "trainQualifiedConfigs": 92,
+  "trainQualifiedConfigs": 91,
   "validationQualifiedConfigs": 0,
   "selected": null,
   "holdout": {
@@ -128,5 +128,5 @@
     "Profitability includes configured buy/sell fee and slippage assumptions.",
     "A 99% claim is accepted only with >=100 profitable-trade observations on untouched holdout and positive net PnL."
   ],
-  "generatedAt": "2026-09-25T19:41:13.551569+00:00"
+  "generatedAt": "2026-09-25T20:50:57.842141+00:00"
 }
