@@ -2,6 +2,7 @@
 import datetime as dt
 import json
 import pathlib
+from candidate_rotation_lib import refresh_rejection, active_rejection_fingerprints
 
 MANIFEST=pathlib.Path("validation/fusion/candidate-manifest.json")
 GATE=pathlib.Path("validation/fusion/gate-latest.json")
@@ -79,28 +80,22 @@ if not strong_fail and len(hard_fail)<2:
     print(json.dumps({"changed":False,"reason":"INSUFFICIENT_HARD_FAILURES","hardFail":hard_fail}))
     raise SystemExit(0)
 
-now=dt.datetime.now(dt.timezone.utc).isoformat()
+now_dt=dt.datetime.now(dt.timezone.utc)
+now=now_dt.isoformat()
 rows=list(r.get("rejected") or [])
-if not any(x.get("candidateFingerprint")==fp for x in rows):
-    rows.append({
-      "candidateId":cid,
-      "candidateFingerprint":fp,
-      "symbol":m.get("symbol"),
-      "family":m.get("family"),
-      "hardFailValidators":hard_fail,
-      "rejectedAt":now,
-    })
-r["rejected"]=rows[-100:]
+fresh_rejection={
+  "candidateId":cid,
+  "candidateFingerprint":fp,
+  "symbol":m.get("symbol"),
+  "family":m.get("family"),
+  "hardFailValidators":hard_fail,
+  "rejectedAt":now,
+}
+r["rejected"]=refresh_rejection(rows,fresh_rejection,max_rows=100)
 REJECTED.write_text(json.dumps(r,indent=2))
 
 ttl=int(r.get("ttlDays") or 7)
-cut=dt.datetime.now(dt.timezone.utc)-dt.timedelta(days=ttl)
-active=set()
-for x in r["rejected"]:
-    try:
-        ts=dt.datetime.fromisoformat(str(x["rejectedAt"]).replace("Z","+00:00"))
-        if ts>=cut: active.add(x.get("candidateFingerprint"))
-    except: pass
+active=active_rejection_fingerprints(r["rejected"],ttl,now=now_dt)
 
 pool=m.get("candidatePool") or []
 next_c=next((x for x in pool if x.get("candidateFingerprint") not in active),None)
