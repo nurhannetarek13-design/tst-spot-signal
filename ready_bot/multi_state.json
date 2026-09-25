@@ -70,9 +70,9 @@
       "symbol": "LINKUSDT"
     }
   ],
-  "day": "2026-09-24",
-  "day_pnl": 0.22938117450755513,
-  "last_run": "2026-09-24T21:44:41.043168+00:00",
+  "day": "2026-09-25",
+  "day_pnl": 0.0,
+  "last_run": "2026-09-25T00:02:45.549936+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -817,8 +817,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-24T21:44:41.045529+00:00",
-    "last_run": "2026-09-24T21:44:41.043168+00:00",
+    "generated_at": "2026-09-25T00:02:45.634099+00:00",
+    "last_run": "2026-09-25T00:02:45.549936+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
