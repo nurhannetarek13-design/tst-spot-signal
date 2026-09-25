@@ -68,15 +68,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for wf in \
-            candidate-vectorbt-validator.yml \
-            fusion-freqtrade-validator.yml \
-            fusion-jesse-validator.yml \
-            nautilus-validator.yml \
-            forward-paper-public-edges.yml; do
+          mapfile -t workflows < <(python - <<'PY'
+          import json
+          m=json.load(open("validation/fusion/candidate-manifest.json"))
+          mapping={
+            "vectorbt":"candidate-vectorbt-validator.yml",
+            "freqtrade":"fusion-freqtrade-validator.yml",
+            "jesse":"fusion-jesse-validator.yml",
+            "nautilus":"nautilus-validator.yml",
+            "forward":"forward-paper-public-edges.yml",
+          }
+          for name in m.get("validatorsRequired") or []:
+              if name in mapping: print(mapping[name])
+          PY
+          )
+          for wf in "${workflows[@]}"; do
             gh workflow run "$wf" --ref main
           done
-          echo "Dispatched all unified validators for: ${{ steps.rotate.outputs.next_candidate }}"
+          echo "Dispatched required unified validators for: ${{ steps.rotate.outputs.next_candidate }}"
 
       - name: Report exhausted candidate pool
         if: steps.rotate.outputs.changed == 'true' && steps.rotate.outputs.next_candidate == ''
