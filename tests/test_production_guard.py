@@ -6,6 +6,7 @@ from ready_bot.production_guard import (
     btc_shock_status,
     clock_sync_status,
     execution_quality_status,
+    estimate_sell_slippage,
     liquidity_disappearance_status,
     signal_freshness_status,
     warmup_status,
@@ -94,6 +95,14 @@ class ProductionGuardTests(unittest.TestCase):
         model=update_symbol_slippage_model(model,"SOLUSDT",8)
         self.assertEqual(model["SOLUSDT"]["count"],2)
         self.assertGreater(model["SOLUSDT"]["ewma_bps"],4)
+
+
+    def test_sell_depth_slippage_is_base_size_aware(self):
+        depth={"bids":[["100","0.05"],["99","1.0"]]}
+        x=estimate_sell_slippage(depth,0.10)
+        self.assertGreaterEqual(x["fill_ratio"],0.999)
+        self.assertLess(x["average_price"],100)
+        self.assertGreater(x["slippage_bps"],0)
 
 
 if __name__=="__main__":
