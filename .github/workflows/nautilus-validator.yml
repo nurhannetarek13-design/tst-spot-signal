@@ -3,6 +3,15 @@ name: Nautilus Execution Validator
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Public Edge Lab", "Unified Candidate Rotation"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - "validation/fusion/candidate-manifest.json"
+      - "research/nautilus_validator.py"
+      - ".github/workflows/nautilus-validator.yml"
 
 permissions:
   contents: write
@@ -30,7 +39,10 @@ jobs:
           import json, pathlib, os, datetime
           m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
           has=bool(m.get("candidateFingerprint"))
-          with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
+              f.write("EXPECTED_CANDIDATE_ID="+str(m.get("candidateId") or "")+"\n")
+              f.write("EXPECTED_CANDIDATE_FP="+str(m.get("candidateFingerprint") or "")+"\n")
           if not has:
               out={"engine":"NAUTILUS_TRADER","strategyId":"TST_CANDIDATE_NAUTILUS_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; Nautilus install and execution validation skipped."}
               pathlib.Path("validation/fusion/nautilus-latest.json").write_text(json.dumps(out,indent=2))
@@ -41,8 +53,25 @@ jobs:
         run: pip install --disable-pip-version-check nautilus_trader pandas numpy
 
       - name: Run event-driven execution validation
+        id: nautilus_run
         if: env.HAS_CANDIDATE == 'true'
+        continue-on-error: true
         run: python research/nautilus_validator.py
+
+      - name: Prove result belongs to checked-out candidate
+        if: env.HAS_CANDIDATE == 'true' && always()
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          p=pathlib.Path("validation/fusion/nautilus-latest.json")
+          assert p.exists(), "Nautilus must always persist a fail-closed snapshot"
+          row=json.load(open(p))
+          assert row.get("candidateId") == os.environ["EXPECTED_CANDIDATE_ID"]
+          assert row.get("candidateFingerprint") == os.environ["EXPECTED_CANDIDATE_FP"]
+          assert row.get("strategyId") == "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1"
+          assert row.get("liveTrading") is False
+          print("Nautilus exact-candidate identity verified")
+          PY
 
       - name: Commit Nautilus snapshot safely
         run: |
@@ -61,3 +90,7 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Surface Nautilus infrastructure failure
+        if: env.HAS_CANDIDATE == 'true' && steps.nautilus_run.outcome == 'failure'
+        run: exit 1
