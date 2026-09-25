@@ -101,5 +101,12 @@
   "data_integrity": {
     "max_unavailable_symbol_fraction": 0.25,
     "fail_closed": true
+  },
+  "exit": {
+    "momentum_fade_min_age_minutes": 5,
+    "momentum_fade_taker_below": 0.48,
+    "no_follow_through_minutes": 30,
+    "min_mfe_r_for_hold": 0.5,
+    "hard_time_stop_minutes": 120
   }
 }

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 import ready_bot.indicator_bot as bot
 
@@ -44,6 +45,8 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertFalse(bot.CFG["risk"]["allow_averaging_down"])
         self.assertFalse(bot.CFG["risk"]["allow_martingale"])
         self.assertEqual(bot.CFG["risk"]["leverage"],1)
+        self.assertEqual(bot.CFG["exit"]["momentum_fade_min_age_minutes"],5)
+        self.assertEqual(bot.CFG["exit"]["no_follow_through_minutes"],30)
 
     def test_six_indicator_snapshot_contains_exact_checks(self):
         snap=bot.indicator_snapshot(
@@ -155,6 +158,39 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.open_position(state,bad,spot_filters()),"SIGNAL_NOT_ELIGIBLE")
         good=dict(bad);good["eligible"]=True;good["vetoes"]=[]
         self.assertEqual(bot.open_position(state,good,spot_filters("BTCUSDT")),"SYMBOL_FILTER_MISMATCH")
+
+
+    def test_dynamic_exit_closes_when_momentum_fades(self):
+        opened=(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat()
+        state={
+            "cash_usdt":10.0,"day_pnl":0.0,"closed_trades":[],
+            "positions":{"TESTUSDT":{
+                "entry":1.0,"stop":0.90,"target":1.20,"initial_risk_abs":0.10,
+                "breakeven":False,"opened_at":opened,"qty":1.0,"cost":1.001,
+                "peak_price":1.0,"trough_price":1.0,"mfe_r":0.0,"mae_r":0.0,
+                "score":5
+            }}
+        }
+        snap={"bid":0.99,"atr_15m":0.01,"micro_pre":{"taker_latest":0.40,"cvd_positive":False,"vwap":1.0}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertNotIn("TESTUSDT",state["positions"])
+        self.assertEqual(state["closed_trades"][-1]["reason"],"MOMENTUM_FADE")
+
+    def test_dynamic_exit_frees_stalled_trade(self):
+        opened=(datetime.now(timezone.utc)-timedelta(minutes=31)).isoformat()
+        state={
+            "cash_usdt":10.0,"day_pnl":0.0,"closed_trades":[],
+            "positions":{"TESTUSDT":{
+                "entry":1.0,"stop":0.90,"target":1.20,"initial_risk_abs":0.10,
+                "breakeven":False,"opened_at":opened,"qty":1.0,"cost":1.001,
+                "peak_price":1.01,"trough_price":0.99,"mfe_r":0.10,"mae_r":0.10,
+                "score":5
+            }}
+        }
+        snap={"bid":1.005,"atr_15m":0.01,"micro_pre":{"taker_latest":0.55,"cvd_positive":True,"vwap":1.0}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertNotIn("TESTUSDT",state["positions"])
+        self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
 
 
 if __name__=="__main__":
