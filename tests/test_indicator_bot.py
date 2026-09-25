@@ -305,5 +305,21 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(state["exit_slippage_model"]["TESTUSDT"]["count"],1)
 
 
+    def test_symbol_slippage_history_can_block_entry(self):
+        state={
+            "cash_usdt":20.08,"positions":{},"day_pnl":0.0,
+            "executed_signal_ids":{},
+            "slippage_model":{"TESTUSDT":{"count":3,"ewma_bps":20.0,"max_bps":22.0,"last_bps":20.0}},
+        }
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bid":0.9999,"spread_bps":1.0,
+            "bar_time":60_000,"score":5,"score_total":6,"checks":{},
+            "eligible":True,"vetoes":[],"atr_15m":0.005,"confirmed_swing_low":0.99,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":60_000}},
+        }
+        self.assertEqual(bot.open_position(state,snap,spot_filters()),"SYMBOL_SLIPPAGE_MODEL_REJECT")
+
+
 if __name__=="__main__":
     unittest.main()
