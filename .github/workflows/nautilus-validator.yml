@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: nautilus-validator
@@ -90,6 +91,12 @@ jobs:
             sleep $((i * 2))
           done
           exit 1
+
+      - name: Dispatch unified fusion gate
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fusion-gate.yml --ref main
 
       - name: Surface Nautilus infrastructure failure
         if: env.HAS_CANDIDATE == 'true' && steps.nautilus_run.outcome == 'failure'
