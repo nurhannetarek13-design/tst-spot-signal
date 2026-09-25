@@ -11,7 +11,7 @@ on:
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - '.github/workflows/binance-spot-point-in-time-universe.yml'
   push:
-    branches: [main]
+    branches: [main, 'feat/**']
     paths:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_binance_spot_point_in_time_universe.py'
