@@ -48,6 +48,7 @@ jobs:
           c=json.load(open('ready_bot/indicator_config.json'))
           s=json.load(open('ready_bot/indicator_state.json'))
           assert c['mode']=='paper'
+          assert c['market_type']=='spot'
           assert c['engine']=='INDICATOR_ONLY_V1'
           assert 'strategies' not in c
           assert s['mode']=='PAPER_ONLY'
