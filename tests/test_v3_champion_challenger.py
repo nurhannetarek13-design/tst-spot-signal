@@ -23,13 +23,14 @@ REG={
         "challengerMustBeatChampionProfitFactorByFraction":0.05,
         "challengerMustNotIncreaseDrawdownByFraction":0.10,
         "automaticPromotion":False,
+        "requireBacktestIntegrity":True,
     }
 }
 
 
 class ChampionChallengerTests(unittest.TestCase):
     def test_small_sample_cannot_promote(self):
-        r=evaluate(state([.1]*20),state([.2]*20),REG,{"replayIntegrityPass":True,"executionReplayPass":True})
+        r=evaluate(state([.1]*20),state([.2]*20),REG,{"replayIntegrityPass":True,"executionReplayPass":True},{"productionGradeHistoricalEvidence":True})
         self.assertFalse(r["evidencePass"])
         self.assertFalse(r["automaticPromotion"])
         self.assertIn("CHALLENGER_SAMPLE_TOO_SMALL",r["reasons"])
@@ -37,18 +38,30 @@ class ChampionChallengerTests(unittest.TestCase):
     def test_missing_spot_replay_blocks(self):
         champion=state([.1]*70+[-.05]*30,3)
         challenger=state([.15]*75+[-.04]*25,4)
-        r=evaluate(champion,challenger,REG,None)
+        r=evaluate(champion,challenger,REG,None,{"productionGradeHistoricalEvidence":True})
         self.assertFalse(r["evidencePass"])
         self.assertIn("SPOT_MICROSTRUCTURE_REPLAY_NOT_PROVEN",r["reasons"])
 
     def test_even_passing_evidence_never_auto_promotes(self):
         champion=state([.1]*70+[-.05]*30,3)
         challenger=state([.2]*80+[-.04]*20,4)
-        r=evaluate(champion,challenger,REG,{"replayIntegrityPass":True,"executionReplayPass":True})
+        r=evaluate(champion,challenger,REG,{"replayIntegrityPass":True,"executionReplayPass":True},{"productionGradeHistoricalEvidence":True})
         self.assertTrue(r["evidencePass"])
         self.assertTrue(r["promotionReadyForManualReview"])
         self.assertFalse(r["automaticPromotion"])
         self.assertFalse(r["liveTrading"])
+
+
+    def test_missing_backtest_integrity_blocks(self):
+        champion=state([.1]*70+[-.05]*30,3)
+        challenger=state([.2]*80+[-.04]*20,4)
+        r=evaluate(
+            champion,challenger,REG,
+            {"replayIntegrityPass":True,"executionReplayPass":True},
+            None,
+        )
+        self.assertFalse(r["evidencePass"])
+        self.assertIn("BACKTEST_INTEGRITY_NOT_PROVEN",r["reasons"])
 
 
 if __name__=="__main__":
