@@ -8,7 +8,7 @@ on:
       - 'ready_bot/stream_shadow.mjs'
       - '.github/workflows/stream-shadow-smoke.yml'
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
     paths:
       - 'ready_bot/stream_shadow.mjs'
       - 'api/binance-public.mjs'
