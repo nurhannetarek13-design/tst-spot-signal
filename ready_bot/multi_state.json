@@ -1,12 +1,6 @@
 {
   "accepted_signals": [],
-  "blocked": [
-    {
-      "reason": "INVALID_STOP_DISTANCE",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "NEARUSDT"
-    }
-  ],
+  "blocked": [],
   "cash_usdt": 7.678616023321284,
   "closed_trades": [
     {
@@ -89,7 +83,7 @@
   ],
   "day": "2026-09-25",
   "day_pnl": 0.3163570036057326,
-  "last_run": "2026-09-25T14:48:31.453578+00:00",
+  "last_run": "2026-09-25T18:58:12.846321+00:00",
   "mode": "PAPER_ONLY",
   "paper_audit": {
     "events": [
@@ -961,8 +955,8 @@
         "status": "BLOCKED_DEPENDENCY_OR_PARITY"
       }
     ],
-    "generated_at": "2026-09-25T14:48:31.456643+00:00",
-    "last_run": "2026-09-25T14:48:31.453578+00:00",
+    "generated_at": "2026-09-25T18:58:12.849174+00:00",
+    "last_run": "2026-09-25T18:58:12.846321+00:00",
     "mode": "PAPER_ONLY",
     "notes": "Counts start when audit was installed; tests do not prove an edge. Rejected is not a loss. Unapproved Freqtrade entries cannot trade.",
     "since": "2026-09-19T21:11:53.438619+00:00",
@@ -1020,14 +1014,7 @@
     "SOLUSDT": 1789995600000,
     "SUIUSDT": 1790254800000
   },
-  "signals": [
-    {
-      "bar_time": 1790341200000,
-      "reason": "20-bar high breakout",
-      "strategy": "TREND_BREAKOUT",
-      "symbol": "NEARUSDT"
-    }
-  ],
+  "signals": [],
   "source_registry": [
     {
       "id": "TREND_BREAKOUT",
