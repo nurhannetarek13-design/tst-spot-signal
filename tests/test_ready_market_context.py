@@ -59,8 +59,17 @@ class ReadyMarketContextTests(unittest.TestCase):
         self.assertEqual(x["risk_multiplier"],0.0)
 
     def test_correlation_guard_detects_highly_correlated_positions(self):
-        a=bars(n=80,drift=.001)
-        b=bars(n=80,drift=.00101)
+        rets=[.002,-.001,.003,.0005,-.002,.0015,.0025,-.0008]*12
+        def from_returns(scale):
+            p=100.0
+            out=[]
+            for i,r in enumerate(rets):
+                o=p
+                p=p*(1+r*scale)
+                out.append({"t":1_700_000_000_000+i*3_600_000,"o":o,"h":max(o,p)*1.001,"l":min(o,p)*.999,"c":p})
+            return out
+        a=from_returns(1.0)
+        b=from_returns(1.02)
         snaps={"A":{"_bars1h":a},"B":{"_bars1h":b}}
         x=max_open_position_correlation(snaps["A"],["B"],snaps,48)
         self.assertIsNotNone(x["max_corr"])
