@@ -5,7 +5,8 @@ const PORT=Number(process.env.PORT||8080);
 const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||25)));
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
 const REST="https://api.binance.com";
-const WS="wss://stream.binance.com:443/stream?streams=";
+const RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
+const WS=String(process.env.PUBLIC_WS_BASE||"wss://data-stream.binance.vision:443/stream?streams=");
 const STABLES=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"]);
 const LEV=["UP","DOWN","BULL","BEAR"];
 
@@ -15,9 +16,21 @@ const runtime={
 };
 const now=()=>Date.now();
 async function get(path){
-  const r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
-  if(!r.ok)throw new Error("REST_"+r.status+":"+path);
-  return await r.json();
+  let r;
+  try{
+    r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
+    if(r.ok)return await r.json();
+    if(!RELAY || ![403,451].includes(r.status))throw new Error("REST_"+r.status+":"+path);
+  }catch(e){
+    if(!RELAY)throw e;
+  }
+  const relayPath=path==="/api/v3/time"?"/api/v3/exchangeInfo":path;
+  const relayUrl=RELAY+"?path="+encodeURIComponent(relayPath);
+  const rr=await fetch(relayUrl,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
+  if(!rr.ok)throw new Error("RELAY_"+rr.status+":"+path);
+  const data=await rr.json();
+  if(path==="/api/v3/time")return {serverTime:Number(data.serverTime||0)};
+  return data;
 }
 function eligible(s){
   const b=String(s.baseAsset||"");
@@ -116,7 +129,8 @@ function health(){
 }
 async function clock(){
   const a=now(),r=await get("/api/v3/time"),b=now(),rtt=b-a,offset=Number(r.serverTime||0)-(a+rtt/2);
-  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=1500,offsetMs:offset,rttMs:rtt,checkedAt:now()};
+  const maxRtt=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
+  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=maxRtt,offsetMs:offset,rttMs:rtt,maxRttMs:maxRtt,checkedAt:now()};
 }
 function streamNames(symbols){
   const out=[];for(const s of symbols){const x=s.toLowerCase();out.push(x+"@depth@100ms",x+"@aggTrade");}return out;
@@ -131,5 +145,25 @@ async function connect(){
 }
 function send(res,status,obj){const raw=JSON.stringify(obj);res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(raw);}
 const server=http.createServer((req,res)=>{const u=new URL(req.url||"/","http://"+(req.headers.host||"localhost"));if(u.pathname==="/health"){const h=health();return send(res,h.ok?200:503,h);}if(u.pathname==="/snapshot"){const sym=String(u.searchParams.get("symbol")||"").toUpperCase();return send(res,200,{ok:true,health:health(),snapshot:sym?snapshot(sym):null,snapshots:sym?undefined:runtime.universe.map(snapshot).filter(Boolean)});}return send(res,200,{ok:true,service:"tst-spot-stream-shadow",mode:"SHADOW_ONLY",liveTrading:false});});
-export async function start(){await clock().catch(e=>runtime.lastError=String(e));setInterval(()=>void clock().catch(e=>runtime.lastError=String(e)),60000);setInterval(()=>{if(runtime.connected&&runtime.lastMessageAt&&now()-runtime.lastMessageAt>5000){runtime.lastError="STREAM_STALE_RECONNECT";try{runtime.ws?.close();}catch{}}},1000);server.listen(PORT,"0.0.0.0");await connect();}
+async function ensureConnected(){
+  try{
+    await connect();
+  }catch(e){
+    runtime.connected=false;
+    runtime.lastError="CONNECT:"+String(e?.message||e);
+    setTimeout(()=>void ensureConnected(),1500);
+  }
+}
+export async function start(){
+  server.listen(PORT,"0.0.0.0");
+  await clock().catch(e=>runtime.lastError="CLOCK:"+String(e?.message||e));
+  setInterval(()=>void clock().catch(e=>runtime.lastError="CLOCK:"+String(e?.message||e)),60000);
+  setInterval(()=>{
+    if(runtime.connected&&runtime.lastMessageAt&&now()-runtime.lastMessageAt>5000){
+      runtime.lastError="STREAM_STALE_RECONNECT";
+      try{runtime.ws?.close();}catch{}
+    }
+  },1000);
+  void ensureConnected();
+}
 if(import.meta.url===pathToFileURL(process.argv[1]||"").href)start().catch(e=>{console.error("[stream-shadow]",String(e?.message||e));process.exit(1);});

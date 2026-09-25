@@ -1,0 +1,42 @@
+name: Replay and Champion Challenger CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/microstructure_replay_validator.py'
+      - 'scripts/champion_challenger_gate.py'
+      - 'validation/champion_challenger.json'
+      - 'tests/test_microstructure_replay.py'
+      - 'tests/test_champion_challenger.py'
+      - '.github/workflows/replay-champion-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: |
+          python -m py_compile research/microstructure_replay_validator.py
+          python -m py_compile scripts/champion_challenger_gate.py
+      - name: Unit tests
+        run: |
+          python -m unittest discover -s tests -p 'test_microstructure_replay.py' -v
+          python -m unittest discover -s tests -p 'test_champion_challenger.py' -v
+      - name: Assert no automatic promotion
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('validation/champion_challenger.json'))
+          assert c['liveTrading'] is False
+          assert c['promotion_policy']['auto_promotion'] is False
+          assert c['promotion_policy']['require_manual_review'] is True
+          assert c['promotion_policy']['require_zero_lookahead_violations'] is True
+          assert c['promotion_policy']['require_survivorship_bias_check'] is True
+          PY
