@@ -56,6 +56,7 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.CFG["risk"]["leverage"],1)
         self.assertEqual(bot.CFG["exit"]["momentum_fade_min_age_minutes"],5)
         self.assertEqual(bot.CFG["exit"]["no_follow_through_minutes"],30)
+        self.assertLessEqual(bot.CFG["production_guard"]["max_stream_signal_age_ms"],5000)
 
     def test_six_indicator_snapshot_contains_exact_checks(self):
         snap=bot.indicator_snapshot(
