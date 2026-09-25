@@ -130,9 +130,13 @@ def is_spot_symbol_record(record, quote_asset=None):
         return False
     if record.get("isSpotTradingAllowed") is not True:
         return False
-    permissions = record.get("permissions")
-    if permissions is not None and "SPOT" not in permissions:
-        return False
+    # Binance Spot exchangeInfo can return legacy permissions=[] while
+    # permissionSets carries SPOT. isSpotTradingAllowed=true is authoritative;
+    # when permissionSets are present, require SPOT there as a consistency check.
+    permission_sets = record.get("permissionSets")
+    if permission_sets:
+        if not any("SPOT" in permission_set for permission_set in permission_sets):
+            return False
     base = record.get("baseAsset", "")
     if not base or base in STABLES or base.endswith(LEVERAGED_SUFFIXES):
         return False
