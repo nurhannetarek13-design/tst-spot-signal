@@ -60,11 +60,20 @@ function finitePositive(value) {
   return Number.isFinite(n) && n>0 ? n : null;
 }
 
-function validateOperation(method, path, params) {
+export function validateOperation(method, path, params) {
   if (!plainObject(params)) return {ok:false,status:"BAD_PARAMS"};
 
   if (method==="GET" && path==="/api/v3/account") {
     if (!exactKeys(params, [])) return {ok:false,status:"ACCOUNT_PARAMS_NOT_ALLOWED"};
+    return {ok:true,params:{}};
+  }
+
+  if (method==="GET" && [
+    "/sapi/v1/account/apiRestrictions",
+    "/sapi/v1/account/status",
+    "/sapi/v1/account/apiTradingStatus",
+  ].includes(path)) {
+    if (!exactKeys(params, [])) return {ok:false,status:"ACCOUNT_SAFETY_PARAMS_NOT_ALLOWED"};
     return {ok:true,params:{}};
   }
 
