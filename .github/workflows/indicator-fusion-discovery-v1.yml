@@ -2,6 +2,8 @@ name: Indicator Fusion Discovery V1
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -73,6 +75,7 @@ jobs:
           retention-days: 14
 
       - name: Commit latest research snapshot safely
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           cp validation/edges/indicator-fusion-v1-latest.json /tmp/indicator-fusion-v1-latest.json
           for i in 1 2 3 4 5; do
