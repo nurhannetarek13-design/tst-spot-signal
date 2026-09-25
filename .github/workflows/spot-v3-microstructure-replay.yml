@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [main]
   push:
+    branches: [main]
     paths:
       - 'research/tardis_spot_microstructure_v3.py'
       - 'tests/test_tardis_spot_microstructure_v3.py'
