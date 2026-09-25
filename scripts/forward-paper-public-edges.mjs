@@ -100,7 +100,7 @@ if(!ledger.open&&fingerprint){
       holdHours:holdBars*mins/60,openedAt:Date.now(),why:best.sig.why
     };
     ledger.seen[best.seenKey]=Date.now();
-    await telegram([`🟣 UNIFIED EDGE PAPER — ${best.symbol.replace("USDT","/USDT")} — SPOT`,`🧠 ${family}`,`⭐ القوة: ${Math.round(best.sig.score)}/100`,`💵 Paper: ${STAKE} USDT`,`💲 دخول: ${fmt(best.ask)}`,`🛑 Stop: ${fmt(ledger.open.stop)}`,`🎯 Target: ${fmt(ledger.open.target)}`,`🔎 ${best.sig.why}`,scope==="MULTI_SYMBOL_BASKET"?"🧺 Basket: مركز واحد فقط على مستوى السلة.":"⚠️ Paper only.",`⚠️ Paper only.`].join("\n"));
+    await telegram([`🟣 UNIFIED EDGE PAPER — ${best.symbol.replace("USDT","/USDT")} — SPOT`,`🧠 ${family}`,`⭐ القوة: ${Math.round(best.sig.score)}/100`,`💵 Paper: ${STAKE} USDT`,`💲 دخول: ${fmt(best.ask)}`,`🛑 Stop: ${fmt(ledger.open.stop)}`,`🎯 Target: ${fmt(ledger.open.target)}`,`🔎 ${best.sig.why}`,...(scope==="MULTI_SYMBOL_BASKET"?["🧺 Basket: مركز واحد فقط على مستوى السلة."]:[]),`⚠️ Paper only.`].join("\n"));
   }
 }
 
