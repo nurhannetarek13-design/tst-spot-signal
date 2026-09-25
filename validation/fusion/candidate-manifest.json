@@ -151,55 +151,9 @@
       ],
       "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
       "candidateFingerprint": "5a8be2536ed727aaa38e"
-    },
-    {
-      "source": "VECTORBT",
-      "sourceGeneratedAt": "2026-09-24T06:42:12.037294+00:00",
-      "symbol": "SAGAUSDT",
-      "family": "VOLATILITY_MOMENTUM",
-      "timeframe": "15m",
-      "params": {
-        "lookback": 20,
-        "relvol": 1.8,
-        "rsi_min": 52,
-        "sl": 0.018,
-        "tp": 0.06
-      },
-      "sourceMetrics": {
-        "base": {
-          "trades": 34,
-          "wins": 11,
-          "winRate": 0.3235294117647059,
-          "netPnlUSDT": 2.933925406639319,
-          "expectancyUSDT": 0.08629192372468586,
-          "profitFactor": 2.33786764687887,
-          "maxDrawdownUSDT": 0.6087633101113805
-        },
-        "stress2x": {
-          "trades": 34,
-          "wins": 11,
-          "winRate": 0.3235294117647059,
-          "netPnlUSDT": 2.556614169996037,
-          "expectancyUSDT": 0.07519453441164814,
-          "profitFactor": 2.046058823890391,
-          "maxDrawdownUSDT": 0.7733191025937515
-        }
-      },
-      "liquidity": {
-        "quoteVolume24h": 23928731.534174,
-        "priceUSDT": null
-      },
-      "rankKey": [
-        0,
-        0.07519453441164814,
-        2.046058823890391,
-        34
-      ],
-      "candidateId": "VECTORBT:SAGAUSDT:VOLATILITY_MOMENTUM",
-      "candidateFingerprint": "863c82d6a75bef370b57"
     }
   ],
-  "poolSize": 3,
+  "poolSize": 2,
   "recentRejectedFingerprints": [],
   "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
   "liveTrading": false,
@@ -210,5 +164,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-24T06:42:13.273650+00:00"
+  "generatedAt": "2026-09-25T06:41:45.305068+00:00"
 }
