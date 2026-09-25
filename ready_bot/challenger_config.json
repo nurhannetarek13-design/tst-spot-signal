@@ -132,7 +132,8 @@
     "max_cancellation_rate_10s": 0.75,
     "bid_cancel_imbalance_ratio": 1.5,
     "max_stream_signal_age_ms": 5000,
-    "min_listing_age_days": 3
+    "min_listing_age_days": 3,
+    "max_total_detection_to_order_ms": 8000
   },
   "smart_execution": {
     "enabled": true,
@@ -156,6 +157,6 @@
   "shadow_challenger": {
     "enabled": false,
     "candidate_id": "UNSET",
-    "base_champion_blob_sha": "fc5dae7393886dca1f0837b3389558ea55a07616"
+    "base_champion_blob_sha": "59ae49df663c548f628c0dca0fd023db3161f1a6"
   }
 }
