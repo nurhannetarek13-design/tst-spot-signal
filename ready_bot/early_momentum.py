@@ -207,13 +207,65 @@ def micro_breakout_hold(bars,lookback=20,tolerance_pct=0.0015):
     return {"ok":bool(breakout and hold),"resistance":resistance,"breakout":breakout,"hold":hold}
 
 
-def depth_imbalance(depth,levels=5):
+def depth_snapshot_metrics(depth,levels=5):
     bids=depth.get("bids",[])[:levels]
     asks=depth.get("asks",[])[:levels]
     bid_liq=sum(float(px)*float(qty) for px,qty in bids)
     ask_liq=sum(float(px)*float(qty) for px,qty in asks)
     den=bid_liq+ask_liq
-    return bid_liq/den if den>0 else None
+    obi=bid_liq/den if den>0 else None
+    best_bid=float(bids[0][0]) if bids else None
+    best_ask=float(asks[0][0]) if asks else None
+    bid_qty=float(bids[0][1]) if bids else None
+    ask_qty=float(asks[0][1]) if asks else None
+    microprice=None
+    mid=None
+    spread_bps=None
+    if best_bid and best_ask and best_ask>=best_bid:
+        mid=(best_bid+best_ask)/2
+        if bid_qty is not None and ask_qty is not None and bid_qty+ask_qty>0:
+            microprice=(best_ask*bid_qty+best_bid*ask_qty)/(bid_qty+ask_qty)
+        if mid>0:
+            spread_bps=(best_ask-best_bid)/mid*10000
+    microprice_bias_bps=((microprice-mid)/mid*10000) if microprice is not None and mid else None
+    return {
+        "bid_liquidity":bid_liq,
+        "ask_liquidity":ask_liq,
+        "obi":obi,
+        "best_bid":best_bid,
+        "best_ask":best_ask,
+        "mid":mid,
+        "microprice":microprice,
+        "microprice_bias_bps":microprice_bias_bps,
+        "spread_bps":spread_bps,
+    }
+
+
+def depth_imbalance(depth,levels=5):
+    return depth_snapshot_metrics(depth,levels).get("obi")
+
+
+def depth_flow_metrics(samples):
+    if len(samples)<2:
+        return {
+            "bid_liquidity_change_pct":None,
+            "ask_liquidity_change_pct":None,
+            "pressure_change":None,
+            "microprice_bias_bps":None,
+        }
+    first=samples[0]
+    last=samples[-1]
+    def pct(a,b):
+        return (b/a-1.0) if a and a>0 else None
+    bid_change=pct(first.get("bid_liquidity"),last.get("bid_liquidity"))
+    ask_change=pct(first.get("ask_liquidity"),last.get("ask_liquidity"))
+    pressure=(bid_change-ask_change) if bid_change is not None and ask_change is not None else None
+    return {
+        "bid_liquidity_change_pct":bid_change,
+        "ask_liquidity_change_pct":ask_change,
+        "pressure_change":pressure,
+        "microprice_bias_bps":last.get("microprice_bias_bps"),
+    }
 
 
 def aggtrade_delta(aggtrades,window_ms=180000):
@@ -252,7 +304,7 @@ def classify(score,cfg):
     return "IGNORE"
 
 
-def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
+def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg,depth_flow=None):
     ibis=[x for x in obi_samples if x is not None]
     obi=min(ibis) if ibis else None  # persistence: weakest sample must still hold.
     spread_tight=bool(
@@ -322,6 +374,7 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
         "spread_samples_bps":spread_samples,
         "spread_stable_or_tightening":spread_tight,
         "agg_cvd":agg,
+        "depth_flow":depth_flow or {},
         "micro_breakout_hold":micro_hold,
         "chase_veto":chase,
     }
