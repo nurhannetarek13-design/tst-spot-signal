@@ -685,7 +685,7 @@ def open_position(state, snap, filters):
     # Final execution-quality gate uses current depth for the actual sized quote.
     # This happens only after the signal has passed all strategy/context guards.
     try:
-        depth = depth20(snap["symbol"])
+        depth = snap.get("_execution_depth") or depth20(snap["symbol"])
         quality = execution_quality_status(
             depth,
             notional,
@@ -778,7 +778,7 @@ def open_position(state, snap, filters):
         "mae_r": 0.0,
     }
     actual = stop_risk(pos)
-    if actual > float(risk_cfg["max_risk_per_trade_usdt"]) + 1e-9:
+    if actual > min(float(risk_cfg["max_risk_per_trade_usdt"]), risk_budget) + 1e-9:
         return "RISK_PER_TRADE"
     portfolio = portfolio_stop_risk(state) + actual
     if portfolio > float(risk_cfg["max_portfolio_stop_risk_usdt"]) + 1e-9:
