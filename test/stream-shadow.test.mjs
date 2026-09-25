@@ -16,6 +16,8 @@ test("book flow tracks additions cancellations obi and microprice",()=>{
   applySide(asks,[["101","1"],["102","2"]],flow,1000,"ask");
   const x=bookMetrics({bids,asks,flow},1000);
   assert.ok(Number.isFinite(x.obi));
+  assert.ok(Number.isFinite(x.bidLiquidityQuote5));
+  assert.ok(Number.isFinite(x.askLiquidityQuote5));
   assert.ok(Number.isFinite(x.microprice));
   assert.ok(x.cancellationRate10s>0);
   assert.ok(x.bidCancelQuote10s>0);
@@ -28,4 +30,5 @@ test("agg trade metrics separate aggressive buys and sells",()=>{
   const x=tradeMetrics(trades,4000);
   assert.equal(x.deltaQuote60s,250);
   assert.ok(x.takerBuyRatio60s>0.8);
+  assert.equal(typeof x.cvdSlopePositive10s,"boolean");
 });
