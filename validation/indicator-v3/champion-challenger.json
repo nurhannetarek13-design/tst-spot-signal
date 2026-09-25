@@ -7,14 +7,13 @@
     "engine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
     "activeConfigPath": "ready_bot/indicator_config.json",
     "frozenConfigPath": "ready_bot/champion_config.json",
-    "configBlobSha": "1b614cb8a1f218cf426b4e401ac74eff5067c9b6",
+    "configBlobSha": "6df570b96b50b2c3e5deb8f46fa40d85a165b406",
     "status": "PAPER_CHAMPION_NOT_LIVE_VALIDATED"
   },
   "shadowChallenger": {
     "configPath": "ready_bot/challenger_config.json",
     "statePath": "validation/indicator-v3/challenger-state.json",
-    "enabled": false,
-    "baseChampionBlobSha": "1b614cb8a1f218cf426b4e401ac74eff5067c9b6"
+    "enabled": false
   },
   "promotionPolicy": {
     "minimumClosedTrades": 100,
