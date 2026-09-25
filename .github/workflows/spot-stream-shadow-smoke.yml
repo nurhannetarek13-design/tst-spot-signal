@@ -1,0 +1,64 @@
+name: Spot Stream Shadow Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ready_bot/stream_shadow.mjs'
+      - '.github/workflows/spot-stream-shadow-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ready_bot/stream_shadow.mjs'
+      - '.github/workflows/spot-stream-shadow-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and unit tests
+        run: |
+          node --check ready_bot/stream_shadow.mjs
+          node --test test/stream-shadow.test.mjs
+      - name: Real Binance Spot WebSocket shadow smoke
+        env:
+          PORT: '8080'
+          STREAM_MAX_SYMBOLS: '3'
+          STREAM_MIN_QUOTE_VOLUME_USDT: '20000000'
+        run: |
+          set -euo pipefail
+          node ready_bot/stream_shadow.mjs >/tmp/stream-shadow.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true; cat /tmp/stream-shadow.log || true' EXIT
+          ok=0
+          for i in $(seq 1 40); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            if [ "$code" = "200" ]; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/health.json || true
+          test "$ok" = "1"
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/health.json'))
+          assert d['ok'] is True
+          assert d['mode']=='SHADOW_ONLY'
+          assert d['liveTrading'] is False
+          assert d['connected'] is True
+          assert d['universeCount']>=3
+          assert d['freshWarmRatio']>=0.8
+          assert d['clock']['ok'] is True
+          print(json.dumps(d,indent=2))
+          PY
