@@ -39,10 +39,16 @@ jobs:
           assert x['authorization']=='RESEARCH_ONLY'
           assert x['liveTrading'] is False
           assert x['runtimeChanged'] is False
+          ui=x.get('universeIntegrity') or {}
+          if ui.get('productionGrade') is not True:
+              assert x['claimSupported'] is False
+              assert x.get('claimBlockedReasons')
           print(json.dumps({
             'selected':x['selected'],
             'holdout':x['holdout'],
             'claimSupported':x['claimSupported'],
+            'claimBlockedReasons':x.get('claimBlockedReasons'),
+            'universeIntegrity':x.get('universeIntegrity'),
             'diagnosticBest':x['diagnosticBestHoldoutPeekingNotEligible'],
             'trainQualifiedConfigs':x['trainQualifiedConfigs'],
             'validationQualifiedConfigs':x['validationQualifiedConfigs']
