@@ -1,0 +1,142 @@
+name: Spot V3 Microstructure Replay
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/tardis_spot_microstructure_v3.py'
+      - 'tests/test_tardis_spot_microstructure_v3.py'
+      - 'ready_bot/champion_config.json'
+      - 'ready_bot/challenger_config.json'
+      - 'validation/indicator-v3/champion-challenger.json'
+      - '.github/workflows/spot-v3-microstructure-replay.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: |
+          python -m py_compile research/tardis_spot_microstructure_v3.py
+          python -m py_compile ready_bot/indicator_bot.py
+      - name: Unit tests
+        run: |
+          python -m unittest -v tests/test_tardis_spot_microstructure_v3.py
+          python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
+      - name: Assert champion challenger is fail closed
+        run: |
+          python - <<'PY'
+          import hashlib,json,pathlib
+          active=pathlib.Path('ready_bot/indicator_config.json').read_bytes()
+          frozen=pathlib.Path('ready_bot/champion_config.json').read_bytes()
+          assert active==frozen, 'PAPER champion drifted from frozen config'
+          c=json.load(open('ready_bot/challenger_config.json'))
+          r=json.load(open('validation/indicator-v3/champion-challenger.json'))
+          assert c['shadow_challenger']['enabled'] is False
+          assert r['liveTrading'] is False and r['autoPromotion'] is False
+          assert r['promotionPolicy']['automaticPromotion'] is False
+          assert r['promotionPolicy']['requireSpotMicrostructureReplay'] is True
+          print(json.dumps({'championConfigSha256':hashlib.sha256(active).hexdigest(),'status':'PASS'}))
+          PY
+
+  replay:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {symbol: BTCUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: ETHUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: SOLUSDT, date: '2021-09-01', offset: 25}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay unseen Spot microstructure window
+        run: |
+          mkdir -p validation/indicator-v3/spot-replay
+          PYTHONPATH=. python research/tardis_spot_microstructure_v3.py \
+            --symbol '\${{ matrix.symbol }}' \
+            --date '\${{ matrix.date }}' \
+            --start-offset '\${{ matrix.offset }}' \
+            --minutes 5 \
+            --quote-usdt 10 \
+            --output 'validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json' \
+            --assert-replay
+      - name: Assert replay scope cannot authorize live
+        run: |
+          python - <<'PY'
+          import json
+          p='validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json'
+          d=json.load(open(p))
+          assert d['authorization']=='RESEARCH_ONLY'
+          assert d['liveTrading'] is False
+          assert d['canonicalReplayReady'] is True
+          assert d['edgeProven'] is False
+          assert d['liveReady'] is False
+          assert d['quoteUSDT']==10
+          print(json.dumps({
+            'symbol':d['symbol'],
+            'candidateCount':d['candidateCount'],
+            'executionReplayPass':d['executionReplayPass'],
+            'slippageBps':d['slippageBps'],
+            'outcomes':d['outcomes'],
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spot-v3-replay-\${{ matrix.symbol }}
+          path: validation/indicator-v3/spot-replay/\${{ matrix.symbol }}.json
+          if-no-files-found: error
+
+  aggregate:
+    needs: replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: spot-v3-replay-*
+          path: downloaded
+          merge-multiple: true
+      - name: Build execution evidence only
+        run: |
+          python - <<'PY'
+          import json,pathlib,statistics
+          rows=[json.loads(p.read_text()) for p in sorted(pathlib.Path('downloaded').glob('*.json'))]
+          assert len(rows)==3
+          candidates=sum(int(x.get('candidateCount') or 0) for x in rows)
+          fillable=sum(int(x.get('fillableCount') or 0) for x in rows)
+          replay_ok=all(x.get('canonicalReplayReady') is True for x in rows)
+          execution_ok=all(x.get('executionReplayPass') is True for x in rows if int(x.get('candidateCount') or 0)>0)
+          slips=[x['slippageBps']['median'] for x in rows if x.get('slippageBps',{}).get('median') is not None]
+          out={
+            'engine':'SPOT_V3_MICROSTRUCTURE_REPLAY_AGGREGATE',
+            'authorization':'RESEARCH_ONLY','liveTrading':False,
+            'replayIntegrityPass':replay_ok,
+            'executionReplayPass':bool(replay_ok and candidates>0 and execution_ok and fillable==candidates),
+            'candidateCount':candidates,'fillableCount':fillable,
+            'medianCellSlippageBps':statistics.median(slips) if slips else None,
+            'edgeProven':False,'liveReady':False,
+            'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok else 'REPLAY_REJECTED',
+            'note':'This artifact cannot prove the full V3 strategy or authorize live trading.'
+          }
+          pathlib.Path('spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spot-v3-replay-aggregate
+          path: spot-v3-replay-aggregate.json
+          if-no-files-found: error
