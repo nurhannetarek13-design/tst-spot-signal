@@ -1,0 +1,94 @@
+name: Indicator Fusion Discovery V1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "research/indicator_fusion_v1.py"
+      - "research/indicator_fusion_discovery_v1.py"
+      - "tests/test_indicator_fusion_v1.py"
+      - ".github/workflows/indicator-fusion-discovery-v1.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indicator-fusion-discovery-v1
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install research dependencies
+        run: pip install --disable-pip-version-check numpy pandas pytest
+
+      - name: Static compile
+        run: |
+          python -m py_compile research/indicator_fusion_v1.py
+          python -m py_compile research/indicator_fusion_discovery_v1.py
+
+      - name: Indicator Fusion unit tests
+        run: PYTHONPATH=. pytest -q tests/test_indicator_fusion_v1.py
+
+      - name: Run fixed multi-symbol discovery
+        run: PYTHONPATH=. python research/indicator_fusion_discovery_v1.py
+
+      - name: Enforce research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open("validation/edges/indicator-fusion-v1-latest.json"))
+          assert x["authorization"]=="RESEARCH_ONLY"
+          assert x["liveTrading"] is False
+          assert x["automaticPromotion"] is False
+          assert x["parameterSearch"] is False
+          assert x["candidateSpec"]["liveTrading"] is False
+          assert x["config"]["family"]=="INDICATOR_FUSION_V1"
+          print(json.dumps({
+              "status":x["status"],
+              "pass":x["pass"],
+              "loadedSymbols":x["loadedSymbols"],
+              "aggregate":x["aggregate"],
+              "breadth":x["breadth"],
+              "validatorBasketSymbols":x["validatorBasketSymbols"],
+          },indent=2))
+          PY
+
+      - name: Upload discovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicator-fusion-v1-discovery
+          path: validation/edges/indicator-fusion-v1-latest.json
+          retention-days: 14
+
+      - name: Commit latest research snapshot safely
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cp validation/edges/indicator-fusion-v1-latest.json /tmp/indicator-fusion-v1-latest.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/edges
+            cp /tmp/indicator-fusion-v1-latest.json validation/edges/indicator-fusion-v1-latest.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/edges/indicator-fusion-v1-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update Indicator Fusion V1 discovery snapshot"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 2))
+          done
+          exit 1
