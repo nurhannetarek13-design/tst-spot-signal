@@ -1,0 +1,70 @@
+name: Indicator-Only Precision Calibration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/indicator_only_precision_calibration.py'
+      - 'ready_bot/indicator_config.json'
+      - '.github/workflows/indicator-only-precision-calibration.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indicator-only-precision-calibration
+  cancel-in-progress: true
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check numpy pandas
+      - run: python -m py_compile research/indicator_only_precision_calibration.py
+      - run: PYTHONPATH=. python research/indicator_only_precision_calibration.py
+      - name: Verify no runtime mutation
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/indicator-only-precision-calibration-latest.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['runtimeChanged'] is False
+          print(json.dumps({
+            'selected':x['selected'],
+            'holdout':x['holdout'],
+            'claimSupported':x['claimSupported'],
+            'diagnosticBest':x['diagnosticBestHoldoutPeekingNotEligible'],
+            'trainQualifiedConfigs':x['trainQualifiedConfigs'],
+            'validationQualifiedConfigs':x['validationQualifiedConfigs']
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: indicator-only-precision-calibration
+          path: validation/indicator-only-precision-calibration-latest.json
+          retention-days: 14
+      - name: Persist calibration snapshot
+        run: |
+          cp validation/indicator-only-precision-calibration-latest.json /tmp/calibration.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/calibration.json validation/indicator-only-precision-calibration-latest.json
+            git config user.name 'indicator-calibration-bot'
+            git config user.email 'indicator-calibration-bot@users.noreply.github.com'
+            git add validation/indicator-only-precision-calibration-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update indicator-only precision calibration'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
