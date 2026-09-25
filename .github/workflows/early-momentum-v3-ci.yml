@@ -7,6 +7,39 @@ on:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
       - 'ready_bot/indicator_config.json'
+      - 'scripts/v3_session_performance.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_backtest_integrity_gate.py'
+      - 'research/backtest_integrity_gate.py'
+      - 'test/v3-execution-intent.test.mjs'
+      - 'src/execution/v3-execution-intent.mjs'
+      - 'test/execution-safety.test.mjs'
+      - 'test/stream-shadow.test.mjs'
+      - 'tests/test_production_guard.py'
+      - 'server.mjs'
+      - 'ready_bot/stream_shadow.mjs'
+      - 'ready_bot/smart_execution.py'
+      - 'ready_bot/production_guard.py'
+      - 'ready_bot/market_context.py'
+      - 'tests/test_indicator_bot.py'
+      - 'tests/test_early_momentum.py'
+      - 'tests/test_ready_market_context.py'
+      - '.github/workflows/indicator-paper-bot.yml'
+      - '.github/workflows/early-momentum-v3-ci.yml'
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'ready_bot/indicator_bot.py'
+      - 'ready_bot/early_momentum.py'
+      - 'ready_bot/indicator_config.json'
+      - 'scripts/v3_session_performance.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_backtest_integrity_gate.py'
+      - 'research/backtest_integrity_gate.py'
+      - 'test/v3-execution-intent.test.mjs'
+      - 'src/execution/v3-execution-intent.mjs'
       - 'test/execution-safety.test.mjs'
       - 'test/stream-shadow.test.mjs'
       - 'tests/test_production_guard.py'
@@ -44,16 +77,24 @@ jobs:
           python -m py_compile ready_bot/market_context.py
           python -m py_compile ready_bot/production_guard.py
           python -m py_compile ready_bot/smart_execution.py
+          python -m py_compile research/backtest_integrity_gate.py
+          python -m py_compile research/binance_spot_point_in_time_universe.py
+          python -m py_compile scripts/v3_session_performance.py
           node --check ready_bot/stream_shadow.mjs
           node --check server.mjs
+          node --check src/execution/v3-execution-intent.mjs
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
           python -m unittest discover -s tests -p 'test_production_guard.py' -v
+          python -m unittest -v tests/test_backtest_integrity_gate.py
+          python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
+          python -m unittest -v tests/test_v3_champion_challenger.py
           node --test test/stream-shadow.test.mjs
           node --test test/execution-safety.test.mjs
+          node --test test/v3-execution-intent.test.mjs
       - name: Assert staged contract
         run: |
           python - <<'PY'
