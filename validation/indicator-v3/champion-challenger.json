@@ -26,7 +26,9 @@
     "requireNoLiveOrdersDuringEvaluation": true,
     "challengerMustBeatChampionProfitFactorByFraction": 0.05,
     "challengerMustNotIncreaseDrawdownByFraction": 0.1,
-    "automaticPromotion": false
+    "automaticPromotion": false,
+    "requireBacktestIntegrity": true,
+    "backtestIntegrityPath": "validation/indicator-v3/backtest-integrity-latest.json"
   },
   "note": "Champion means active PAPER configuration only. It is not a claim of profitable or live-ready edge."
 }
