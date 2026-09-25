@@ -46,13 +46,65 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          git config user.name 'indicator-paper-bot'
+          git config user.email 'indicator-paper-bot@users.noreply.github.com'
+
+          critical_hash() {
+            python - <<'PY'
+          import hashlib, json
+          s=json.load(open('ready_bot/indicator_state.json'))
+          critical={
+              'day':s.get('day'),
+              'cash_usdt':s.get('cash_usdt'),
+              'day_pnl':s.get('day_pnl'),
+              'positions':s.get('positions',{}),
+              'closed_trades':s.get('closed_trades',[]),
+              'seen':s.get('seen',{}),
+          }
+          raw=json.dumps(critical,sort_keys=True,separators=(',',':')).encode()
+          print(hashlib.sha256(raw).hexdigest())
+          PY
+          }
+
+          persist_state() {
+            label="$1"
+            cp ready_bot/indicator_state.json /tmp/indicator-state.json
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git reset --hard origin/main
+              cp /tmp/indicator-state.json ready_bot/indicator_state.json
+              git add ready_bot/indicator_state.json
+              if git diff --cached --quiet; then
+                return 0
+              fi
+              git commit -m "$label"
+              if git push origin HEAD:main; then
+                return 0
+              fi
+              sleep $((attempt*2))
+            done
+            return 1
+          }
+
           cycles=1
           if [ "${{ github.event_name }}" = "schedule" ]; then
             cycles=5
           fi
+
           for i in $(seq 1 "$cycles"); do
             echo "=== scan $i/$cycles $(date -u +%FT%TZ) ==="
+            before="$(critical_hash)"
             python ready_bot/indicator_bot.py
+            after="$(critical_hash)"
+
+            # Entries, exits, PnL and de-dup state are safety-critical.
+            # Persist them immediately so an overlapping/cancelled Actions run
+            # cannot erase a completed paper decision.
+            if [ "$before" != "$after" ]; then
+              persist_state "Persist critical paper state scan $i"
+            fi
+
             if [ "$i" -lt "$cycles" ]; then
               now=$(date +%s)
               next=$(( (now / 60 + 1) * 60 ))
