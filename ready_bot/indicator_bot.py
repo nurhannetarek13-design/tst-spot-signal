@@ -587,9 +587,17 @@ def simulated_fill(price, side):
     return price * (1 + slip if side == "buy" else 1 - slip)
 
 
+def conservative_execution_slippage_rate():
+    return max(
+        float(CFG["risk"]["slippage_rate"]),
+        float(CFG["production_guard"]["max_estimated_slippage_bps"]) / 10000.0,
+    )
+
+
 def stop_risk(position):
     fee = float(CFG["risk"]["fee_rate"])
-    stop_fill = simulated_fill(position["stop"], "sell")
+    slip = conservative_execution_slippage_rate()
+    stop_fill = float(position["stop"]) * (1.0 - slip)
     return max(0.0, position["cost"] - position["qty"] * stop_fill * (1 - fee))
 
 
@@ -724,7 +732,10 @@ def open_position(state, snap, filters):
     ) * regime_mult
     if risk_budget <= 0:
         return "REGIME_RISK_ZERO"
-    stake_by_risk = risk_budget / max(stop_fraction + 2 * fee + float(risk_cfg["slippage_rate"]), 1e-9)
+    stake_by_risk = risk_budget / max(
+        stop_fraction + 2 * fee + conservative_execution_slippage_rate(),
+        1e-9,
+    )
     notional = min(float(risk_cfg["max_quote_per_trade_usdt"]), stake_by_risk,
                    state["cash_usdt"] / (1 + fee))
     if notional <= 0:
