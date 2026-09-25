@@ -38,6 +38,8 @@ def request_json(url):
 
 
 def market(route):
+    if not str(route).startswith("/api/v3/"):
+        raise RuntimeError("SPOT_ONLY_ROUTE_VIOLATION")
     last = None
     for base in ("https://data-api.binance.vision", "https://api.binance.com", "https://api1.binance.com"):
         try:
@@ -120,6 +122,23 @@ def evidence_blocks_entries(evidence, config=None):
     return not evidence.get("ok", False)
 
 
+def is_spot_symbol_record(record, quote_asset=None):
+    quote_asset = quote_asset or CFG["universe"]["quote_asset"]
+    if record.get("status") != "TRADING":
+        return False
+    if record.get("quoteAsset") != quote_asset:
+        return False
+    if record.get("isSpotTradingAllowed") is not True:
+        return False
+    permissions = record.get("permissions")
+    if permissions is not None and "SPOT" not in permissions:
+        return False
+    base = record.get("baseAsset", "")
+    if not base or base in STABLES or base.endswith(LEVERAGED_SUFFIXES):
+        return False
+    return True
+
+
 def universe():
     uc = CFG["universe"]
     quote = uc["quote_asset"]
@@ -127,10 +146,7 @@ def universe():
     tick = {x["symbol"]: x for x in market("/api/v3/ticker/24hr")}
     rows = []
     for s in info.get("symbols", []):
-        if s.get("status") != "TRADING" or s.get("quoteAsset") != quote or not s.get("isSpotTradingAllowed", True):
-            continue
-        base = s.get("baseAsset", "")
-        if not base or base in STABLES or base.endswith(LEVERAGED_SUFFIXES):
+        if not is_spot_symbol_record(s, quote):
             continue
         t = tick.get(s.get("symbol"), {})
         qv = float(t.get("quoteVolume") or 0)
@@ -172,6 +188,8 @@ def symbol_filters(symbol):
     entry = next((s for s in data.get("symbols", []) if s.get("symbol") == symbol), None)
     if not entry:
         raise RuntimeError("SYMBOL_FILTERS_MISSING")
+    if not is_spot_symbol_record(entry):
+        raise RuntimeError("SPOT_ONLY_SYMBOL_VIOLATION")
     fs = {x["filterType"]: x for x in entry.get("filters", [])}
     lot = fs.get("LOT_SIZE")
     notion = fs.get("NOTIONAL") or fs.get("MIN_NOTIONAL")
@@ -183,6 +201,9 @@ def symbol_filters(symbol):
         "min_qty": float(lot["minQty"]),
         "max_qty": float(lot["maxQty"]),
         "step_size": float(lot["stepSize"]),
+        "spot_verified": True,
+        "quote_asset": entry.get("quoteAsset"),
+        "symbol": entry.get("symbol"),
     }
 
 
@@ -414,6 +435,14 @@ def round_qty(qty, filters):
 
 
 def open_position(state, snap, filters):
+    if snap.get("eligible") is not True or snap.get("vetoes"):
+        return "SIGNAL_NOT_ELIGIBLE"
+    if filters.get("spot_verified") is not True or filters.get("quote_asset") != CFG["universe"]["quote_asset"]:
+        return "SPOT_ONLY_VIOLATION"
+    if filters.get("symbol") != snap.get("symbol"):
+        return "SYMBOL_FILTER_MISMATCH"
+    if not math.isfinite(float(snap.get("ask", 0))) or float(snap.get("ask", 0)) <= 0:
+        return "INVALID_ENTRY_PRICE"
     risk_cfg = CFG["risk"]
     if len(state["positions"]) >= int(risk_cfg["max_open_positions"]):
         return "MAX_OPEN_POSITIONS"
@@ -499,6 +528,8 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
 
 
 def validate_config():
+    if CFG.get("market_type") != "spot":
+        raise RuntimeError("SPOT_ONLY_CONFIG_VIOLATION")
     if CFG.get("mode") != "paper":
         raise RuntimeError("Indicator runtime is PAPER only")
     if CFG.get("engine") != "INDICATOR_ONLY_V1":

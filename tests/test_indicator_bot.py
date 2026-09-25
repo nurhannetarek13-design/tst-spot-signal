@@ -19,6 +19,7 @@ def bars(n=250, drift=0.001, taker=0.60, qv=2_000_000.0):
 class IndicatorBotTests(unittest.TestCase):
     def test_engine_is_indicator_only_and_paper(self):
         self.assertEqual(bot.CFG["mode"],"paper")
+        self.assertEqual(bot.CFG["market_type"],"spot")
         self.assertEqual(bot.CFG["engine"],"INDICATOR_ONLY_V1")
         self.assertNotIn("strategies",bot.CFG)
         self.assertEqual(bot.CFG["entry"]["min_score"],85)
@@ -53,8 +54,8 @@ class IndicatorBotTests(unittest.TestCase):
     def test_open_position_sizes_by_risk_and_never_exceeds_limits(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
         snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,
-              "score":95,"groups":{"trend":25,"momentum":20,"flow":30,"volatility":10,"liquidity":10}}
-        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001}
+              "score":95,"groups":{"trend":25,"momentum":20,"flow":30,"volatility":10,"liquidity":10},"eligible":True,"vetoes":[]}
+        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001,"spot_verified":True,"quote_asset":"USDT","symbol":"TESTUSDT"}
         self.assertEqual(bot.open_position(state,snap,filters),"PAPER_OPENED")
         p=state["positions"]["TESTUSDT"]
         self.assertLessEqual(p["cost"],bot.CFG["risk"]["max_quote_per_trade_usdt"]*(1+bot.CFG["risk"]["fee_rate"])+0.01)
@@ -63,8 +64,8 @@ class IndicatorBotTests(unittest.TestCase):
 
     def test_daily_loss_gate_blocks_new_position(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":-2.0}
-        snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{}}
-        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001}
+        snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{},"eligible":True,"vetoes":[]}
+        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001,"spot_verified":True,"quote_asset":"USDT","symbol":"TESTUSDT"}
         self.assertEqual(bot.open_position(state,snap,filters),"DAILY_LOSS_CAP")
 
 
@@ -75,6 +76,37 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(status["requiredWinRate"],0.99)
         self.assertGreaterEqual(status["requiredTrades"],100)
         self.assertFalse(bot.evidence_blocks_entries(status))
+
+
+    def test_spot_symbol_record_is_fail_closed(self):
+        good={"status":"TRADING","quoteAsset":"USDT","baseAsset":"SOL","isSpotTradingAllowed":True,"permissions":["SPOT"]}
+        self.assertTrue(bot.is_spot_symbol_record(good))
+        missing_flag=dict(good); missing_flag.pop("isSpotTradingAllowed")
+        self.assertFalse(bot.is_spot_symbol_record(missing_flag))
+        futures_like=dict(good); futures_like["permissions"]=["TRD_GRP_004"]
+        self.assertFalse(bot.is_spot_symbol_record(futures_like))
+        wrong_quote=dict(good); wrong_quote["quoteAsset"]="USDC"
+        self.assertFalse(bot.is_spot_symbol_record(wrong_quote))
+
+    def test_open_position_rejects_unverified_non_spot_symbol(self):
+        state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
+        snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{},"eligible":True,"vetoes":[]}
+        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001,"spot_verified":False,"quote_asset":"USDT","symbol":"TESTUSDT"}
+        self.assertEqual(bot.open_position(state,snap,filters),"SPOT_ONLY_VIOLATION")
+
+    def test_market_rejects_non_spot_api_routes_before_network(self):
+        with self.assertRaisesRegex(RuntimeError,"SPOT_ONLY_ROUTE_VIOLATION"):
+            bot.market("/fapi/v1/klines?symbol=BTCUSDT")
+
+
+    def test_execution_boundary_rejects_ineligible_or_mismatched_signal(self):
+        state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
+        filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001,"spot_verified":True,"quote_asset":"USDT","symbol":"TESTUSDT"}
+        bad={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{},"eligible":False,"vetoes":["RSI"]}
+        self.assertEqual(bot.open_position(state,bad,filters),"SIGNAL_NOT_ELIGIBLE")
+        good=dict(bad);good["eligible"]=True;good["vetoes"]=[]
+        wrong=dict(filters);wrong["symbol"]="BTCUSDT"
+        self.assertEqual(bot.open_position(state,good,wrong),"SYMBOL_FILTER_MISMATCH")
 
 
 if __name__=="__main__":
