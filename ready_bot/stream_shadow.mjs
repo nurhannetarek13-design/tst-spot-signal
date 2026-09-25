@@ -54,6 +54,7 @@ export function bookMetrics(s,t=Date.now()){
   const cancels=f.filter(x=>x.type==="cancel").reduce((z,x)=>z+x.quote,0);
   return {
     bestBid:bid,bestAsk:ask,spreadBps:mid?((ask-bid)/mid)*10000:null,
+    bidLiquidityQuote5:bq,askLiquidityQuote5:aq,
     obi:den>0?bq/den:null,microprice:micro,micropriceBiasBps:mid&&micro?((micro-mid)/mid)*10000:null,
     cancellationRate10s:adds+cancels>0?cancels/(adds+cancels):null,
     bidCancelQuote10s:f.filter(x=>x.type==="cancel"&&x.side==="bid").reduce((z,x)=>z+x.quote,0),
@@ -64,7 +65,18 @@ export function tradeMetrics(trades,t=Date.now()){
   const r=trades.filter(x=>t-x.ts<=60000);
   const buy=r.filter(x=>x.d>0).reduce((z,x)=>z+x.d,0),sell=Math.abs(r.filter(x=>x.d<0).reduce((z,x)=>z+x.d,0));
   const total=buy+sell;
-  return {deltaQuote60s:buy-sell,takerBuyRatio60s:total>0?buy/total:null,tradeEvents60s:r.length};
+  const buckets=new Map();
+  for(const x of r){
+    const k=Math.floor(x.ts/10000);
+    buckets.set(k,(buckets.get(k)||0)+x.d);
+  }
+  const vals=[...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  return {
+    deltaQuote60s:buy-sell,
+    takerBuyRatio60s:total>0?buy/total:null,
+    tradeEvents60s:r.length,
+    cvdSlopePositive10s:vals.length>=2 ? vals.at(-1)>vals[0] : false,
+  };
 }
 async function universe(){
   const [info,tick]=await Promise.all([get("/api/v3/exchangeInfo"),get("/api/v3/ticker/24hr")]);
