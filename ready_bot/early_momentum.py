@@ -135,7 +135,8 @@ def prefilter_snapshot(bars1m,bars3m,cfg):
 
     vw=session_vwap(bars1m)
     price=bars1m[-1]["c"]
-    vwap_ok=bool(vw and atr_now and price>=vw and (price-vw)<=float(cfg["vwap_max_atr_distance"])*atr_now)
+    vwap_distance_atr=((price-vw)/atr_now) if vw is not None and atr_now and atr_now>0 else None
+    vwap_ok=bool(vwap_distance_atr is not None and 0.0<=vwap_distance_atr<=float(cfg["vwap_max_atr_distance"]))
 
     prox=breakout_proximity(bars1m,atr_now,int(cfg["recent_resistance_lookback_1m"]))
     near_breakout=bool(prox and -0.15<=prox["distance_atr"]<=float(cfg["breakout_proximity_atr"]))
@@ -179,6 +180,7 @@ def prefilter_snapshot(bars1m,bars3m,cfg):
         "ema9_slope_positive":ema_slope,
         "volatility_expansion":vol_expansion,
         "vwap":vw,
+        "vwap_distance_atr":vwap_distance_atr,
         "vwap_position_ok":vwap_ok,
         "atr_1m":atr_now,
         "breakout":prox,
@@ -259,16 +261,14 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
         score+=8
         if obi_armed: score+=7
 
-    # Live aggTrade CVD can reinforce/replace candle CVD confidence, but total is capped.
-    if agg.get("delta_quote",0)>0 and agg.get("slope_positive"):
-        score=max(score, float(pre["prefilter_score"])+15+(15 if obi_ok else 0))
+    # CVD has a fixed 15-point budget in the pre-score. Live aggTrades are
+    # confirmation for ENTRY_CANDIDATE, not extra points (avoids double counting).
     score=min(100.0,score)
 
     chase=False
-    atr1=pre.get("atr_1m")
-    if atr1 and pre.get("vwap") is not None:
-        # vwap_position_ok already enforces <=1.5 ATR; failing it while price is above VWAP is chasing.
-        chase=not bool(pre.get("vwap_position_ok"))
+    distance=pre.get("vwap_distance_atr")
+    if distance is not None:
+        chase=distance>float(cfg["vwap_max_atr_distance"])
 
     stage=classify(score,cfg)
     micro_hold=pre.get("micro_breakout_hold") or {"ok":False}
