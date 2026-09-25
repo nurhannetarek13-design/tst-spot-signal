@@ -128,7 +128,9 @@
     "max_ask_liquidity_growth_pct": 0.5,
     "max_estimated_slippage_bps": 12,
     "min_depth_fill_ratio": 0.999,
-    "event_risk_file": "ready_bot/event_risk.json"
+    "event_risk_file": "ready_bot/event_risk.json",
+    "max_cancellation_rate_10s": 0.75,
+    "bid_cancel_imbalance_ratio": 1.5
   },
   "smart_execution": {
     "enabled": true,
