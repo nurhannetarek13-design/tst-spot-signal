@@ -36,7 +36,7 @@ jobs:
       - name: Compile and test indicator runtime
         run: |
           python -m py_compile ready_bot/indicator_bot.py
-          python -m unittest tests.test_indicator_bot -v
+          python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
 
       - name: Run indicator-only PAPER engine
         run: python ready_bot/indicator_bot.py
