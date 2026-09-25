@@ -152,6 +152,7 @@ def load_state():
 
 
 def save_state(state):
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
     tmp.replace(STATE_PATH)
