@@ -1,0 +1,91 @@
+name: Binance Spot Stream Shadow Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ready_bot/stream_shadow.mjs'
+      - '.github/workflows/stream-shadow-smoke.yml'
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'ready_bot/stream_shadow.mjs'
+      - 'api/binance-public.mjs'
+      - 'scripts/binance-public-proxy.mjs'
+      - 'test/stream-shadow.test.mjs'
+      - '.github/workflows/stream-shadow-smoke.yml'
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spot-stream-shadow-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile shadow daemon
+        run: node --check ready_bot/stream_shadow.mjs
+      - name: Start public-data shadow daemon
+        env:
+          STREAM_MAX_SYMBOLS: '10'
+          STREAM_MIN_QUOTE_VOLUME_USDT: '20000000'
+          PUBLIC_MARKET_RELAY_URL: 'https://tst-spot-signal.vercel.app/api/binance-public'
+          PUBLIC_WS_BASE: 'wss://data-stream.binance.vision:443/stream?streams='
+          STREAM_MAX_CLOCK_RTT_MS: '5000'
+          PORT: '8080'
+        run: |
+          nohup node ready_bot/stream_shadow.mjs >/tmp/stream-shadow.log 2>&1 &
+          echo $! >/tmp/stream-shadow.pid
+      - name: Wait for healthy synchronized streams
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 45); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            cat /tmp/health.json 2>/dev/null || true
+            if [ "$code" = "200" ]; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "Shadow stream never became healthy"
+            cat /tmp/stream-shadow.log || true
+            exit 1
+          fi
+      - name: Assert shadow is public-data only and fresh
+        run: |
+          curl -fsS 'http://127.0.0.1:8080/snapshot?symbol=BTCUSDT' >/tmp/snapshot.json
+          python - <<'PY'
+          import json
+          h=json.load(open('/tmp/health.json'))
+          s=json.load(open('/tmp/snapshot.json'))
+          assert h['ok'] is True
+          assert h['mode']=='SHADOW_ONLY'
+          assert h['liveTrading'] is False
+          assert h['freshWarmRatio'] >= 0.80
+          snap=s['snapshot']
+          assert snap['synced'] is True
+          assert snap['fresh'] is True
+          assert snap['depthAgeMs'] <= 3000
+          assert snap['tradeAgeMs'] <= 12000
+          assert snap['sequenceGaps'] >= 0
+          for forbidden in ('apiKey','secret','privateKey','orderId'):
+              assert forbidden not in json.dumps(s)
+          PY
+      - name: Show shadow logs on failure
+        if: failure()
+        run: cat /tmp/stream-shadow.log || true
