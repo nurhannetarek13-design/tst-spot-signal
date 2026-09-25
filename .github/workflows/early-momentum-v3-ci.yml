@@ -27,6 +27,32 @@ on:
       - 'tests/test_ready_market_context.py'
       - '.github/workflows/indicator-paper-bot.yml'
       - '.github/workflows/early-momentum-v3-ci.yml'
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'ready_bot/indicator_bot.py'
+      - 'ready_bot/early_momentum.py'
+      - 'ready_bot/indicator_config.json'
+      - 'scripts/v3_session_performance.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_backtest_integrity_gate.py'
+      - 'research/backtest_integrity_gate.py'
+      - 'test/v3-execution-intent.test.mjs'
+      - 'src/execution/v3-execution-intent.mjs'
+      - 'test/execution-safety.test.mjs'
+      - 'test/stream-shadow.test.mjs'
+      - 'tests/test_production_guard.py'
+      - 'server.mjs'
+      - 'ready_bot/stream_shadow.mjs'
+      - 'ready_bot/smart_execution.py'
+      - 'ready_bot/production_guard.py'
+      - 'ready_bot/market_context.py'
+      - 'tests/test_indicator_bot.py'
+      - 'tests/test_early_momentum.py'
+      - 'tests/test_ready_market_context.py'
+      - '.github/workflows/indicator-paper-bot.yml'
+      - '.github/workflows/early-momentum-v3-ci.yml'
   workflow_dispatch:
 
 jobs:
