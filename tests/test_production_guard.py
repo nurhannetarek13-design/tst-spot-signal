@@ -8,6 +8,7 @@ from ready_bot.production_guard import (
     execution_quality_status,
     estimate_sell_slippage,
     liquidity_disappearance_status,
+    listing_age_status,
     signal_freshness_status,
     warmup_status,
 )
@@ -115,6 +116,22 @@ class ProductionGuardTests(unittest.TestCase):
         },max_cancellation_rate=0.75,bid_cancel_imbalance_ratio=1.5)
         self.assertFalse(x["ok"])
         self.assertIn("BID_CANCELLATION_SPIKE",x["reasons"])
+
+
+    def test_new_listing_quarantine(self):
+        now=10*86_400_000
+        too_new=[{"t":8*86_400_000},{"t":9*86_400_000}]
+        x=listing_age_status(too_new,min_complete_days=3,now_ms=now)
+        self.assertFalse(x["ok"])
+        self.assertEqual(x["reason"],"NEW_LISTING_QUARANTINE")
+
+        mature=[
+            {"t":5*86_400_000},{"t":6*86_400_000},{"t":7*86_400_000},
+            {"t":8*86_400_000},{"t":9*86_400_000},
+        ]
+        y=listing_age_status(mature,min_complete_days=3,now_ms=now)
+        self.assertTrue(y["ok"])
+        self.assertGreaterEqual(y["age_days"],3)
 
 
 if __name__=="__main__":
