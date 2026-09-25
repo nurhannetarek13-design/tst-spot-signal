@@ -41,6 +41,7 @@ class Book:
         self.asks = {float(p): float(q) for p, q in asks if float(q) > 0}
         self.last_update_id = int(update_id or 0)
         self.last_ts_ms = int(ts_ms)
+        self.sequence_gaps = 0
 
     def update(self, bids, asks, first_id, final_id, ts_ms):
         if self.last_update_id and int(final_id) <= self.last_update_id:
@@ -72,7 +73,9 @@ class Book:
 
 
 def _sorted_events(events):
-    return sorted(events, key=lambda e: (int(e.get("ts_ms") or 0), str(e.get("type") or "")))
+    # Python sort is stable, so equal timestamps retain native input order.
+    # Do not reorder event types at the same timestamp; that can create look-ahead.
+    return sorted(events, key=lambda e: int(e.get("ts_ms") or 0))
 
 
 def _profit_factor(pnls):
@@ -136,6 +139,7 @@ def replay(events, *,
     books = defaultdict(Book.empty)
     trades = defaultdict(lambda: deque(maxlen=10000))
     marks = defaultdict(list)
+    pending = []
     decisions = []
     pnls = []
     equity = float(initial_equity)
@@ -145,82 +149,92 @@ def replay(events, *,
     gap_rejections = 0
     partial_fill_rejections = 0
     slippage_rejections = 0
+    no_timeline_rejections = 0
     symbols_traded = set()
     symbol_slippage = defaultdict(list)
     session_pnls = defaultdict(list)
 
-    # Marks are outcome data only; never exposed to decision features.
+    # Outcome marks are pre-indexed but never exposed to execution features.
     for e in events:
         if e.get("type") == "mark":
             marks[str(e["symbol"])].append((int(e["ts_ms"]), float(e["price"])))
     for rows in marks.values():
         rows.sort()
 
-    for e in events:
-        et = str(e.get("type") or "")
-        symbol = str(e.get("symbol") or "")
-        ts = int(e.get("ts_ms") or 0)
-        if et == "depth_snapshot":
-            books[symbol].snapshot(e.get("bids") or [], e.get("asks") or [], e.get("last_update_id") or 0, ts)
-            continue
-        if et == "depth_update":
-            status = books[symbol].update(
-                e.get("bids") or [], e.get("asks") or [],
-                e.get("first_update_id") or 0, e.get("final_update_id") or 0, ts
-            )
-            if status == "GAP":
-                gap_rejections += 1
-            continue
-        if et == "agg_trade":
-            quote = float(e["price"]) * float(e["qty"])
-            delta = -quote if bool(e.get("buyer_maker")) else quote
-            trades[symbol].append((ts, delta))
-            continue
-        if et != "signal":
-            continue
+    def execute_signal(signal):
+        nonlocal equity, lookahead_violations, stale_rejections
+        nonlocal gap_rejections, partial_fill_rejections, slippage_rejections
 
-        decision_ts = ts
-        exec_ts = decision_ts + int(latency_ms)
-        # No event after exec_ts may influence execution features.
+        symbol = signal["symbol"]
+        decision_ts = int(signal["decision_ts"])
+        exec_ts = int(signal["exec_ts"])
         book = books[symbol]
+
+        # By construction this function runs BEFORE the first event whose
+        # timestamp is >= exec_ts. Therefore book state may only contain events
+        # strictly before execution time (or earlier equal-timestamp input).
         if book.last_ts_ms > exec_ts:
             lookahead_violations += 1
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "LOOKAHEAD_VIOLATION"})
-            continue
-        if exec_ts - book.last_ts_ms > int(max_book_age_ms):
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"LOOKAHEAD_VIOLATION","book_ts_ms":book.last_ts_ms,
+            })
+            return
+
+        if not book.last_ts_ms or exec_ts - book.last_ts_ms > int(max_book_age_ms):
             stale_rejections += 1
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "STALE_BOOK"})
-            continue
-        if book.sequence_gaps > 0 and e.get("require_gap_free", True):
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"STALE_BOOK","book_ts_ms":book.last_ts_ms,
+            })
+            return
+
+        if book.sequence_gaps > 0 and signal.get("require_gap_free", True):
             gap_rejections += 1
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "DEPTH_SEQUENCE_GAP"})
-            continue
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"DEPTH_SEQUENCE_GAP","sequence_gaps":book.sequence_gaps,
+            })
+            return
 
         bid, ask = book.best_bid(), book.best_ask()
         if not bid or not ask or ask < bid:
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "INVALID_BOOK"})
-            continue
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"INVALID_BOOK",
+            })
+            return
 
         quality = estimate_buy_slippage(book.as_depth(), quote_per_trade)
         if quality["fill_ratio"] < min_fill_ratio:
             partial_fill_rejections += 1
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "PARTIAL_FILL_REJECT", **quality})
-            continue
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"PARTIAL_FILL_REJECT",**quality,
+            })
+            return
         if quality["slippage_bps"] is None or quality["slippage_bps"] > max_slippage_bps:
             slippage_rejections += 1
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "SLIPPAGE_REJECT", **quality})
-            continue
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"SLIPPAGE_REJECT",**quality,
+            })
+            return
 
         fill = float(quality["average_price"])
         outcome = _future_mark(marks, symbol, exec_ts, horizon_ms)
         if not outcome:
-            decisions.append({"symbol": symbol, "ts_ms": ts, "code": "NO_OUTCOME_MARK"})
-            continue
+            decisions.append({
+                "symbol":symbol,"ts_ms":decision_ts,"exec_ts_ms":exec_ts,
+                "code":"NO_OUTCOME_MARK",
+            })
+            return
+
         out_ts, out_price = outcome
-        window_marks=_marks_between(marks, symbol, exec_ts, exec_ts + int(horizon_ms))
-        prices=[float(p) for _,p in window_marks]
-        mfe=((max(prices)/fill)-1.0) if prices else 0.0
-        mae=((min(prices)/fill)-1.0) if prices else 0.0
+        window_marks = _marks_between(marks, symbol, exec_ts, exec_ts + int(horizon_ms))
+        prices = [float(p) for _,p in window_marks]
+        mfe = ((max(prices)/fill)-1.0) if prices else 0.0
+        mae = ((min(prices)/fill)-1.0) if prices else 0.0
         gross = (float(out_price) / fill) - 1.0
         net = gross - 2.0 * float(fee_rate)
         pnl = float(quote_per_trade) * net
@@ -229,70 +243,133 @@ def replay(events, *,
         pnls.append(pnl)
         symbols_traded.add(symbol)
         symbol_slippage[symbol].append(float(quality["slippage_bps"] or 0.0))
-        session=_session_label(exec_ts)
+        session = _session_label(exec_ts)
         session_pnls[session].append(pnl)
         decisions.append({
-            "symbol": symbol,
-            "ts_ms": ts,
-            "exec_ts_ms": exec_ts,
-            "exit_ts_ms": out_ts,
-            "code": "FILLED",
-            "fill_price": fill,
-            "exit_price": out_price,
-            "slippage_bps": quality["slippage_bps"],
-            "fill_ratio": quality["fill_ratio"],
-            "gross_return": gross,
-            "net_return_after_fees": net,
-            "mfe_return": mfe,
-            "mae_return": mae,
-            "session": session,
-            "pnl": pnl,
+            "symbol":symbol,
+            "ts_ms":decision_ts,
+            "exec_ts_ms":exec_ts,
+            "book_ts_ms":book.last_ts_ms,
+            "modeled_latency_ms":exec_ts-decision_ts,
+            "exit_ts_ms":out_ts,
+            "code":"FILLED",
+            "fill_price":fill,
+            "exit_price":out_price,
+            "slippage_bps":quality["slippage_bps"],
+            "fill_ratio":quality["fill_ratio"],
+            "gross_return":gross,
+            "net_return_after_fees":net,
+            "mfe_return":mfe,
+            "mae_return":mae,
+            "session":session,
+            "pnl":pnl,
         })
+
+    for e in events:
+        et = str(e.get("type") or "")
+        symbol = str(e.get("symbol") or "")
+        ts = int(e.get("ts_ms") or 0)
+
+        # Execute due signals before applying the event at/after execution time.
+        due = [x for x in pending if int(x["exec_ts"]) <= ts]
+        if due:
+            for x in due:
+                execute_signal(x)
+                pending.remove(x)
+
+        if et == "depth_snapshot":
+            books[symbol].snapshot(
+                e.get("bids") or [], e.get("asks") or [],
+                e.get("last_update_id") or 0, ts
+            )
+            continue
+
+        if et == "depth_update":
+            status = books[symbol].update(
+                e.get("bids") or [], e.get("asks") or [],
+                e.get("first_update_id") or 0, e.get("final_update_id") or 0, ts
+            )
+            if status == "GAP":
+                gap_rejections += 1
+            continue
+
+        if et == "agg_trade":
+            quote = float(e["price"]) * float(e["qty"])
+            delta = -quote if bool(e.get("buyer_maker")) else quote
+            trades[symbol].append((ts, delta))
+            continue
+
+        if et == "signal":
+            pending.append({
+                "symbol":symbol,
+                "decision_ts":ts,
+                "exec_ts":ts + int(latency_ms),
+                "require_gap_free":e.get("require_gap_free", True),
+            })
+            continue
+
+    # If the timeline ended after an execution deadline, the last known book is
+    # still valid only when its age satisfies max_book_age_ms.
+    last_ts = max((int(e.get("ts_ms") or 0) for e in events), default=0)
+    for x in list(pending):
+        if int(x["exec_ts"]) <= last_ts:
+            execute_signal(x)
+        else:
+            no_timeline_rejections += 1
+            decisions.append({
+                "symbol":x["symbol"],
+                "ts_ms":x["decision_ts"],
+                "exec_ts_ms":x["exec_ts"],
+                "code":"NO_POST_SIGNAL_TIMELINE",
+            })
+        pending.remove(x)
 
     wins = sum(x > 0 for x in pnls)
     losses = sum(x < 0 for x in pnls)
     return {
-        "mode": "RESEARCH_REPLAY_ONLY",
-        "universe_source": universe_source,
-        "survivorship_bias_checked": bool(survivorship_bias_checked),
-        "lookahead_violations": lookahead_violations,
-        "trades": len(pnls),
-        "wins": wins,
-        "losses": losses,
-        "win_rate": wins / len(pnls) if pnls else 0.0,
-        "net_pnl": sum(pnls),
-        "net_expectancy": sum(pnls) / len(pnls) if pnls else 0.0,
-        "profit_factor": _profit_factor(pnls),
-        "max_drawdown": _max_drawdown(curve),
-        "symbols_traded": sorted(symbols_traded),
-        "symbol_count": len(symbols_traded),
-        "stale_rejections": stale_rejections,
-        "gap_rejections": gap_rejections,
-        "partial_fill_rejections": partial_fill_rejections,
-        "slippage_rejections": slippage_rejections,
-        "per_symbol_slippage_bps": {
-            s: {
-                "count": len(xs),
-                "avg": sum(xs)/len(xs) if xs else 0.0,
-                "max": max(xs) if xs else 0.0,
+        "mode":"RESEARCH_REPLAY_ONLY",
+        "universe_source":universe_source,
+        "survivorship_bias_checked":bool(survivorship_bias_checked),
+        "lookahead_violations":lookahead_violations,
+        "trades":len(pnls),
+        "wins":wins,
+        "losses":losses,
+        "win_rate":wins / len(pnls) if pnls else 0.0,
+        "net_pnl":sum(pnls),
+        "net_expectancy":sum(pnls) / len(pnls) if pnls else 0.0,
+        "profit_factor":_profit_factor(pnls),
+        "max_drawdown":_max_drawdown(curve),
+        "symbols_traded":sorted(symbols_traded),
+        "symbol_count":len(symbols_traded),
+        "stale_rejections":stale_rejections,
+        "gap_rejections":gap_rejections,
+        "partial_fill_rejections":partial_fill_rejections,
+        "slippage_rejections":slippage_rejections,
+        "no_timeline_rejections":no_timeline_rejections,
+        "per_symbol_slippage_bps":{
+            s:{
+                "count":len(xs),
+                "avg":sum(xs)/len(xs) if xs else 0.0,
+                "max":max(xs) if xs else 0.0,
             } for s,xs in sorted(symbol_slippage.items())
         },
-        "session_stats": {
-            s: {
-                "trades": len(xs),
-                "net_pnl": sum(xs),
-                "net_expectancy": sum(xs)/len(xs) if xs else 0.0,
+        "session_stats":{
+            s:{
+                "trades":len(xs),
+                "net_pnl":sum(xs),
+                "net_expectancy":sum(xs)/len(xs) if xs else 0.0,
             } for s,xs in sorted(session_pnls.items())
         },
-        "assumptions": {
-            "fee_rate_per_side": fee_rate,
-            "latency_ms": latency_ms,
-            "max_slippage_bps": max_slippage_bps,
-            "min_fill_ratio": min_fill_ratio,
-            "max_book_age_ms": max_book_age_ms,
-            "horizon_ms": horizon_ms,
+        "assumptions":{
+            "fee_rate_per_side":fee_rate,
+            "latency_ms":latency_ms,
+            "latency_execution_mode":"BOOK_STATE_AS_OF_EXECUTION_DEADLINE_NO_LOOKAHEAD",
+            "max_slippage_bps":max_slippage_bps,
+            "min_fill_ratio":min_fill_ratio,
+            "max_book_age_ms":max_book_age_ms,
+            "horizon_ms":horizon_ms,
         },
-        "decisions": decisions,
+        "decisions":decisions,
     }
 
 
