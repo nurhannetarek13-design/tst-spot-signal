@@ -81,6 +81,7 @@ except ImportError:
         btc_shock_status,
         clock_sync_status,
         execution_quality_status,
+        estimate_sell_slippage,
         liquidity_disappearance_status,
         load_event_risk,
         signal_freshness_status,
