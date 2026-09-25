@@ -1,5 +1,6 @@
 import numpy as np, pandas as pd
-from research.indicator_fusion_v2 import DEFAULT_PARAMS_V2, compute_indicator_fusion_v2, contract_v2, variance_ratio_series\nfrom research.indicator_fusion_v2_discovery import era_cut_index
+from research.indicator_fusion_v2 import DEFAULT_PARAMS_V2, compute_indicator_fusion_v2, contract_v2, variance_ratio_series
+from research.indicator_fusion_v2_discovery import era_cut_index
 
 def frame(n=320):
     idx=pd.date_range("2025-01-01",periods=n,freq="h",tz="UTC")
@@ -26,4 +27,9 @@ def test_weak_flow_veto():
     d=frame(); d.loc[d.index[-1],"taker_quote"]=d.quote_volume.iloc[-1]*.40
     p={**DEFAULT_PARAMS_V2,"emaTrend":20,"flowLookback":24,"atrRankLookback":24,"breakoutLookback":12,"minRollingQuoteVolume24h":1}
     x=compute_indicator_fusion_v2(d,p); assert bool(x.hard_veto.iloc[-1]); assert not bool(x.enter.iloc[-1])
-\n\ndef test_era_cut_index_is_unit_safe():\n    idx=pd.date_range("2025-01-01",periods=10,freq="h",tz="UTC")\n    cutoff=idx[6]\n    assert era_cut_index(idx,cutoff)==6\n
+
+
+def test_era_cut_index_is_unit_safe():
+    idx=pd.date_range("2025-01-01",periods=10,freq="h",tz="UTC")
+    cutoff=idx[6]
+    assert era_cut_index(idx,cutoff)==6
