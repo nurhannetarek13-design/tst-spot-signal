@@ -509,6 +509,10 @@ def portfolio_stop_risk(state):
     return sum(stop_risk(p) for p in state["positions"].values())
 
 
+def account_equity_at_cost(state):
+    return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
+
+
 def close_position(state, symbol, bid, reason):
     p = state["positions"].pop(symbol)
     fee = float(CFG["risk"]["fee_rate"])
@@ -570,7 +574,11 @@ def open_position(state, snap, filters):
     target = entry + (entry - stop) * float(risk_cfg["reward_risk"])
 
     fee = float(risk_cfg["fee_rate"])
-    risk_budget = float(risk_cfg["max_risk_per_trade_usdt"])
+    equity = account_equity_at_cost(state)
+    risk_budget = min(
+        float(risk_cfg["max_risk_per_trade_usdt"]),
+        equity * float(risk_cfg["max_risk_per_trade_fraction"]),
+    )
     stake_by_risk = risk_budget / max(stop_fraction + 2 * fee + float(risk_cfg["slippage_rate"]), 1e-9)
     notional = min(float(risk_cfg["max_quote_per_trade_usdt"]), stake_by_risk,
                    state["cash_usdt"] / (1 + fee))
@@ -651,6 +659,14 @@ def validate_config():
         raise RuntimeError("Invalid daily loss cap")
     if float(CFG["risk"]["max_risk_per_trade_usdt"]) <= 0:
         raise RuntimeError("Invalid per-trade risk")
+    if not (0 < float(CFG["risk"]["max_risk_per_trade_fraction"]) <= 0.005):
+        raise RuntimeError("Per-trade risk must be <= 0.5 percent")
+    if CFG["risk"].get("allow_averaging_down") is not False:
+        raise RuntimeError("Averaging down must stay disabled")
+    if CFG["risk"].get("allow_martingale") is not False:
+        raise RuntimeError("Martingale must stay disabled")
+    if float(CFG["risk"].get("leverage", 1)) != 1:
+        raise RuntimeError("Leverage is not allowed")
 
 
 def main():
@@ -697,7 +713,7 @@ def main():
             blocked.append({"symbol": symbol, "reason": "OPEN_POSITION_UNPRICED"})
             unpriced = True
             continue
-        manage_position(state, symbol, snap["bid"], snap["atr_1h"])
+        manage_position(state, symbol, snap["bid"], snap["atr_15m"])
 
     evidence = precision_evidence_status()
     signals = []
