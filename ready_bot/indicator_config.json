@@ -53,7 +53,10 @@
     "max_risk_per_trade_fraction": 0.005,
     "allow_averaging_down": false,
     "allow_martingale": false,
-    "leverage": 1
+    "leverage": 1,
+    "max_pair_correlation": 0.85,
+    "consecutive_loss_cooldown_count": 3,
+    "consecutive_loss_cooldown_minutes": 60
   },
   "evidence_gate": {
     "required": true,
@@ -94,5 +97,9 @@
     "recent_resistance_lookback_1m": 20,
     "volatility_expansion_ratio": 1.15,
     "price_velocity_lookback_1m": 3
+  },
+  "data_integrity": {
+    "max_unavailable_symbol_fraction": 0.25,
+    "fail_closed": true
   }
 }
