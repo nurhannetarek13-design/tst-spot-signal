@@ -203,6 +203,7 @@ def symbol_filters(symbol):
         "step_size": float(lot["stepSize"]),
         "spot_verified": True,
         "quote_asset": entry.get("quoteAsset"),
+        "symbol": entry.get("symbol"),
     }
 
 
@@ -434,8 +435,14 @@ def round_qty(qty, filters):
 
 
 def open_position(state, snap, filters):
+    if snap.get("eligible") is not True or snap.get("vetoes"):
+        return "SIGNAL_NOT_ELIGIBLE"
     if filters.get("spot_verified") is not True or filters.get("quote_asset") != CFG["universe"]["quote_asset"]:
         return "SPOT_ONLY_VIOLATION"
+    if filters.get("symbol") != snap.get("symbol"):
+        return "SYMBOL_FILTER_MISMATCH"
+    if not math.isfinite(float(snap.get("ask", 0))) or float(snap.get("ask", 0)) <= 0:
+        return "INVALID_ENTRY_PRICE"
     risk_cfg = CFG["risk"]
     if len(state["positions"]) >= int(risk_cfg["max_open_positions"]):
         return "MAX_OPEN_POSITIONS"
