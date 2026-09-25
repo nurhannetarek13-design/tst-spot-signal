@@ -34,5 +34,19 @@ class TardisSpotReplayV3Tests(unittest.TestCase):
         self.assertEqual(x["status"],"DEPTH_GAP")
 
 
+    def test_buffered_bridge_can_precede_generated_snapshot(self):
+        rows=[
+            {"line":0,"prefix":"","data":{"E":1000,"U":99,"u":100,"b":[["99","9"]],"a":[]}},
+            {"line":1,"prefix":"","data":{"E":1100,"U":101,"u":102,"b":[["100","5"]],"a":[["101","9"]]}},
+            {"line":2,"prefix":"","data":{"lastUpdateId":100,"bids":[["99","10"]],"asks":[["101","10"]]}},
+            {"line":3,"prefix":"","data":{"E":1200,"U":103,"u":103,"b":[["100","6"]],"a":[["102","2"]]}},
+        ]
+        x=replay(rows,"BTCUSDT",0,10_000,10)
+        self.assertTrue(x["canonicalReplayReady"])
+        self.assertEqual(x["snapshotLine"],2)
+        self.assertEqual(x["bridgeLine"],1)
+        self.assertEqual(x["eventsApplied"],2)
+
+
 if __name__=="__main__":
     unittest.main()
