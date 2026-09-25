@@ -77,6 +77,27 @@ export function validateOperation(method, path, params) {
     return {ok:true,params:{}};
   }
 
+  if (method==="GET" && path==="/api/v3/order") {
+    const allowed=["symbol","origClientOrderId"];
+    if (!exactKeys(params,allowed) || !safeSymbol(params.symbol) ||
+        !/^[A-Za-z0-9_-]{5,36}$/.test(String(params.origClientOrderId||""))) {
+      return {ok:false,status:"ORDER_LOOKUP_PARAMS_NOT_ALLOWED"};
+    }
+    return {ok:true,params:{
+      symbol:String(params.symbol),
+      origClientOrderId:String(params.origClientOrderId),
+    }};
+  }
+
+  if (method==="GET" && path==="/api/v3/orderList") {
+    const allowed=["origClientOrderId"];
+    if (!exactKeys(params,allowed) ||
+        !/^[A-Za-z0-9_-]{5,36}$/.test(String(params.origClientOrderId||""))) {
+      return {ok:false,status:"ORDER_LIST_LOOKUP_PARAMS_NOT_ALLOWED"};
+    }
+    return {ok:true,params:{origClientOrderId:String(params.origClientOrderId)}};
+  }
+
   if (method==="POST" && path==="/api/v3/order") {
     const side=String(params.side||"");
     const type=String(params.type||"");
