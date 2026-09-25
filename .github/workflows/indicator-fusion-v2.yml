@@ -1,0 +1,48 @@
+name: Indicator Fusion V2 Event Regime
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "research/indicator_fusion_v2.py"
+      - "research/indicator_fusion_v2_discovery.py"
+      - "tests/test_indicator_fusion_v2.py"
+      - ".github/workflows/indicator-fusion-v2.yml"
+permissions: {contents: write}
+concurrency: {group: indicator-fusion-v2, cancel-in-progress: true}
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install --disable-pip-version-check numpy pandas pytest
+      - run: python -m py_compile research/indicator_fusion_v2.py research/indicator_fusion_v2_discovery.py
+      - run: PYTHONPATH=. pytest -q tests/test_indicator_fusion_v2.py
+      - run: PYTHONPATH=. python research/indicator_fusion_v2_discovery.py
+      - name: Enforce research-only
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open("validation/edges/indicator-fusion-v2-latest.json"))
+          assert x["authorization"]=="RESEARCH_ONLY" and x["liveTrading"] is False and x["automaticPromotion"] is False and x["parameterSearch"] is False
+          print(json.dumps({"status":x["status"],"aggregate":x["aggregate"],"breadth":x["breadth"]},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with: {name: indicator-fusion-v2, path: validation/edges/indicator-fusion-v2-latest.json, retention-days: 14}
+      - name: Commit snapshot
+        run: |
+          cp validation/edges/indicator-fusion-v2-latest.json /tmp/v2.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main && git reset --hard origin/main
+            mkdir -p validation/edges && cp /tmp/v2.json validation/edges/indicator-fusion-v2-latest.json
+            git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validation/edges/indicator-fusion-v2-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Update Indicator Fusion V2 snapshot" && git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
