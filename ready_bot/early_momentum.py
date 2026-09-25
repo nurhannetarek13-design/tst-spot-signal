@@ -187,6 +187,18 @@ def prefilter_snapshot(bars1m,bars3m,cfg):
     }
 
 
+
+def micro_breakout_hold(bars,lookback=20,tolerance_pct=0.0015):
+    """Require a small breakout/reclaim without waiting for a large extension."""
+    if len(bars)<lookback+3:
+        return {"ok":False,"resistance":None,"breakout":False,"hold":False}
+    resistance=max(x["h"] for x in bars[-lookback-3:-3])
+    recent=bars[-3:]
+    breakout=any(x["h"]>resistance for x in recent)
+    hold=bool(recent[-1]["c"]>=resistance*(1.0-float(tolerance_pct)))
+    return {"ok":bool(breakout and hold),"resistance":resistance,"breakout":breakout,"hold":hold}
+
+
 def depth_imbalance(depth,levels=5):
     bids=depth.get("bids",[])[:levels]
     asks=depth.get("asks",[])[:levels]
@@ -259,6 +271,7 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
         chase=not bool(pre.get("vwap_position_ok"))
 
     stage=classify(score,cfg)
+    micro_hold=pre.get("micro_breakout_hold") or {"ok":False}
     if stage=="ENTRY_CANDIDATE":
         required=(
             pre.get("rvol_1m") is not None and pre["rvol_1m"]>=float(cfg["volume_acceleration_1m_armed"])
@@ -268,6 +281,7 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
             and obi_armed
             and spread_tight
             and pre.get("vwap_position_ok")
+            and micro_hold.get("ok")
             and not chase
         )
         if not required:
@@ -282,5 +296,6 @@ def combine_microstructure(pre,obi_samples,spread_samples,agg,cfg):
         "spread_samples_bps":spread_samples,
         "spread_stable_or_tightening":spread_tight,
         "agg_cvd":agg,
+        "micro_breakout_hold":micro_hold,
         "chase_veto":chase,
     }
