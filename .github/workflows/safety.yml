@@ -34,6 +34,9 @@ jobs:
       - name: Test Jesse spot time-exit reservation fix
         run: python tests/test_jesse_spot_time_exit.py
 
+      - name: Test explicit fusion orchestration wiring
+        run: python tests/test_fusion_orchestration_wiring.py
+
       - name: Assert fail-closed trading policy
         run: |
           python - <<'PY'
