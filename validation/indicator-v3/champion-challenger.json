@@ -7,7 +7,7 @@
     "engine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
     "activeConfigPath": "ready_bot/indicator_config.json",
     "frozenConfigPath": "ready_bot/champion_config.json",
-    "configBlobSha": "5d8d80622562842d8a6aac4942be21fa538f553a",
+    "configBlobSha": "6df570b96b50b2c3e5deb8f46fa40d85a165b406",
     "status": "PAPER_CHAMPION_NOT_LIVE_VALIDATED"
   },
   "shadowChallenger": {
