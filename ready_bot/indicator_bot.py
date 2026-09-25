@@ -63,6 +63,7 @@ try:
         btc_shock_status,
         clock_sync_status,
         execution_quality_status,
+        estimate_sell_slippage,
         liquidity_disappearance_status,
         load_event_risk,
         signal_freshness_status,
@@ -137,6 +138,7 @@ def load_state():
             "executed_signal_ids": {},
             "decision_log": [],
             "slippage_model": {},
+            "exit_slippage_model": {},
             "signals": [],
             "blocked": [],
             "last_run": None,
@@ -148,10 +150,12 @@ def load_state():
     s.setdefault("executed_signal_ids", {})
     s.setdefault("decision_log", [])
     s.setdefault("slippage_model", {})
+    s.setdefault("exit_slippage_model", {})
     return s
 
 
 def save_state(state):
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
     tmp.replace(STATE_PATH)
@@ -281,6 +285,19 @@ def depth20(symbol):
 
 def recent_aggtrades(symbol, limit=500):
     return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
+
+
+def stream_shadow_micro_snapshot(symbol):
+    base=str(os.getenv("TST_STREAM_SHADOW_URL") or "").rstrip("/")
+    if not base:
+        return None
+    url=base+"/snapshot?"+urllib.parse.urlencode({"symbol":symbol})
+    row=request_json(url)
+    snap=(row or {}).get("snapshot") or {}
+    health=(row or {}).get("health") or {}
+    if health.get("ok") is not True or snap.get("synced") is not True or snap.get("fresh") is not True or snap.get("warmed") is not True:
+        raise RuntimeError("STREAM_SHADOW_NOT_HEALTHY")
+    return snap
 
 
 def symbol_filters(symbol):
@@ -584,15 +601,44 @@ def account_equity_at_cost(state):
     return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
 
 
-def close_position(state, symbol, bid, reason):
+def close_position(state, symbol, bid, reason, exit_depth=None):
     p = state["positions"].pop(symbol)
     fee = float(CFG["risk"]["fee_rate"])
-    ref = min(bid, p["stop"]) if reason == "STOP" else (p["target"] if reason == "TARGET" else bid)
-    fill = simulated_fill(ref, "sell")
+    ref = float(bid)
+    depth_meta={"source":"FALLBACK","fill_ratio":None,"slippage_bps":None}
+    try:
+        depth = exit_depth or depth20(symbol)
+        est = estimate_sell_slippage(depth, p["qty"])
+        if est.get("ok") and est.get("average_price"):
+            fill=float(est["average_price"])
+            depth_meta={
+                "source":"LIVE_DEPTH",
+                "fill_ratio":est.get("fill_ratio"),
+                "slippage_bps":est.get("slippage_bps"),
+            }
+        else:
+            raise RuntimeError("INSUFFICIENT_EXIT_DEPTH")
+    except Exception as exc:
+        fallback_rate=max(
+            float(CFG["risk"]["slippage_rate"]),
+            float(CFG["production_guard"]["max_estimated_slippage_bps"])/10000.0,
+        )
+        fill=ref*(1.0-fallback_rate)
+        depth_meta={
+            "source":"CONSERVATIVE_FALLBACK",
+            "fill_ratio":None,
+            "slippage_bps":fallback_rate*10000,
+            "detail":str(exc)[:120],
+        }
+
     proceeds = p["qty"] * fill * (1 - fee)
     pnl = proceeds - p["cost"]
     state["cash_usdt"] += proceeds
     state["day_pnl"] += pnl
+    exit_slip=realized_slippage_bps(ref,fill,"SELL")
+    state["exit_slippage_model"]=update_symbol_slippage_model(
+        state.get("exit_slippage_model"),symbol,exit_slip
+    )
     state["closed_trades"].append({
         "symbol": symbol, "engine": CFG["engine"], "entry": p["entry"], "exit": fill,
         "qty": p["qty"], "pnl_usdt": pnl, "reason": reason,
@@ -603,6 +649,8 @@ def close_position(state, symbol, bid, reason):
         "entry_context": p.get("entry_context"),
         "mfe_r": p.get("mfe_r"),
         "mae_r": p.get("mae_r"),
+        "exit_execution": depth_meta,
+        "exit_slippage_bps": exit_slip,
     })
 
 
@@ -617,8 +665,10 @@ def signal_id_for_snapshot(snap):
     micro=snap.get("micro") or {}
     agg=micro.get("agg_cvd") or {}
     event_ms=int(agg.get("latest_event_ms") or snap.get("bar_time") or 0)
-    breakout=(micro.get("micro_breakout_hold") or {}).get("resistance")
-    raw=f"{snap.get('symbol')}|{event_ms//60000}|{breakout}|{micro.get('score')}"
+    # One deterministic BUY intent per symbol per market-event minute.
+    # This prevents duplicate execution while allowing the fast engine to
+    # reconsider a rejected symbol on the next minute instead of waiting 15m.
+    raw=f"{CFG['engine']}|{snap.get('symbol')}|BUY|{event_ms//60000}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -699,13 +749,25 @@ def open_position(state, snap, filters):
     if not quality.get("ok"):
         return "EXECUTION_QUALITY_REJECT"
 
+    slip_row=(state.get("slippage_model") or {}).get(snap["symbol"]) or {}
+    slip_count=int(slip_row.get("count") or 0)
+    hist_slip=(float(slip_row.get("ewma_bps")) if slip_row.get("ewma_bps") is not None else None)
+    current_slip=float(quality.get("slippage_bps") or 0.0)
+    min_hist=int(CFG["smart_execution"].get("min_symbol_slippage_samples",3))
+    effective_slip=max(current_slip,hist_slip) if hist_slip is not None and slip_count>=min_hist else current_slip
+    quality["historical_ewma_bps"]=hist_slip
+    quality["historical_sample_count"]=slip_count
+    quality["effective_slippage_bps"]=effective_slip
+    if effective_slip>float(CFG["smart_execution"]["max_slippage_bps"]):
+        return "SYMBOL_SLIPPAGE_MODEL_REJECT"
+
     guard=(snap.get("micro") or {}).get("production_guard") or {}
     plan=choose_execution_plan(
         symbol=snap["symbol"],
         quote_amount_usdt=notional,
         best_bid=snap["bid"],
         best_ask=snap["ask"],
-        estimated_slippage_bps=quality.get("slippage_bps"),
+        estimated_slippage_bps=quality.get("effective_slippage_bps"),
         fill_ratio=quality.get("fill_ratio"),
         tick_size=filters.get("tick_size"),
         momentum_score=(snap.get("micro") or {}).get("score") or 0,
@@ -771,6 +833,12 @@ def open_position(state, snap, filters):
             "spread_bps": snap.get("spread_bps"),
             "adx_15m": snap.get("adx_15m"),
             "rsi_15m": snap.get("rsi_15m"),
+            "session": ((snap.get("micro") or {}).get("production_guard") or {}).get("session"),
+            "decision_latency_ms": ((snap.get("micro") or {}).get("production_guard") or {}).get("decision_latency_ms"),
+            "adverse_selection": ((snap.get("micro") or {}).get("production_guard") or {}).get("adverse_selection"),
+            "liquidity_disappearance": ((snap.get("micro") or {}).get("production_guard") or {}).get("liquidity_disappearance"),
+            "estimated_entry_slippage_bps": (snap.get("execution_quality") or {}).get("slippage_bps"),
+            "execution_style": (snap.get("execution_plan") or {}).get("style"),
         },
         "peak_price": entry,
         "trough_price": entry,
@@ -810,10 +878,10 @@ def manage_position(state, symbol, snap):
     p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
 
     if bid <= p["stop"]:
-        close_position(state, symbol, bid, "STOP")
+        close_position(state, symbol, bid, "STOP", snap.get("_exit_depth"))
         return
     if bid >= p["target"]:
-        close_position(state, symbol, bid, "TARGET")
+        close_position(state, symbol, bid, "TARGET", snap.get("_exit_depth"))
         return
 
     exit_cfg=CFG.get("exit",{})
@@ -838,7 +906,7 @@ def manage_position(state, symbol, snap):
             and bid<float(vwap_now)
         )
         if fade:
-            close_position(state, symbol, bid, "MOMENTUM_FADE")
+            close_position(state, symbol, bid, "MOMENTUM_FADE", snap.get("_exit_depth"))
             return
 
     # If the trade never produces meaningful favorable excursion, free capital.
@@ -846,11 +914,11 @@ def manage_position(state, symbol, snap):
         age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
         and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
     ):
-        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH")
+        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH", snap.get("_exit_depth"))
         return
 
     if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
-        close_position(state, symbol, bid, "HARD_TIME_STOP")
+        close_position(state, symbol, bid, "HARD_TIME_STOP", snap.get("_exit_depth"))
         return
 
     if p["initial_risk_abs"] > 0 and bid >= p["entry"] + float(CFG["risk"]["breakeven_at_r"]) * p["initial_risk_abs"]:
@@ -897,20 +965,58 @@ def enrich_microstructure(symbol, snap):
     obi_samples = []
     spreads = []
     depth_samples = []
+    stream_samples = []
     samples = int(cfg["obi_samples"])
     interval = float(cfg["obi_sample_interval_seconds"])
+    use_stream=bool(str(os.getenv("TST_STREAM_SHADOW_URL") or "").strip())
     for i in range(samples):
-        depth = depth5(symbol)
-        dm = depth_snapshot_metrics(depth, int(cfg["obi_levels"]))
-        depth_samples.append(dm)
-        obi_samples.append(dm.get("obi"))
-        if dm.get("spread_bps") is not None:
-            spreads.append(dm["spread_bps"])
+        if use_stream:
+            ss=stream_shadow_micro_snapshot(symbol)
+            stream_samples.append(ss)
+            obi_samples.append(ss.get("obi"))
+            if ss.get("spreadBps") is not None:
+                spreads.append(ss["spreadBps"])
+        else:
+            depth = depth5(symbol)
+            dm = depth_snapshot_metrics(depth, int(cfg["obi_levels"]))
+            depth_samples.append(dm)
+            obi_samples.append(dm.get("obi"))
+            if dm.get("spread_bps") is not None:
+                spreads.append(dm["spread_bps"])
         if i < samples - 1 and interval > 0:
             time.sleep(interval)
 
-    agg = aggtrade_delta(recent_aggtrades(symbol, 500))
-    depth_flow = depth_flow_metrics(depth_samples)
+    if use_stream:
+        first,last=stream_samples[0],stream_samples[-1]
+        def pct(a,b):
+            return (float(b)/float(a)-1.0) if a not in {None,0} and b is not None else None
+        depth_flow={
+            "bid_liquidity_change_pct":pct(first.get("bidLiquidityQuote5"),last.get("bidLiquidityQuote5")),
+            "ask_liquidity_change_pct":pct(first.get("askLiquidityQuote5"),last.get("askLiquidityQuote5")),
+            "microprice_bias_bps":last.get("micropriceBiasBps"),
+            "cancellation_rate_10s":last.get("cancellationRate10s"),
+            "bid_cancel_quote_10s":last.get("bidCancelQuote10s"),
+            "ask_cancel_quote_10s":last.get("askCancelQuote10s"),
+            "source":"BINANCE_SPOT_WEBSOCKET_SIDECAR",
+        }
+        if depth_flow["bid_liquidity_change_pct"] is not None and depth_flow["ask_liquidity_change_pct"] is not None:
+            depth_flow["pressure_change"]=depth_flow["bid_liquidity_change_pct"]-depth_flow["ask_liquidity_change_pct"]
+        else:
+            depth_flow["pressure_change"]=None
+        last_trade_age=last.get("tradeAgeMs")
+        latest_event_ms=(time.time()*1000-float(last_trade_age)) if last_trade_age is not None else None
+        agg={
+            "delta_quote":float(last.get("deltaQuote60s") or 0.0),
+            "buy_quote":None,
+            "sell_quote":None,
+            "ratio":last.get("takerBuyRatio60s"),
+            "slope_positive":bool(last.get("cvdSlopePositive10s")),
+            "latest_event_ms":latest_event_ms,
+            "source":"BINANCE_SPOT_WEBSOCKET_SIDECAR",
+        }
+    else:
+        agg = aggtrade_delta(recent_aggtrades(symbol, 500))
+        depth_flow = depth_flow_metrics(depth_samples)
     micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg, depth_flow)
     decision_ms = time.time() * 1000
 
@@ -927,7 +1033,7 @@ def enrich_microstructure(symbol, snap):
         bars3m=len(snap.get("_bars3m") or []),
         bars15m=len(snap.get("_bars15") or []),
         bars1h=len(snap.get("_bars1h") or []),
-        depth_samples=len(depth_samples),
+        depth_samples=(len(stream_samples) if use_stream else len(depth_samples)),
         min_1m=guard_cfg["warmup_min_1m"],
         min_3m=guard_cfg["warmup_min_3m"],
         min_15m=guard_cfg["warmup_min_15m"],
@@ -945,6 +1051,8 @@ def enrich_microstructure(symbol, snap):
         depth_flow,
         max_bid_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
         max_ask_growth_pct=guard_cfg["max_ask_liquidity_growth_pct"],
+        max_cancellation_rate=guard_cfg["max_cancellation_rate_10s"],
+        bid_cancel_imbalance_ratio=guard_cfg["bid_cancel_imbalance_ratio"],
     )
 
     micro["production_guard"] = {
@@ -954,6 +1062,7 @@ def enrich_microstructure(symbol, snap):
         "liquidity_disappearance": liquidity,
         "decision_latency_ms": max(0.0, decision_ms-detected_ms),
         "session": utc_session_label(),
+        "microstructure_source": "BINANCE_SPOT_WEBSOCKET_SIDECAR" if use_stream else "REST_DEPTH_SAMPLING",
     }
     production_ok = freshness["ok"] and warmup["ok"] and adverse["ok"] and liquidity["ok"]
     snap["micro"] = micro
@@ -1224,7 +1333,8 @@ def main():
             if len(state["positions"]) >= int(CFG["risk"]["max_open_positions"]):
                 break
             key = snap["symbol"]
-            if state.get("seen", {}).get(key) == snap["bar_time"]:
+            decision_id=signal_id_for_snapshot(snap)
+            if state.get("seen", {}).get(key) == decision_id:
                 continue
             event_risk=load_event_risk(
                 ROOT.parent / CFG["production_guard"]["event_risk_file"],
@@ -1234,17 +1344,17 @@ def main():
             if not event_risk.get("ok"):
                 blocked.append({"symbol":key,"reason":event_risk.get("reason") or "EVENT_RISK","detail":event_risk})
                 append_decision(state,key,"WHY_SKIP",reason=event_risk.get("reason") or "EVENT_RISK")
-                state.setdefault("seen", {})[key] = snap["bar_time"]
+                state.setdefault("seen", {})[key] = decision_id
                 continue
             corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
                 blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
-                state.setdefault("seen", {})[key] = snap["bar_time"]
+                state.setdefault("seen", {})[key] = decision_id
                 continue
             snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
             result = open_position(state, snap, snap["filters"])
-            state.setdefault("seen", {})[key] = snap["bar_time"]
+            state.setdefault("seen", {})[key] = decision_id
             if result != "PAPER_OPENED":
                 blocked.append({"symbol": key, "score": snap["score"], "reason": result})
                 append_decision(state,key,"WHY_SKIP",reason=result,momentum_score=(snap.get("micro") or {}).get("score"))
