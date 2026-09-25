@@ -51,5 +51,6 @@
     "require_positive_net": true,
     "scope": "live_only",
     "paper_observation_allowed": true
-  }
+  },
+  "market_type": "spot"
 }
