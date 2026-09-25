@@ -67,6 +67,7 @@ def load_state():
     s = json.loads(STATE_PATH.read_text())
     if s.get("mode") != "PAPER_ONLY":
         raise RuntimeError("Refusing non-paper state")
+    s["engine"] = CFG["engine"]
     return s
 
 
@@ -255,24 +256,6 @@ def atr(bars, n=14):
     return sum(vals) / len(vals)
 
 
-def macd_hist(values, fast=12, slow=26, signal=9):
-    ef = ema_series(values, fast)
-    es = ema_series(values, slow)
-    if not ef or not es:
-        return []
-    m = []
-    start = max(fast, slow) - 1
-    for i in range(start, len(values)):
-        if ef[i] is None or es[i] is None:
-            continue
-        m.append(ef[i] - es[i])
-    sig = ema_series(m, signal)
-    out = []
-    for i in range(len(m)):
-        out.append(None if i >= len(sig) or sig[i] is None else m[i] - sig[i])
-    return out
-
-
 def relative_quote_volume(bars, n=20):
     if len(bars) < n + 1:
         return None
@@ -290,14 +273,89 @@ def spread_bps(bid, ask):
     return ((ask - bid) / mid) * 10000 if mid > 0 else float("inf")
 
 
-def bollinger_width(values, n=20):
-    if len(values) < n:
+
+def adx(bars, n=14):
+    """Latest Wilder ADX from OHLC bars."""
+    if len(bars) < (2 * n + 2):
         return None
-    x = values[-n:]
-    mean = sum(x) / n
-    var = sum((v - mean) ** 2 for v in x) / n
-    sd = math.sqrt(var)
-    return (4 * sd / mean) if mean > 0 else None
+    trs, plus_dm, minus_dm = [], [], []
+    for i in range(1, len(bars)):
+        cur, prev = bars[i], bars[i - 1]
+        up = cur["h"] - prev["h"]
+        down = prev["l"] - cur["l"]
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        trs.append(max(cur["h"] - cur["l"], abs(cur["h"] - prev["c"]), abs(cur["l"] - prev["c"])))
+    if len(trs) < n * 2:
+        return None
+    tr_s = sum(trs[:n])
+    plus_s = sum(plus_dm[:n])
+    minus_s = sum(minus_dm[:n])
+    dx = []
+    for i in range(n, len(trs)):
+        if i > n:
+            tr_s = tr_s - tr_s / n + trs[i]
+            plus_s = plus_s - plus_s / n + plus_dm[i]
+            minus_s = minus_s - minus_s / n + minus_dm[i]
+        if tr_s <= 0:
+            continue
+        pdi = 100.0 * plus_s / tr_s
+        mdi = 100.0 * minus_s / tr_s
+        den = pdi + mdi
+        dx.append(0.0 if den <= 0 else 100.0 * abs(pdi - mdi) / den)
+    if len(dx) < n:
+        return None
+    value = sum(dx[:n]) / n
+    for x in dx[n:]:
+        value = (value * (n - 1) + x) / n
+    return value
+
+
+def session_vwap_series(bars):
+    """UTC-session VWAP for each bar using typical price * base volume."""
+    out = []
+    current_day = None
+    pv = 0.0
+    vol = 0.0
+    for b in bars:
+        day = datetime.fromtimestamp(b["t"] / 1000, tz=timezone.utc).date()
+        if day != current_day:
+            current_day = day
+            pv = 0.0
+            vol = 0.0
+        typical = (b["h"] + b["l"] + b["c"]) / 3.0
+        pv += typical * b["v"]
+        vol += b["v"]
+        out.append(pv / vol if vol > 0 else None)
+    return out
+
+
+def successful_vwap_retest(bars, vwaps, lookback=4, tolerance_pct=0.0025):
+    if not bars or not vwaps or vwaps[-1] is None or bars[-1]["c"] <= vwaps[-1]:
+        return False
+    start = max(0, len(bars) - int(lookback))
+    for i in range(start, len(bars)):
+        v = vwaps[i]
+        if v is None:
+            continue
+        if bars[i]["l"] <= v * (1.0 + float(tolerance_pct)) and bars[i]["c"] >= v:
+            return True
+    return False
+
+
+def confirmed_swing_low(bars, lookback=20, left=2, right=2):
+    """Most recent confirmed pivot low; excludes the unconfirmed right edge."""
+    if len(bars) < left + right + 3:
+        return None
+    lo = max(int(left), len(bars) - int(lookback))
+    hi = len(bars) - int(right)
+    for i in range(hi - 1, lo - 1, -1):
+        pivot = bars[i]["l"]
+        left_vals = [bars[j]["l"] for j in range(i - int(left), i)]
+        right_vals = [bars[j]["l"] for j in range(i + 1, i + int(right) + 1)]
+        if pivot < min(left_vals) and pivot <= min(right_vals):
+            return float(pivot)
+    return None
 
 
 def btc_regime(btc1h, btc4h):
@@ -325,78 +383,86 @@ def btc_regime(btc1h, btc4h):
 def indicator_snapshot(symbol, bars15, bars1h, bars4h, bid, ask, quote_volume_24h):
     if min(len(bars15), len(bars1h), len(bars4h)) < 220:
         raise RuntimeError("INSUFFICIENT_HISTORY")
+
     c15 = [x["c"] for x in bars15]
     c1 = [x["c"] for x in bars1h]
-    c4 = [x["c"] for x in bars4h]
     last15 = bars15[-1]
+    ec = CFG["entry"]
 
-    e20_1 = ema(c1, 20)
-    e50_1 = ema(c1, 50)
-    e200_1 = ema(c1, 200)
-    e50_4 = ema(c4, 50)
-    e200_4 = ema(c4, 200)
+    # 6 entry indicators only.
+    ema20_15 = ema(c15, 20)
+    ema50_15 = ema(c15, 50)
+    ema200_1h = ema(c1, 200)
+    adx15 = adx(bars15, 14)
+    rsi15 = rsi(c15, 14)
+    rvol20 = relative_quote_volume(bars15, 20)
+    taker = taker_ratio(last15)
+    vwaps = session_vwap_series(bars15)
+    vwap_now = vwaps[-1] if vwaps else None
+    vwap_retest = successful_vwap_retest(
+        bars15,
+        vwaps,
+        lookback=int(ec["vwap_retest_lookback"]),
+        tolerance_pct=float(ec["vwap_retest_tolerance_pct"]),
+    )
 
-    r_now = rsi(c1)
-    r_prev = rsi(c1[:-3]) if len(c1) > 20 else None
-    mh = macd_hist(c1)
-    mh_now = mh[-1] if mh else None
-    mh_prev = mh[-2] if len(mh) > 1 else None
-
-    tr = taker_ratio(last15)
-    tr3_vals = [taker_ratio(x) for x in bars15[-3:]]
-    tr3 = sum(x for x in tr3_vals if x is not None) / len([x for x in tr3_vals if x is not None]) if all(x is not None for x in tr3_vals) else None
-    rv = relative_quote_volume(bars15, 20)
-
-    a1 = atr(bars1h, 14)
-    atr_pct = a1 / c1[-1] if a1 and c1[-1] > 0 else None
-    bw = bollinger_width(c1, 20)
+    atr15 = atr(bars15, 14)
+    atr_pct15 = atr15 / c15[-1] if atr15 and c15[-1] > 0 else None
+    swing = confirmed_swing_low(
+        bars15,
+        lookback=int(CFG["risk"]["swing_lookback_bars"]),
+        left=int(CFG["risk"]["swing_pivot_left"]),
+        right=int(CFG["risk"]["swing_pivot_right"]),
+    )
     spr = spread_bps(bid, ask)
 
-    groups = {"trend": 0, "momentum": 0, "flow": 0, "volatility": 0, "liquidity": 0}
+    checks = {
+        "ema_20_gt_50_15m": bool(ema20_15 is not None and ema50_15 is not None and ema20_15 > ema50_15),
+        "adx_14": bool(adx15 is not None and adx15 >= float(ec["adx_min"])),
+        "rsi_14": bool(rsi15 is not None and float(ec["rsi_min"]) <= rsi15 <= float(ec["rsi_max"])),
+        "rvol_20": bool(rvol20 is not None and rvol20 >= float(ec["min_relative_quote_volume"])),
+        "taker_buy_ratio": bool(taker is not None and taker >= float(ec["min_taker_buy_ratio"])),
+        "vwap_retest": bool(vwap_retest),
+    }
+    score = sum(1 for passed in checks.values() if passed)
 
-    if e50_4 and e200_4 and e50_4 > e200_4: groups["trend"] += 8
-    if e20_1 and e50_1 and e20_1 > e50_1: groups["trend"] += 6
-    if e50_1 and e200_1 and e50_1 > e200_1: groups["trend"] += 6
-    if e20_1 and c1[-1] > e20_1: groups["trend"] += 5
-
-    ec = CFG["entry"]
-    if r_now is not None and float(ec["rsi_min"]) <= r_now <= float(ec["rsi_max"]): groups["momentum"] += 8
-    if r_now is not None and r_prev is not None and r_now > r_prev: groups["momentum"] += 4
-    if mh_now is not None and mh_now > 0: groups["momentum"] += 4
-    if mh_now is not None and mh_prev is not None and mh_now > mh_prev: groups["momentum"] += 4
-
-    if tr is not None and tr >= float(ec["min_taker_buy_ratio"]): groups["flow"] += 15
-    if tr3 is not None and tr3 >= 0.54: groups["flow"] += 5
-    if rv is not None and rv >= float(ec["min_relative_quote_volume"]): groups["flow"] += 10
-
-    if atr_pct is not None and float(ec["atr_pct_min"]) <= atr_pct <= float(ec["atr_pct_max"]): groups["volatility"] += 6
-    if bw is not None and 0.01 <= bw <= 0.12: groups["volatility"] += 4
-
-    if quote_volume_24h >= float(CFG["universe"]["min_quote_volume_24h"]): groups["liquidity"] += 10
-    if spr <= float(ec["max_spread_bps"]): groups["liquidity"] += 5
-
-    score = sum(groups.values())
+    # Hard market gates are separate from the 5/6 score.
     vetoes = []
-    if tr is None or tr < float(ec["hard_taker_floor"]): vetoes.append("TAKER_FLOW")
-    if rv is None or rv < float(ec["hard_relative_volume_floor"]): vetoes.append("RELATIVE_VOLUME")
-    if r_now is None or r_now > float(ec["rsi_veto"]): vetoes.append("RSI")
-    if atr_pct is None or atr_pct > float(ec["atr_pct_veto"]): vetoes.append("VOLATILITY")
-    if spr > float(ec["max_spread_bps"]): vetoes.append("SPREAD")
-    if quote_volume_24h < float(CFG["universe"]["min_quote_volume_24h"]): vetoes.append("LIQUIDITY")
+    if ema200_1h is None or c1[-1] <= ema200_1h:
+        vetoes.append("EMA200_1H")
+    if quote_volume_24h < float(CFG["universe"]["min_quote_volume_24h"]):
+        vetoes.append("LIQUIDITY")
+    if spr > float(ec["max_spread_bps"]):
+        vetoes.append("SPREAD")
+    if taker is None or taker < float(ec["hard_taker_floor"]):
+        vetoes.append("TAKER_FLOW_LT_50")
+    if rsi15 is None or rsi15 > float(ec["rsi_veto"]):
+        vetoes.append("RSI_LATE")
 
     return {
         "symbol": symbol,
         "score": score,
-        "groups": groups,
+        "score_total": int(ec["score_total"]),
+        "checks": checks,
         "vetoes": vetoes,
-        "eligible": score >= float(ec["min_score"]) and not vetoes,
+        "eligible": score >= int(ec["score_required"]) and not vetoes,
         "bar_time": last15["t"],
-        "bid": bid, "ask": ask, "spread_bps": spr,
-        "taker_buy_ratio": tr, "taker_buy_ratio_3": tr3, "relative_quote_volume": rv,
-        "rsi_1h": r_now, "macd_hist_1h": mh_now, "atr_pct_1h": atr_pct,
-        "bollinger_width_1h": bw,
+        "bid": bid,
+        "ask": ask,
+        "spread_bps": spr,
+        "ema20_15m": ema20_15,
+        "ema50_15m": ema50_15,
+        "ema200_1h": ema200_1h,
+        "adx_15m": adx15,
+        "rsi_15m": rsi15,
+        "relative_quote_volume": rvol20,
+        "taker_buy_ratio": taker,
+        "vwap_15m": vwap_now,
+        "vwap_retest": vwap_retest,
+        "atr_15m": atr15,
+        "atr_pct_15m": atr_pct15,
+        "confirmed_swing_low": swing,
         "quote_volume_24h": quote_volume_24h,
-        "atr_1h": a1,
     }
 
 
@@ -413,6 +479,10 @@ def stop_risk(position):
 
 def portfolio_stop_risk(state):
     return sum(stop_risk(p) for p in state["positions"].values())
+
+
+def account_equity_at_cost(state):
+    return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
 
 
 def close_position(state, symbol, bid, reason):
@@ -456,15 +526,31 @@ def open_position(state, snap, filters):
         return "POSITION_ALREADY_OPEN"
 
     entry = simulated_fill(snap["ask"], "buy")
-    atr_pct = float(snap["atr_pct_1h"])
-    stop_fraction = max(float(risk_cfg["min_stop_fraction"]),
-                        min(float(risk_cfg["max_stop_fraction"]),
-                            atr_pct * float(risk_cfg["stop_atr_multiplier"])))
-    stop = entry * (1 - stop_fraction)
-    target = entry * (1 + stop_fraction * float(risk_cfg["reward_risk"]))
+    atr_abs = snap.get("atr_15m")
+    swing_low = snap.get("confirmed_swing_low")
+    if atr_abs is None or not math.isfinite(float(atr_abs)) or float(atr_abs) <= 0:
+        return "ATR_UNAVAILABLE"
+    if swing_low is None or not math.isfinite(float(swing_low)) or float(swing_low) <= 0:
+        return "NO_CONFIRMED_SWING_LOW"
+
+    atr_abs = float(atr_abs)
+    swing_low = float(swing_low)
+    atr_stop = entry - atr_abs * float(risk_cfg["stop_atr_multiplier"])
+    swing_stop = swing_low - atr_abs * float(risk_cfg["swing_atr_buffer"])
+    stop = min(atr_stop, swing_stop, entry * (1 - float(risk_cfg["min_stop_fraction"])))
+    if stop <= 0 or stop >= entry:
+        return "INVALID_STOP"
+    stop_fraction = (entry - stop) / entry
+    if stop_fraction > float(risk_cfg["max_stop_fraction"]):
+        return "STOP_TOO_WIDE"
+    target = entry + (entry - stop) * float(risk_cfg["reward_risk"])
 
     fee = float(risk_cfg["fee_rate"])
-    risk_budget = float(risk_cfg["max_risk_per_trade_usdt"])
+    equity = account_equity_at_cost(state)
+    risk_budget = min(
+        float(risk_cfg["max_risk_per_trade_usdt"]),
+        equity * float(risk_cfg["max_risk_per_trade_fraction"]),
+    )
     stake_by_risk = risk_budget / max(stop_fraction + 2 * fee + float(risk_cfg["slippage_rate"]), 1e-9)
     notional = min(float(risk_cfg["max_quote_per_trade_usdt"]), stake_by_risk,
                    state["cash_usdt"] / (1 + fee))
@@ -485,7 +571,8 @@ def open_position(state, snap, filters):
         "stop": stop, "target": target, "initial_stop": stop,
         "initial_risk_abs": entry - stop, "breakeven": False,
         "opened_at": now_iso(), "bar_time": snap["bar_time"], "score": snap["score"],
-        "groups": snap["groups"],
+        "score_total": snap.get("score_total", 6), "checks": snap.get("checks", {}),
+        "confirmed_swing_low": swing_low,
     }
     actual = stop_risk(pos)
     if actual > float(risk_cfg["max_risk_per_trade_usdt"]) + 1e-9:
@@ -536,14 +623,22 @@ def validate_config():
         raise RuntimeError("SPOT_ONLY_CONFIG_VIOLATION")
     if CFG.get("mode") != "paper":
         raise RuntimeError("Indicator runtime is PAPER only")
-    if CFG.get("engine") != "INDICATOR_ONLY_V1":
+    if CFG.get("engine") != "INDICATOR_ONLY_V2_5OF6":
         raise RuntimeError("Unexpected engine id")
-    if float(CFG["entry"]["min_score"]) > 100 or float(CFG["entry"]["min_score"]) <= 0:
-        raise RuntimeError("Invalid score threshold")
+    if int(CFG["entry"]["score_total"]) != 6 or int(CFG["entry"]["score_required"]) != 5:
+        raise RuntimeError("Invalid 5-of-6 score contract")
     if float(CFG["risk"]["max_daily_loss_usdt"]) <= 0:
         raise RuntimeError("Invalid daily loss cap")
     if float(CFG["risk"]["max_risk_per_trade_usdt"]) <= 0:
         raise RuntimeError("Invalid per-trade risk")
+    if not (0 < float(CFG["risk"]["max_risk_per_trade_fraction"]) <= 0.005):
+        raise RuntimeError("Per-trade risk must be <= 0.5 percent")
+    if CFG["risk"].get("allow_averaging_down") is not False:
+        raise RuntimeError("Averaging down must stay disabled")
+    if CFG["risk"].get("allow_martingale") is not False:
+        raise RuntimeError("Martingale must stay disabled")
+    if float(CFG["risk"].get("leverage", 1)) != 1:
+        raise RuntimeError("Leverage is not allowed")
 
 
 def main():
@@ -590,7 +685,7 @@ def main():
             blocked.append({"symbol": symbol, "reason": "OPEN_POSITION_UNPRICED"})
             unpriced = True
             continue
-        manage_position(state, symbol, snap["bid"], snap["atr_1h"])
+        manage_position(state, symbol, snap["bid"], snap["atr_15m"])
 
     evidence = precision_evidence_status()
     signals = []
@@ -627,8 +722,9 @@ def main():
                 blocked.append({"symbol": key, "score": snap["score"], "reason": result})
 
     state["signals"] = [{
-        "symbol": x["symbol"], "score": x["score"], "groups": x["groups"],
+        "symbol": x["symbol"], "score": x["score"], "score_total": x["score_total"], "checks": x["checks"],
         "taker_buy_ratio": x["taker_buy_ratio"], "relative_quote_volume": x["relative_quote_volume"],
+        "adx_15m": x["adx_15m"], "rsi_15m": x["rsi_15m"], "vwap_retest": x["vwap_retest"],
         "spread_bps": x["spread_bps"], "bar_time": x["bar_time"],
     } for x in signals]
     state["blocked"] = blocked
