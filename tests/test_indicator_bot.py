@@ -21,9 +21,11 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.CFG["mode"],"paper")
         self.assertEqual(bot.CFG["engine"],"INDICATOR_ONLY_V1")
         self.assertNotIn("strategies",bot.CFG)
-        self.assertEqual(bot.CFG["entry"]["min_score"],90)
+        self.assertEqual(bot.CFG["entry"]["min_score"],85)
         self.assertTrue(bot.CFG["evidence_gate"]["required"])
         self.assertEqual(bot.CFG["evidence_gate"]["minimum_win_rate"],0.99)
+        self.assertEqual(bot.CFG["evidence_gate"]["scope"],"live_only")
+        self.assertTrue(bot.CFG["evidence_gate"]["paper_observation_allowed"])
 
     def test_indicator_score_is_bounded_and_grouped(self):
         snap=bot.indicator_snapshot("TESTUSDT",bars(taker=.62),bars(drift=.0015,taker=.58),
@@ -39,9 +41,14 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertIn("TAKER_FLOW",snap["vetoes"])
         self.assertFalse(snap["eligible"])
 
-    def test_btc_regime_can_veto_downtrend(self):
+    def test_btc_regime_keeps_macro_guard_without_requiring_1h_bullish(self):
         self.assertTrue(bot.btc_regime(bars(drift=.001),bars(drift=.002))["ok"])
-        self.assertFalse(bot.btc_regime(bars(drift=-.002),bars(drift=.002))["ok"])
+        soft=bot.btc_regime(bars(drift=-.0002),bars(drift=.002))
+        self.assertTrue(soft["macroBullish"])
+        self.assertFalse(soft["oneHourBullish"])
+        self.assertTrue(soft["ok"])
+        crash=bot.btc_regime(bars(drift=-.02),bars(drift=.002))
+        self.assertFalse(crash["ok"])
 
     def test_open_position_sizes_by_risk_and_never_exceeds_limits(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
@@ -67,6 +74,7 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(status["reason"],"PRECISION_EVIDENCE_NOT_MET")
         self.assertEqual(status["requiredWinRate"],0.99)
         self.assertGreaterEqual(status["requiredTrades"],100)
+        self.assertFalse(bot.evidence_blocks_entries(status))
 
 
 if __name__=="__main__":
