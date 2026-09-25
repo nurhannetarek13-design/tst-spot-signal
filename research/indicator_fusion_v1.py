@@ -199,7 +199,12 @@ def compute_indicator_fusion(
     out["families"] = sum(x.astype(int) for x in confirmations)
 
     hard_veto = (
-        (rsi > float(p["rsiVeto"]))
+        qv24.isna()
+        | ema_trend.isna()
+        | taker_z.isna()
+        | atr_rank.isna()
+        | prior_high.isna()
+        | (rsi > float(p["rsiVeto"]))
         | (taker_ratio < float(p["takerFloor"]))
         | (atr > float(p["atrVeto"]))
         | (qv24 < float(p["minRollingQuoteVolume24h"]))
