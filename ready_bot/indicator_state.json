@@ -2,32 +2,44 @@
   "blocked": [
     {
       "detail": {
-        "ema200_4h": 78710.43354552475,
-        "ema20_1h": 84140.07575446881,
-        "ema50_1h": 84329.43565722766,
-        "ema50_4h": 82852.34089334944,
+        "claimSupported": false,
+        "holdoutNetPnlPerUnit": 0.0,
+        "holdoutTrades": 0,
+        "holdoutWinRate": 0.0,
         "ok": false,
-        "ret1h": 0.0021828460928201565
+        "reason": "PRECISION_EVIDENCE_NOT_MET",
+        "requiredTrades": 100,
+        "requiredWinRate": 0.99
       },
-      "reason": "BTC_REGIME_VETO"
+      "reason": "PRECISION_EVIDENCE_GATE"
     }
   ],
   "btc_regime": {
-    "ema200_4h": 78710.43354552475,
-    "ema20_1h": 84140.07575446881,
-    "ema50_1h": 84329.43565722766,
-    "ema50_4h": 82852.34089334944,
+    "ema200_4h": 78800.28361884227,
+    "ema20_1h": 84128.64092070547,
+    "ema50_1h": 84317.29080267138,
+    "ema50_4h": 82898.11784976354,
     "ok": false,
-    "ret1h": 0.0021828460928201565
+    "ret1h": 0.0006194026295731625
   },
   "cash_usdt": 20.08,
   "closed_trades": [],
   "day": "2026-09-25",
   "day_pnl": 0.0,
   "engine": "INDICATOR_ONLY_V1",
-  "last_run": "2026-09-25T19:22:12.604485+00:00",
+  "last_run": "2026-09-25T20:53:29.112073+00:00",
   "mode": "PAPER_ONLY",
   "positions": {},
+  "precision_evidence": {
+    "claimSupported": false,
+    "holdoutNetPnlPerUnit": 0.0,
+    "holdoutTrades": 0,
+    "holdoutWinRate": 0.0,
+    "ok": false,
+    "reason": "PRECISION_EVIDENCE_NOT_MET",
+    "requiredTrades": 100,
+    "requiredWinRate": 0.99
+  },
   "seen": {},
   "signals": [],
   "universe": [
@@ -53,8 +65,8 @@
     "TAOUSDT",
     "ADAUSDT",
     "XLMUSDT",
-    "PEPEUSDT",
     "WLDUSDT",
+    "PEPEUSDT",
     "ARBUSDT"
   ]
 }
