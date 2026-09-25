@@ -42,15 +42,23 @@ jobs:
               with open(os.environ["GITHUB_ENV"],"a") as f: f.write("HAS_CANDIDATE=false\n")
               print("No unified candidate; fail-closed snapshot written")
           else:
-              pair=m["symbol"][:-4]+"/USDT"
-              pairs=list(dict.fromkeys([pair,"BTC/USDT","ETH/USDT","SOL/USDT"]))
+              symbols=list(m.get("symbols") or [m["symbol"]])
+              candidate_pairs=[s[:-4]+"/USDT" for s in symbols]
+              download_pairs=list(dict.fromkeys(candidate_pairs+["BTC/USDT","ETH/USDT","SOL/USDT"]))
+              config=json.loads(pathlib.Path("freqtrade/user_data/config.json").read_text())
+              if m.get("scope")=="MULTI_SYMBOL_BASKET":
+                  # Historical pooled research only: prevent wallet/max-open limits
+                  # from censoring simultaneous symbol-level signals.
+                  config["max_open_trades"]=max(1,len(candidate_pairs))
+                  config["dry_run_wallet"]=max(1000.0,20.0*len(candidate_pairs))
+              pathlib.Path("freqtrade/user_data/candidate-config.json").write_text(json.dumps(config,indent=2))
               with open(os.environ["GITHUB_ENV"],"a") as f:
                   f.write("HAS_CANDIDATE=true\n")
-                  f.write(f"PAIR={pair}\n")
-                  f.write(f"PAIRS={' '.join(pairs)}\n")
+                  f.write(f"CANDIDATE_PAIRS={' '.join(candidate_pairs)}\n")
+                  f.write(f"DOWNLOAD_PAIRS={' '.join(download_pairs)}\n")
                   f.write(f"TF={m['timeframe']}\n")
               pathlib.Path("freqtrade/user_data/candidate-manifest.json").write_text(json.dumps(m,indent=2))
-              print(m["candidateId"], pair, m["timeframe"], pairs)
+              print(m["candidateId"], m.get("scope","SINGLE_SYMBOL"), m["timeframe"], candidate_pairs)
           PY
 
       - name: Pull official Freqtrade image
@@ -67,7 +75,7 @@ jobs:
             --exchange binance \
             --days 365 \
             --timeframes "$TF" \
-            --pairs $PAIRS
+            --pairs $DOWNLOAD_PAIRS
 
       - name: Prepare writable result folders
         if: env.HAS_CANDIDATE == 'true'
@@ -83,11 +91,11 @@ jobs:
             -v "/tmp/ft-base-$GITHUB_RUN_ID:/results" \
             freqtradeorg/freqtrade:stable \
             backtesting \
-            --config /freqtrade/user_data/config.json \
+            --config /freqtrade/user_data/candidate-config.json \
             --strategy UnifiedCandidateStrategy \
             --strategy-path /freqtrade/user_data/strategies \
             --timeframe "$TF" \
-            --pairs "$PAIR" \
+            --pairs $CANDIDATE_PAIRS \
             --fee 0.0015 \
             --cache none \
             --export trades \
@@ -102,11 +110,11 @@ jobs:
             -v "/tmp/ft-stress-$GITHUB_RUN_ID:/results" \
             freqtradeorg/freqtrade:stable \
             backtesting \
-            --config /freqtrade/user_data/config.json \
+            --config /freqtrade/user_data/candidate-config.json \
             --strategy UnifiedCandidateStrategy \
             --strategy-path /freqtrade/user_data/strategies \
             --timeframe "$TF" \
-            --pairs "$PAIR" \
+            --pairs $CANDIDATE_PAIRS \
             --fee 0.003 \
             --cache none \
             --export trades \
