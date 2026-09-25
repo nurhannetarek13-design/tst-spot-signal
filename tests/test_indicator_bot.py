@@ -188,6 +188,8 @@ class IndicatorBotTests(unittest.TestCase):
         bot.manage_position(state,"TESTUSDT",snap)
         self.assertNotIn("TESTUSDT",state["positions"])
         self.assertEqual(state["closed_trades"][-1]["reason"],"MOMENTUM_FADE")
+        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
+        self.assertEqual(state["decision_log"][-1]["reason"],"MOMENTUM_FADE")
 
     def test_dynamic_exit_frees_stalled_trade(self):
         opened=(datetime.now(timezone.utc)-timedelta(minutes=31)).isoformat()
@@ -204,6 +206,8 @@ class IndicatorBotTests(unittest.TestCase):
         bot.manage_position(state,"TESTUSDT",snap)
         self.assertNotIn("TESTUSDT",state["positions"])
         self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
+        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
+        self.assertEqual(state["decision_log"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
 
 
     def test_duplicate_signal_id_is_idempotent(self):
