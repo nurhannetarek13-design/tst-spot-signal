@@ -1,0 +1,82 @@
+name: Indicator-Only Paper Bot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ready_bot/indicator_bot.py'
+      - 'ready_bot/indicator_config.json'
+      - 'tests/test_indicator_bot.py'
+      - '.github/workflows/indicator-paper-bot.yml'
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indicator-only-paper-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test indicator runtime
+        run: |
+          python -m py_compile ready_bot/indicator_bot.py
+          python -m unittest tests.test_indicator_bot -v
+
+      - name: Run indicator-only PAPER engine
+        run: python ready_bot/indicator_bot.py
+
+      - name: Assert paper-only state and risk policy
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('ready_bot/indicator_config.json'))
+          s=json.load(open('ready_bot/indicator_state.json'))
+          assert c['mode']=='paper'
+          assert c['engine']=='INDICATOR_ONLY_V1'
+          assert 'strategies' not in c
+          assert s['mode']=='PAPER_ONLY'
+          assert c['risk']['max_daily_loss_usdt']==2.0
+          assert c['risk']['max_open_positions']==3
+          assert c['risk']['max_quote_per_trade_usdt']<=10.0
+          print(json.dumps({
+            'engine':c['engine'],
+            'cash':s['cash_usdt'],
+            'day_pnl':s['day_pnl'],
+            'positions':list(s['positions']),
+            'signals':s.get('signals',[]),
+            'btc_regime':s.get('btc_regime')
+          },indent=2))
+          PY
+
+      - name: Persist indicator paper state
+        run: |
+          cp ready_bot/indicator_state.json /tmp/indicator-state.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/indicator-state.json ready_bot/indicator_state.json
+            git config user.name 'indicator-paper-bot'
+            git config user.email 'indicator-paper-bot@users.noreply.github.com'
+            git add ready_bot/indicator_state.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update indicator-only paper state'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
