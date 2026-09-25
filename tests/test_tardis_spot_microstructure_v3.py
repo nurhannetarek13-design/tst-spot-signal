@@ -48,5 +48,27 @@ class TardisSpotReplayV3Tests(unittest.TestCase):
         self.assertEqual(x["eventsApplied"],2)
 
 
+    def test_execution_probes_are_independent_of_strategy_candidates(self):
+        rows=[
+            {"line":0,"prefix":"","data":{"lastUpdateId":100,"bids":[["99","100"]],"asks":[["101","100"]]}},
+        ]
+        uid=101
+        line=1
+        for minute in range(4):
+            base=minute*60_000
+            for ms in (1_000,2_000):
+                rows.append({
+                    "line":line,"prefix":"",
+                    "data":{"E":base+ms,"U":uid,"u":uid,"b":[["99",str(100+minute)]],"a":[["101",str(100+minute)]]}
+                })
+                uid+=1;line+=1
+        x=replay(rows,"BTCUSDT",0,240_000,10)
+        self.assertTrue(x["canonicalReplayReady"])
+        self.assertEqual(x["candidateCount"],0)
+        self.assertGreaterEqual(x["executionProbeCount"],3)
+        self.assertTrue(x["executionReplayPass"])
+        self.assertGreaterEqual(x["executionProbeFillRate"],0.95)
+
+
 if __name__=="__main__":
     unittest.main()
