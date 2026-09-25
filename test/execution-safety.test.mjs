@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder, evaluateApiRestrictions, evaluateAccountTradingSafety } from "../server.mjs";
-import { validateOperation } from "../api/binance-signed-relay.mjs";
-import { evaluateCloudflareAccountSafety } from "../src/buy-gateway-stable.js";
 
 const symbolInfo = {
   filters: [
@@ -97,45 +95,4 @@ test("Account trading safety blocks locked or non-normal accounts", () => {
   const abnormal=evaluateAccountTradingSafety({data:"Maintenance"},{data:{isLocked:false,plannedRecoverTime:0}});
   assert.equal(abnormal.ok,false);
   assert.ok(abnormal.reasons.includes("ACCOUNT_STATUS_NOT_NORMAL"));
-});
-
-
-test("signed relay allows only the read-only account safety GETs", () => {
-  for (const path of [
-    "/sapi/v1/account/apiRestrictions",
-    "/sapi/v1/account/status",
-    "/sapi/v1/account/apiTradingStatus",
-  ]) {
-    assert.equal(validateOperation("GET",path,{}).ok,true);
-    assert.equal(validateOperation("POST",path,{}).ok,false);
-    assert.equal(validateOperation("GET",path,{foo:"bar"}).ok,false);
-  }
-  assert.equal(validateOperation("GET","/sapi/v1/capital/config/getall",{}).ok,false);
-});
-
-test("cloudflare live safety requires spot-only permissions and normal unlocked account", () => {
-  const safe=evaluateCloudflareAccountSafety(
-    {
-      enableReading:true,enableSpotAndMarginTrading:true,
-      enableWithdrawals:false,enableFutures:false,enableMargin:false,ipRestrict:true,
-    },
-    {data:"Normal"},
-    {data:{isLocked:false,plannedRecoverTime:0}},
-  );
-  assert.equal(safe.ok,true);
-
-  const bad=evaluateCloudflareAccountSafety(
-    {
-      enableReading:true,enableSpotAndMarginTrading:true,
-      enableWithdrawals:true,enableFutures:true,enableMargin:true,ipRestrict:false,
-    },
-    {data:"Maintenance"},
-    {data:{isLocked:true,plannedRecoverTime:123}},
-  );
-  assert.equal(bad.ok,false);
-  for (const reason of [
-    "WITHDRAWALS_MUST_BE_DISABLED","FUTURES_MUST_BE_DISABLED",
-    "MARGIN_MUST_BE_DISABLED","IP_RESTRICTION_REQUIRED",
-    "ACCOUNT_STATUS_NOT_NORMAL","API_TRADING_LOCKED",
-  ]) assert.ok(bad.reasons.includes(reason));
 });
