@@ -296,22 +296,78 @@ def replay(events, *,
     }
 
 
+def load_point_in_time_universe_evidence(path):
+    if not path:
+        return {
+            "checked":False,
+            "source":"UNKNOWN",
+            "historicalSymbolCount":0,
+            "delistedSymbolCount":0,
+            "months":0,
+        }
+    p=Path(path)
+    if not p.exists():
+        return {
+            "checked":False,
+            "source":"MISSING_POINT_IN_TIME_ARTIFACT",
+            "historicalSymbolCount":0,
+            "delistedSymbolCount":0,
+            "months":0,
+        }
+    try:
+        d=json.loads(p.read_text())
+    except Exception:
+        return {
+            "checked":False,
+            "source":"INVALID_POINT_IN_TIME_ARTIFACT",
+            "historicalSymbolCount":0,
+            "delistedSymbolCount":0,
+            "months":0,
+        }
+    months=len(d.get("pointInTimeUniverseByMonth") or {})
+    hist=int(d.get("historicalSymbolCount") or 0)
+    dele=int(d.get("delistedSymbolCount") or 0)
+    checked=bool(
+        d.get("pointInTimeUniverse") is True
+        and d.get("delistedCoverage") is True
+        and months>=12
+        and hist>=20
+        and dele>=1
+    )
+    return {
+        "checked":checked,
+        "source":"BINANCE_VISION_POINT_IN_TIME_SPOT_UNIVERSE" if checked else "POINT_IN_TIME_ARTIFACT_INCOMPLETE",
+        "historicalSymbolCount":hist,
+        "delistedSymbolCount":dele,
+        "months":months,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--universe-source", default="UNKNOWN")
     ap.add_argument("--survivorship-bias-checked", action="store_true")
+    ap.add_argument("--point-in-time-universe")
     ap.add_argument("--latency-ms", type=int, default=500)
     args = ap.parse_args()
 
     events = [json.loads(line) for line in Path(args.events).read_text().splitlines() if line.strip()]
+    universe_evidence=load_point_in_time_universe_evidence(args.point_in_time_universe)
+    derived_checked=bool(args.survivorship_bias_checked or universe_evidence["checked"])
+    derived_source=(
+        universe_evidence["source"]
+        if universe_evidence["checked"]
+        else args.universe_source
+    )
     result = replay(
         events,
         latency_ms=args.latency_ms,
-        universe_source=args.universe_source,
-        survivorship_bias_checked=args.survivorship_bias_checked,
+        universe_source=derived_source,
+        survivorship_bias_checked=derived_checked,
     )
+    result["point_in_time_universe_evidence"]=universe_evidence
     Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True))
     print(json.dumps({k: v for k, v in result.items() if k != "decisions"}, indent=2))
 
