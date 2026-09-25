@@ -598,9 +598,16 @@ def simulated_fill(price, side):
     return price * (1 + slip if side == "buy" else 1 - slip)
 
 
+def conservative_execution_slippage_rate():
+    return max(
+        float(CFG["risk"]["slippage_rate"]),
+        float(CFG["production_guard"]["max_estimated_slippage_bps"]) / 10000.0,
+    )
+
+
 def stop_risk(position):
     fee = float(CFG["risk"]["fee_rate"])
-    stop_fill = simulated_fill(position["stop"], "sell")
+    stop_fill = float(position["stop"]) * (1.0 - conservative_execution_slippage_rate())
     return max(0.0, position["cost"] - position["qty"] * stop_fill * (1 - fee))
 
 
