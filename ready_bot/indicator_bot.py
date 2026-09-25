@@ -35,6 +35,23 @@ except ImportError:
         prefilter_snapshot,
     )
 
+try:
+    from .market_context import (
+        classify_market_regime,
+        max_open_position_correlation,
+        pct_return,
+        relative_strength_ranking,
+        validate_bar_integrity,
+    )
+except ImportError:
+    from market_context import (
+        classify_market_regime,
+        max_open_position_correlation,
+        pct_return,
+        relative_strength_ranking,
+        validate_bar_integrity,
+    )
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("TST_INDICATOR_CONFIG", str(ROOT / "indicator_config.json")))
 STATE_PATH = Path(os.getenv("TST_INDICATOR_STATE", str(ROOT / "indicator_state.json")))
@@ -194,6 +211,9 @@ def closed_bars(symbol, timeframe, limit=None):
             "t": int(r[0]), "o": float(r[1]), "h": float(r[2]), "l": float(r[3]),
             "c": float(r[4]), "v": float(r[5]), "qv": float(r[7]), "n": int(r[8]), "tq": float(r[10])
         })
+    integrity = validate_bar_integrity(out, timeframe, int(now_ms))
+    if not integrity["ok"]:
+        raise RuntimeError("DATA_INTEGRITY:" + ",".join(integrity["reasons"]))
     return out
 
 
@@ -525,6 +545,12 @@ def close_position(state, symbol, bid, reason):
         "symbol": symbol, "engine": CFG["engine"], "entry": p["entry"], "exit": fill,
         "qty": p["qty"], "pnl_usdt": pnl, "reason": reason,
         "score_at_entry": p.get("score"), "opened_at": p["opened_at"], "closed_at": now_iso(),
+        "momentum_score": p.get("momentum_score"),
+        "market_regime": p.get("market_regime"),
+        "relative_strength": p.get("relative_strength"),
+        "entry_context": p.get("entry_context"),
+        "mfe_r": p.get("mfe_r"),
+        "mae_r": p.get("mae_r"),
     })
 
 
@@ -574,10 +600,13 @@ def open_position(state, snap, filters):
 
     fee = float(risk_cfg["fee_rate"])
     equity = account_equity_at_cost(state)
+    regime_mult=max(0.0,min(1.0,float(snap.get("risk_multiplier",1.0))))
     risk_budget = min(
         float(risk_cfg["max_risk_per_trade_usdt"]),
         equity * float(risk_cfg["max_risk_per_trade_fraction"]),
-    )
+    ) * regime_mult
+    if risk_budget <= 0:
+        return "REGIME_RISK_ZERO"
     stake_by_risk = risk_budget / max(stop_fraction + 2 * fee + float(risk_cfg["slippage_rate"]), 1e-9)
     notional = min(float(risk_cfg["max_quote_per_trade_usdt"]), stake_by_risk,
                    state["cash_usdt"] / (1 + fee))
@@ -602,6 +631,23 @@ def open_position(state, snap, filters):
         "confirmed_swing_low": swing_low,
         "momentum_score": snap.get("micro", {}).get("score"),
         "momentum_stage": snap.get("micro", {}).get("stage"),
+        "relative_strength": snap.get("relative_strength"),
+        "market_regime": snap.get("regime", {}).get("state") if isinstance(snap.get("regime"), dict) else snap.get("regime"),
+        "portfolio_corr": snap.get("portfolio_corr"),
+        "entry_context": {
+            "taker_last3": snap.get("micro", {}).get("taker_last3"),
+            "rvol_1m": snap.get("micro", {}).get("rvol_1m"),
+            "rvol_3m": snap.get("micro", {}).get("rvol_3m"),
+            "obi": snap.get("micro", {}).get("obi"),
+            "agg_cvd": snap.get("micro", {}).get("agg_cvd"),
+            "spread_bps": snap.get("spread_bps"),
+            "adx_15m": snap.get("adx_15m"),
+            "rsi_15m": snap.get("rsi_15m"),
+        },
+        "peak_price": entry,
+        "trough_price": entry,
+        "mfe_r": 0.0,
+        "mae_r": 0.0,
     }
     actual = stop_risk(pos)
     if actual > float(risk_cfg["max_risk_per_trade_usdt"]) + 1e-9:
@@ -619,6 +665,11 @@ def open_position(state, snap, filters):
 
 def manage_position(state, symbol, bid, atr_now):
     p = state["positions"][symbol]
+    p["peak_price"]=max(float(p.get("peak_price") or p["entry"]),float(bid))
+    p["trough_price"]=min(float(p.get("trough_price") or p["entry"]),float(bid))
+    r0=max(float(p.get("initial_risk_abs") or 0),1e-12)
+    p["mfe_r"]=max(float(p.get("mfe_r") or 0.0),(p["peak_price"]-p["entry"])/r0)
+    p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
     if bid <= p["stop"]:
         close_position(state, symbol, bid, "STOP")
         return
@@ -646,6 +697,10 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
         qv = float(t.get("quoteVolume") or 0)
     snap = indicator_snapshot(symbol, b15, b1, b4, bid, ask, qv)
     snap["filters"] = symbol_filters(symbol)
+    snap["ret_5m"] = pct_return(b1m, 5)
+    snap["ret_15m"] = pct_return(b15, 1)
+    snap["ret_1h"] = pct_return(b1, 1)
+    snap["_bars1h"] = b1
     snap["micro_pre"] = prefilter_snapshot(b1m, b3m, CFG["momentum"])
     snap["micro_pre"]["micro_breakout_hold"] = micro_breakout_hold(
         b1m,
@@ -700,6 +755,29 @@ def validate_config():
         raise RuntimeError("Martingale must stay disabled")
     if float(CFG["risk"].get("leverage", 1)) != 1:
         raise RuntimeError("Leverage is not allowed")
+    if not (0 < float(CFG["risk"].get("max_pair_correlation", 0.85)) <= 1):
+        raise RuntimeError("Invalid correlation cap")
+    if int(CFG["risk"].get("consecutive_loss_cooldown_count", 3)) < 2:
+        raise RuntimeError("Invalid consecutive loss cooldown")
+
+
+def consecutive_loss_cooldown(state):
+    risk_cfg=CFG["risk"]
+    need=int(risk_cfg.get("consecutive_loss_cooldown_count",3))
+    minutes=int(risk_cfg.get("consecutive_loss_cooldown_minutes",60))
+    closed=list(state.get("closed_trades") or [])
+    if len(closed)<need:
+        return {"active":False}
+    tail=closed[-need:]
+    if not all(float(x.get("pnl_usdt") or 0)<0 for x in tail):
+        return {"active":False}
+    try:
+        last=datetime.fromisoformat(str(tail[-1]["closed_at"]).replace("Z","+00:00"))
+    except Exception:
+        return {"active":False}
+    until=last.timestamp()+minutes*60
+    remaining=until-time.time()
+    return {"active":remaining>0,"remaining_seconds":max(0,int(remaining)),"losses":need}
 
 
 def main():
@@ -739,6 +817,30 @@ def main():
             except Exception as exc:
                 blocked.append({"symbol": symbol, "reason": "DATA_UNAVAILABLE", "detail": str(exc)[:160]})
 
+    # MARKET CONTEXT: use broad state and cross-sectional strength as modifiers,
+    # not a pile of extra mandatory entry indicators.
+    btc_snap = snapshots.get("BTCUSDT")
+    btc_returns = {
+        "5m": btc_snap.get("ret_5m") if btc_snap else 0.0,
+        "15m": btc_snap.get("ret_15m") if btc_snap else 0.0,
+        "1h": btc_snap.get("ret_1h") if btc_snap else 0.0,
+    }
+    rs_map = relative_strength_ranking(snapshots, btc_returns)
+    for symbol, rs in rs_map.items():
+        if symbol in snapshots:
+            snapshots[symbol]["relative_strength"] = rs
+
+    try:
+        regime = classify_market_regime(btc1h, btc4h, snapshots)
+    except Exception as exc:
+        regime = {"state":"RISK_OFF","allow_new_longs":False,"risk_multiplier":0.0,"reason":f"REGIME_ERROR:{str(exc)[:120]}"}
+
+    unavailable_count=sum(1 for x in blocked if x.get("reason")=="DATA_UNAVAILABLE")
+    integrity_ratio=unavailable_count/max(1,len(symbols))
+    data_integrity_ok=integrity_ratio <= float(CFG["data_integrity"]["max_unavailable_symbol_fraction"])
+    if not data_integrity_ok:
+        blocked.append({"reason":"GLOBAL_DATA_INTEGRITY_HALT","unavailable_fraction":integrity_ratio})
+
     # EARLY MOMENTUM: score all symbols cheaply on 1m/3m first, then spend
     # order-book/aggTrade calls only on the strongest few.
     micro_candidates = [
@@ -751,6 +853,7 @@ def main():
         key=lambda item: (
             -float(item[1]["micro_pre"].get("prefilter_score", 0)),
             -float(item[1]["micro_pre"].get("taker_latest") or 0),
+            -float((item[1].get("relative_strength") or {}).get("score") or 0),
             item[0],
         )
     )
@@ -762,6 +865,15 @@ def main():
                 symbol = futures[future]
                 try:
                     snapshots[symbol] = future.result()
+                    rs=snapshots[symbol].get("relative_strength") or {}
+                    micro=snapshots[symbol].get("micro") or {}
+                    # Relative strength ranks opportunity; only clearly weak coins
+                    # are downgraded one stage instead of hard-rejected.
+                    if rs.get("weak") and micro.get("stage")=="ENTRY_CANDIDATE":
+                        micro["stage"]="ARMED"
+                        snapshots[symbol]["eligible"]=False
+                        micro["rs_downgrade"]=True
+                    snapshots[symbol]["regime"]=regime
                 except Exception as exc:
                     blocked.append({"symbol": symbol, "reason": "MICROSTRUCTURE_UNAVAILABLE", "detail": str(exc)[:160]})
 
@@ -787,6 +899,8 @@ def main():
                 "vwap_distance_atr": micro["vwap_distance_atr"],
                 "price_velocity": micro["price_velocity"],
                 "chase_veto": micro["chase_veto"],
+                "relative_strength": snap.get("relative_strength"),
+                "regime": regime.get("state"),
             })
     momentum_watchlist.sort(key=lambda x: (-x["score"], x["symbol"]))
 
@@ -800,9 +914,16 @@ def main():
         manage_position(state, symbol, snap["bid"], snap["atr_15m"])
 
     evidence = precision_evidence_status()
+    cooldown = consecutive_loss_cooldown(state)
     signals = []
     if evidence_blocks_entries(evidence):
         blocked.append({"reason": "PRECISION_EVIDENCE_GATE", "detail": evidence})
+    elif not data_integrity_ok:
+        blocked.append({"reason": "DATA_INTEGRITY_VETO"})
+    elif not regime.get("allow_new_longs"):
+        blocked.append({"reason": "MARKET_REGIME_RISK_OFF", "detail": regime})
+    elif cooldown.get("active"):
+        blocked.append({"reason": "CONSECUTIVE_LOSS_COOLDOWN", "detail": cooldown})
     elif not btc.get("ok"):
         blocked.append({"reason": "BTC_REGIME_VETO", "detail": btc})
     else:
@@ -819,6 +940,7 @@ def main():
         -float(x.get("micro", {}).get("score", 0)),
         -float(x.get("micro", {}).get("taker_latest") or 0),
         -float(x.get("micro", {}).get("rvol_1m") or 0),
+        -float((x.get("relative_strength") or {}).get("score") or 0),
         x["symbol"],
     ))
 
@@ -833,6 +955,13 @@ def main():
             key = snap["symbol"]
             if state.get("seen", {}).get(key) == snap["bar_time"]:
                 continue
+            corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
+            snap["portfolio_corr"]=corr
+            if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
+                blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
+                state.setdefault("seen", {})[key] = snap["bar_time"]
+                continue
+            snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
             result = open_position(state, snap, snap["filters"])
             state.setdefault("seen", {})[key] = snap["bar_time"]
             if result != "PAPER_OPENED":
@@ -857,6 +986,10 @@ def main():
     state["momentum_watchlist"] = momentum_watchlist
     state["blocked"] = blocked
     state["btc_regime"] = btc
+    state["market_regime"] = regime
+    state["relative_strength"] = rs_map
+    state["data_integrity"] = {"ok":data_integrity_ok,"unavailable_fraction":integrity_ratio}
+    state["loss_cooldown"] = cooldown
     state["precision_evidence"] = evidence
     state["universe"] = [x["symbol"] for x in uni]
     state["last_run"] = now_iso()
@@ -864,7 +997,8 @@ def main():
 
     print(json.dumps({
         "mode": "PAPER_ONLY", "engine": CFG["engine"], "cash_usdt": state["cash_usdt"],
-        "day_pnl": state["day_pnl"], "btc_regime": btc, "precision_evidence": evidence, "positions": state["positions"],
+        "day_pnl": state["day_pnl"], "btc_regime": btc, "market_regime": regime,
+        "data_integrity": state["data_integrity"], "precision_evidence": evidence, "positions": state["positions"],
         "signals": state["signals"], "momentum_watchlist": momentum_watchlist,
         "blocked": blocked, "last_run": state["last_run"],
     }, indent=2))

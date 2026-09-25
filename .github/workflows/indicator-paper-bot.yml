@@ -10,7 +10,7 @@ on:
       - 'tests/test_indicator_bot.py'
       - '.github/workflows/indicator-paper-bot.yml'
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '2-59/5 * * * *'
 
 permissions:
   contents: write
@@ -23,7 +23,7 @@ jobs:
   run:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,11 +36,32 @@ jobs:
       - name: Compile and test indicator runtime
         run: |
           python -m py_compile ready_bot/indicator_bot.py
+          python -m py_compile ready_bot/early_momentum.py
+          python -m py_compile ready_bot/market_context.py
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
+          python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
 
-      - name: Run indicator-only PAPER engine
-        run: python ready_bot/indicator_bot.py
+      - name: Run indicator-only PAPER engine at ~1-minute cadence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cycles=1
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            cycles=5
+          fi
+          for i in $(seq 1 "$cycles"); do
+            echo "=== scan $i/$cycles $(date -u +%FT%TZ) ==="
+            python ready_bot/indicator_bot.py
+            if [ "$i" -lt "$cycles" ]; then
+              now=$(date +%s)
+              next=$(( (now / 60 + 1) * 60 ))
+              sleep_for=$(( next - now ))
+              if [ "$sleep_for" -gt 0 ]; then
+                sleep "$sleep_for"
+              fi
+            fi
+          done
 
       - name: Assert paper-only state and risk policy
         run: |
@@ -69,6 +90,9 @@ jobs:
           assert c['risk']['allow_averaging_down'] is False
           assert c['risk']['allow_martingale'] is False
           assert c['risk']['leverage']==1
+          assert c['risk']['max_pair_correlation']==0.85
+          assert c['risk']['consecutive_loss_cooldown_count']==3
+          assert c['data_integrity']['fail_closed'] is True
           print(json.dumps({
             'engine':c['engine'],
             'cash':s['cash_usdt'],

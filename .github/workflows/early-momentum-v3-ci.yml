@@ -7,8 +7,11 @@ on:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
       - 'ready_bot/indicator_config.json'
+      - 'ready_bot/market_context.py'
       - 'tests/test_indicator_bot.py'
       - 'tests/test_early_momentum.py'
+      - 'tests/test_ready_market_context.py'
+      - '.github/workflows/indicator-paper-bot.yml'
       - '.github/workflows/early-momentum-v3-ci.yml'
   workflow_dispatch:
 
@@ -25,10 +28,12 @@ jobs:
         run: |
           python -m py_compile ready_bot/indicator_bot.py
           python -m py_compile ready_bot/early_momentum.py
+          python -m py_compile ready_bot/market_context.py
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
+          python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
       - name: Assert staged contract
         run: |
           python - <<'PY'
@@ -42,4 +47,7 @@ jobs:
           assert c['momentum']['obi_armed_min']==0.58
           assert c['risk']['leverage']==1
           assert c['risk']['allow_martingale'] is False
+          assert c['risk']['max_pair_correlation']==0.85
+          assert c['risk']['consecutive_loss_cooldown_count']==3
+          assert c['data_integrity']['fail_closed'] is True
           PY
