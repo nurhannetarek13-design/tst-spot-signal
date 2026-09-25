@@ -28,7 +28,7 @@ on:
       - '.github/workflows/indicator-paper-bot.yml'
       - '.github/workflows/early-momentum-v3-ci.yml'
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
     paths:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
