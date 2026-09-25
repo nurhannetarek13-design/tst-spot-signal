@@ -279,5 +279,31 @@ class IndicatorBotTests(unittest.TestCase):
                 self.assertTrue(snap["micro"]["production_guard"]["warmup"]["ok"])
 
 
+    def test_exit_uses_bid_depth_and_records_slippage(self):
+        opened=(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat()
+        state={
+            "cash_usdt":10.0,"day_pnl":0.0,"closed_trades":[],
+            "exit_slippage_model":{},
+            "positions":{"TESTUSDT":{
+                "entry":1.0,"stop":0.95,"target":1.10,"initial_risk_abs":0.05,
+                "breakeven":False,"opened_at":opened,"qty":10.0,"cost":10.01,
+                "peak_price":1.0,"trough_price":1.0,"mfe_r":0.0,"mae_r":0.0,
+                "score":5
+            }}
+        }
+        snap={
+            "bid":0.94,"atr_15m":0.01,
+            "_exit_depth":{"bids":[["0.94","5"],["0.93","10"]],"asks":[["0.95","10"]]},
+            "micro_pre":{"taker_latest":0.40,"cvd_positive":False,"vwap":1.0}
+        }
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertNotIn("TESTUSDT",state["positions"])
+        trade=state["closed_trades"][-1]
+        self.assertEqual(trade["reason"],"STOP")
+        self.assertEqual(trade["exit_execution"]["source"],"LIVE_DEPTH")
+        self.assertGreater(trade["exit_slippage_bps"],0)
+        self.assertEqual(state["exit_slippage_model"]["TESTUSDT"]["count"],1)
+
+
 if __name__=="__main__":
     unittest.main()
