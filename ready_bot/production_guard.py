@@ -138,16 +138,31 @@ def adverse_selection_status(micro, *, obi_bullish=0.58, min_trade_ratio=0.52,
 
 
 def liquidity_disappearance_status(depth_flow, *, max_bid_drop_pct=0.35,
-                                   max_ask_growth_pct=0.50):
+                                   max_ask_growth_pct=0.50,
+                                   max_cancellation_rate=0.75,
+                                   bid_cancel_imbalance_ratio=1.50):
     flow=depth_flow or {}
     bid=flow.get("bid_liquidity_change_pct")
     ask=flow.get("ask_liquidity_change_pct")
+    cancellation=flow.get("cancellation_rate_10s")
+    bid_cancel=flow.get("bid_cancel_quote_10s")
+    ask_cancel=flow.get("ask_cancel_quote_10s")
     reasons=[]
     if bid is not None and float(bid)<=-abs(float(max_bid_drop_pct)):
         reasons.append("BID_LIQUIDITY_DISAPPEARANCE")
     if ask is not None and float(ask)>=abs(float(max_ask_growth_pct)):
         reasons.append("ASK_LIQUIDITY_SURGE")
-    return {"ok":not reasons,"reasons":reasons,"bid_change_pct":bid,"ask_change_pct":ask}
+    if cancellation is not None and float(cancellation)>=float(max_cancellation_rate):
+        if bid_cancel is not None and ask_cancel is not None:
+            if float(bid_cancel)>max(float(ask_cancel),1e-9)*float(bid_cancel_imbalance_ratio):
+                reasons.append("BID_CANCELLATION_SPIKE")
+    return {
+        "ok":not reasons,"reasons":reasons,
+        "bid_change_pct":bid,"ask_change_pct":ask,
+        "cancellation_rate_10s":cancellation,
+        "bid_cancel_quote_10s":bid_cancel,
+        "ask_cancel_quote_10s":ask_cancel,
+    }
 
 
 def estimate_buy_slippage(depth, quote_amount_usdt):
@@ -183,6 +198,42 @@ def estimate_buy_slippage(depth, quote_amount_usdt):
         "best_ask":best,
         "slippage_bps":slip,
         "quote_simulated":spent,
+    }
+
+
+def estimate_sell_slippage(depth, base_qty):
+    """Walk bid levels for a base-sized SELL and return deterministic fill metrics."""
+    qty=float(base_qty)
+    bids=(depth or {}).get("bids") or []
+    if qty<=0 or not bids:
+        return {"ok":False,"reason":"DEPTH_UNAVAILABLE","fill_ratio":0.0,"slippage_bps":None}
+
+    remaining=qty
+    sold=0.0
+    quote=0.0
+    best=float(bids[0][0])
+    for level in bids:
+        px=float(level[0])
+        available=max(0.0,float(level[1]))
+        take=min(remaining,available)
+        if take>0 and px>0:
+            sold+=take
+            quote+=take*px
+            remaining-=take
+        if remaining<=1e-12:
+            break
+
+    fill_ratio=min(1.0,sold/qty) if qty>0 else 0.0
+    avg=quote/sold if sold>0 else None
+    slip=(1.0-avg/best)*10000 if avg is not None and best>0 else None
+    return {
+        "ok":fill_ratio>=0.999 and slip is not None,
+        "fill_ratio":fill_ratio,
+        "average_price":avg,
+        "best_bid":best,
+        "slippage_bps":slip,
+        "base_simulated":sold,
+        "quote_proceeds":quote,
     }
 
 
