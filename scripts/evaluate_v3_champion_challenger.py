@@ -46,11 +46,12 @@ def median_slippage(state):
     return statistics.median(rows) if rows else None
 
 
-def evaluate(champion,challenger,registry,replay=None):
+def evaluate(champion,challenger,registry,replay=None,backtest_integrity=None):
     policy=registry["promotionPolicy"]
     cm=trade_metrics(champion);xm=trade_metrics(challenger)
     cslip=median_slippage(champion);xslip=median_slippage(challenger)
     replay_ok=bool(replay and replay.get("replayIntegrityPass") is True and replay.get("executionReplayPass") is True)
+    backtest_ok=bool(backtest_integrity and backtest_integrity.get("productionGradeHistoricalEvidence") is True)
 
     reasons=[]
     if xm["closedTrades"]<int(policy["minimumClosedTrades"]):reasons.append("CHALLENGER_SAMPLE_TOO_SMALL")
@@ -59,6 +60,7 @@ def evaluate(champion,challenger,registry,replay=None):
     if xm["maxDrawdownUSDT"]>float(policy["maximumDrawdownUSDT"]):reasons.append("CHALLENGER_DRAWDOWN_TOO_HIGH")
     if xslip is None or xslip>float(policy["maximumMedianEntrySlippageBps"]):reasons.append("CHALLENGER_SLIPPAGE_NOT_PROVEN")
     if policy.get("requireSpotMicrostructureReplay") and not replay_ok:reasons.append("SPOT_MICROSTRUCTURE_REPLAY_NOT_PROVEN")
+    if policy.get("requireBacktestIntegrity") and not backtest_ok:reasons.append("BACKTEST_INTEGRITY_NOT_PROVEN")
 
     if cm["closedTrades"]>=int(policy["minimumClosedTrades"]):
         min_pf=cm["profitFactor"]*(1+float(policy["challengerMustBeatChampionProfitFactorByFraction"]))
@@ -79,6 +81,7 @@ def evaluate(champion,challenger,registry,replay=None):
         "championMedianSlippageBps":cslip,
         "challengerMedianSlippageBps":xslip,
         "spotReplayEvidence":replay or {"status":"MISSING"},
+        "backtestIntegrityEvidence":backtest_integrity or {"status":"MISSING"},
         "evidencePass":evidence_pass,
         "promotionReadyForManualReview":evidence_pass,
         "reasons":reasons,
@@ -93,10 +96,12 @@ def main():
     ap.add_argument("--challenger",default="validation/indicator-v3/challenger-state.json")
     ap.add_argument("--registry",default="validation/indicator-v3/champion-challenger.json")
     ap.add_argument("--replay")
+    ap.add_argument("--backtest-integrity")
     ap.add_argument("--output",default="validation/indicator-v3/champion-challenger-latest.json")
     a=ap.parse_args()
     replay=load(a.replay) if a.replay else None
-    out=evaluate(load(a.champion),load(a.challenger),load(a.registry),replay)
+    integrity=load(a.backtest_integrity) if a.backtest_integrity else None
+    out=evaluate(load(a.champion),load(a.challenger),load(a.registry),replay,integrity)
     p=pathlib.Path(a.output);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(out,indent=2))
     print(json.dumps(out,indent=2))
 
