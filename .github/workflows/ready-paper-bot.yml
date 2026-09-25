@@ -1,4 +1,4 @@
-name: Ready Multi-Strategy Paper Bot
+name: Legacy Multi-Strategy Paper Bot (Manual Only)
 
 on:
   workflow_dispatch:
@@ -20,8 +20,6 @@ on:
       - 'tests/test_paper_arbitration.py'
       - 'tests/test_paper_audit.py'
       - '.github/workflows/ready-paper-bot.yml'
-  schedule:
-    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
