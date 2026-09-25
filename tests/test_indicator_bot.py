@@ -19,6 +19,7 @@ def bars(n=250, drift=0.001, taker=0.60, qv=2_000_000.0):
 class IndicatorBotTests(unittest.TestCase):
     def test_engine_is_indicator_only_and_paper(self):
         self.assertEqual(bot.CFG["mode"],"paper")
+        self.assertEqual(bot.CFG["market_type"],"spot")
         self.assertEqual(bot.CFG["engine"],"INDICATOR_ONLY_V1")
         self.assertNotIn("strategies",bot.CFG)
         self.assertEqual(bot.CFG["entry"]["min_score"],85)
