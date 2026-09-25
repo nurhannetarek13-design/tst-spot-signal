@@ -83,6 +83,20 @@ jobs:
           node --check ready_bot/stream_shadow.mjs
           node --check server.mjs
           node --check src/execution/v3-execution-intent.mjs
+      - name: Standalone module import path
+        run: |
+          python - <<'PY'
+          import importlib.util, pathlib, sys
+          path=pathlib.Path('ready_bot/indicator_bot.py')
+          sys.path.insert(0,str(path.parent))
+          spec=importlib.util.spec_from_file_location('indicator_bot_standalone',path)
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          assert callable(mod.close_position)
+          assert callable(mod.candidate_listing_age_status)
+          print('Standalone fallback imports OK')
+          PY
+
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
