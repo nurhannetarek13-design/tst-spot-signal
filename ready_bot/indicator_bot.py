@@ -779,6 +779,7 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
     snap["ret_15m"] = pct_return(b15, 1)
     snap["ret_1h"] = pct_return(b1, 1)
     snap["_bars1h"] = b1
+    snap["_bars15"] = b15
     snap["micro_pre"] = prefilter_snapshot(b1m, b3m, CFG["momentum"])
     snap["micro_pre"]["micro_breakout_hold"] = micro_breakout_hold(
         b1m,
@@ -792,6 +793,8 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
 
 def enrich_microstructure(symbol, snap):
     cfg = CFG["momentum"]
+    guard_cfg = CFG["production_guard"]
+    detected_ms = time.time() * 1000
     obi_samples = []
     spreads = []
     depth_samples = []
@@ -806,12 +809,75 @@ def enrich_microstructure(symbol, snap):
             spreads.append(dm["spread_bps"])
         if i < samples - 1 and interval > 0:
             time.sleep(interval)
+
     agg = aggtrade_delta(recent_aggtrades(symbol, 500))
     depth_flow = depth_flow_metrics(depth_samples)
     micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg, depth_flow)
+    decision_ms = time.time() * 1000
+
+    freshness = signal_freshness_status(
+        detected_at_ms=detected_ms,
+        decision_at_ms=decision_ms,
+        now_ms=decision_ms,
+        market_event_ms=agg.get("latest_event_ms"),
+        max_signal_age_ms=guard_cfg["max_signal_age_ms"],
+        max_decision_latency_ms=guard_cfg["max_decision_latency_ms"],
+    )
+    warmup = warmup_status(
+        bars1m=len(snap.get("_bars1m") or []),
+        bars3m=len(snap.get("_bars3m") or []),
+        bars15m=len(snap.get("_bars15") or []),
+        bars1h=len(snap.get("_bars1h") or []),
+        depth_samples=len(depth_samples),
+        min_1m=guard_cfg["warmup_min_1m"],
+        min_3m=guard_cfg["warmup_min_3m"],
+        min_15m=guard_cfg["warmup_min_15m"],
+        min_1h=guard_cfg["warmup_min_1h"],
+        min_depth_samples=guard_cfg["min_depth_samples"],
+    )
+    adverse = adverse_selection_status(
+        micro,
+        obi_bullish=CFG["momentum"]["obi_armed_min"],
+        min_trade_ratio=guard_cfg["adverse_min_trade_ratio"],
+        min_microprice_bias_bps=guard_cfg["adverse_min_microprice_bias_bps"],
+        max_bid_liquidity_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
+    )
+    liquidity = liquidity_disappearance_status(
+        depth_flow,
+        max_bid_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
+        max_ask_growth_pct=guard_cfg["max_ask_liquidity_growth_pct"],
+    )
+
+    micro["production_guard"] = {
+        "freshness": freshness,
+        "warmup": warmup,
+        "adverse_selection": adverse,
+        "liquidity_disappearance": liquidity,
+        "decision_latency_ms": max(0.0, decision_ms-detected_ms),
+        "session": utc_session_label(),
+    }
+    production_ok = freshness["ok"] and warmup["ok"] and adverse["ok"] and liquidity["ok"]
     snap["micro"] = micro
-    snap["eligible"] = bool(micro["stage"] == "ENTRY_CANDIDATE" and snap.get("guard_ok"))
+    snap["eligible"] = bool(
+        micro["stage"] == "ENTRY_CANDIDATE"
+        and snap.get("guard_ok")
+        and production_ok
+    )
     return snap
+
+
+def binance_clock_status():
+    cfg=CFG["production_guard"]
+    start=time.time()*1000
+    row=market("/api/v3/time")
+    end=time.time()*1000
+    return clock_sync_status(
+        row.get("serverTime"),
+        start,
+        end,
+        max_offset_ms=cfg["max_clock_offset_ms"],
+        max_rtt_ms=cfg["max_clock_rtt_ms"],
+    )
 
 
 def validate_config():
@@ -839,6 +905,14 @@ def validate_config():
         raise RuntimeError("Invalid correlation cap")
     if int(CFG["risk"].get("consecutive_loss_cooldown_count", 3)) < 2:
         raise RuntimeError("Invalid consecutive loss cooldown")
+    if CFG.get("data_integrity", {}).get("fail_closed") is not True:
+        raise RuntimeError("Data integrity must fail closed")
+    if float(CFG["production_guard"]["max_signal_age_ms"]) <= 0:
+        raise RuntimeError("Invalid signal freshness budget")
+    if float(CFG["smart_execution"]["max_slippage_bps"]) <= 0:
+        raise RuntimeError("Invalid slippage budget")
+    if CFG.get("security", {}).get("never_log_credentials") is not True:
+        raise RuntimeError("Credential logging must stay disabled")
 
 
 def consecutive_loss_cooldown(state):
@@ -865,6 +939,11 @@ def main():
     state = load_state()
     reset_day(state)
     blocked = []
+
+    try:
+        clock = binance_clock_status()
+    except Exception as exc:
+        clock = {"ok":False,"reasons":["CLOCK_SYNC_UNAVAILABLE"],"detail":str(exc)[:120]}
 
     try:
         uni = universe()
