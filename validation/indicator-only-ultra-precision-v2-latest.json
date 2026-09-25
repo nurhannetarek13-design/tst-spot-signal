@@ -1,0 +1,236 @@
+{
+  "engine": "INDICATOR_ONLY_ULTRA_PRECISION_CALIBRATION_V2",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "runtimeChanged": false,
+  "target": {
+    "winRate": 0.99,
+    "minimumHoldoutTrades": 100,
+    "requiresPositiveNet": true
+  },
+  "windows": {
+    "train": [
+      "2024-04-08T19:44:35.502312+00:00",
+      "2024-10-05T19:44:35.502312+00:00"
+    ],
+    "validation": [
+      "2024-10-05T19:44:35.502312+00:00",
+      "2025-01-03T19:44:35.502312+00:00"
+    ],
+    "holdout": [
+      "2025-01-03T19:44:35.502312+00:00",
+      "2025-04-03T19:44:35.502312+00:00"
+    ],
+    "allNewerHistoryExcluded": [
+      "2025-04-03T19:44:35.502312+00:00",
+      "2026-09-25T19:44:35.502312+00:00"
+    ]
+  },
+  "gridSize": 9720,
+  "symbolsRequested": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "symbolsLoaded": [
+    "ZECUSDT",
+    "SOLUSDT",
+    "NEARUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "BTCUSDT",
+    "VTHOUSDT",
+    "SUIUSDT",
+    "UNIUSDT",
+    "ENAUSDT",
+    "DOGEUSDT",
+    "BNBUSDT",
+    "XPLUSDT",
+    "ONDOUSDT",
+    "BABYUSDT",
+    "LINKUSDT",
+    "SAGAUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "PEPEUSDT",
+    "XLMUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ],
+  "symbolsWithWindow": {
+    "train": [
+      "ZECUSDT",
+      "SOLUSDT",
+      "NEARUSDT",
+      "ETHUSDT",
+      "XRPUSDT",
+      "BTCUSDT",
+      "VTHOUSDT",
+      "SUIUSDT",
+      "UNIUSDT",
+      "ENAUSDT",
+      "DOGEUSDT",
+      "BNBUSDT",
+      "LINKUSDT",
+      "SAGAUSDT",
+      "LTCUSDT",
+      "AVAXUSDT",
+      "TAOUSDT",
+      "ADAUSDT",
+      "PEPEUSDT",
+      "XLMUSDT",
+      "WLDUSDT",
+      "ARBUSDT"
+    ],
+    "validation": [
+      "ZECUSDT",
+      "SOLUSDT",
+      "NEARUSDT",
+      "ETHUSDT",
+      "XRPUSDT",
+      "BTCUSDT",
+      "VTHOUSDT",
+      "SUIUSDT",
+      "UNIUSDT",
+      "ENAUSDT",
+      "DOGEUSDT",
+      "BNBUSDT",
+      "LINKUSDT",
+      "SAGAUSDT",
+      "LTCUSDT",
+      "AVAXUSDT",
+      "TAOUSDT",
+      "ADAUSDT",
+      "PEPEUSDT",
+      "XLMUSDT",
+      "WLDUSDT",
+      "ARBUSDT"
+    ],
+    "holdout": [
+      "ZECUSDT",
+      "SOLUSDT",
+      "NEARUSDT",
+      "ETHUSDT",
+      "XRPUSDT",
+      "BTCUSDT",
+      "VTHOUSDT",
+      "SUIUSDT",
+      "UNIUSDT",
+      "ENAUSDT",
+      "DOGEUSDT",
+      "BNBUSDT",
+      "LINKUSDT",
+      "SAGAUSDT",
+      "LTCUSDT",
+      "AVAXUSDT",
+      "TAOUSDT",
+      "ADAUSDT",
+      "PEPEUSDT",
+      "XLMUSDT",
+      "WLDUSDT",
+      "ARBUSDT"
+    ]
+  },
+  "dataFailures": {},
+  "baseRecordCounts": {
+    "train": 620,
+    "validation": 1356,
+    "holdout": 195
+  },
+  "trainQualifiedConfigs": 0,
+  "validationQualifiedConfigs": 0,
+  "selected": null,
+  "holdout": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "winRate": 0.0,
+    "netPnlPerUnit": 0.0,
+    "expectancyPerUnit": 0.0,
+    "profitFactor": 0.0,
+    "reasons": {}
+  },
+  "claimSupported": false,
+  "diagnosticBestHoldoutPeekingNotEligible": {
+    "params": {
+      "scoreMin": 95,
+      "takerMin": 0.6,
+      "taker3Min": 0.58,
+      "rvolMin": 1.5,
+      "rsiMax": 70,
+      "stopMult": 1.5,
+      "minStop": 0.03,
+      "rewardRisk": 0.15
+    },
+    "metrics": {
+      "trades": 20,
+      "wins": 20,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 417.3998470469474,
+      "expectancyPerUnit": 20.86999235234737,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 20
+      }
+    }
+  },
+  "diagnosticMaxWinRateHoldoutPeekingNotEligible": {
+    "params": {
+      "scoreMin": 95,
+      "takerMin": 0.6,
+      "taker3Min": 0.58,
+      "rvolMin": 1.5,
+      "rsiMax": 70,
+      "stopMult": 1.5,
+      "minStop": 0.03,
+      "rewardRisk": 0.15
+    },
+    "metrics": {
+      "trades": 20,
+      "wins": 20,
+      "losses": 0,
+      "winRate": 1.0,
+      "netPnlPerUnit": 417.3998470469474,
+      "expectancyPerUnit": 20.86999235234737,
+      "profitFactor": 999.0,
+      "reasons": {
+        "TARGET": 20
+      }
+    }
+  },
+  "notes": [
+    "This period predates the prior indicator-only audits.",
+    "The final holdout is not used for parameter selection.",
+    "Current-universe historical testing still has survivorship bias.",
+    "Historical spread snapshots are unavailable, so no spread penalty is added.",
+    "Fees and slippage are included in profitable-trade classification.",
+    "Small targets are rejected automatically if costs make their net PnL non-positive.",
+    "No setting is promoted to runtime unless train, validation and untouched holdout all support it."
+  ],
+  "generatedAt": "2026-09-25T19:53:09.413389+00:00"
+}
