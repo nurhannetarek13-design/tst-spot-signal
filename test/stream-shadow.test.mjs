@@ -29,3 +29,32 @@ test("agg trade metrics separate aggressive buys and sells",()=>{
   assert.equal(x.deltaQuote60s,250);
   assert.ok(x.takerBuyRatio60s>0.8);
 });
+
+
+test("book metrics expose V3 sidecar contract",()=>{
+  const s={
+    bids:new Map([[100,3],[99,2]]),
+    asks:new Map([[101,2],[102,3]]),
+    flow:[
+      {ts:1000,side:"bid",type:"add",quote:100},
+      {ts:1000,side:"ask",type:"cancel",quote:101},
+    ],
+  };
+  const x=bookMetrics(s,1500);
+  assert.ok(Number.isFinite(x.bidLiquidityQuote5));
+  assert.ok(Number.isFinite(x.askLiquidityQuote5));
+  assert.ok(Number.isFinite(x.obi));
+  assert.ok(Number.isFinite(x.micropriceBiasBps));
+  assert.ok(Number.isFinite(x.cancellationRate10s));
+});
+
+test("CVD slope requires improving and net-positive 10s buckets",()=>{
+  const positive=tradeMetrics([
+    {ts:1000,d:10},{ts:12000,d:20},{ts:22000,d:30},
+  ],23000);
+  assert.equal(positive.cvdSlopePositive10s,true);
+  const negativeNet=tradeMetrics([
+    {ts:1000,d:-100},{ts:12000,d:-20},{ts:22000,d:5},
+  ],23000);
+  assert.equal(negativeNet.cvdSlopePositive10s,false);
+});
