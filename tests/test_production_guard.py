@@ -1,5 +1,8 @@
+import json
+import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 from ready_bot.production_guard import (
     adverse_selection_status,
@@ -8,6 +11,7 @@ from ready_bot.production_guard import (
     execution_quality_status,
     estimate_sell_slippage,
     liquidity_disappearance_status,
+    load_event_risk,
     signal_freshness_status,
     warmup_status,
 )
@@ -115,6 +119,52 @@ class ProductionGuardTests(unittest.TestCase):
         },max_cancellation_rate=0.75,bid_cancel_imbalance_ratio=1.5)
         self.assertFalse(x["ok"])
         self.assertIn("BID_CANCELLATION_SPIKE",x["reasons"])
+
+
+    def test_event_risk_missing_is_observable_but_live_required_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"event-risk.json"
+            paper=load_event_risk(path,"SOLUSDT",required=False,max_age_minutes=60)
+            self.assertTrue(paper["ok"])
+            self.assertFalse(paper["fresh"])
+
+            live=load_event_risk(path,"SOLUSDT",required=True,max_age_minutes=60)
+            self.assertFalse(live["ok"])
+            self.assertEqual(live["reason"],"EVENT_RISK_FEED_MISSING")
+
+    def test_event_risk_stale_feed_blocks_when_required(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"event-risk.json"
+            generated=(datetime.now(timezone.utc)-timedelta(hours=2)).isoformat()
+            path.write_text(json.dumps({
+                "generated_at":generated,
+                "global_halt_until":None,
+                "global_reason":None,
+                "symbols":{},
+            }))
+            x=load_event_risk(path,"SOLUSDT",required=True,max_age_minutes=60)
+            self.assertFalse(x["ok"])
+            self.assertEqual(x["reason"],"EVENT_RISK_FEED_STALE")
+
+    def test_event_risk_symbol_halt_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"event-risk.json"
+            now=datetime.now(timezone.utc)
+            path.write_text(json.dumps({
+                "generated_at":now.isoformat(),
+                "global_halt_until":None,
+                "global_reason":None,
+                "symbols":{
+                    "SOLUSDT":{
+                        "until":(now+timedelta(hours=1)).isoformat(),
+                        "reason":"TOKEN_EVENT",
+                    }
+                },
+            }))
+            x=load_event_risk(path,"SOLUSDT",required=True,max_age_minutes=60)
+            self.assertFalse(x["ok"])
+            self.assertEqual(x["reason"],"SYMBOL_EVENT_RISK")
+            self.assertEqual(x["detail"],"TOKEN_EVENT")
 
 
 if __name__=="__main__":
