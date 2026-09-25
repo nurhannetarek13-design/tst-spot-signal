@@ -90,7 +90,7 @@ class IndicatorBotTests(unittest.TestCase):
 
     def test_open_position_rejects_unverified_non_spot_symbol(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
-        snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{}}
+        snap={"symbol":"TESTUSDT","ask":1.0,"atr_pct_1h":0.02,"bar_time":1,"score":95,"groups":{},"eligible":True,"vetoes":[]}
         filters={"min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,"max_qty":1e9,"step_size":0.0001,"spot_verified":False,"quote_asset":"USDT","symbol":"TESTUSDT"}
         self.assertEqual(bot.open_position(state,snap,filters),"SPOT_ONLY_VIOLATION")
 
