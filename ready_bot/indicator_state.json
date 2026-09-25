@@ -1,0 +1,60 @@
+{
+  "blocked": [
+    {
+      "detail": {
+        "ema200_4h": 78710.43354552475,
+        "ema20_1h": 84140.07575446881,
+        "ema50_1h": 84329.43565722766,
+        "ema50_4h": 82852.34089334944,
+        "ok": false,
+        "ret1h": 0.0021828460928201565
+      },
+      "reason": "BTC_REGIME_VETO"
+    }
+  ],
+  "btc_regime": {
+    "ema200_4h": 78710.43354552475,
+    "ema20_1h": 84140.07575446881,
+    "ema50_1h": 84329.43565722766,
+    "ema50_4h": 82852.34089334944,
+    "ok": false,
+    "ret1h": 0.0021828460928201565
+  },
+  "cash_usdt": 20.08,
+  "closed_trades": [],
+  "day": "2026-09-25",
+  "day_pnl": 0.0,
+  "engine": "INDICATOR_ONLY_V1",
+  "last_run": "2026-09-25T19:21:38.481817+00:00",
+  "mode": "PAPER_ONLY",
+  "positions": {},
+  "seen": {},
+  "signals": [],
+  "universe": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "ZECUSDT",
+    "NEARUSDT",
+    "SUIUSDT",
+    "VTHOUSDT",
+    "ENAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "UNIUSDT",
+    "SAGAUSDT",
+    "LINKUSDT",
+    "ONDOUSDT",
+    "XPLUSDT",
+    "BABYUSDT",
+    "LTCUSDT",
+    "AVAXUSDT",
+    "TAOUSDT",
+    "ADAUSDT",
+    "XLMUSDT",
+    "PEPEUSDT",
+    "WLDUSDT",
+    "ARBUSDT"
+  ]
+}
