@@ -154,6 +154,46 @@ app.get("/market-data", async (req, res) => {
   }
 });
 
+export function evaluateApiRestrictions(row = {}) {
+  const safe = {
+    ipRestrict: row.ipRestrict === true,
+    enableReading: row.enableReading === true,
+    enableWithdrawals: row.enableWithdrawals === true,
+    enableMargin: row.enableMargin === true,
+    enableFutures: row.enableFutures === true,
+    enableSpotAndMarginTrading: row.enableSpotAndMarginTrading === true,
+    enablePortfolioMarginTrading: row.enablePortfolioMarginTrading === true,
+  };
+  const reasons = [];
+  if (!safe.enableReading) reasons.push("READ_PERMISSION_REQUIRED");
+  if (safe.enableWithdrawals) reasons.push("WITHDRAWALS_MUST_BE_DISABLED");
+  if (safe.enableFutures) reasons.push("FUTURES_MUST_BE_DISABLED");
+  if (safe.enableMargin) reasons.push("MARGIN_MUST_BE_DISABLED");
+  if (!safe.ipRestrict) reasons.push("IP_RESTRICTION_REQUIRED");
+  return { ok: reasons.length === 0, reasons, ...safe };
+}
+
+app.get("/executor/api-key-safety", async (_req, res) => {
+  try {
+    if (!hasBinanceSigningKey()) {
+      return res.status(409).json({ ok:false, status:"API_NOT_CONNECTED", noSecretValuesExposed:true });
+    }
+    const restrictions = await signedBinance("GET", "/sapi/v1/account/apiRestrictions", {});
+    const result = evaluateApiRestrictions(restrictions);
+    return res.status(result.ok ? 200 : 409).json({
+      ...result,
+      status: result.ok ? "API_KEY_SAFETY_OK" : "API_KEY_SAFETY_BLOCKED",
+      noSecretValuesExposed:true,
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok:false,status:"API_KEY_SAFETY_UNAVAILABLE",
+      error:String(error?.message||error).slice(0,160),
+      noSecretValuesExposed:true,
+    });
+  }
+});
+
 app.get("/executor/status", async (_req, res) => {
   const cfg = executorConfig();
   return res.json({
