@@ -1,0 +1,67 @@
+name: Indicator Fixed Confirmation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/indicator_only_fixed_confirmation.py'
+      - '.github/workflows/indicator-fixed-confirmation.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indicator-fixed-confirmation
+  cancel-in-progress: true
+
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check numpy pandas
+      - run: python -m py_compile research/indicator_only_fixed_confirmation.py
+      - run: PYTHONPATH=. python research/indicator_only_fixed_confirmation.py
+      - name: Verify fixed confirmation
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('validation/indicator-only-fixed-confirmation-latest.json'))
+          assert x['authorization']=='RESEARCH_ONLY'
+          assert x['liveTrading'] is False
+          assert x['runtimeChanged'] is False
+          print(json.dumps({
+            'params':x['params'],
+            'aggregate':x['aggregate'],
+            'observed99':x['observed99'],
+            'symbolsAudited':len(x['symbolsAudited'])
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: indicator-fixed-confirmation
+          path: validation/indicator-only-fixed-confirmation-latest.json
+          retention-days: 14
+      - name: Persist snapshot
+        run: |
+          cp validation/indicator-only-fixed-confirmation-latest.json /tmp/fixed.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/fixed.json validation/indicator-only-fixed-confirmation-latest.json
+            git config user.name 'indicator-fixed-confirmation-bot'
+            git config user.email 'indicator-fixed-confirmation-bot@users.noreply.github.com'
+            git add validation/indicator-only-fixed-confirmation-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update indicator fixed confirmation snapshot'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
