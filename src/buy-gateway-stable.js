@@ -563,7 +563,7 @@ async function handleTelegramWebhook(request, env) {
   const s = await getState(env, `live-signal:${id}`);
   if (action === "PREP" && s) {
     const b = await refreshBalance(env);
-    if (!b?.ok || b.credentialMode !== "LIVE") {
+    if (!b?.ok || !b.canTrade || b.accountSafetyOk !== true || b.credentialMode !== "LIVE") {
       await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Live Binance balance unavailable — no trade prepared", show_alert: true });
       return new Response("ok");
     }
