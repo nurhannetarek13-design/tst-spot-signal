@@ -23,6 +23,7 @@ class ChampionChallengerTests(unittest.TestCase):
             "trades":120,"symbol_count":8,"profit_factor":1.3,
             "net_expectancy":0.02,"max_drawdown":0.05,
             "lookahead_violations":0,"survivorship_bias_checked":True,
+            "universe_source":"HISTORICAL_ALL_LISTED_INCLUDING_DELISTED",
         }
 
     def good_shadow(self):
