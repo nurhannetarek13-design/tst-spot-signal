@@ -1025,7 +1025,7 @@ def enrich_microstructure(symbol, snap):
         decision_at_ms=decision_ms,
         now_ms=decision_ms,
         market_event_ms=agg.get("latest_event_ms"),
-        max_signal_age_ms=guard_cfg["max_signal_age_ms"],
+        max_signal_age_ms=(guard_cfg["max_stream_signal_age_ms"] if use_stream else guard_cfg["max_signal_age_ms"]),
         max_decision_latency_ms=guard_cfg["max_decision_latency_ms"],
     )
     warmup = warmup_status(
