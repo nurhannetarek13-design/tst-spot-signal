@@ -853,6 +853,7 @@ def main():
         key=lambda item: (
             -float(item[1]["micro_pre"].get("prefilter_score", 0)),
             -float(item[1]["micro_pre"].get("taker_latest") or 0),
+            -float((item[1].get("relative_strength") or {}).get("score") or 0),
             item[0],
         )
     )
@@ -939,6 +940,7 @@ def main():
         -float(x.get("micro", {}).get("score", 0)),
         -float(x.get("micro", {}).get("taker_latest") or 0),
         -float(x.get("micro", {}).get("rvol_1m") or 0),
+        -float((x.get("relative_strength") or {}).get("score") or 0),
         x["symbol"],
     ))
 
