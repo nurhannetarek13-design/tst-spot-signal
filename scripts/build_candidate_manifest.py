@@ -101,8 +101,8 @@ if EDGE.exists():
           "rankKey":[0.5,float(stress.get("expectancyUSDT",0)),float(stress.get("profitFactor",0)),int(stress.get("trades",0))],
           "validatorsRequired":["vectorbt","freqtrade","nautilus","forward"],
           "validation":{
-            "historicalScope":"FULL_CANDIDATE",
-            "forwardScope":"FULL_CANDIDATE",
+            "historicalScope":"MULTI_SYMBOL_POOLED_RESEARCH",
+            "forwardScope":"GLOBAL_SINGLE_POSITION_BASKET",
             "historicalValidators":["vectorbt","freqtrade","nautilus"],
             "forwardValidators":["forward"]
           }
