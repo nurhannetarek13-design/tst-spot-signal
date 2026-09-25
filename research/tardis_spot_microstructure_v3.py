@@ -23,6 +23,7 @@ from research.tardis_l2_replay import parse_ordered_raw
 BASE="https://api.tardis.dev/v1/data-feeds/binance"
 AUTHORIZATION="RESEARCH_ONLY"
 ROUNDTRIP_COST_BPS=28.0
+DEFAULT_EXECUTION_LATENCY_MS=500
 
 
 def fetch_minute(symbol:str,date:str,offset:int)->str:
@@ -185,6 +186,7 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
     trades=[]
     samples=[]
     candidates=[]
+    pending=[]
     flow=deque()
 
     # Spot snapshots are generated via REST while WS depth updates are buffered.
@@ -224,6 +226,15 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
         last=u;events+=1
         bm=book_metrics(bids,asks,5)
         if not bm:return {"status":"CROSSED_OR_EMPTY_BOOK","canonicalReplayReady":False}
+
+        # Execute pending signals only on the first reconstructed book at/after
+        # their latency budget. This avoids same-timestamp optimistic fills.
+        for pc in pending:
+            if pc.get("fill") is None and ts>=int(pc["fill_due_ts"]):
+                pc["fill"]=simulate_buy(asks,quote_usdt)
+                pc["fill_ts"]=ts
+                pc["execution_latency_ms"]=ts-int(pc["signal_ts"])
+                pc["fill_book"]={"best_ask":bm["best_ask"],"spread_bps":bm["spread_bps"],"obi":bm["obi"]}
         if u in ticker_by_u:
             ticker_comp+=1;tb,ta=ticker_by_u[u]
             if abs(tb-bm["best_bid"])<1e-12 and abs(ta-bm["best_ask"])<1e-12:ticker_exact+=1
@@ -252,20 +263,33 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
             and ctx.get("vwap_distance_atr") is not None and 0<=ctx["vwap_distance_atr"]<=1.5
             and ctx.get("breakout_distance_atr") is not None and -0.15<=ctx["breakout_distance_atr"]<=0.25
         )
-        if qualifies and (not candidates or ts-candidates[-1]["ts"]>=60_000):
-            fill=simulate_buy(asks,quote_usdt)
-            candidates.append({"ts":ts,"mid":bm["mid"],"fill":fill,"context":ctx,"book":bm,"cancel_rate":cancel_rate})
+        last_signal_ts=(candidates[-1]["signal_ts"] if candidates else None)
+        if qualifies and (last_signal_ts is None or ts-last_signal_ts>=60_000):
+            candidate={
+                "signal_ts":ts,
+                "fill_due_ts":ts+DEFAULT_EXECUTION_LATENCY_MS,
+                "signal_mid":bm["mid"],
+                "fill":None,
+                "fill_ts":None,
+                "execution_latency_ms":None,
+                "context":ctx,
+                "signal_book":bm,
+                "cancel_rate":cancel_rate,
+            }
+            candidates.append(candidate)
+            pending.append(candidate)
 
     # Forward outcomes use future samples only; candidate construction above never reads them.
-    for c in candidates:
+    filled=[c for c in candidates if c.get("fill") is not None and c.get("fill_ts") is not None]
+    for c in filled:
         for h in (10,30,60):
-            future=next((x for x in samples if x["ts"]>=c["ts"]+h*1000),None)
+            future=next((x for x in samples if x["ts"]>=c["fill_ts"]+h*1000),None)
             if future:
                 raw=(future["mid"]/c["fill"]["avg_price"]-1)*10000 if c["fill"]["avg_price"] else None
                 c[f"net_{h}s_bps"]=(raw-ROUNDTRIP_COST_BPS) if raw is not None else None
 
     match=ticker_exact/ticker_comp if ticker_comp else None
-    fillable=[c for c in candidates if c["fill"]["fill_ratio"]>=0.999]
+    fillable=[c for c in filled if c["fill"]["fill_ratio"]>=0.999]
     slips=[c["fill"]["slippage_bps"] for c in fillable if c["fill"]["slippage_bps"] is not None]
     outcomes={}
     for h in (10,30,60):
@@ -279,10 +303,16 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
         "symbol":symbol,"eventsApplied":events,"gaps":gaps,
         "snapshotLine":line,"snapshotLastUpdateId":sid,"bridgeLine":bridge_line,
         "tickerComparable":ticker_comp,"tickerExact":ticker_exact,"tickerMatchRate":match,
-        "candidateCount":len(candidates),"fillableCount":len(fillable),
+        "candidateCount":len(candidates),"filledCandidateCount":len(filled),"fillableCount":len(fillable),
+        "configuredLatencyMs":DEFAULT_EXECUTION_LATENCY_MS,
+        "observedLatencyMs":{
+            "median":median([float(x["execution_latency_ms"]) for x in filled if x.get("execution_latency_ms") is not None]),
+            "max":max([float(x["execution_latency_ms"]) for x in filled if x.get("execution_latency_ms") is not None],default=None),
+        },
         "slippageBps":{"median":median(slips),"max":max(slips) if slips else None},
         "outcomes":outcomes,
         "executionReplayPass":execution_ok,
+        "latencyMode":"FIRST_RECONSTRUCTED_BOOK_AT_OR_AFTER_SIGNAL_PLUS_LATENCY",
         "edgeProven":False,
         "liveReady":False,
         "candidates":candidates[:50],
