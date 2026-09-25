@@ -19,6 +19,7 @@
     "require_survivorship_bias_check": true,
     "min_shadow_trades": 50,
     "max_shadow_safety_incidents": 0,
-    "min_shadow_net_expectancy_usdt": 0
+    "min_shadow_net_expectancy_usdt": 0,
+    "require_point_in_time_universe_artifact": true
   }
 }
