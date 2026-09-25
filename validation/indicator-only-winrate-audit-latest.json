@@ -57,139 +57,139 @@
     "ARBUSDT"
   ],
   "dataFailures": {},
-  "scoreThreshold": 90,
+  "scoreThreshold": 85,
   "targetClaimWinRate": 0.99,
   "pessimistic": {
-    "resolvedTrades": 388,
-    "wins": 151,
-    "losses": 237,
-    "winRate": 0.38917525773195877
+    "resolvedTrades": 686,
+    "wins": 263,
+    "losses": 423,
+    "winRate": 0.38338192419825073
   },
   "optimisticUpperBound": {
-    "resolvedTrades": 388,
-    "wins": 151,
-    "losses": 237,
-    "winRate": 0.38917525773195877
+    "resolvedTrades": 686,
+    "wins": 263,
+    "losses": 423,
+    "winRate": 0.38338192419825073
   },
-  "unresolvedWithin7d": 0,
+  "unresolvedWithin7d": 1,
   "perSymbol": {
     "BTCUSDT": {
       "pessimistic": {
-        "resolvedTrades": 19,
-        "wins": 6,
-        "losses": 13,
-        "winRate": 0.3157894736842105
+        "resolvedTrades": 35,
+        "wins": 11,
+        "losses": 24,
+        "winRate": 0.3142857142857143
       },
       "optimistic": {
-        "resolvedTrades": 19,
-        "wins": 6,
-        "losses": 13,
-        "winRate": 0.3157894736842105
+        "resolvedTrades": 35,
+        "wins": 11,
+        "losses": 24,
+        "winRate": 0.3142857142857143
       },
       "unresolved": 0,
-      "signalBars": 71,
+      "signalBars": 178,
       "maxScore": 100.0
     },
     "ETHUSDT": {
       "pessimistic": {
-        "resolvedTrades": 26,
-        "wins": 6,
-        "losses": 20,
+        "resolvedTrades": 39,
+        "wins": 9,
+        "losses": 30,
         "winRate": 0.23076923076923078
       },
       "optimistic": {
-        "resolvedTrades": 26,
-        "wins": 6,
-        "losses": 20,
+        "resolvedTrades": 39,
+        "wins": 9,
+        "losses": 30,
         "winRate": 0.23076923076923078
       },
       "unresolved": 0,
-      "signalBars": 84,
+      "signalBars": 221,
       "maxScore": 100.0
     },
     "XRPUSDT": {
       "pessimistic": {
-        "resolvedTrades": 12,
-        "wins": 5,
-        "losses": 7,
-        "winRate": 0.4166666666666667
+        "resolvedTrades": 26,
+        "wins": 12,
+        "losses": 14,
+        "winRate": 0.46153846153846156
       },
       "optimistic": {
-        "resolvedTrades": 12,
-        "wins": 5,
-        "losses": 7,
-        "winRate": 0.4166666666666667
+        "resolvedTrades": 26,
+        "wins": 12,
+        "losses": 14,
+        "winRate": 0.46153846153846156
       },
       "unresolved": 0,
-      "signalBars": 26,
+      "signalBars": 99,
       "maxScore": 100.0
     },
     "SOLUSDT": {
       "pessimistic": {
-        "resolvedTrades": 23,
-        "wins": 9,
-        "losses": 14,
-        "winRate": 0.391304347826087
+        "resolvedTrades": 40,
+        "wins": 16,
+        "losses": 24,
+        "winRate": 0.4
       },
       "optimistic": {
-        "resolvedTrades": 23,
-        "wins": 9,
-        "losses": 14,
-        "winRate": 0.391304347826087
+        "resolvedTrades": 40,
+        "wins": 16,
+        "losses": 24,
+        "winRate": 0.4
       },
       "unresolved": 0,
-      "signalBars": 68,
+      "signalBars": 200,
       "maxScore": 100.0
     },
     "ZECUSDT": {
       "pessimistic": {
-        "resolvedTrades": 30,
-        "wins": 11,
-        "losses": 19,
-        "winRate": 0.36666666666666664
+        "resolvedTrades": 55,
+        "wins": 21,
+        "losses": 34,
+        "winRate": 0.38181818181818183
       },
       "optimistic": {
-        "resolvedTrades": 30,
-        "wins": 11,
-        "losses": 19,
-        "winRate": 0.36666666666666664
+        "resolvedTrades": 55,
+        "wins": 21,
+        "losses": 34,
+        "winRate": 0.38181818181818183
       },
       "unresolved": 0,
-      "signalBars": 87,
+      "signalBars": 255,
       "maxScore": 100.0
     },
     "NEARUSDT": {
       "pessimistic": {
-        "resolvedTrades": 20,
-        "wins": 11,
-        "losses": 9,
-        "winRate": 0.55
+        "resolvedTrades": 39,
+        "wins": 16,
+        "losses": 23,
+        "winRate": 0.41025641025641024
       },
       "optimistic": {
-        "resolvedTrades": 20,
-        "wins": 11,
-        "losses": 9,
-        "winRate": 0.55
+        "resolvedTrades": 39,
+        "wins": 16,
+        "losses": 23,
+        "winRate": 0.41025641025641024
       },
       "unresolved": 0,
-      "signalBars": 52,
+      "signalBars": 138,
       "maxScore": 100.0
     },
     "SUIUSDT": {
       "pessimistic": {
-        "resolvedTrades": 17,
-        "wins": 9,
-        "losses": 8,
-        "winRate": 0.5294117647058824
+        "resolvedTrades": 35,
+        "wins": 16,
+        "losses": 19,
+        "winRate": 0.45714285714285713
       },
       "optimistic": {
-        "resolvedTrades": 17,
-        "wins": 9,
-        "losses": 8,
-        "winRate": 0.5294117647058824
+        "resolvedTrades": 35,
+        "wins": 16,
+        "losses": 19,
+        "winRate": 0.45714285714285713
       },
       "unresolved": 0,
-      "signalBars": 37,
+      "signalBars": 137,
       "maxScore": 100.0
     },
     "VTHOUSDT": {
@@ -211,70 +211,70 @@
     },
     "ENAUSDT": {
       "pessimistic": {
-        "resolvedTrades": 16,
-        "wins": 8,
-        "losses": 8,
-        "winRate": 0.5
+        "resolvedTrades": 36,
+        "wins": 17,
+        "losses": 19,
+        "winRate": 0.4722222222222222
       },
       "optimistic": {
-        "resolvedTrades": 16,
-        "wins": 8,
-        "losses": 8,
-        "winRate": 0.5
+        "resolvedTrades": 36,
+        "wins": 17,
+        "losses": 19,
+        "winRate": 0.4722222222222222
       },
       "unresolved": 0,
-      "signalBars": 28,
+      "signalBars": 114,
       "maxScore": 100.0
     },
     "BNBUSDT": {
       "pessimistic": {
-        "resolvedTrades": 22,
-        "wins": 10,
-        "losses": 12,
-        "winRate": 0.45454545454545453
+        "resolvedTrades": 31,
+        "wins": 13,
+        "losses": 18,
+        "winRate": 0.41935483870967744
       },
       "optimistic": {
-        "resolvedTrades": 22,
-        "wins": 10,
-        "losses": 12,
-        "winRate": 0.45454545454545453
+        "resolvedTrades": 31,
+        "wins": 13,
+        "losses": 18,
+        "winRate": 0.41935483870967744
       },
-      "unresolved": 0,
-      "signalBars": 66,
+      "unresolved": 1,
+      "signalBars": 197,
       "maxScore": 100.0
     },
     "DOGEUSDT": {
       "pessimistic": {
-        "resolvedTrades": 21,
-        "wins": 8,
-        "losses": 13,
-        "winRate": 0.38095238095238093
+        "resolvedTrades": 38,
+        "wins": 11,
+        "losses": 27,
+        "winRate": 0.2894736842105263
       },
       "optimistic": {
-        "resolvedTrades": 21,
-        "wins": 8,
-        "losses": 13,
-        "winRate": 0.38095238095238093
+        "resolvedTrades": 38,
+        "wins": 11,
+        "losses": 27,
+        "winRate": 0.2894736842105263
       },
       "unresolved": 0,
-      "signalBars": 38,
+      "signalBars": 143,
       "maxScore": 100.0
     },
     "UNIUSDT": {
       "pessimistic": {
-        "resolvedTrades": 17,
-        "wins": 12,
-        "losses": 5,
-        "winRate": 0.7058823529411765
+        "resolvedTrades": 35,
+        "wins": 18,
+        "losses": 17,
+        "winRate": 0.5142857142857142
       },
       "optimistic": {
-        "resolvedTrades": 17,
-        "wins": 12,
-        "losses": 5,
-        "winRate": 0.7058823529411765
+        "resolvedTrades": 35,
+        "wins": 18,
+        "losses": 17,
+        "winRate": 0.5142857142857142
       },
       "unresolved": 0,
-      "signalBars": 54,
+      "signalBars": 129,
       "maxScore": 100.0
     },
     "SAGAUSDT": {
@@ -296,206 +296,206 @@
     },
     "LINKUSDT": {
       "pessimistic": {
-        "resolvedTrades": 24,
-        "wins": 6,
+        "resolvedTrades": 29,
+        "wins": 11,
         "losses": 18,
-        "winRate": 0.25
+        "winRate": 0.3793103448275862
       },
       "optimistic": {
-        "resolvedTrades": 24,
-        "wins": 6,
+        "resolvedTrades": 29,
+        "wins": 11,
         "losses": 18,
-        "winRate": 0.25
+        "winRate": 0.3793103448275862
       },
       "unresolved": 0,
-      "signalBars": 65,
+      "signalBars": 181,
       "maxScore": 100.0
     },
     "ONDOUSDT": {
       "pessimistic": {
-        "resolvedTrades": 19,
-        "wins": 5,
-        "losses": 14,
-        "winRate": 0.2631578947368421
+        "resolvedTrades": 32,
+        "wins": 12,
+        "losses": 20,
+        "winRate": 0.375
       },
       "optimistic": {
-        "resolvedTrades": 19,
-        "wins": 5,
-        "losses": 14,
-        "winRate": 0.2631578947368421
+        "resolvedTrades": 32,
+        "wins": 12,
+        "losses": 20,
+        "winRate": 0.375
       },
       "unresolved": 0,
-      "signalBars": 45,
+      "signalBars": 140,
       "maxScore": 100.0
     },
     "XPLUSDT": {
       "pessimistic": {
-        "resolvedTrades": 2,
-        "wins": 0,
-        "losses": 2,
-        "winRate": 0.0
+        "resolvedTrades": 5,
+        "wins": 2,
+        "losses": 3,
+        "winRate": 0.4
       },
       "optimistic": {
-        "resolvedTrades": 2,
-        "wins": 0,
-        "losses": 2,
-        "winRate": 0.0
+        "resolvedTrades": 5,
+        "wins": 2,
+        "losses": 3,
+        "winRate": 0.4
       },
       "unresolved": 0,
-      "signalBars": 4,
+      "signalBars": 13,
       "maxScore": 100.0
     },
     "BABYUSDT": {
       "pessimistic": {
-        "resolvedTrades": 2,
+        "resolvedTrades": 4,
         "wins": 0,
-        "losses": 2,
+        "losses": 4,
         "winRate": 0.0
       },
       "optimistic": {
-        "resolvedTrades": 2,
+        "resolvedTrades": 4,
         "wins": 0,
-        "losses": 2,
+        "losses": 4,
         "winRate": 0.0
       },
       "unresolved": 0,
-      "signalBars": 11,
+      "signalBars": 18,
       "maxScore": 100.0
     },
     "LTCUSDT": {
       "pessimistic": {
-        "resolvedTrades": 15,
-        "wins": 4,
-        "losses": 11,
-        "winRate": 0.26666666666666666
+        "resolvedTrades": 27,
+        "wins": 6,
+        "losses": 21,
+        "winRate": 0.2222222222222222
       },
       "optimistic": {
-        "resolvedTrades": 15,
-        "wins": 4,
-        "losses": 11,
-        "winRate": 0.26666666666666666
+        "resolvedTrades": 27,
+        "wins": 6,
+        "losses": 21,
+        "winRate": 0.2222222222222222
       },
       "unresolved": 0,
-      "signalBars": 35,
+      "signalBars": 83,
       "maxScore": 100.0
     },
     "AVAXUSDT": {
       "pessimistic": {
-        "resolvedTrades": 15,
-        "wins": 4,
-        "losses": 11,
-        "winRate": 0.26666666666666666
+        "resolvedTrades": 24,
+        "wins": 8,
+        "losses": 16,
+        "winRate": 0.3333333333333333
       },
       "optimistic": {
-        "resolvedTrades": 15,
-        "wins": 4,
-        "losses": 11,
-        "winRate": 0.26666666666666666
+        "resolvedTrades": 24,
+        "wins": 8,
+        "losses": 16,
+        "winRate": 0.3333333333333333
       },
       "unresolved": 0,
-      "signalBars": 33,
+      "signalBars": 97,
       "maxScore": 100.0
     },
     "TAOUSDT": {
       "pessimistic": {
-        "resolvedTrades": 20,
-        "wins": 6,
-        "losses": 14,
-        "winRate": 0.3
+        "resolvedTrades": 37,
+        "wins": 13,
+        "losses": 24,
+        "winRate": 0.35135135135135137
       },
       "optimistic": {
-        "resolvedTrades": 20,
-        "wins": 6,
-        "losses": 14,
-        "winRate": 0.3
+        "resolvedTrades": 37,
+        "wins": 13,
+        "losses": 24,
+        "winRate": 0.35135135135135137
       },
       "unresolved": 0,
-      "signalBars": 49,
+      "signalBars": 137,
       "maxScore": 100.0
     },
     "ADAUSDT": {
       "pessimistic": {
-        "resolvedTrades": 19,
-        "wins": 10,
-        "losses": 9,
-        "winRate": 0.5263157894736842
+        "resolvedTrades": 36,
+        "wins": 14,
+        "losses": 22,
+        "winRate": 0.3888888888888889
       },
       "optimistic": {
-        "resolvedTrades": 19,
-        "wins": 10,
-        "losses": 9,
-        "winRate": 0.5263157894736842
+        "resolvedTrades": 36,
+        "wins": 14,
+        "losses": 22,
+        "winRate": 0.3888888888888889
       },
       "unresolved": 0,
-      "signalBars": 39,
+      "signalBars": 122,
       "maxScore": 100.0
     },
     "XLMUSDT": {
       "pessimistic": {
-        "resolvedTrades": 8,
-        "wins": 2,
+        "resolvedTrades": 11,
+        "wins": 5,
         "losses": 6,
-        "winRate": 0.25
+        "winRate": 0.45454545454545453
       },
       "optimistic": {
-        "resolvedTrades": 8,
-        "wins": 2,
+        "resolvedTrades": 11,
+        "wins": 5,
         "losses": 6,
-        "winRate": 0.25
+        "winRate": 0.45454545454545453
       },
       "unresolved": 0,
-      "signalBars": 19,
+      "signalBars": 56,
       "maxScore": 100.0
     },
     "WLDUSDT": {
       "pessimistic": {
-        "resolvedTrades": 16,
-        "wins": 7,
-        "losses": 9,
-        "winRate": 0.4375
+        "resolvedTrades": 25,
+        "wins": 12,
+        "losses": 13,
+        "winRate": 0.48
       },
       "optimistic": {
-        "resolvedTrades": 16,
-        "wins": 7,
-        "losses": 9,
-        "winRate": 0.4375
+        "resolvedTrades": 25,
+        "wins": 12,
+        "losses": 13,
+        "winRate": 0.48
       },
       "unresolved": 0,
-      "signalBars": 48,
+      "signalBars": 126,
       "maxScore": 100.0
     },
     "PEPEUSDT": {
       "pessimistic": {
-        "resolvedTrades": 18,
-        "wins": 6,
-        "losses": 12,
-        "winRate": 0.3333333333333333
+        "resolvedTrades": 33,
+        "wins": 12,
+        "losses": 21,
+        "winRate": 0.36363636363636365
       },
       "optimistic": {
-        "resolvedTrades": 18,
-        "wins": 6,
-        "losses": 12,
-        "winRate": 0.3333333333333333
+        "resolvedTrades": 33,
+        "wins": 12,
+        "losses": 21,
+        "winRate": 0.36363636363636365
       },
       "unresolved": 0,
-      "signalBars": 54,
+      "signalBars": 164,
       "maxScore": 100.0
     },
     "ARBUSDT": {
       "pessimistic": {
-        "resolvedTrades": 7,
-        "wins": 6,
-        "losses": 1,
-        "winRate": 0.8571428571428571
+        "resolvedTrades": 14,
+        "wins": 8,
+        "losses": 6,
+        "winRate": 0.5714285714285714
       },
       "optimistic": {
-        "resolvedTrades": 7,
-        "wins": 6,
-        "losses": 1,
-        "winRate": 0.8571428571428571
+        "resolvedTrades": 14,
+        "wins": 8,
+        "losses": 6,
+        "winRate": 0.5714285714285714
       },
       "unresolved": 0,
-      "signalBars": 15,
+      "signalBars": 40,
       "maxScore": 100.0
     }
   },
@@ -512,5 +512,5 @@
   "claimSupported": false,
   "authorization": "AUDIT_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-25T20:54:34.867970+00:00"
+  "generatedAt": "2026-09-25T21:01:01.548787+00:00"
 }
