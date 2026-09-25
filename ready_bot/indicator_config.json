@@ -86,7 +86,7 @@
     "obi_watch_min": 0.55,
     "obi_armed_min": 0.58,
     "obi_samples": 3,
-    "obi_sample_interval_seconds": 3,
+    "obi_sample_interval_seconds": 2,
     "obi_levels": 5,
     "spread_stable_multiplier": 1.05,
     "vwap_max_atr_distance": 1.5,
@@ -108,5 +108,44 @@
     "no_follow_through_minutes": 30,
     "min_mfe_r_for_hold": 0.5,
     "hard_time_stop_minutes": 120
+  },
+  "production_guard": {
+    "max_clock_offset_ms": 750,
+    "max_clock_rtt_ms": 1500,
+    "max_signal_age_ms": 12000,
+    "max_decision_latency_ms": 6500,
+    "warmup_min_1m": 60,
+    "warmup_min_3m": 30,
+    "warmup_min_15m": 220,
+    "warmup_min_1h": 220,
+    "min_depth_samples": 3,
+    "btc_shock_1m_abs": 0.008,
+    "btc_shock_3m_abs": 0.015,
+    "btc_shock_cooldown_minutes": 5,
+    "adverse_min_trade_ratio": 0.52,
+    "adverse_min_microprice_bias_bps": -0.5,
+    "max_bid_liquidity_drop_pct": 0.35,
+    "max_ask_liquidity_growth_pct": 0.5,
+    "max_estimated_slippage_bps": 12,
+    "min_depth_fill_ratio": 0.999,
+    "event_risk_file": "ready_bot/event_risk.json"
+  },
+  "smart_execution": {
+    "enabled": true,
+    "market_momentum_score": 92,
+    "market_max_spread_bps": 6,
+    "market_max_slippage_bps": 4,
+    "aggressive_limit_max_cross_bps": 8,
+    "max_slippage_bps": 12,
+    "min_fill_ratio": 0.999,
+    "max_latency_ms": 6500,
+    "cancel_after_ms": 1500,
+    "max_cancel_replace": 2
+  },
+  "security": {
+    "live_require_withdrawals_disabled": true,
+    "live_require_futures_disabled": true,
+    "live_require_ip_restriction": true,
+    "never_log_credentials": true
   }
 }
