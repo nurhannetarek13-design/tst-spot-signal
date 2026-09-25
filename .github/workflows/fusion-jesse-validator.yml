@@ -36,13 +36,18 @@ jobs:
           python - <<'PY'
           import json, pathlib, os, datetime
           m=json.loads(pathlib.Path("validation/fusion/candidate-manifest.json").read_text())
-          has=bool(m.get("candidateId") and m.get("candidateFingerprint"))
+          exists=bool(m.get("candidateId") and m.get("candidateFingerprint"))
+          required="jesse" in (m.get("validatorsRequired") or [])
+          has=exists and required
           with open(os.environ["GITHUB_ENV"],"a") as f:
               f.write("HAS_CANDIDATE="+str(has).lower()+"\n")
               f.write("EXPECTED_CANDIDATE_ID="+str(m.get("candidateId") or "")+"\n")
               f.write("EXPECTED_CANDIDATE_FP="+str(m.get("candidateFingerprint") or "")+"\n")
-          if not has:
+          if not exists:
               out={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NO_CANDIDATE","pass":False,"candidateId":None,"candidateFingerprint":None,"candidateStatus":m.get("status"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"No unified candidate; Jesse install and market download skipped."}
+              pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(out,indent=2))
+          elif not required:
+              out={"engine":"JESSE","strategyId":"TST_CANDIDATE_JESSE_VALIDATOR_V1","status":"NOT_REQUIRED","pass":False,"candidateId":m.get("candidateId"),"candidateFingerprint":m.get("candidateFingerprint"),"symbol":m.get("symbol"),"scope":m.get("scope"),"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"notes":"Jesse is not part of this candidate contract; no backtest was run."}
               pathlib.Path("validation/fusion/jesse-latest.json").write_text(json.dumps(out,indent=2))
           PY
 
