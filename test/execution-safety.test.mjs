@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder } from "../server.mjs";
+import { isStepAligned, validateOrderFilters, isUnknownExecutionError, normalizeKnownSymbols, validateApprovedSignal, isTerminalOrder, evaluateApiRestrictions } from "../server.mjs";
 
 const symbolInfo = {
   filters: [
@@ -64,4 +64,21 @@ test("daily-loss universe includes every validated traded symbol", () => {
 test("partial fills are exposure, never a terminal successful buy", () => {
   assert.equal(isTerminalOrder({ status: "PARTIALLY_FILLED", executedQty: "0.1" }), false);
   assert.equal(isTerminalOrder({ status: "FILLED", executedQty: "0.1" }), true);
+});
+
+
+test("API key safety rejects withdrawals futures margin and missing IP restriction", () => {
+  const safe=evaluateApiRestrictions({
+    ipRestrict:true,enableReading:true,enableWithdrawals:false,
+    enableMargin:false,enableFutures:false,enableSpotAndMarginTrading:true,
+  });
+  assert.equal(safe.ok,true);
+  const bad=evaluateApiRestrictions({
+    ipRestrict:false,enableReading:true,enableWithdrawals:true,
+    enableMargin:true,enableFutures:true,
+  });
+  assert.equal(bad.ok,false);
+  assert.ok(bad.reasons.includes("WITHDRAWALS_MUST_BE_DISABLED"));
+  assert.ok(bad.reasons.includes("FUTURES_MUST_BE_DISABLED"));
+  assert.ok(bad.reasons.includes("IP_RESTRICTION_REQUIRED"));
 });
