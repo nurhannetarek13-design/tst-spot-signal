@@ -6,7 +6,7 @@ const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
 const REST="https://api.binance.com";
 const RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
-const WS="wss://stream.binance.com:443/stream?streams=";
+const WS=String(process.env.PUBLIC_WS_BASE||"wss://data-stream.binance.vision:443/stream?streams=");
 const STABLES=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"]);
 const LEV=["UP","DOWN","BULL","BEAR"];
 
@@ -129,7 +129,8 @@ function health(){
 }
 async function clock(){
   const a=now(),r=await get("/api/v3/time"),b=now(),rtt=b-a,offset=Number(r.serverTime||0)-(a+rtt/2);
-  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=1500,offsetMs:offset,rttMs:rtt,checkedAt:now()};
+  const maxRtt=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
+  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=maxRtt,offsetMs:offset,rttMs:rtt,maxRttMs:maxRtt,checkedAt:now()};
 }
 function streamNames(symbols){
   const out=[];for(const s of symbols){const x=s.toLowerCase();out.push(x+"@depth@100ms",x+"@aggTrade");}return out;
