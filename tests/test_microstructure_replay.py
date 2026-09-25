@@ -56,5 +56,39 @@ class ReplayTests(unittest.TestCase):
         self.assertGreater(r["gap_rejections"],0)
 
 
+    def test_latency_uses_book_state_as_of_execution_deadline(self):
+        ev=[
+            {"type":"depth_snapshot","symbol":"SOLUSDT","ts_ms":1000,"last_update_id":100,
+             "bids":[["99.9","10"]],"asks":[["100.0","10"]]},
+            {"type":"signal","symbol":"SOLUSDT","ts_ms":1500},
+            {"type":"depth_update","symbol":"SOLUSDT","ts_ms":1900,"first_update_id":101,"final_update_id":101,
+             "bids":[["99.9","10"]],"asks":[["100.0","0"],["101.0","10"]]},
+            {"type":"depth_update","symbol":"SOLUSDT","ts_ms":2100,"first_update_id":102,"final_update_id":102,
+             "bids":[["99.9","10"]],"asks":[["101.0","0"],["90.0","10"]]},
+            {"type":"mark","symbol":"SOLUSDT","ts_ms":902000,"price":102.0},
+        ]
+        r=replay(ev,latency_ms=500,horizon_ms=900_000,max_book_age_ms=3000)
+        fill=[x for x in r["decisions"] if x["code"]=="FILLED"][0]
+        self.assertAlmostEqual(fill["fill_price"],101.0)
+        self.assertEqual(fill["exec_ts_ms"],2000)
+        self.assertEqual(fill["book_ts_ms"],1900)
+        self.assertEqual(r["lookahead_violations"],0)
+
+    def test_snapshot_resync_clears_prior_gap(self):
+        ev=[
+            {"type":"depth_snapshot","symbol":"SOLUSDT","ts_ms":1000,"last_update_id":100,
+             "bids":[["99","10"]],"asks":[["100","10"]]},
+            {"type":"depth_update","symbol":"SOLUSDT","ts_ms":1100,"first_update_id":105,"final_update_id":106,
+             "bids":[],"asks":[]},
+            {"type":"depth_snapshot","symbol":"SOLUSDT","ts_ms":1200,"last_update_id":200,
+             "bids":[["99.5","10"]],"asks":[["100","10"]]},
+            {"type":"signal","symbol":"SOLUSDT","ts_ms":1300},
+            {"type":"mark","symbol":"SOLUSDT","ts_ms":901800,"price":101},
+        ]
+        r=replay(ev,latency_ms=500,horizon_ms=900_000,max_book_age_ms=3000)
+        self.assertEqual(r["trades"],1)
+        self.assertEqual(r["lookahead_violations"],0)
+
+
 if __name__=="__main__":
     unittest.main()
