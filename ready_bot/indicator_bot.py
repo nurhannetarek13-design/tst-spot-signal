@@ -631,8 +631,10 @@ def signal_id_for_snapshot(snap):
     micro=snap.get("micro") or {}
     agg=micro.get("agg_cvd") or {}
     event_ms=int(agg.get("latest_event_ms") or snap.get("bar_time") or 0)
-    breakout=(micro.get("micro_breakout_hold") or {}).get("resistance")
-    raw=f"{snap.get('symbol')}|{event_ms//60000}|{breakout}|{micro.get('score')}"
+    # One deterministic BUY intent per symbol per market-event minute.
+    # This prevents duplicate execution while allowing the fast engine to
+    # reconsider a rejected symbol on the next minute instead of waiting 15m.
+    raw=f"{CFG['engine']}|{snap.get('symbol')}|BUY|{event_ms//60000}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -1283,7 +1285,8 @@ def main():
             if len(state["positions"]) >= int(CFG["risk"]["max_open_positions"]):
                 break
             key = snap["symbol"]
-            if state.get("seen", {}).get(key) == snap["bar_time"]:
+            decision_id=signal_id_for_snapshot(snap)
+            if state.get("seen", {}).get(key) == decision_id:
                 continue
             event_risk=load_event_risk(
                 ROOT.parent / CFG["production_guard"]["event_risk_file"],
@@ -1293,17 +1296,17 @@ def main():
             if not event_risk.get("ok"):
                 blocked.append({"symbol":key,"reason":event_risk.get("reason") or "EVENT_RISK","detail":event_risk})
                 append_decision(state,key,"WHY_SKIP",reason=event_risk.get("reason") or "EVENT_RISK")
-                state.setdefault("seen", {})[key] = snap["bar_time"]
+                state.setdefault("seen", {})[key] = decision_id
                 continue
             corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
                 blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
-                state.setdefault("seen", {})[key] = snap["bar_time"]
+                state.setdefault("seen", {})[key] = decision_id
                 continue
             snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
             result = open_position(state, snap, snap["filters"])
-            state.setdefault("seen", {})[key] = snap["bar_time"]
+            state.setdefault("seen", {})[key] = decision_id
             if result != "PAPER_OPENED":
                 blocked.append({"symbol": key, "score": snap["score"], "reason": result})
                 append_decision(state,key,"WHY_SKIP",reason=result,momentum_score=(snap.get("micro") or {}).get("score"))
