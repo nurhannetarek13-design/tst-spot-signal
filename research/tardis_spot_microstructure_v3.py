@@ -207,7 +207,8 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
         if {"U","u"}.issubset(d):
             depth_rows.append((r,ts))
 
-    depth_rows.sort(key=lambda item:(int(item[0]["data"]["u"]), int(item[0]["line"])))
+    # Preserve native arrival order; never sort future messages backward by sequence id.
+    depth_rows.sort(key=lambda item:int(item[0]["line"]))
     for r,ts in depth_rows:
         d=r["data"]
         U=int(d["U"]);u=int(d["u"])
