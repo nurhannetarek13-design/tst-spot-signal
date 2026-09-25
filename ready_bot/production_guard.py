@@ -257,21 +257,43 @@ def utc_session_label(now=None):
     return "LATE_US_ASIA_TRANSITION"
 
 
-def load_event_risk(path, symbol, now=None):
+def load_event_risk(path, symbol, now=None, *, required=False, max_age_minutes=None):
     """Explicit operational event-risk file.
 
-    This is intentionally deterministic: uncertain external news never gets
-    silently converted into a trade. Operators/automation may populate the file.
+    PAPER may observe without an external feed. A future non-paper runtime can
+    require a fresh feed and fail closed when the file is missing or stale.
     """
     p=Path(path)
     if not p.exists():
-        return {"ok":True,"blocked":False,"reason":None,"source":"NO_FILE"}
+        if required:
+            return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FEED_MISSING","source":"NO_FILE","fresh":False}
+        return {"ok":True,"blocked":False,"reason":None,"source":"NO_FILE","fresh":False}
     try:
         data=json.loads(p.read_text())
     except Exception as exc:
-        return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FILE_INVALID","detail":str(exc)[:120]}
+        return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FILE_INVALID","detail":str(exc)[:120],"fresh":False}
 
-    now_ts=(now or datetime.now(timezone.utc)).timestamp()
+    now_dt=now or datetime.now(timezone.utc)
+    now_ts=now_dt.timestamp()
+
+    generated=data.get("generated_at")
+    fresh=True
+    age_minutes=None
+    if max_age_minutes is not None:
+        try:
+            if not generated:
+                fresh=False
+            else:
+                gen_dt=datetime.fromisoformat(str(generated).replace("Z","+00:00"))
+                age_minutes=max(0.0,(now_dt-gen_dt).total_seconds()/60.0)
+                fresh=age_minutes<=float(max_age_minutes)
+        except Exception:
+            fresh=False
+    if required and not fresh:
+        return {
+            "ok":False,"blocked":True,"reason":"EVENT_RISK_FEED_STALE",
+            "source":"EVENT_RISK_FILE","fresh":False,"age_minutes":age_minutes,
+        }
 
     def active_until(value):
         if not value:
@@ -283,10 +305,10 @@ def load_event_risk(path, symbol, now=None):
             return True
 
     if active_until(data.get("global_halt_until")):
-        return {"ok":False,"blocked":True,"reason":"GLOBAL_EVENT_RISK","detail":data.get("global_reason")}
+        return {"ok":False,"blocked":True,"reason":"GLOBAL_EVENT_RISK","detail":data.get("global_reason"),"fresh":fresh,"age_minutes":age_minutes}
 
     row=(data.get("symbols") or {}).get(str(symbol).upper())
     if isinstance(row,dict) and active_until(row.get("until")):
-        return {"ok":False,"blocked":True,"reason":"SYMBOL_EVENT_RISK","detail":row.get("reason")}
+        return {"ok":False,"blocked":True,"reason":"SYMBOL_EVENT_RISK","detail":row.get("reason"),"fresh":fresh,"age_minutes":age_minutes}
 
-    return {"ok":True,"blocked":False,"reason":None,"source":"EVENT_RISK_FILE"}
+    return {"ok":True,"blocked":False,"reason":None,"source":"EVENT_RISK_FILE","fresh":fresh,"age_minutes":age_minutes}
