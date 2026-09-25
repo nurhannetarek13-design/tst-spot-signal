@@ -49,6 +49,16 @@ def evaluate(policy, replay, shadow):
             bool(source) and source not in {"CURRENT_ONLY","CURRENT_LISTINGS_ONLY","UNKNOWN"},
             replay.get("universe_source"), "historical universe including delisted/removed pairs")
 
+    if policy.get("require_point_in_time_universe_artifact", True):
+        evidence=replay.get("point_in_time_universe_evidence") or {}
+        add("point_in_time_universe_artifact",
+            evidence.get("checked") is True,
+            evidence,
+            "verified Binance Vision point-in-time universe artifact")
+        add("delisted_symbol_coverage",
+            int(evidence.get("delistedSymbolCount") or 0) >= 1,
+            evidence.get("delistedSymbolCount"), ">=1")
+
     add("shadow_trades",
         int(shadow.get("trades", 0)) >= int(policy["min_shadow_trades"]),
         shadow.get("trades"), policy["min_shadow_trades"])
