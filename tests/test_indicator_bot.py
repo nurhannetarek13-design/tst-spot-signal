@@ -193,5 +193,37 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
 
 
+    def test_dynamic_exit_on_momentum_fade(self):
+        from datetime import datetime, timezone, timedelta
+        state={"cash_usdt":10.0,"positions":{
+            "TESTUSDT":{
+                "entry":1.0,"stop":0.95,"target":1.10,"initial_risk_abs":0.05,
+                "breakeven":False,"qty":1.0,"cost":1.0,
+                "opened_at":(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat(),
+                "peak_price":1.01,"trough_price":0.99,
+            }
+        },"closed_trades":[],"day_pnl":0.0}
+        snap={"bid":0.99,"atr_15m":0.01,"micro_pre":{"taker_latest":0.45,"cvd_positive":False,"vwap":1.0}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertNotIn("TESTUSDT",state["positions"])
+        self.assertEqual(state["closed_trades"][-1]["reason"],"MOMENTUM_FADE")
+
+    def test_dynamic_exit_on_no_follow_through(self):
+        from datetime import datetime, timezone, timedelta
+        state={"cash_usdt":10.0,"positions":{
+            "TESTUSDT":{
+                "entry":1.0,"stop":0.95,"target":1.10,"initial_risk_abs":0.05,
+                "breakeven":False,"qty":1.0,"cost":1.0,
+                "opened_at":(datetime.now(timezone.utc)-timedelta(minutes=40)).isoformat(),
+                "peak_price":1.01,"trough_price":0.99,
+                "mfe_r":0.2,
+            }
+        },"closed_trades":[],"day_pnl":0.0}
+        snap={"bid":1.0,"atr_15m":0.01,"micro_pre":{"taker_latest":0.55,"cvd_positive":True,"vwap":0.99}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertNotIn("TESTUSDT",state["positions"])
+        self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
+
+
 if __name__=="__main__":
     unittest.main()
