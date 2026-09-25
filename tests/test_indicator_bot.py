@@ -305,5 +305,17 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(state["exit_slippage_model"]["TESTUSDT"]["count"],1)
 
 
+    def test_risk_sizing_uses_conservative_execution_slippage(self):
+        expected=max(
+            bot.CFG["risk"]["slippage_rate"],
+            bot.CFG["production_guard"]["max_estimated_slippage_bps"]/10000,
+        )
+        self.assertAlmostEqual(bot.conservative_execution_slippage_rate(),expected)
+        self.assertGreaterEqual(
+            bot.conservative_execution_slippage_rate(),
+            bot.CFG["risk"]["slippage_rate"],
+        )
+
+
 if __name__=="__main__":
     unittest.main()
