@@ -23,6 +23,8 @@ try:
         aggtrade_delta,
         combine_microstructure,
         depth_imbalance,
+        depth_flow_metrics,
+        depth_snapshot_metrics,
         micro_breakout_hold,
         prefilter_snapshot,
     )
@@ -31,6 +33,8 @@ except ImportError:
         aggtrade_delta,
         combine_microstructure,
         depth_imbalance,
+        depth_flow_metrics,
+        depth_snapshot_metrics,
         micro_breakout_hold,
         prefilter_snapshot,
     )
@@ -716,19 +720,21 @@ def enrich_microstructure(symbol, snap):
     cfg = CFG["momentum"]
     obi_samples = []
     spreads = []
+    depth_samples = []
     samples = int(cfg["obi_samples"])
     interval = float(cfg["obi_sample_interval_seconds"])
     for i in range(samples):
         depth = depth5(symbol)
-        obi_samples.append(depth_imbalance(depth, int(cfg["obi_levels"])))
-        bids = depth.get("bids") or []
-        asks = depth.get("asks") or []
-        if bids and asks:
-            spreads.append(spread_bps(float(bids[0][0]), float(asks[0][0])))
+        dm = depth_snapshot_metrics(depth, int(cfg["obi_levels"]))
+        depth_samples.append(dm)
+        obi_samples.append(dm.get("obi"))
+        if dm.get("spread_bps") is not None:
+            spreads.append(dm["spread_bps"])
         if i < samples - 1 and interval > 0:
             time.sleep(interval)
     agg = aggtrade_delta(recent_aggtrades(symbol, 500))
-    micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg)
+    depth_flow = depth_flow_metrics(depth_samples)
+    micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg, depth_flow)
     snap["micro"] = micro
     snap["eligible"] = bool(micro["stage"] == "ENTRY_CANDIDATE" and snap.get("guard_ok"))
     return snap
