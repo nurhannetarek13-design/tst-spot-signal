@@ -2,6 +2,9 @@ name: Unified Candidate Rotation
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Unified Fusion Gate"]
+    types: [completed]
 
 permissions:
   contents: write
