@@ -46,11 +46,13 @@ def clock_sync_status(server_time_ms, request_start_ms, response_end_ms, *,
 
 
 def signal_freshness_status(*, detected_at_ms, decision_at_ms=None, now_ms=None,
+                            market_event_ms=None,
                             max_signal_age_ms=12000, max_decision_latency_ms=6500):
     now=float(now_ms if now_ms is not None else time.time()*1000)
     detected=float(detected_at_ms or 0)
     decision=float(decision_at_ms or now)
-    age=now-detected if detected>0 else float("inf")
+    event=float(market_event_ms or detected or 0)
+    age=now-event if event>0 else float("inf")
     decision_latency=decision-detected if detected>0 else float("inf")
     reasons=[]
     if age<0 or age>float(max_signal_age_ms): reasons.append("STALE_SIGNAL")
