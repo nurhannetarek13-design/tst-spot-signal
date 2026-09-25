@@ -121,18 +121,21 @@ jobs:
           candidates=sum(int(x.get('candidateCount') or 0) for x in rows)
           fillable=sum(int(x.get('fillableCount') or 0) for x in rows)
           replay_ok=all(x.get('canonicalReplayReady') is True for x in rows)
-          execution_ok=all(x.get('executionReplayPass') is True for x in rows if int(x.get('candidateCount') or 0)>0)
-          slips=[x['slippageBps']['median'] for x in rows if x.get('slippageBps',{}).get('median') is not None]
+          execution_ok=all(x.get('executionReplayPass') is True for x in rows)
+          slips=[x['executionProbeSlippageBps']['median'] for x in rows if x.get('executionProbeSlippageBps',{}).get('median') is not None]
+          probes=sum(int(x.get('executionProbeCount') or 0) for x in rows)
+          filled_probes=sum(int(x.get('filledExecutionProbeCount') or 0) for x in rows)
           out={
             'engine':'SPOT_V3_MICROSTRUCTURE_REPLAY_AGGREGATE',
             'authorization':'RESEARCH_ONLY','liveTrading':False,
             'replayIntegrityPass':replay_ok,
-            'executionReplayPass':bool(replay_ok and candidates>0 and execution_ok and fillable==candidates),
+            'executionReplayPass':bool(replay_ok and execution_ok and probes>0 and filled_probes>0),
             'candidateCount':candidates,'fillableCount':fillable,
+            'executionProbeCount':probes,'filledExecutionProbeCount':filled_probes,
             'medianCellSlippageBps':statistics.median(slips) if slips else None,
             'edgeProven':False,'liveReady':False,
-            'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok else 'REPLAY_REJECTED',
-            'note':'This artifact cannot prove the full V3 strategy or authorize live trading.'
+            'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok and execution_ok else 'REPLAY_REJECTED',
+            'note':'Execution probes are independent of V3 entry signals. CandidateCount may be zero. This artifact cannot prove the full V3 strategy or authorize live trading.'
           }
           pathlib.Path('spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
           print(json.dumps(out,indent=2))
