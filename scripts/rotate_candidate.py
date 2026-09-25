@@ -10,7 +10,7 @@ REJECTED=pathlib.Path("validation/fusion/rejected-candidates.json")
 FORWARD=pathlib.Path("validation/fusion/forward-latest.json")
 LEDGER=pathlib.Path("paper/public-edge-forward-ledger.json")
 
-HISTORICAL_VALIDATORS=("vectorbt","freqtrade","jesse","nautilus")
+DEFAULT_HISTORICAL_VALIDATORS=("vectorbt","freqtrade","jesse","nautilus")
 
 
 def load(p,default):
@@ -33,7 +33,8 @@ summary=g.get("validatorSummary") or {}
 # have already demonstrated an economic hard failure.
 current={}
 waiting=[]
-for name in HISTORICAL_VALIDATORS:
+historical_validators=tuple((m.get("validation") or {}).get("historicalValidators") or [x for x in (m.get("validatorsRequired") or DEFAULT_HISTORICAL_VALIDATORS) if x!="forward"])
+for name in historical_validators:
     v=summary.get(name) or {}
     if v.get("candidateId")==cid and v.get("candidateFingerprint")==fp and v.get("candidateMatch") is True:
         current[name]=v
@@ -115,7 +116,8 @@ else:
       "candidatePool":pool,"poolSize":len(pool),
       "recentRejectedFingerprints":sorted(active),
       "authorization":"VALIDATION_AND_FORWARD_PAPER_ONLY","liveTrading":False,
-      "validatorsRequired":["vectorbt","freqtrade","jesse","nautilus","forward"],
+      "validatorsRequired":next_c.get("validatorsRequired",["vectorbt","freqtrade","jesse","nautilus","forward"]),
+      "validation":next_c.get("validation",{}),
       "generatedAt":now,
       "rotationReason":{"rejectedCandidateId":cid,"rejectedFingerprint":fp,"hardFailValidators":hard_fail},
     }
