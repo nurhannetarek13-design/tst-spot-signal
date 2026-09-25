@@ -107,11 +107,25 @@ async function sync(symbol){
     for(const [p,q] of snap.bids||[])if(Number(q)>0)s.bids.set(Number(p),Number(q));
     for(const [p,q] of snap.asks||[])if(Number(q)>0)s.asks.set(Number(p),Number(q));
     let id=Number(snap.lastUpdateId||0);
-    const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id);
-    for(const e of pending){
-      const st=sequenceStatus(id,e);if(st==="GAP")throw new Error("SYNC_GAP");if(st==="OLD")continue;
-      const ts=Number(e.E||now());applySide(s.bids,e.b,s.flow,ts,"bid");applySide(s.asks,e.a,s.flow,ts,"ask");id=Number(e.u);s.lastDepth=ts;
+    // Drain every event buffered while the REST snapshot was in flight.
+    // Do not mark synced until no buffered depth update is left behind.
+    let rounds=0;
+    while(rounds<20){
+      rounds++;
+      const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id);
+      if(!pending.length)break;
+      for(const e of pending){
+        const st=sequenceStatus(id,e);
+        if(st==="GAP")throw new Error("SYNC_GAP");
+        if(st==="OLD")continue;
+        const ts=Number(e.E||now());
+        applySide(s.bids,e.b,s.flow,ts,"bid");
+        applySide(s.asks,e.a,s.flow,ts,"ask");
+        id=Number(e.u);
+        s.lastDepth=ts;
+      }
     }
+    if(s.buffer.some(e=>Number(e.u)>id))throw new Error("SYNC_BUFFER_NOT_DRAINED");
     s.lastUpdateId=id;s.synced=true;s.warmSince=now();runtime.resyncs++;
   }catch(e){runtime.lastError="SYNC:"+symbol+":"+String(e?.message||e);s.synced=false;}finally{s.syncing=false;}
 }
