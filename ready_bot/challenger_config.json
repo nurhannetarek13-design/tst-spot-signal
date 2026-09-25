@@ -131,7 +131,9 @@
     "event_risk_file": "ready_bot/event_risk.json",
     "max_cancellation_rate_10s": 0.75,
     "bid_cancel_imbalance_ratio": 1.5,
-    "max_stream_signal_age_ms": 5000
+    "max_stream_signal_age_ms": 5000,
+    "event_risk_required_for_live": true,
+    "event_risk_max_age_minutes": 60
   },
   "smart_execution": {
     "enabled": true,
