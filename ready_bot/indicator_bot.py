@@ -669,6 +669,17 @@ def close_position(state, symbol, bid, reason, exit_depth=None):
         "exit_execution": depth_meta,
         "exit_slippage_bps": exit_slip,
     })
+    append_decision(
+        state,
+        symbol,
+        "WHY_EXIT",
+        reason=reason,
+        pnl_usdt=pnl,
+        exit_price=fill,
+        exit_slippage_bps=exit_slip,
+        mfe_r=p.get("mfe_r"),
+        mae_r=p.get("mae_r"),
+    )
 
 
 def round_qty(qty, filters):
@@ -1374,6 +1385,7 @@ def main():
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
                 blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
+                append_decision(state,key,"WHY_SKIP",reason="CORRELATION_TOO_HIGH",max_corr=corr.get("max_corr"))
                 state.setdefault("seen", {})[key] = decision_id
                 continue
             snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
