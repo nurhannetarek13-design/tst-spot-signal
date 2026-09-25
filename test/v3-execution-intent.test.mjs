@@ -16,6 +16,8 @@ function position(style="AGGRESSIVE_LIMIT"){
     cost:5,
     momentum_score:91,
     market_regime:"TREND",
+    opened_at:new Date().toISOString(),
+    entry_context:{decision_latency_ms:1200,max_total_latency_ms:8000},
     execution_plan:{
       style,
       reference_price:100,
@@ -30,6 +32,9 @@ function position(style="AGGRESSIVE_LIMIT"){
 test("V3 intent preserves smart execution and protection",()=>{
   const x=v3PaperPositionToExecutionIntent("SOLUSDT",position());
   assert.equal(x.authorization,"SHADOW_ONLY");
+  assert.equal(x.decisionLatencyMs,1200);
+  assert.equal(x.maxTotalLatencyMs,8000);
+  assert.ok(Number.isFinite(x.createdAtMs));
   assert.equal(x.liveApproved,false);
   assert.equal(x.entry.style,"AGGRESSIVE_LIMIT");
   assert.equal(x.entry.limitPrice,100.05);
