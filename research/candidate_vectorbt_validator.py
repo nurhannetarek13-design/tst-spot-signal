@@ -79,10 +79,20 @@ def build_signals(df,raw,hold):
         else: i+=1
     return pd.Series(entries,index=df.index),pd.Series(exits,index=df.index)
 
-def metrics(pf):
+def trade_rows(pf,symbol):
     rr=pf.trades.closed.records_readable
-    if rr.empty:return {"trades":0,"wins":0,"winRate":0.0,"netPnlUSDT":0.0,"expectancyUSDT":0.0,"profitFactor":0.0,"maxDrawdownUSDT":0.0}
-    p=rr["PnL"].astype(float).to_numpy(); gp=p[p>0].sum() if np.any(p>0) else 0; gl=-p[p<0].sum() if np.any(p<0) else 0
+    if rr.empty:return []
+    exit_col=next((x for x in ["Exit Timestamp","Exit Index"] if x in rr.columns),None)
+    out=[]
+    for i,row in rr.iterrows():
+        out.append({"symbol":symbol,"exit":str(row[exit_col]) if exit_col else str(i),"pnl":float(row["PnL"])})
+    return out
+
+def metrics_rows(rows):
+    rows=sorted(rows,key=lambda x:(x["exit"],x["symbol"]))
+    p=np.asarray([x["pnl"] for x in rows],dtype=float)
+    if len(p)==0:return {"trades":0,"wins":0,"winRate":0.0,"netPnlUSDT":0.0,"expectancyUSDT":0.0,"profitFactor":0.0,"maxDrawdownUSDT":0.0}
+    gp=p[p>0].sum() if np.any(p>0) else 0; gl=-p[p<0].sum() if np.any(p<0) else 0
     eq=np.cumsum(p); peak=np.maximum.accumulate(np.r_[0.0,eq])[:-1]; dd=peak-eq
     return {"trades":int(len(p)),"wins":int((p>0).sum()),"winRate":float((p>0).mean()),"netPnlUSDT":float(p.sum()),"expectancyUSDT":float(p.mean()),"profitFactor":float(gp/gl) if gl>0 else (999.0 if gp>0 else 0.0),"maxDrawdownUSDT":float(max(0.0,dd.max(initial=0.0)))}
 
@@ -90,7 +100,10 @@ m=json.loads(MANIFEST.read_text())
 if not m.get("candidateFingerprint"):
     out={"engine":"VECTORBT_CANDIDATE","strategyId":STRATEGY_ID,"status":"NO_CANDIDATE","pass":False,"candidateFingerprint":None,"liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat()}
 else:
-    df=fetch(m["symbol"],m["timeframe"]); p=m["params"]; hold=int(p.get("holdBars",24 if m["timeframe"]=="1h" else 96))
+    p=m["params"]; hold=int(p.get("holdBars",24 if m["timeframe"]=="1h" else 96))
+    symbols=list(m.get("symbols") or [m["symbol"]])
+    scope=m.get("scope","SINGLE_SYMBOL")
+
     leader=None
     if m["family"]=="CROSS_CRYPTO_LEAD_LAG":
         anchors=[]
@@ -98,14 +111,36 @@ else:
             adf=fetch(s,m["timeframe"])
             anchors.append(adf["close"].pct_change(3).rename(s))
         leader=pd.concat(anchors,axis=1).mean(axis=1)
-    raw=raw_signal(df,m["family"],p,leader); entries,exits=build_signals(df,raw,hold)
-    start=int(len(df)*0.60)
-    def run(fee):
+
+    def run_symbol(symbol,fee):
+        df=fetch(symbol,m["timeframe"])
+        raw=raw_signal(df,m["family"],p,leader)
+        entries,exits=build_signals(df,raw,hold)
+        start=int(len(df)*0.60)
         sub=df.iloc[start:]; e=entries.iloc[start:]; x=exits.iloc[start:]
-        pf=vbt.Portfolio.from_signals(sub.close,e,x,init_cash=INIT,size=STAKE,size_type="value",fees=fee,sl_stop=float(p["sl"]),tp_stop=float(p["tp"]),direction="longonly",freq=m["timeframe"])
-        return metrics(pf)
+        pf=vbt.Portfolio.from_signals(
+            sub.close,e,x,init_cash=INIT,size=STAKE,size_type="value",fees=fee,
+            sl_stop=float(p["sl"]),tp_stop=float(p["tp"]),direction="longonly",freq=m["timeframe"]
+        )
+        return trade_rows(pf,symbol)
+
+    def run(fee):
+        rows=[]
+        for symbol in symbols:
+            rows.extend(run_symbol(symbol,fee))
+        return metrics_rows(rows)
+
     base=run(BASE_FEE); stress=run(STRESS_FEE)
     independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and base["expectancyUSDT"]>0 and stress["profitFactor"]>=1.0 and stress["expectancyUSDT"]>0 and base["maxDrawdownUSDT"]<=2.0
     passed=independent and base["trades"]>=100 and stress["trades"]>=100
-    out={"engine":"VECTORBT_CANDIDATE","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],"symbol":m["symbol"],"family":m["family"],"timeframe":m["timeframe"],"params":p,"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),"notes":"Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."}
+    out={
+      "engine":"VECTORBT_CANDIDATE","strategyId":STRATEGY_ID,
+      "status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,
+      "candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],
+      "symbol":m["symbol"],"symbols":symbols,"scope":scope,
+      "family":m["family"],"timeframe":m["timeframe"],"params":p,
+      "base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,
+      "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
+      "notes":"VectorBT validates the manifest-declared symbol scope. MULTI_SYMBOL_BASKET pools independent per-symbol historical trades for research only; it cannot authorize live execution."
+    }
 OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
