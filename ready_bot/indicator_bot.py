@@ -67,6 +67,7 @@ def load_state():
     s = json.loads(STATE_PATH.read_text())
     if s.get("mode") != "PAPER_ONLY":
         raise RuntimeError("Refusing non-paper state")
+    s["engine"] = CFG["engine"]
     return s
 
 
