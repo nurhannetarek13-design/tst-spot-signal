@@ -106,7 +106,7 @@ def main():
     per={}; older_symbols=[]; recent_symbols=[]
     for s in symbols:
         d=data[s]; f=compute_indicator_fusion_v2(d,DEFAULT_PARAMS_V2)
-        cut=int(np.searchsorted(d.index.view("int64"),cutoff.value))
+        # Avoid datetime unit drift (ms/us/ns) across pandas versions.\n        cut=int((d.index < cutoff).sum())
         per[s]={}
         if cut>=4000:
             older_symbols.append(s)
