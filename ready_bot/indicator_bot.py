@@ -521,6 +521,8 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
 
 
 def validate_config():
+    if CFG.get("market_type") != "spot":
+        raise RuntimeError("SPOT_ONLY_CONFIG_VIOLATION")
     if CFG.get("mode") != "paper":
         raise RuntimeError("Indicator runtime is PAPER only")
     if CFG.get("engine") != "INDICATOR_ONLY_V1":
