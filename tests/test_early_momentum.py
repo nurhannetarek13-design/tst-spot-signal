@@ -143,5 +143,18 @@ class EarlyMomentumTests(unittest.TestCase):
         self.assertNotEqual(x["stage"],"ENTRY_CANDIDATE")
 
 
+    def test_depth_flow_and_microprice_diagnostics(self):
+        d1={"bids":[["100","2"],["99","2"]],"asks":[["101","1"],["102","1"]]}
+        d2={"bids":[["100","3"],["99","2.5"]],"asks":[["101","0.8"],["102","0.8"]]}
+        m1=depth_snapshot_metrics(d1,2)
+        m2=depth_snapshot_metrics(d2,2)
+        self.assertGreater(m1["obi"],.5)
+        self.assertIsNotNone(m1["microprice"])
+        flow=depth_flow_metrics([m1,m2])
+        self.assertGreater(flow["bid_liquidity_change_pct"],0)
+        self.assertLess(flow["ask_liquidity_change_pct"],0)
+        self.assertGreater(flow["pressure_change"],0)
+
+
 if __name__=="__main__":
     unittest.main()
