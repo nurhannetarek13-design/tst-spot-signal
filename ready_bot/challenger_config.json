@@ -131,7 +131,8 @@
     "event_risk_file": "ready_bot/event_risk.json",
     "max_cancellation_rate_10s": 0.75,
     "bid_cancel_imbalance_ratio": 1.5,
-    "max_stream_signal_age_ms": 5000
+    "max_stream_signal_age_ms": 5000,
+    "min_listing_age_days": 3
   },
   "smart_execution": {
     "enabled": true,
@@ -155,6 +156,6 @@
   "shadow_challenger": {
     "enabled": false,
     "candidate_id": "UNSET",
-    "base_champion_blob_sha": "6df570b96b50b2c3e5deb8f46fa40d85a165b406"
+    "base_champion_blob_sha": "fc5dae7393886dca1f0837b3389558ea55a07616"
   }
 }
