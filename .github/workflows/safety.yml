@@ -31,6 +31,27 @@ jobs:
       - name: Test candidate rotation cooldown refresh
         run: PYTHONPATH=. python tests/test_candidate_rotation_logic.py
 
+      - name: Assert liquidity basket contract is research-only
+        run: |
+          python - <<'PY'
+          import pathlib
+          builder=pathlib.Path("scripts/build_candidate_manifest.py").read_text()
+          gate=pathlib.Path("scripts/build_fusion_gate.py").read_text()
+          rotation=pathlib.Path("scripts/rotate_candidate.py").read_text()
+          jesse=pathlib.Path(".github/workflows/fusion-jesse-validator.yml").read_text()
+          freqtrade=pathlib.Path(".github/workflows/fusion-freqtrade-validator.yml").read_text()
+          assert 'MULTI_SYMBOL_BASKET' in builder
+          assert 'MULTI_SYMBOL_POOLED_RESEARCH' in builder
+          assert 'GLOBAL_SINGLE_POSITION_BASKET' in builder
+          assert 'validatorsRequired":["vectorbt","freqtrade","nautilus","forward"]' in builder
+          assert 'restricted_history' in gate
+          assert 'small_ready=(len(small_reasons)==0) and not restricted_history' in gate
+          assert 'historicalValidators' in rotation
+          assert 'status":"NOT_REQUIRED"' in jesse
+          assert 'candidate-config.json' in freqtrade
+          print("Liquidity basket contract verified: pooled history -> one-position forward only.")
+          PY
+
       - name: Assert fail-closed trading policy
         run: |
           python - <<'PY'
@@ -60,9 +81,22 @@ jobs:
           import json, pathlib
           root=pathlib.Path("validation/fusion")
           m=json.loads((root/"candidate-manifest.json").read_text())
-          required=["vectorbt","freqtrade","jesse","nautilus","forward"]
           assert m["strategyId"]=="TST_UNIFIED_CANDIDATE_V1"
-          assert m["validatorsRequired"]==required
+          required=m.get("validatorsRequired") or []
+          allowed={"vectorbt","freqtrade","jesse","nautilus","forward"}
+          assert required and set(required)<=allowed
+          if m.get("scope")=="MULTI_SYMBOL_BASKET":
+              validation=m.get("validation") or {}
+              assert m.get("symbol")=="BASKET"
+              assert len(m.get("symbols") or [])>=3
+              assert required==["vectorbt","freqtrade","nautilus","forward"]
+              assert "jesse" not in required
+              assert validation.get("historicalScope")=="MULTI_SYMBOL_POOLED_RESEARCH"
+              assert validation.get("forwardScope")=="GLOBAL_SINGLE_POSITION_BASKET"
+              assert validation.get("historicalValidators")==["vectorbt","freqtrade","nautilus"]
+              assert validation.get("forwardValidators")==["forward"]
+          else:
+              assert required==["vectorbt","freqtrade","jesse","nautilus","forward"]
           if m.get("candidateFingerprint"):
               for name,path in {
                   "vectorbt":"vectorbt-candidate-latest.json",
@@ -77,5 +111,15 @@ jobs:
           gate_code=pathlib.Path("scripts/build_fusion_gate.py").read_text()
           assert "CANDIDATE_ID_MISMATCH" in gate_code
           assert "CANDIDATE_FINGERPRINT_MISMATCH" in gate_code
-          print("Unified candidate wiring verified; stale snapshots are fail-closed during rotation.")
+          assert "MULTI_SYMBOL_POOLED_RESEARCH" in gate_code
+          assert "restricted_history" in gate_code
+          assert "GLOBAL_SINGLE_POSITION_BASKET:NOT_HISTORICALLY_VALIDATED" in gate_code
+          forward_code=pathlib.Path("scripts/forward-paper-public-edges.mjs").read_text()
+          assert 'scope==="MULTI_SYMBOL_BASKET"' in forward_code
+          assert "opportunities.sort" in forward_code
+          assert "ledger.open" in forward_code
+          manifest_code=pathlib.Path("scripts/build_candidate_manifest.py").read_text()
+          assert '"scope":"MULTI_SYMBOL_BASKET"' in manifest_code
+          assert '"validatorsRequired":["vectorbt","freqtrade","nautilus","forward"]' in manifest_code
+          print("Unified candidate wiring verified; basket research is explicit and fail-closed.")
           PY
