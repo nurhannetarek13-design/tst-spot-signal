@@ -44,6 +44,11 @@ jobs:
           TST_INDICATOR_STATE: validation/indicator-v3/challenger-state.json
         run: |
           python ready_bot/indicator_bot.py
+      - name: Build backtest integrity evidence
+        run: |
+          python -m unittest -v tests/test_backtest_integrity_gate.py
+          python research/backtest_integrity_gate.py
+
       - name: Evaluate without auto-promotion
         run: |
           python scripts/evaluate_v3_champion_challenger.py \
