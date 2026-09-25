@@ -14,6 +14,7 @@ import os
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -441,6 +442,20 @@ def manage_position(state, symbol, bid, atr_now):
         p["stop"] = max(p["stop"], trail)
 
 
+def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
+    b15 = closed_bars(symbol, CFG["timeframes"]["trigger"])
+    b1 = closed_bars(symbol, CFG["timeframes"]["trend"])
+    b4 = closed_bars(symbol, CFG["timeframes"]["macro"])
+    bid, ask = book(symbol)
+    qv = quote_volume_hint
+    if qv is None:
+        t = market(f"/api/v3/ticker/24hr?symbol={symbol}")
+        qv = float(t.get("quoteVolume") or 0)
+    snap = indicator_snapshot(symbol, b15, b1, b4, bid, ask, qv)
+    snap["filters"] = symbol_filters(symbol)
+    return snap
+
+
 def validate_config():
     if CFG.get("mode") != "paper":
         raise RuntimeError("Indicator runtime is PAPER only")
@@ -480,21 +495,16 @@ def main():
     qv_map = {x["symbol"]: x["quote_volume_24h"] for x in uni}
     # Always retain pricing for open positions even if they fall out of the dynamic universe.
     symbols = list(dict.fromkeys([x["symbol"] for x in uni] + list(state["positions"])))
-    for symbol in symbols:
-        try:
-            b15 = closed_bars(symbol, CFG["timeframes"]["trigger"])
-            b1 = closed_bars(symbol, CFG["timeframes"]["trend"])
-            b4 = closed_bars(symbol, CFG["timeframes"]["macro"])
-            bid, ask = book(symbol)
-            qv = qv_map.get(symbol)
-            if qv is None:
-                t = market(f"/api/v3/ticker/24hr?symbol={symbol}")
-                qv = float(t.get("quoteVolume") or 0)
-            snap = indicator_snapshot(symbol, b15, b1, b4, bid, ask, qv)
-            snap["filters"] = symbol_filters(symbol)
-            snapshots[symbol] = snap
-        except Exception as exc:
-            blocked.append({"symbol": symbol, "reason": "DATA_UNAVAILABLE", "detail": str(exc)[:160]})
+    # Market reads are independent. Parallelizing them keeps a 5-minute runtime
+    # cadence practical without changing any indicator or risk decision.
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(symbols)))) as pool:
+        futures = {pool.submit(fetch_symbol_snapshot, symbol, qv_map.get(symbol)): symbol for symbol in symbols}
+        for future in as_completed(futures):
+            symbol = futures[future]
+            try:
+                snapshots[symbol] = future.result()
+            except Exception as exc:
+                blocked.append({"symbol": symbol, "reason": "DATA_UNAVAILABLE", "detail": str(exc)[:160]})
 
     unpriced = False
     for symbol in list(state["positions"]):
