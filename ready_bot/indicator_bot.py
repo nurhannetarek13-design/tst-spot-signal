@@ -63,6 +63,7 @@ try:
         btc_shock_status,
         clock_sync_status,
         execution_quality_status,
+        estimate_sell_slippage,
         liquidity_disappearance_status,
         load_event_risk,
         signal_freshness_status,
@@ -137,6 +138,7 @@ def load_state():
             "executed_signal_ids": {},
             "decision_log": [],
             "slippage_model": {},
+            "exit_slippage_model": {},
             "signals": [],
             "blocked": [],
             "last_run": None,
@@ -148,6 +150,7 @@ def load_state():
     s.setdefault("executed_signal_ids", {})
     s.setdefault("decision_log", [])
     s.setdefault("slippage_model", {})
+    s.setdefault("exit_slippage_model", {})
     return s
 
 
@@ -598,15 +601,44 @@ def account_equity_at_cost(state):
     return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
 
 
-def close_position(state, symbol, bid, reason):
+def close_position(state, symbol, bid, reason, exit_depth=None):
     p = state["positions"].pop(symbol)
     fee = float(CFG["risk"]["fee_rate"])
-    ref = min(bid, p["stop"]) if reason == "STOP" else (p["target"] if reason == "TARGET" else bid)
-    fill = simulated_fill(ref, "sell")
+    ref = float(bid)
+    depth_meta={"source":"FALLBACK","fill_ratio":None,"slippage_bps":None}
+    try:
+        depth = exit_depth or depth20(symbol)
+        est = estimate_sell_slippage(depth, p["qty"])
+        if est.get("ok") and est.get("average_price"):
+            fill=float(est["average_price"])
+            depth_meta={
+                "source":"LIVE_DEPTH",
+                "fill_ratio":est.get("fill_ratio"),
+                "slippage_bps":est.get("slippage_bps"),
+            }
+        else:
+            raise RuntimeError("INSUFFICIENT_EXIT_DEPTH")
+    except Exception as exc:
+        fallback_rate=max(
+            float(CFG["risk"]["slippage_rate"]),
+            float(CFG["production_guard"]["max_estimated_slippage_bps"])/10000.0,
+        )
+        fill=ref*(1.0-fallback_rate)
+        depth_meta={
+            "source":"CONSERVATIVE_FALLBACK",
+            "fill_ratio":None,
+            "slippage_bps":fallback_rate*10000,
+            "detail":str(exc)[:120],
+        }
+
     proceeds = p["qty"] * fill * (1 - fee)
     pnl = proceeds - p["cost"]
     state["cash_usdt"] += proceeds
     state["day_pnl"] += pnl
+    exit_slip=realized_slippage_bps(ref,fill,"SELL")
+    state["exit_slippage_model"]=update_symbol_slippage_model(
+        state.get("exit_slippage_model"),symbol,exit_slip
+    )
     state["closed_trades"].append({
         "symbol": symbol, "engine": CFG["engine"], "entry": p["entry"], "exit": fill,
         "qty": p["qty"], "pnl_usdt": pnl, "reason": reason,
@@ -617,6 +649,8 @@ def close_position(state, symbol, bid, reason):
         "entry_context": p.get("entry_context"),
         "mfe_r": p.get("mfe_r"),
         "mae_r": p.get("mae_r"),
+        "exit_execution": depth_meta,
+        "exit_slippage_bps": exit_slip,
     })
 
 
@@ -832,10 +866,10 @@ def manage_position(state, symbol, snap):
     p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
 
     if bid <= p["stop"]:
-        close_position(state, symbol, bid, "STOP")
+        close_position(state, symbol, bid, "STOP", snap.get("_exit_depth"))
         return
     if bid >= p["target"]:
-        close_position(state, symbol, bid, "TARGET")
+        close_position(state, symbol, bid, "TARGET", snap.get("_exit_depth"))
         return
 
     exit_cfg=CFG.get("exit",{})
@@ -860,7 +894,7 @@ def manage_position(state, symbol, snap):
             and bid<float(vwap_now)
         )
         if fade:
-            close_position(state, symbol, bid, "MOMENTUM_FADE")
+            close_position(state, symbol, bid, "MOMENTUM_FADE", snap.get("_exit_depth"))
             return
 
     # If the trade never produces meaningful favorable excursion, free capital.
@@ -868,11 +902,11 @@ def manage_position(state, symbol, snap):
         age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
         and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
     ):
-        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH")
+        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH", snap.get("_exit_depth"))
         return
 
     if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
-        close_position(state, symbol, bid, "HARD_TIME_STOP")
+        close_position(state, symbol, bid, "HARD_TIME_STOP", snap.get("_exit_depth"))
         return
 
     if p["initial_risk_abs"] > 0 and bid >= p["entry"] + float(CFG["risk"]["breakeven_at_r"]) * p["initial_risk_abs"]:
