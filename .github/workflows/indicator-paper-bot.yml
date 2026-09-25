@@ -7,6 +7,11 @@ on:
     paths:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/indicator_config.json'
+      - 'ready_bot/event_risk.json'
+      - 'ready_bot/smart_execution.py'
+      - 'ready_bot/production_guard.py'
+      - 'ready_bot/market_context.py'
+      - 'ready_bot/early_momentum.py'
       - 'tests/test_indicator_bot.py'
       - '.github/workflows/indicator-paper-bot.yml'
   schedule:
@@ -38,9 +43,12 @@ jobs:
           python -m py_compile ready_bot/indicator_bot.py
           python -m py_compile ready_bot/early_momentum.py
           python -m py_compile ready_bot/market_context.py
+          python -m py_compile ready_bot/production_guard.py
+          python -m py_compile ready_bot/smart_execution.py
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
+          python -m unittest discover -s tests -p 'test_production_guard.py' -v
 
       - name: Run indicator-only PAPER engine at ~1-minute cadence
         shell: bash
@@ -145,6 +153,10 @@ jobs:
           assert c['risk']['max_pair_correlation']==0.85
           assert c['risk']['consecutive_loss_cooldown_count']==3
           assert c['data_integrity']['fail_closed'] is True
+          assert c['production_guard']['max_signal_age_ms']<=12000
+          assert c['production_guard']['max_decision_latency_ms']<=6500
+          assert c['smart_execution']['enabled'] is True
+          assert c['security']['never_log_credentials'] is True
           print(json.dumps({
             'engine':c['engine'],
             'cash':s['cash_usdt'],
