@@ -95,6 +95,20 @@ def _max_drawdown(equity_curve):
     return worst
 
 
+def _session_label(ts_ms):
+    from datetime import datetime, timezone
+    h=datetime.fromtimestamp(int(ts_ms)/1000, tz=timezone.utc).hour
+    if 0 <= h < 7: return "ASIA"
+    if 7 <= h < 13: return "EUROPE"
+    if 13 <= h < 16: return "EU_US_OVERLAP"
+    if 16 <= h < 21: return "US"
+    return "LATE_US_ASIA_TRANSITION"
+
+
+def _marks_between(marks, symbol, start_ts_ms, end_ts_ms):
+    return [(ts,p) for ts,p in (marks.get(symbol) or []) if int(start_ts_ms) <= ts <= int(end_ts_ms)]
+
+
 def _future_mark(marks, symbol, after_ts_ms, horizon_ms):
     rows = marks.get(symbol) or []
     target = int(after_ts_ms) + int(horizon_ms)
@@ -132,6 +146,8 @@ def replay(events, *,
     partial_fill_rejections = 0
     slippage_rejections = 0
     symbols_traded = set()
+    symbol_slippage = defaultdict(list)
+    session_pnls = defaultdict(list)
 
     # Marks are outcome data only; never exposed to decision features.
     for e in events:
@@ -201,6 +217,10 @@ def replay(events, *,
             decisions.append({"symbol": symbol, "ts_ms": ts, "code": "NO_OUTCOME_MARK"})
             continue
         out_ts, out_price = outcome
+        window_marks=_marks_between(marks, symbol, exec_ts, exec_ts + int(horizon_ms))
+        prices=[float(p) for _,p in window_marks]
+        mfe=((max(prices)/fill)-1.0) if prices else 0.0
+        mae=((min(prices)/fill)-1.0) if prices else 0.0
         gross = (float(out_price) / fill) - 1.0
         net = gross - 2.0 * float(fee_rate)
         pnl = float(quote_per_trade) * net
@@ -208,6 +228,9 @@ def replay(events, *,
         curve.append(equity)
         pnls.append(pnl)
         symbols_traded.add(symbol)
+        symbol_slippage[symbol].append(float(quality["slippage_bps"] or 0.0))
+        session=_session_label(exec_ts)
+        session_pnls[session].append(pnl)
         decisions.append({
             "symbol": symbol,
             "ts_ms": ts,
@@ -220,6 +243,9 @@ def replay(events, *,
             "fill_ratio": quality["fill_ratio"],
             "gross_return": gross,
             "net_return_after_fees": net,
+            "mfe_return": mfe,
+            "mae_return": mae,
+            "session": session,
             "pnl": pnl,
         })
 
@@ -244,6 +270,20 @@ def replay(events, *,
         "gap_rejections": gap_rejections,
         "partial_fill_rejections": partial_fill_rejections,
         "slippage_rejections": slippage_rejections,
+        "per_symbol_slippage_bps": {
+            s: {
+                "count": len(xs),
+                "avg": sum(xs)/len(xs) if xs else 0.0,
+                "max": max(xs) if xs else 0.0,
+            } for s,xs in sorted(symbol_slippage.items())
+        },
+        "session_stats": {
+            s: {
+                "trades": len(xs),
+                "net_pnl": sum(xs),
+                "net_expectancy": sum(xs)/len(xs) if xs else 0.0,
+            } for s,xs in sorted(session_pnls.items())
+        },
         "assumptions": {
             "fee_rate_per_side": fee_rate,
             "latency_ms": latency_ms,
