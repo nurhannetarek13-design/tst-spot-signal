@@ -287,6 +287,16 @@ def recent_aggtrades(symbol, limit=500):
     return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
 
 
+def stream_shadow_health():
+    base=str(os.getenv("TST_STREAM_SHADOW_URL") or "").rstrip("/")
+    if not base:
+        return None
+    row=request_json(base+"/health")
+    if (row or {}).get("ok") is not True:
+        raise RuntimeError("STREAM_SHADOW_NOT_HEALTHY")
+    return row
+
+
 def stream_shadow_micro_snapshot(symbol):
     base=str(os.getenv("TST_STREAM_SHADOW_URL") or "").rstrip("/")
     if not base:
@@ -1176,6 +1186,26 @@ def main():
         btc = {"ok": False, "reason": f"BTC_DATA:{str(exc)[:120]}"}
         btc_shock = {"ok":False,"shock":True,"reason":f"BTC_SHOCK_DATA:{str(exc)[:120]}"}
 
+    stream_btc_shock = None
+    if str(os.getenv("TST_STREAM_SHADOW_URL") or "").strip():
+        try:
+            stream_health = stream_shadow_health()
+            stream_btc_shock = (stream_health or {}).get("btcShock") or {
+                "ok":False,"shock":True,"reason":"BTC_STREAM_SHOCK_MISSING"
+            }
+            if stream_btc_shock.get("ok") is not True:
+                stream_btc_shock = {
+                    **stream_btc_shock,
+                    "ok":False,
+                    "shock":True,
+                    "reason":stream_btc_shock.get("reason") or "BTC_STREAM_SHOCK",
+                }
+        except Exception as exc:
+            stream_btc_shock = {
+                "ok":False,"shock":True,
+                "reason":f"BTC_STREAM_HEALTH:{str(exc)[:120]}",
+            }
+
     snapshots = {}
     qv_map = {x["symbol"]: x["quote_volume_24h"] for x in uni}
     # Always retain pricing for open positions even if they fall out of the dynamic universe.
@@ -1298,6 +1328,8 @@ def main():
         blocked.append({"reason":"CLOCK_SYNC_VETO","detail":clock})
     elif not btc_shock.get("ok"):
         blocked.append({"reason":"BTC_SHOCK_VETO","detail":btc_shock})
+    elif stream_btc_shock is not None and stream_btc_shock.get("ok") is not True:
+        blocked.append({"reason":"BTC_STREAM_SHOCK_VETO","detail":stream_btc_shock})
     elif not data_integrity_ok:
         blocked.append({"reason": "DATA_INTEGRITY_VETO"})
     elif not regime.get("allow_new_longs"):
@@ -1390,6 +1422,7 @@ def main():
     state["blocked"] = blocked
     state["btc_regime"] = btc
     state["btc_shock"] = btc_shock
+    state["btc_stream_shock"] = stream_btc_shock
     state["clock_sync"] = clock
     state["market_regime"] = regime
     state["relative_strength"] = rs_map
@@ -1403,6 +1436,7 @@ def main():
     print(json.dumps({
         "mode": "PAPER_ONLY", "engine": CFG["engine"], "cash_usdt": state["cash_usdt"],
         "day_pnl": state["day_pnl"], "btc_regime": btc, "btc_shock": btc_shock,
+        "btc_stream_shock": stream_btc_shock,
         "clock_sync": clock, "market_regime": regime,
         "data_integrity": state["data_integrity"], "precision_evidence": evidence, "positions": state["positions"],
         "signals": state["signals"], "momentum_watchlist": momentum_watchlist,
