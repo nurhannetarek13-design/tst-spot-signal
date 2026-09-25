@@ -1,0 +1,24 @@
+{
+  "mode": "PAPER_SHADOW_ONLY",
+  "liveTrading": false,
+  "champion": {
+    "id": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
+    "status": "PAPER_CHAMPION",
+    "source": "ready_bot/indicator_bot.py"
+  },
+  "challenger": null,
+  "promotion_policy": {
+    "auto_promotion": false,
+    "require_manual_review": true,
+    "min_oos_trades": 100,
+    "min_oos_symbols": 5,
+    "min_profit_factor": 1.15,
+    "min_net_expectancy_usdt": 0,
+    "max_drawdown_fraction": 0.1,
+    "require_zero_lookahead_violations": true,
+    "require_survivorship_bias_check": true,
+    "min_shadow_trades": 50,
+    "max_shadow_safety_incidents": 0,
+    "min_shadow_net_expectancy_usdt": 0
+  }
+}
