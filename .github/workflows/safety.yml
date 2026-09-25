@@ -31,6 +31,9 @@ jobs:
       - name: Test candidate rotation cooldown refresh
         run: PYTHONPATH=. python tests/test_candidate_rotation_logic.py
 
+      - name: Test Jesse spot time-exit reservation fix
+        run: python tests/test_jesse_spot_time_exit.py
+
       - name: Assert fail-closed trading policy
         run: |
           python - <<'PY'
