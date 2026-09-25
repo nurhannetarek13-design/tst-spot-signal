@@ -38,6 +38,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Compile and test indicator runtime
         run: |
           python -m py_compile ready_bot/indicator_bot.py
@@ -45,6 +49,8 @@ jobs:
           python -m py_compile ready_bot/market_context.py
           python -m py_compile ready_bot/production_guard.py
           python -m py_compile ready_bot/smart_execution.py
+          node --check ready_bot/stream_shadow.mjs
+          node --test test/stream-shadow.test.mjs
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
@@ -52,8 +58,29 @@ jobs:
 
       - name: Run indicator-only PAPER engine at ~1-minute cadence
         shell: bash
+        env:
+          TST_STREAM_SHADOW_URL: http://127.0.0.1:8080
+          STREAM_MAX_SYMBOLS: '25'
+          STREAM_MIN_QUOTE_VOLUME_USDT: '20000000'
+          PORT: '8080'
         run: |
           set -euo pipefail
+
+          node ready_bot/stream_shadow.mjs >/tmp/stream-shadow.log 2>&1 &
+          stream_pid=$!
+          trap 'kill "$stream_pid" 2>/dev/null || true; cat /tmp/stream-shadow.log || true' EXIT
+
+          stream_ok=0
+          for attempt in $(seq 1 45); do
+            code=$(curl -sS -o /tmp/stream-health.json -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            if [ "$code" = "200" ]; then
+              stream_ok=1
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/stream-health.json || true
+          test "$stream_ok" = "1"
 
           git config user.name 'indicator-paper-bot'
           git config user.email 'indicator-paper-bot@users.noreply.github.com'
