@@ -8,30 +8,30 @@
     {
       "symbol": "PROVEUSDT",
       "entry": 0.232,
-      "stop": 0.21181642596573336,
+      "stop": 0.21486624046442454,
       "qty": 8.227260513654,
       "notionalUSDT": 1.90872444,
       "riskUSDT": 0.2,
       "score": 89,
       "openedAt": "2026-09-24T04:55:31.030Z",
       "signalBarTime": "2026-09-24T04:00:00.000Z",
-      "highestClose": 0.2328,
-      "barsHeld": 4,
+      "highestClose": 0.2344,
+      "barsHeld": 5,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     },
     {
       "symbol": "SNDKBUSDT",
       "entry": 1757.54,
-      "stop": 1693.2415062664393,
+      "stop": 1693.8713970355616,
       "qty": 0.002267629261,
       "notionalUSDT": 3.98544913,
       "riskUSDT": 0.2,
       "score": 86,
       "openedAt": "2026-09-24T23:14:00.262Z",
       "signalBarTime": "2026-09-24T20:00:00.000Z",
-      "highestClose": 1775.12,
-      "barsHeld": 1,
+      "highestClose": 1776.07,
+      "barsHeld": 2,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -117,7 +117,7 @@
     "PROVEUSDT:1790222400000",
     "SNDKBUSDT:1790280000000"
   ],
-  "lastRunAt": "2026-09-25T05:01:03.854Z",
+  "lastRunAt": "2026-09-25T13:50:52.427Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
