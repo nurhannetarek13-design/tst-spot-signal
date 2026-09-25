@@ -65,6 +65,7 @@ try:
         execution_quality_status,
         estimate_sell_slippage,
         liquidity_disappearance_status,
+        listing_age_status,
         load_event_risk,
         signal_freshness_status,
         utc_session_label,
@@ -81,7 +82,9 @@ except ImportError:
         btc_shock_status,
         clock_sync_status,
         execution_quality_status,
+        estimate_sell_slippage,
         liquidity_disappearance_status,
+        listing_age_status,
         load_event_risk,
         signal_freshness_status,
         utc_session_label,
@@ -298,6 +301,20 @@ def stream_shadow_micro_snapshot(symbol):
     if health.get("ok") is not True or snap.get("synced") is not True or snap.get("fresh") is not True or snap.get("warmed") is not True:
         raise RuntimeError("STREAM_SHADOW_NOT_HEALTHY")
     return snap
+
+
+def candidate_listing_age_status(symbol):
+    days=max(1,int(CFG["production_guard"].get("min_listing_age_days",3)))
+    try:
+        bars=closed_bars(symbol,"1d",limit=days+2)
+        return listing_age_status(bars,min_complete_days=days)
+    except Exception as exc:
+        return {
+            "ok":False,
+            "reason":"LISTING_AGE_UNAVAILABLE",
+            "detail":str(exc)[:120],
+            "required_days":days,
+        }
 
 
 def symbol_filters(symbol):
@@ -1346,6 +1363,13 @@ def main():
                 append_decision(state,key,"WHY_SKIP",reason=event_risk.get("reason") or "EVENT_RISK")
                 state.setdefault("seen", {})[key] = decision_id
                 continue
+            listing_age=candidate_listing_age_status(key)
+            snap["listing_age"]=listing_age
+            if not listing_age.get("ok"):
+                blocked.append({"symbol":key,"reason":listing_age.get("reason") or "NEW_LISTING_QUARANTINE","detail":listing_age})
+                append_decision(state,key,"WHY_SKIP",reason=listing_age.get("reason") or "NEW_LISTING_QUARANTINE")
+                state.setdefault("seen", {})[key] = decision_id
+                continue
             corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
@@ -1381,6 +1405,7 @@ def main():
         "production_guard": x.get("micro", {}).get("production_guard"),
         "execution_plan": x.get("execution_plan"),
         "execution_quality": x.get("execution_quality"),
+        "listing_age": x.get("listing_age"),
         "micro_breakout_hold": x.get("micro", {}).get("micro_breakout_hold"),
         "context_score_15m": x["score"],
         "context_checks_15m": x["checks"],
