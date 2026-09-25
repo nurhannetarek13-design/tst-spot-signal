@@ -75,6 +75,9 @@ jobs:
           assert snap['depthAgeMs'] <= 3000
           assert snap['tradeAgeMs'] <= 12000
           assert snap['sequenceGaps'] >= 0
+          assert snap['bidLiquidityQuote5'] is not None
+          assert snap['askLiquidityQuote5'] is not None
+          assert isinstance(snap['cvdSlopePositive10s'], bool)
           for forbidden in ('apiKey','secret','privateKey','orderId'):
               assert forbidden not in json.dumps(s)
           PY
