@@ -60,6 +60,10 @@ jobs:
           assert c['risk']['max_daily_loss_usdt']==2.0
           assert c['risk']['max_open_positions']==3
           assert c['risk']['max_quote_per_trade_usdt']<=10.0
+          assert c['risk']['max_risk_per_trade_fraction']<=0.005
+          assert c['risk']['allow_averaging_down'] is False
+          assert c['risk']['allow_martingale'] is False
+          assert c['risk']['leverage']==1
           print(json.dumps({
             'engine':c['engine'],
             'cash':s['cash_usdt'],
