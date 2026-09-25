@@ -646,7 +646,7 @@ async function notifyExecutionReadinessTransition(env, balance) {
     balance?.canTrade &&
     balance?.accountSafetyOk === true
   );
-  const blocker=ready ? null : safeRelayDiagnostic(lastError?.error);
+  const blocker=ready ? null : (balance?.accountSafetyReasons?.[0] || safeRelayDiagnostic(lastError?.error));
   const previous=await getState(env,"live-readiness:transition-state");
   const current={
     ready,
