@@ -6,12 +6,6 @@ const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
 const MAX_CLOCK_OFFSET_MS=Number(process.env.STREAM_MAX_CLOCK_OFFSET_MS||750);
 const MAX_CLOCK_RTT_MS=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
-const STREAM_WARMUP_MS=Number(process.env.STREAM_WARMUP_MS||60000);
-const MAX_DEPTH_AGE_MS=Number(process.env.STREAM_MAX_DEPTH_AGE_MS||3000);
-const MAX_TRADE_AGE_MS=Number(process.env.STREAM_MAX_TRADE_AGE_MS||5000);
-const BTC_SHOCK_5S_ABS=Number(process.env.BTC_SHOCK_5S_ABS||0.004);
-const BTC_SHOCK_15S_ABS=Number(process.env.BTC_SHOCK_15S_ABS||0.007);
-const BTC_SHOCK_60S_ABS=Number(process.env.BTC_SHOCK_60S_ABS||0.012);
 const PUBLIC_RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
 const REST_BASES=[
   "https://data-api.binance.vision",
@@ -76,7 +70,7 @@ export function applySide(map,rows,flow,ts,side){
   while(flow.length&&ts-flow[0].ts>60000)flow.shift();
 }
 function stateFor(symbol){
-  return {symbol,bids:new Map(),asks:new Map(),flow:[],trades:[],buffer:[],midHistory:[],synced:false,syncing:false,lastUpdateId:0,lastDepth:null,lastTrade:null,warmSince:null,gaps:0};
+  return {symbol,bids:new Map(),asks:new Map(),flow:[],trades:[],buffer:[],synced:false,syncing:false,lastUpdateId:0,lastDepth:null,lastTrade:null,warmSince:null,gaps:0};
 }
 function top(map,desc,n=5){return [...map.entries()].sort((a,b)=>desc?b[0]-a[0]:a[0]-b[0]).slice(0,n);}
 export function bookMetrics(s,t=Date.now()){
@@ -97,38 +91,6 @@ export function bookMetrics(s,t=Date.now()){
     askCancelQuote10s:f.filter(x=>x.type==="cancel"&&x.side==="ask").reduce((z,x)=>z+x.quote,0)
   };
 }
-export function btcShockMetrics(history,t=Date.now(),thresholds={}){
-  const rows=(history||[]).filter(x=>Number.isFinite(Number(x?.ts))&&Number.isFinite(Number(x?.mid))&&Number(x.mid)>0);
-  const latest=rows.at(-1);
-  if(!latest)return {ok:false,shock:true,reason:"BTC_MID_UNAVAILABLE",ret5s:null,ret15s:null,ret60s:null};
-  const prior=(ms)=>{
-    for(let i=rows.length-1;i>=0;i--){
-      if(latest.ts-rows[i].ts>=ms)return rows[i];
-    }
-    return null;
-  };
-  const p5=prior(5000),p15=prior(15000),p60=prior(60000);
-  const ret=(p)=>p?latest.mid/p.mid-1:null;
-  const r5=ret(p5),r15=ret(p15),r60=ret(p60);
-  const th5=Number(thresholds.s5??BTC_SHOCK_5S_ABS);
-  const th15=Number(thresholds.s15??BTC_SHOCK_15S_ABS);
-  const th60=Number(thresholds.s60??BTC_SHOCK_60S_ABS);
-  const warmed=Boolean(p60);
-  const shock=Boolean(
-    (r5!=null&&Math.abs(r5)>=th5)||
-    (r15!=null&&Math.abs(r15)>=th15)||
-    (r60!=null&&Math.abs(r60)>=th60)
-  );
-  return {
-    ok:warmed&&!shock,
-    shock,
-    warmed,
-    reason:!warmed?"BTC_SHOCK_WARMUP":(shock?"BTC_STREAM_SHOCK":null),
-    ret5s:r5,ret15s:r15,ret60s:r60,
-    thresholds:{s5:th5,s15:th15,s60:th60},
-  };
-}
-
 export function tradeMetrics(trades,t=Date.now()){
   const r=trades.filter(x=>t-x.ts<=60000);
   const buy=r.filter(x=>x.d>0).reduce((z,x)=>z+x.d,0),sell=Math.abs(r.filter(x=>x.d<0).reduce((z,x)=>z+x.d,0));
@@ -201,21 +163,12 @@ async function sync(symbol){
     if(retry&&runtime.connected)setTimeout(()=>void sync(symbol),300);
   }
 }
-function recordMid(s,ts){
-  const bids=top(s.bids,true,1),asks=top(s.asks,false,1);
-  const bid=bids[0]?.[0]??null,ask=asks[0]?.[0]??null;
-  if(!(bid>0&&ask>bid))return;
-  const mid=(bid+ask)/2;
-  s.midHistory.push({ts,mid});
-  while(s.midHistory.length&&ts-s.midHistory[0].ts>70000)s.midHistory.shift();
-}
-
 function depth(symbol,d){
   const s=runtime.books.get(symbol);if(!s)return;
   if(!s.synced){s.buffer.push(d);if(s.buffer.length>5000)s.buffer.splice(0,s.buffer.length-5000);return;}
   const st=sequenceStatus(s.lastUpdateId,d);if(st==="OLD")return;
   if(st!=="APPLY"){s.synced=false;s.gaps++;runtime.resyncs++;void sync(symbol);return;}
-  const ts=Number(d.E||now());applySide(s.bids,d.b,s.flow,ts,"bid");applySide(s.asks,d.a,s.flow,ts,"ask");s.lastUpdateId=Number(d.u);s.lastDepth=ts;recordMid(s,ts);
+  const ts=Number(d.E||now());applySide(s.bids,d.b,s.flow,ts,"bid");applySide(s.asks,d.a,s.flow,ts,"ask");s.lastUpdateId=Number(d.u);s.lastDepth=ts;
 }
 function trade(symbol,d){
   const s=runtime.books.get(symbol);if(!s)return;const ts=Number(d.T||d.E||now()),q=Number(d.p||0)*Number(d.q||0);
@@ -223,19 +176,15 @@ function trade(symbol,d){
 }
 function snapshot(symbol){
   const s=runtime.books.get(symbol);if(!s)return null;const t=now(),da=s.lastDepth==null?Infinity:t-s.lastDepth,ta=s.lastTrade==null?Infinity:t-s.lastTrade;
-  return {symbol,synced:s.synced,warmed:s.synced&&s.warmSince!=null&&t-s.warmSince>=STREAM_WARMUP_MS,fresh:s.synced&&da<=MAX_DEPTH_AGE_MS&&ta<=MAX_TRADE_AGE_MS,
+  return {symbol,synced:s.synced,warmed:s.synced&&s.warmSince!=null&&t-s.warmSince>=3000,fresh:s.synced&&da<=3000&&ta<=12000,
     depthAgeMs:Number.isFinite(da)?da:null,tradeAgeMs:Number.isFinite(ta)?ta:null,lastUpdateId:s.lastUpdateId,sequenceGaps:s.gaps,
     ...bookMetrics(s,t),...tradeMetrics(s.trades,t)};
 }
 function health(){
   const rows=runtime.universe.map(snapshot).filter(Boolean),good=rows.filter(x=>x.fresh&&x.warmed).length,ratio=rows.length?good/rows.length:0;
   const clockFresh=runtime.clock.checkedAt&&now()-runtime.clock.checkedAt<120000&&runtime.clock.ok;
-  const btc=runtime.books.get("BTCUSDT");
-  const btcShock=btc?btcShockMetrics(btc.midHistory):{ok:false,shock:true,warmed:false,reason:"BTC_NOT_STREAMING"};
   return {ok:runtime.connected&&ratio>=0.8&&clockFresh,mode:"SHADOW_ONLY",liveTrading:false,connected:runtime.connected,
-    universeCount:rows.length,freshWarmCount:good,freshWarmRatio:ratio,clock:runtime.clock,btcShock,
-    warmupMs:STREAM_WARMUP_MS,maxDepthAgeMs:MAX_DEPTH_AGE_MS,maxTradeAgeMs:MAX_TRADE_AGE_MS,
-    reconnects:runtime.reconnects,resyncs:runtime.resyncs,
+    universeCount:rows.length,freshWarmCount:good,freshWarmRatio:ratio,clock:runtime.clock,reconnects:runtime.reconnects,resyncs:runtime.resyncs,
     lastMessageAgeMs:runtime.lastMessageAt?now()-runtime.lastMessageAt:null,lastError:runtime.lastError};
 }
 async function clock(){
