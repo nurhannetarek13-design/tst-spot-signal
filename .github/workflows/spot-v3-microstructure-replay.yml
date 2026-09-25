@@ -85,6 +85,9 @@ jobs:
           assert d['authorization']=='RESEARCH_ONLY'
           assert d['liveTrading'] is False
           assert d['canonicalReplayReady'] is True
+          assert d['executionReplayPass'] is True
+          assert d['executionProbeCount'] >= 3
+          assert d['executionProbeFillRate'] >= 0.95
           assert d['edgeProven'] is False
           assert d['liveReady'] is False
           assert d['quoteUSDT']==10
@@ -139,6 +142,10 @@ jobs:
           }
           pathlib.Path('spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
           print(json.dumps(out,indent=2))
+          assert out['replayIntegrityPass'] is True
+          assert out['executionReplayPass'] is True
+          assert out['edgeProven'] is False
+          assert out['liveReady'] is False
           PY
       - uses: actions/upload-artifact@v4
         with:
