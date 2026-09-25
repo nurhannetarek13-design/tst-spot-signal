@@ -390,10 +390,11 @@ def main():
     ap.add_argument("--start-offset",type=int,default=25)
     ap.add_argument("--minutes",type=int,default=5)
     ap.add_argument("--quote-usdt",type=float,default=10.0)
+    ap.add_argument("--no-warmup",action="store_true",help="Fetch only the evaluation window; execution probes remain valid but strategy context may be unready.")
     ap.add_argument("--output",type=pathlib.Path)
     ap.add_argument("--assert-replay",action="store_true")
     a=ap.parse_args()
-    out=run(a.symbol,a.date,a.start_offset,a.minutes,True,a.quote_usdt)
+    out=run(a.symbol,a.date,a.start_offset,a.minutes,not a.no_warmup,a.quote_usdt)
     text=json.dumps(out,indent=2,sort_keys=True)
     if a.output:
         a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(text)
