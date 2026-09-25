@@ -1,4 +1,5 @@
 name: Indicator-Only Precision Calibration
+# retrigger after calibration syntax fix
 
 on:
   workflow_dispatch:
