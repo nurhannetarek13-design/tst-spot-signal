@@ -290,3 +290,32 @@ def load_event_risk(path, symbol, now=None):
         return {"ok":False,"blocked":True,"reason":"SYMBOL_EVENT_RISK","detail":row.get("reason")}
 
     return {"ok":True,"blocked":False,"reason":None,"source":"EVENT_RISK_FILE"}
+
+
+def listing_age_status(daily_bars, *, min_complete_days=3, now_ms=None):
+    """Quarantine very new Spot listings before execution.
+
+    Uses only closed daily bars available at decision time. This is an event-risk
+    guard, not an alpha filter.
+    """
+    bars=list(daily_bars or [])
+    need=max(1,int(min_complete_days))
+    if len(bars)<need:
+        return {
+            "ok":False,
+            "reason":"NEW_LISTING_QUARANTINE",
+            "complete_days":len(bars),
+            "required_days":need,
+            "age_days":None,
+        }
+    now=float(now_ms if now_ms is not None else time.time()*1000)
+    first=float(bars[0].get("t") or 0)
+    age_days=(now-first)/86_400_000 if first>0 else None
+    ok=age_days is not None and age_days>=float(need)
+    return {
+        "ok":bool(ok),
+        "reason":None if ok else "NEW_LISTING_QUARANTINE",
+        "complete_days":len(bars),
+        "required_days":need,
+        "age_days":age_days,
+    }
