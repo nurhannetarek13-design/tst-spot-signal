@@ -4,8 +4,18 @@ import { pathToFileURL } from "node:url";
 const PORT=Number(process.env.PORT||8080);
 const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||25)));
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
-const REST="https://api.binance.com";
-const RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
+const MAX_CLOCK_OFFSET_MS=Number(process.env.STREAM_MAX_CLOCK_OFFSET_MS||750);
+const MAX_CLOCK_RTT_MS=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
+const PUBLIC_RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
+const REST_BASES=[
+  "https://data-api.binance.vision",
+  "https://api.binance.com",
+  "https://api-gcp.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://api4.binance.com",
+];
 const WS=String(process.env.PUBLIC_WS_BASE||"wss://data-stream.binance.vision:443/stream?streams=");
 const STABLES=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"]);
 const LEV=["UP","DOWN","BULL","BEAR"];
@@ -15,22 +25,29 @@ const runtime={
   reconnects:0,resyncs:0,lastError:null,clock:{ok:false},universe:[],books:new Map()
 };
 const now=()=>Date.now();
-async function get(path){
-  let r;
-  try{
-    r=await fetch(REST+path,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
-    if(r.ok)return await r.json();
-    if(!RELAY || ![403,451].includes(r.status))throw new Error("REST_"+r.status+":"+path);
-  }catch(e){
-    if(!RELAY)throw e;
+export function publicRestTargets(path,relay=PUBLIC_RELAY){
+  const targets=[];
+  if(path==="/api/v3/time"){
+    // Clock sync must never prefer a CDN/relay response that may be cached.
+    for(const base of REST_BASES) targets.push(base+path);
+    if(relay) targets.push(String(relay).replace(/\/$/,"")+"?path="+encodeURIComponent(path));
+  }else{
+    if(relay) targets.push(String(relay).replace(/\/$/,"")+"?path="+encodeURIComponent(path));
+    for(const base of REST_BASES) targets.push(base+path);
   }
-  const relayPath=path==="/api/v3/time"?"/api/v3/exchangeInfo":path;
-  const relayUrl=RELAY+"?path="+encodeURIComponent(relayPath);
-  const rr=await fetch(relayUrl,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
-  if(!rr.ok)throw new Error("RELAY_"+rr.status+":"+path);
-  const data=await rr.json();
-  if(path==="/api/v3/time")return {serverTime:Number(data.serverTime||0)};
-  return data;
+  return targets;
+}
+async function get(path){
+  const targets=publicRestTargets(path);
+  let last="unavailable";
+  for(const url of targets){
+    try{
+      const r=await fetch(url,{headers:{"cache-control":"no-store","accept":"application/json"},signal:AbortSignal.timeout(10000)});
+      if(r.ok)return await r.json();
+      last="HTTP_"+r.status+":"+url;
+    }catch(e){last=String(e?.message||e);}
+  }
+  throw new Error("PUBLIC_REST_UNAVAILABLE:"+path+":"+last);
 }
 function eligible(s){
   const b=String(s.baseAsset||"");
@@ -67,6 +84,7 @@ export function bookMetrics(s,t=Date.now()){
   const cancels=f.filter(x=>x.type==="cancel").reduce((z,x)=>z+x.quote,0);
   return {
     bestBid:bid,bestAsk:ask,spreadBps:mid?((ask-bid)/mid)*10000:null,
+    bidLiquidityQuote5:bq,askLiquidityQuote5:aq,
     obi:den>0?bq/den:null,microprice:micro,micropriceBiasBps:mid&&micro?((micro-mid)/mid)*10000:null,
     cancellationRate10s:adds+cancels>0?cancels/(adds+cancels):null,
     bidCancelQuote10s:f.filter(x=>x.type==="cancel"&&x.side==="bid").reduce((z,x)=>z+x.quote,0),
@@ -77,7 +95,18 @@ export function tradeMetrics(trades,t=Date.now()){
   const r=trades.filter(x=>t-x.ts<=60000);
   const buy=r.filter(x=>x.d>0).reduce((z,x)=>z+x.d,0),sell=Math.abs(r.filter(x=>x.d<0).reduce((z,x)=>z+x.d,0));
   const total=buy+sell;
-  return {deltaQuote60s:buy-sell,takerBuyRatio60s:total>0?buy/total:null,tradeEvents60s:r.length};
+  const buckets=new Map();
+  for(const x of r){
+    const k=Math.floor(x.ts/10000);
+    buckets.set(k,(buckets.get(k)||0)+x.d);
+  }
+  const vals=[...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  return {
+    deltaQuote60s:buy-sell,
+    takerBuyRatio60s:total>0?buy/total:null,
+    tradeEvents60s:r.length,
+    cvdSlopePositive10s:vals.length>=2 ? (vals.at(-1)>vals[0] && vals.reduce((a,b)=>a+b,0)>0) : false,
+  };
 }
 async function universe(){
   const [info,tick]=await Promise.all([get("/api/v3/exchangeInfo"),get("/api/v3/ticker/24hr")]);
@@ -89,19 +118,50 @@ async function universe(){
 }
 async function sync(symbol){
   const s=runtime.books.get(symbol);if(!s||s.syncing)return;s.syncing=true;
+  let retry=false;
   try{
     const snap=await get("/api/v3/depth?symbol="+encodeURIComponent(symbol)+"&limit=1000");
-    s.bids.clear();s.asks.clear();s.flow.length=0;
-    for(const [p,q] of snap.bids||[])if(Number(q)>0)s.bids.set(Number(p),Number(q));
-    for(const [p,q] of snap.asks||[])if(Number(q)>0)s.asks.set(Number(p),Number(q));
+    const nextBids=new Map(),nextAsks=new Map(),nextFlow=[];
+    for(const [p,q] of snap.bids||[])if(Number(q)>0)nextBids.set(Number(p),Number(q));
+    for(const [p,q] of snap.asks||[])if(Number(q)>0)nextAsks.set(Number(p),Number(q));
     let id=Number(snap.lastUpdateId||0);
-    const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id).sort((a,b)=>Number(a.U)-Number(b.U));
+
+    // Preserve native WebSocket arrival order. Discard only events already
+    // covered by the REST snapshot; the first newer event must bridge id+1.
+    const pending=s.buffer.filter(e=>Number(e.u)>id);
+    let bridged=pending.length===0;
     for(const e of pending){
-      const st=sequenceStatus(id,e);if(st==="GAP")throw new Error("SYNC_GAP");if(st==="OLD")continue;
-      const ts=Number(e.E||now());applySide(s.bids,e.b,s.flow,ts,"bid");applySide(s.asks,e.a,s.flow,ts,"ask");id=Number(e.u);s.lastDepth=ts;
+      const U=Number(e.U),u=Number(e.u);
+      if(!bridged){
+        if(!(U<=id+1&&id+1<=u)){
+          if(U>id+1) throw new Error("SNAPSHOT_BRIDGE_GAP");
+          continue;
+        }
+        bridged=true;
+      }else if(U>id+1){
+        throw new Error("SYNC_GAP");
+      }
+      if(u<=id)continue;
+      const ts=Number(e.E||now());
+      applySide(nextBids,e.b,nextFlow,ts,"bid");
+      applySide(nextAsks,e.a,nextFlow,ts,"ask");
+      id=u;
+      s.lastDepth=ts;
     }
-    s.lastUpdateId=id;s.synced=true;s.warmSince=now();runtime.resyncs++;
-  }catch(e){runtime.lastError="SYNC:"+symbol+":"+String(e?.message||e);s.synced=false;}finally{s.syncing=false;}
+    if(pending.length>0&&!bridged)throw new Error("SNAPSHOT_BRIDGE_NOT_FOUND");
+
+    s.bids=nextBids;s.asks=nextAsks;s.flow=nextFlow;
+    s.lastUpdateId=id;s.synced=true;s.warmSince=now();
+    s.buffer=s.buffer.filter(e=>Number(e.u)>id);
+    runtime.resyncs++;
+  }catch(e){
+    runtime.lastError="SYNC:"+symbol+":"+String(e?.message||e);
+    s.synced=false;
+    retry=true;
+  }finally{
+    s.syncing=false;
+    if(retry&&runtime.connected)setTimeout(()=>void sync(symbol),300);
+  }
 }
 function depth(symbol,d){
   const s=runtime.books.get(symbol);if(!s)return;
@@ -129,8 +189,7 @@ function health(){
 }
 async function clock(){
   const a=now(),r=await get("/api/v3/time"),b=now(),rtt=b-a,offset=Number(r.serverTime||0)-(a+rtt/2);
-  const maxRtt=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
-  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=maxRtt,offsetMs:offset,rttMs:rtt,maxRttMs:maxRtt,checkedAt:now()};
+  runtime.clock={ok:Math.abs(offset)<=MAX_CLOCK_OFFSET_MS&&rtt<=MAX_CLOCK_RTT_MS,offsetMs:offset,rttMs:rtt,checkedAt:now()};
 }
 function streamNames(symbols){
   const out=[];for(const s of symbols){const x=s.toLowerCase();out.push(x+"@depth@100ms",x+"@aggTrade");}return out;
