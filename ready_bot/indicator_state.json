@@ -15,9 +15,48 @@
   "closed_trades": [],
   "day": "2026-09-25",
   "day_pnl": 0.0,
-  "engine": "INDICATOR_ONLY_V2_5OF6",
-  "last_run": "2026-09-25T21:20:18.786090+00:00",
+  "engine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
+  "last_run": "2026-09-25T21:31:22.870813+00:00",
   "mode": "PAPER_ONLY",
+  "momentum_watchlist": [
+    {
+      "agg_cvd": {
+        "buy_quote": 51163.54083800002,
+        "delta_quote": 36691.02258600003,
+        "ratio": 0.7795035464857005,
+        "sell_quote": 14472.518251999996,
+        "slope_positive": false
+      },
+      "breakout": {
+        "distance_atr": 0.0,
+        "resistance": 0.03685
+      },
+      "chase_veto": true,
+      "micro_breakout_hold": {
+        "breakout": true,
+        "hold": true,
+        "ok": true,
+        "resistance": 0.0366
+      },
+      "obi": 0.17411688130776998,
+      "prefilter_score": 77,
+      "price_velocity": 0.010696653867251715,
+      "rvol_1m": 4.600489135416594,
+      "rvol_3m": 1.4720145494654795,
+      "score": 77.0,
+      "spread_stable_or_tightening": false,
+      "stage": "WATCH",
+      "symbol": "SAGAUSDT",
+      "taker_last3": [
+        0.43469006725728043,
+        0.774170228029251,
+        0.8896921003299787
+      ],
+      "taker_rising": true,
+      "trade_count_accel": 1.9448818897637796,
+      "vwap_distance_atr": 0.9390706549285225
+    }
+  ],
   "positions": {
     "AVAXUSDT": {
       "bar_time": 1790368200000,
@@ -75,8 +114,8 @@
     "BABYUSDT",
     "AVAXUSDT",
     "LTCUSDT",
-    "TAOUSDT",
     "ADAUSDT",
+    "TAOUSDT",
     "XLMUSDT",
     "WLDUSDT",
     "PEPEUSDT",
