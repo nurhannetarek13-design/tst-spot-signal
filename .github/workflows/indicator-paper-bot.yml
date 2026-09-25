@@ -62,6 +62,7 @@ jobs:
           TST_STREAM_SHADOW_URL: http://127.0.0.1:8080
           STREAM_MAX_SYMBOLS: '25'
           STREAM_MIN_QUOTE_VOLUME_USDT: '20000000'
+          STREAM_WARMUP_MS: '15000'
           PORT: '8080'
         run: |
           set -euo pipefail
