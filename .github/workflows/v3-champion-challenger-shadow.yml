@@ -1,0 +1,63 @@
+name: V3 Champion Challenger Shadow
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '11 * * * *'
+  push:
+    paths:
+      - 'ready_bot/champion_config.json'
+      - 'ready_bot/challenger_config.json'
+      - 'validation/indicator-v3/champion-challenger.json'
+      - 'scripts/evaluate_v3_champion_challenger.py'
+      - 'tests/test_v3_champion_challenger.py'
+      - '.github/workflows/v3-champion-challenger-shadow.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest -v tests/test_v3_champion_challenger.py
+      - name: Check challenger status
+        id: challenger
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          c=json.load(open('ready_bot/challenger_config.json'))
+          print('enabled='+('true' if c.get('shadow_challenger',{}).get('enabled') is True else 'false'))
+          PY
+      - name: Run isolated challenger shadow cycle
+        if: steps.challenger.outputs.enabled == 'true'
+        env:
+          TST_INDICATOR_CONFIG: ready_bot/challenger_config.json
+          TST_INDICATOR_STATE: validation/indicator-v3/challenger-state.json
+        run: |
+          python ready_bot/indicator_bot.py
+      - name: Evaluate without auto-promotion
+        run: |
+          python scripts/evaluate_v3_champion_challenger.py \
+            --champion ready_bot/indicator_state.json \
+            --challenger validation/indicator-v3/challenger-state.json \
+            --registry validation/indicator-v3/champion-challenger.json \
+            --output validation/indicator-v3/champion-challenger-latest.json
+          python - <<'PY'
+          import json
+          d=json.load(open('validation/indicator-v3/champion-challenger-latest.json'))
+          assert d['liveTrading'] is False
+          assert d['automaticPromotion'] is False
+          print(json.dumps(d,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3-champion-challenger-evidence
+          path: validation/indicator-v3/champion-challenger-latest.json
+          if-no-files-found: error
