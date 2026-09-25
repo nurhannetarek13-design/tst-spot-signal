@@ -176,14 +176,34 @@ class UnifiedCandidateValidator(Strategy):
         try:self.vars["entry_ts"]=float(self.current_candle[0])
         except Exception:pass
 
+    def _cancel_spot_exit_reservations_before_market_close(self):
+        """
+        Jesse's spot sandbox tracks resting sell reservations. A time-based
+        market liquidation while a full-size TP limit is still active can be
+        rejected as if we were selling the same asset twice. Cancel the
+        resting exits and clear Jesse's exit placeholders before liquidating.
+        This changes no stop/target price and is used only for the time exit.
+        """
+        if not self.is_spot_trading:
+            return
+        if self.active_exit_orders:
+            self.broker.cancel_all_orders()
+        self.stop_loss=None
+        self._stop_loss=None
+        self.take_profit=None
+        self._take_profit=None
+
     def update_position(self):
         hold=int(PARAMS.get("holdBars",0))
         if hold<=0 or not self.is_long:return
         mins=60 if TF=="1h" else 15
         try:
             entry_ts=float(self.vars.get("entry_ts",self.current_candle[0]))
-            if float(self.current_candle[0])-entry_ts>=hold*mins*60*1000:self.liquidate()
-        except Exception:pass
+            if float(self.current_candle[0])-entry_ts>=hold*mins*60*1000:
+                self._cancel_spot_exit_reservations_before_market_close()
+                self.liquidate()
+        except Exception:
+            raise
 
     def go_short(self):pass
     def should_cancel_entry(self)->bool:return True
