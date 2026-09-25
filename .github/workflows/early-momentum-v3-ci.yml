@@ -55,6 +55,10 @@ on:
       - '.github/workflows/early-momentum-v3-ci.yml'
   workflow_dispatch:
 
+concurrency:
+  group: early-momentum-v3-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
