@@ -164,5 +164,14 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-25T06:41:45.305068+00:00"
+  "generatedAt": "2026-09-25T18:12:53.262099+00:00",
+  "rotationReason": {
+    "rejectedCandidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+    "rejectedFingerprint": "47d4daea870e3a1ab59c",
+    "hardFailValidators": [
+      "vectorbt",
+      "freqtrade",
+      "nautilus"
+    ]
+  }
 }

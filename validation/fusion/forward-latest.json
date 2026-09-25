@@ -1,10 +1,10 @@
 {
   "engine": "FORWARD_PAPER",
   "strategyId": "TST_UNIFIED_FORWARD_V1",
-  "status": "NO_CANDIDATE",
+  "status": "RESET_FOR_NEW_CANDIDATE",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
   "metrics": {
     "trades": 0,
     "wins": 0,
@@ -17,6 +17,6 @@
   "open": null,
   "authorization": "FORWARD_PAPER_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-12T17:54:23.880Z",
-  "notes": "No unified candidate is currently eligible; forward tracker is fail-closed."
+  "generatedAt": "2026-09-25T18:12:53.262099+00:00",
+  "notes": "Forward state reset atomically with candidate rotation; no cancelled paper position is counted as a trade."
 }
