@@ -863,6 +863,7 @@ def open_position(state, snap, filters):
             "rsi_15m": snap.get("rsi_15m"),
             "session": ((snap.get("micro") or {}).get("production_guard") or {}).get("session"),
             "decision_latency_ms": ((snap.get("micro") or {}).get("production_guard") or {}).get("decision_latency_ms"),
+            "max_total_latency_ms": CFG["production_guard"]["max_total_detection_to_order_ms"],
             "adverse_selection": ((snap.get("micro") or {}).get("production_guard") or {}).get("adverse_selection"),
             "liquidity_disappearance": ((snap.get("micro") or {}).get("production_guard") or {}).get("liquidity_disappearance"),
             "estimated_entry_slippage_bps": (snap.get("execution_quality") or {}).get("slippage_bps"),
