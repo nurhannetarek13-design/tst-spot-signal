@@ -49,7 +49,12 @@ jobs:
           s=json.load(open('ready_bot/indicator_state.json'))
           assert c['mode']=='paper'
           assert c['market_type']=='spot'
-          assert c['engine']=='INDICATOR_ONLY_V1'
+          assert c['engine']=='INDICATOR_ONLY_V2_5OF6'
+          assert c['entry']['score_required']==5
+          assert c['entry']['score_total']==6
+          assert c['entry']['adx_min']==20
+          assert c['entry']['min_relative_quote_volume']==1.3
+          assert c['entry']['min_taker_buy_ratio']==0.55
           assert 'strategies' not in c
           assert s['mode']=='PAPER_ONLY'
           assert c['risk']['max_daily_loss_usdt']==2.0
