@@ -32,6 +32,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_microstructure_replay.py' -v
           python -m unittest discover -s tests -p 'test_champion_challenger.py' -v
+          python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
       - name: Assert no automatic promotion
         run: |
           python - <<'PY'
