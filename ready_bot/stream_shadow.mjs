@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 const PORT=Number(process.env.PORT||8080);
 const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||25)));
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
+const MAX_CLOCK_OFFSET_MS=Number(process.env.STREAM_MAX_CLOCK_OFFSET_MS||750);
+const MAX_CLOCK_RTT_MS=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
 const PUBLIC_RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
 const REST_BASES=[
   "https://data-api.binance.vision",
@@ -25,8 +27,14 @@ const runtime={
 const now=()=>Date.now();
 async function get(path){
   const targets=[];
-  if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
-  for(const base of REST_BASES) targets.push(base+path);
+  if(path==="/api/v3/time"){
+    // Clock sync must never prefer a CDN/relay response that may be cached.
+    for(const base of REST_BASES) targets.push(base+path);
+    if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
+  }else{
+    if(PUBLIC_RELAY) targets.push(PUBLIC_RELAY+"?path="+encodeURIComponent(path));
+    for(const base of REST_BASES) targets.push(base+path);
+  }
   let last="unavailable";
   for(const url of targets){
     try{
@@ -177,7 +185,7 @@ function health(){
 }
 async function clock(){
   const a=now(),r=await get("/api/v3/time"),b=now(),rtt=b-a,offset=Number(r.serverTime||0)-(a+rtt/2);
-  runtime.clock={ok:Math.abs(offset)<=750&&rtt<=1500,offsetMs:offset,rttMs:rtt,checkedAt:now()};
+  runtime.clock={ok:Math.abs(offset)<=MAX_CLOCK_OFFSET_MS&&rtt<=MAX_CLOCK_RTT_MS,offsetMs:offset,rttMs:rtt,checkedAt:now()};
 }
 function streamNames(symbols){
   const out=[];for(const s of symbols){const x=s.toLowerCase();out.push(x+"@depth@100ms",x+"@aggTrade");}return out;
