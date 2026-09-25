@@ -2,24 +2,6 @@ name: Legacy Multi-Strategy Paper Bot (Manual Only)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'ready_bot/native_paper.py'
-      - 'ready_bot/arbitration.py'
-      - 'ready_bot/native_js_bridge.mjs'
-      - 'ready_bot/multi_bot.py'
-      - 'ready_bot/multi_config.json'
-      - 'ready_bot/paper_audit.py'
-      - 'ready_bot/paper_observer.py'
-      - 'tests/test_multi_bot.py'
-      - 'tests/test_multi_bot_contract.py'
-      - 'tests/test_native_paper.py'
-      - 'tests/test_native_js_real.py'
-      - 'tests/test_paper_arbitration.py'
-      - 'tests/test_paper_audit.py'
-      - '.github/workflows/ready-paper-bot.yml'
 
 permissions:
   contents: write
