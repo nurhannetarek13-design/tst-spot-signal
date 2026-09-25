@@ -30,3 +30,8 @@ def test_keeps_unrelated_rejections_and_appends_new_one():
     )
     assert [x["candidateFingerprint"] for x in rows]==["old","new"]
     assert active_rejection_fingerprints(rows,7,now=now)=={"old","new"}
+
+if __name__=="__main__":
+    test_refreshes_expired_duplicate_instead_of_reselecting_it()
+    test_keeps_unrelated_rejections_and_appends_new_one()
+    print("candidate rotation cooldown tests: OK")
