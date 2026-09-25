@@ -1,54 +1,8 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "source": "PUBLIC_EDGE_LAB",
-  "sourceGeneratedAt": "2026-09-12T07:15:48.512012+00:00",
-  "symbol": "SAHARAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "params": {
-    "emaFast": 48,
-    "emaSlow": 120,
-    "retLookback": 24,
-    "retMin": 0.02,
-    "atrMin": 0.006,
-    "atrMax": 0.08,
-    "relvol": 0.8,
-    "holdBars": 24,
-    "sl": 0.03,
-    "tp": 0.06
-  },
-  "sourceMetrics": {
-    "base": {
-      "trades": 80,
-      "wins": 34,
-      "winRate": 0.425,
-      "netPnlUSDT": 1.3834438186252132,
-      "expectancyUSDT": 0.017293047732815165,
-      "profitFactor": 1.1702889449869467,
-      "maxDrawdownUSDT": 3.3327425460484585
-    },
-    "stress2x": {
-      "trades": 80,
-      "wins": 34,
-      "winRate": 0.425,
-      "netPnlUSDT": 0.05938256101085271,
-      "expectancyUSDT": 0.0007422820126356588,
-      "profitFactor": 1.0066932309767163,
-      "maxDrawdownUSDT": 4.187024855693853
-    }
-  },
-  "liquidity": {
-    "quoteVolume24h": 57449119.85281,
-    "priceUSDT": 0.00909
-  },
-  "rankKey": [
-    1,
-    0.0007422820126356588,
-    1.0066932309767163,
-    80
-  ],
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -155,9 +109,10 @@
   ],
   "poolSize": 2,
   "recentRejectedFingerprints": [
-    "47d4daea870e3a1ab59c"
+    "47d4daea870e3a1ab59c",
+    "5a8be2536ed727aaa38e"
   ],
-  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -166,14 +121,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-09-25T18:19:06.800023+00:00",
-  "rotationReason": {
-    "rejectedCandidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
-    "rejectedFingerprint": "47d4daea870e3a1ab59c",
-    "hardFailValidators": [
-      "vectorbt",
-      "freqtrade",
-      "nautilus"
-    ]
-  }
+  "generatedAt": "2026-09-25T18:51:36.271111+00:00"
 }
