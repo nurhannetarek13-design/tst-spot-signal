@@ -83,8 +83,10 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertTrue(bot.is_spot_symbol_record(good))
         missing_flag=dict(good); missing_flag.pop("isSpotTradingAllowed")
         self.assertFalse(bot.is_spot_symbol_record(missing_flag))
-        futures_like=dict(good); futures_like["permissions"]=["TRD_GRP_004"]
-        self.assertFalse(bot.is_spot_symbol_record(futures_like))
+        legacy_empty=dict(good); legacy_empty["permissions"]=[]; legacy_empty["permissionSets"]=[["SPOT","MARGIN"]]
+        self.assertTrue(bot.is_spot_symbol_record(legacy_empty))
+        non_spot_sets=dict(good); non_spot_sets["permissionSets"]=[["MARGIN","TRD_GRP_004"]]
+        self.assertFalse(bot.is_spot_symbol_record(non_spot_sets))
         wrong_quote=dict(good); wrong_quote["quoteAsset"]="USDC"
         self.assertFalse(bot.is_spot_symbol_record(wrong_quote))
 
