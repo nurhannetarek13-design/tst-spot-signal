@@ -31,6 +31,30 @@ jobs:
       - name: Test candidate rotation cooldown refresh
         run: PYTHONPATH=. python tests/test_candidate_rotation_logic.py
 
+      - name: Test manifest builder emits truthful liquidity basket
+        run: |
+          set -euo pipefail
+          cp validation/fusion/candidate-manifest.json /tmp/candidate-manifest.before-basket-test.json
+          python scripts/build_candidate_manifest.py >/tmp/basket-manifest.json
+          python - <<'PY'
+          import json
+          m=json.load(open("validation/fusion/candidate-manifest.json"))
+          baskets=[x for x in m.get("candidatePool",[]) if x.get("scope")=="MULTI_SYMBOL_BASKET"]
+          assert len(baskets)==1, baskets
+          b=baskets[0]
+          assert b["symbol"]=="BASKET"
+          assert b["family"]=="LIQUIDITY_REVERSAL"
+          assert len(b["symbols"])>=3
+          assert b["validatorsRequired"]==["vectorbt","freqtrade","nautilus","forward"]
+          v=b["validation"]
+          assert v["historicalScope"]=="MULTI_SYMBOL_POOLED_RESEARCH"
+          assert v["forwardScope"]=="GLOBAL_SINGLE_POSITION_BASKET"
+          assert v["historicalValidators"]==["vectorbt","freqtrade","nautilus"]
+          assert b["rankKey"][0] < 1
+          print("basket manifest candidate:", b["candidateId"], len(b["symbols"]), "symbols")
+          PY
+          cp /tmp/candidate-manifest.before-basket-test.json validation/fusion/candidate-manifest.json
+
       - name: Assert liquidity basket contract is research-only
         run: |
           python - <<'PY'
