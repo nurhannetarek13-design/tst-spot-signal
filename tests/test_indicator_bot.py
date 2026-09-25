@@ -322,5 +322,26 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"SYMBOL_SLIPPAGE_MODEL_REJECT")
 
 
+    def test_dynamic_exit_records_why_exit(self):
+        from datetime import datetime, timezone, timedelta
+        state={
+            "cash_usdt":10.0,
+            "positions":{
+                "TESTUSDT":{
+                    "entry":1.0,"stop":0.95,"target":1.10,"initial_risk_abs":0.05,
+                    "breakeven":False,"qty":1.0,"cost":1.0,
+                    "opened_at":(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat(),
+                    "peak_price":1.01,"trough_price":0.99,
+                }
+            },
+            "closed_trades":[],"decision_log":[],"day_pnl":0.0,
+            "exit_slippage_model":{},
+        }
+        snap={"bid":0.99,"atr_15m":0.01,"micro_pre":{"taker_latest":0.45,"cvd_positive":False,"vwap":1.0}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
+        self.assertEqual(state["decision_log"][-1]["reason"],"MOMENTUM_FADE")
+
+
 if __name__=="__main__":
     unittest.main()
