@@ -5,6 +5,10 @@ on:
   workflow_run:
     workflows: ["Unified Fusion Gate"]
     types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/candidate-rotation.yml"
 
 permissions:
   contents: write
