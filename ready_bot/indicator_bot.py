@@ -1348,6 +1348,11 @@ def main():
             event_risk=load_event_risk(
                 ROOT.parent / CFG["production_guard"]["event_risk_file"],
                 key,
+                required=(
+                    CFG.get("mode") != "paper"
+                    and CFG["production_guard"].get("event_risk_required_for_live") is True
+                ),
+                max_age_minutes=CFG["production_guard"].get("event_risk_max_age_minutes"),
             )
             snap["event_risk"]=event_risk
             if not event_risk.get("ok"):
@@ -1359,6 +1364,7 @@ def main():
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
                 blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
+                append_decision(state,key,"WHY_SKIP",reason="CORRELATION_TOO_HIGH",detail=corr)
                 state.setdefault("seen", {})[key] = decision_id
                 continue
             snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
