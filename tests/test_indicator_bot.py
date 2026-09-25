@@ -17,10 +17,17 @@ def bars(n=250, drift=0.001, taker=0.60, qv=2_000_000.0):
     return out
 
 
+def execution_depth(price=1.0):
+    return {
+        "bids":[[str(price*0.9999),"1000"]],
+        "asks":[[str(price),"1000"],[str(price*1.0001),"1000"]],
+    }
+
+
 def spot_filters(symbol="TESTUSDT", verified=True):
     return {
         "min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,
-        "max_qty":1e9,"step_size":0.0001,
+        "max_qty":1e9,"step_size":0.0001,"tick_size":0.0001,
         "spot_verified":verified,"quote_asset":"USDT","symbol":symbol,
     }
 
@@ -98,6 +105,9 @@ class IndicatorBotTests(unittest.TestCase):
             "symbol":"TESTUSDT","ask":1.0,"bar_time":1,"score":5,"score_total":6,
             "checks":{"ema_20_gt_50_15m":True},"eligible":True,"vetoes":[],
             "atr_15m":0.005,"confirmed_swing_low":0.99,
+            "bid":0.9999,"spread_bps":1.0,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":1}},
         }
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"PAPER_OPENED")
         p=state["positions"]["TESTUSDT"]
@@ -191,6 +201,23 @@ class IndicatorBotTests(unittest.TestCase):
         bot.manage_position(state,"TESTUSDT",snap)
         self.assertNotIn("TESTUSDT",state["positions"])
         self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
+
+
+    def test_duplicate_signal_id_is_idempotent(self):
+        state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0,"executed_signal_ids":{}}
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bid":0.9999,"spread_bps":1.0,
+            "bar_time":60_000,"score":5,"score_total":6,"checks":{},
+            "eligible":True,"vetoes":[],"atr_15m":0.005,"confirmed_swing_low":0.99,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":60_000}},
+        }
+        first=bot.open_position(state,snap,spot_filters())
+        self.assertEqual(first,"PAPER_OPENED")
+        state["positions"].pop("TESTUSDT")
+        state["cash_usdt"]=20.08
+        second=bot.open_position(state,snap,spot_filters())
+        self.assertEqual(second,"DUPLICATE_SIGNAL_ID")
 
 
 if __name__=="__main__":

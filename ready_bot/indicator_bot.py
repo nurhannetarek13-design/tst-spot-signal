@@ -8,6 +8,7 @@ protective stop/target/trailing management. Live trading is intentionally absent
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -56,6 +57,41 @@ except ImportError:
         validate_bar_integrity,
     )
 
+try:
+    from .production_guard import (
+        adverse_selection_status,
+        btc_shock_status,
+        clock_sync_status,
+        execution_quality_status,
+        liquidity_disappearance_status,
+        load_event_risk,
+        signal_freshness_status,
+        utc_session_label,
+        warmup_status,
+    )
+    from .smart_execution import (
+        choose_execution_plan,
+        realized_slippage_bps,
+        update_symbol_slippage_model,
+    )
+except ImportError:
+    from production_guard import (
+        adverse_selection_status,
+        btc_shock_status,
+        clock_sync_status,
+        execution_quality_status,
+        liquidity_disappearance_status,
+        load_event_risk,
+        signal_freshness_status,
+        utc_session_label,
+        warmup_status,
+    )
+    from smart_execution import (
+        choose_execution_plan,
+        realized_slippage_bps,
+        update_symbol_slippage_model,
+    )
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("TST_INDICATOR_CONFIG", str(ROOT / "indicator_config.json")))
 STATE_PATH = Path(os.getenv("TST_INDICATOR_STATE", str(ROOT / "indicator_state.json")))
@@ -98,6 +134,9 @@ def load_state():
             "day": datetime.now(timezone.utc).date().isoformat(),
             "day_pnl": 0.0,
             "seen": {},
+            "executed_signal_ids": {},
+            "decision_log": [],
+            "slippage_model": {},
             "signals": [],
             "blocked": [],
             "last_run": None,
@@ -106,6 +145,9 @@ def load_state():
     if s.get("mode") != "PAPER_ONLY":
         raise RuntimeError("Refusing non-paper state")
     s["engine"] = CFG["engine"]
+    s.setdefault("executed_signal_ids", {})
+    s.setdefault("decision_log", [])
+    s.setdefault("slippage_model", {})
     return s
 
 
@@ -233,6 +275,10 @@ def depth5(symbol):
     return market("/api/v3/depth?" + urllib.parse.urlencode({"symbol": symbol, "limit": 5}))
 
 
+def depth20(symbol):
+    return market("/api/v3/depth?" + urllib.parse.urlencode({"symbol": symbol, "limit": 20}))
+
+
 def recent_aggtrades(symbol, limit=500):
     return market("/api/v3/aggTrades?" + urllib.parse.urlencode({"symbol": symbol, "limit": int(limit)}))
 
@@ -247,7 +293,8 @@ def symbol_filters(symbol):
     fs = {x["filterType"]: x for x in entry.get("filters", [])}
     lot = fs.get("LOT_SIZE")
     notion = fs.get("NOTIONAL") or fs.get("MIN_NOTIONAL")
-    if not lot or not notion:
+    price_filter = fs.get("PRICE_FILTER")
+    if not lot or not notion or not price_filter:
         raise RuntimeError("EXCHANGE_FILTERS_MISSING")
     return {
         "min_notional": float(notion["minNotional"]),
@@ -255,6 +302,7 @@ def symbol_filters(symbol):
         "min_qty": float(lot["minQty"]),
         "max_qty": float(lot["maxQty"]),
         "step_size": float(lot["stepSize"]),
+        "tick_size": float(price_filter["tickSize"]),
         "spot_verified": True,
         "quote_asset": entry.get("quoteAsset"),
         "symbol": entry.get("symbol"),
@@ -565,6 +613,21 @@ def round_qty(qty, filters):
     return math.floor(qty / step + 1e-12) * step
 
 
+def signal_id_for_snapshot(snap):
+    micro=snap.get("micro") or {}
+    agg=micro.get("agg_cvd") or {}
+    event_ms=int(agg.get("latest_event_ms") or snap.get("bar_time") or 0)
+    breakout=(micro.get("micro_breakout_hold") or {}).get("resistance")
+    raw=f"{snap.get('symbol')}|{event_ms//60000}|{breakout}|{micro.get('score')}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def append_decision(state, symbol, code, **detail):
+    row={"at":now_iso(),"symbol":symbol,"code":code,**detail}
+    state["decision_log"]=(list(state.get("decision_log") or [])+[row])[-500:]
+    return row
+
+
 def open_position(state, snap, filters):
     if snap.get("eligible") is not True or snap.get("vetoes"):
         return "SIGNAL_NOT_ELIGIBLE"
@@ -619,6 +682,61 @@ def open_position(state, snap, filters):
     if not (float(filters["min_notional"]) <= notional <= float(filters["max_notional"])):
         return "EXCHANGE_NOTIONAL_FILTER"
 
+    # Final execution-quality gate uses current depth for the actual sized quote.
+    # This happens only after the signal has passed all strategy/context guards.
+    try:
+        depth = snap.get("_execution_depth") or depth20(snap["symbol"])
+        quality = execution_quality_status(
+            depth,
+            notional,
+            max_slippage_bps=CFG["production_guard"]["max_estimated_slippage_bps"],
+            min_fill_ratio=CFG["production_guard"]["min_depth_fill_ratio"],
+        )
+    except Exception as exc:
+        snap["execution_quality"]={"ok":False,"reasons":["DEPTH_CHECK_FAILED"],"detail":str(exc)[:120]}
+        return "EXECUTION_DEPTH_UNAVAILABLE"
+    snap["execution_quality"]=quality
+    if not quality.get("ok"):
+        return "EXECUTION_QUALITY_REJECT"
+
+    guard=(snap.get("micro") or {}).get("production_guard") or {}
+    plan=choose_execution_plan(
+        symbol=snap["symbol"],
+        quote_amount_usdt=notional,
+        best_bid=snap["bid"],
+        best_ask=snap["ask"],
+        estimated_slippage_bps=quality.get("slippage_bps"),
+        fill_ratio=quality.get("fill_ratio"),
+        tick_size=filters.get("tick_size"),
+        momentum_score=(snap.get("micro") or {}).get("score") or 0,
+        taker_rising=(snap.get("micro") or {}).get("taker_rising"),
+        spread_bps=snap.get("spread_bps") or 999,
+        latency_ms=guard.get("decision_latency_ms") or 0,
+        cfg=CFG["smart_execution"],
+    )
+    snap["execution_plan"]=plan
+    if not plan.get("ok"):
+        return str(plan.get("reason") or "SMART_EXECUTION_REJECT")
+
+    # PAPER fill models the current depth instead of a single global slippage constant.
+    depth_avg=float(quality.get("average_price") or snap["ask"])
+    if plan.get("style")=="AGGRESSIVE_LIMIT":
+        limit_price=float(plan["limit_price"])
+        if depth_avg>limit_price:
+            return "PAPER_LIMIT_WOULD_NOT_FILL"
+        entry=max(float(snap["ask"]),depth_avg)
+    else:
+        entry=max(float(snap["ask"]),depth_avg)
+
+    # Keep the original absolute protective thesis; recompute target/R after modeled fill.
+    stop = min(atr_stop, swing_stop, entry * (1 - float(risk_cfg["min_stop_fraction"])))
+    if stop <= 0 or stop >= entry:
+        return "INVALID_STOP_AFTER_EXECUTION"
+    stop_fraction=(entry-stop)/entry
+    if stop_fraction>float(risk_cfg["max_stop_fraction"]):
+        return "STOP_TOO_WIDE_AFTER_EXECUTION"
+    target=entry+(entry-stop)*float(risk_cfg["reward_risk"])
+
     qty = round_qty(notional / entry, filters)
     if qty < float(filters["min_qty"]) or qty > float(filters["max_qty"]):
         return "EXCHANGE_LOT_FILTER"
@@ -626,8 +744,12 @@ def open_position(state, snap, filters):
     if cost > state["cash_usdt"] + 1e-9:
         return "INSUFFICIENT_CASH"
 
+    signal_id=signal_id_for_snapshot(snap)
+    if signal_id in (state.get("executed_signal_ids") or {}):
+        return "DUPLICATE_SIGNAL_ID"
+
     pos = {
-        "engine": CFG["engine"], "entry": entry, "qty": qty, "cost": cost,
+        "engine": CFG["engine"], "signal_id": signal_id, "entry": entry, "qty": qty, "cost": cost,
         "stop": stop, "target": target, "initial_stop": stop,
         "initial_risk_abs": entry - stop, "breakeven": False,
         "opened_at": now_iso(), "bar_time": snap["bar_time"], "score": snap["score"],
@@ -638,6 +760,8 @@ def open_position(state, snap, filters):
         "relative_strength": snap.get("relative_strength"),
         "market_regime": snap.get("regime", {}).get("state") if isinstance(snap.get("regime"), dict) else snap.get("regime"),
         "portfolio_corr": snap.get("portfolio_corr"),
+        "execution_plan": snap.get("execution_plan"),
+        "execution_quality": snap.get("execution_quality"),
         "entry_context": {
             "taker_last3": snap.get("micro", {}).get("taker_last3"),
             "rvol_1m": snap.get("micro", {}).get("rvol_1m"),
@@ -654,7 +778,7 @@ def open_position(state, snap, filters):
         "mae_r": 0.0,
     }
     actual = stop_risk(pos)
-    if actual > float(risk_cfg["max_risk_per_trade_usdt"]) + 1e-9:
+    if actual > min(float(risk_cfg["max_risk_per_trade_usdt"]), risk_budget) + 1e-9:
         return "RISK_PER_TRADE"
     portfolio = portfolio_stop_risk(state) + actual
     if portfolio > float(risk_cfg["max_portfolio_stop_risk_usdt"]) + 1e-9:
@@ -664,6 +788,14 @@ def open_position(state, snap, filters):
 
     state["cash_usdt"] -= cost
     state["positions"][snap["symbol"]] = pos
+    state.setdefault("executed_signal_ids", {})[signal_id]={"symbol":snap["symbol"],"opened_at":now_iso()}
+    # Bound persistent idempotency history.
+    if len(state["executed_signal_ids"])>2000:
+        oldest=list(state["executed_signal_ids"])[:-1500]
+        for key in oldest:
+            state["executed_signal_ids"].pop(key,None)
+    realized=realized_slippage_bps(float(snap["ask"]),entry,"BUY")
+    state["slippage_model"]=update_symbol_slippage_model(state.get("slippage_model"),snap["symbol"],realized)
     return "PAPER_OPENED"
 
 
@@ -746,6 +878,7 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
     snap["ret_15m"] = pct_return(b15, 1)
     snap["ret_1h"] = pct_return(b1, 1)
     snap["_bars1h"] = b1
+    snap["_bars15"] = b15
     snap["micro_pre"] = prefilter_snapshot(b1m, b3m, CFG["momentum"])
     snap["micro_pre"]["micro_breakout_hold"] = micro_breakout_hold(
         b1m,
@@ -759,6 +892,8 @@ def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
 
 def enrich_microstructure(symbol, snap):
     cfg = CFG["momentum"]
+    guard_cfg = CFG["production_guard"]
+    detected_ms = time.time() * 1000
     obi_samples = []
     spreads = []
     depth_samples = []
@@ -773,12 +908,75 @@ def enrich_microstructure(symbol, snap):
             spreads.append(dm["spread_bps"])
         if i < samples - 1 and interval > 0:
             time.sleep(interval)
+
     agg = aggtrade_delta(recent_aggtrades(symbol, 500))
     depth_flow = depth_flow_metrics(depth_samples)
     micro = combine_microstructure(snap["micro_pre"], obi_samples, spreads, agg, cfg, depth_flow)
+    decision_ms = time.time() * 1000
+
+    freshness = signal_freshness_status(
+        detected_at_ms=detected_ms,
+        decision_at_ms=decision_ms,
+        now_ms=decision_ms,
+        market_event_ms=agg.get("latest_event_ms"),
+        max_signal_age_ms=guard_cfg["max_signal_age_ms"],
+        max_decision_latency_ms=guard_cfg["max_decision_latency_ms"],
+    )
+    warmup = warmup_status(
+        bars1m=len(snap.get("_bars1m") or []),
+        bars3m=len(snap.get("_bars3m") or []),
+        bars15m=len(snap.get("_bars15") or []),
+        bars1h=len(snap.get("_bars1h") or []),
+        depth_samples=len(depth_samples),
+        min_1m=guard_cfg["warmup_min_1m"],
+        min_3m=guard_cfg["warmup_min_3m"],
+        min_15m=guard_cfg["warmup_min_15m"],
+        min_1h=guard_cfg["warmup_min_1h"],
+        min_depth_samples=guard_cfg["min_depth_samples"],
+    )
+    adverse = adverse_selection_status(
+        micro,
+        obi_bullish=CFG["momentum"]["obi_armed_min"],
+        min_trade_ratio=guard_cfg["adverse_min_trade_ratio"],
+        min_microprice_bias_bps=guard_cfg["adverse_min_microprice_bias_bps"],
+        max_bid_liquidity_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
+    )
+    liquidity = liquidity_disappearance_status(
+        depth_flow,
+        max_bid_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
+        max_ask_growth_pct=guard_cfg["max_ask_liquidity_growth_pct"],
+    )
+
+    micro["production_guard"] = {
+        "freshness": freshness,
+        "warmup": warmup,
+        "adverse_selection": adverse,
+        "liquidity_disappearance": liquidity,
+        "decision_latency_ms": max(0.0, decision_ms-detected_ms),
+        "session": utc_session_label(),
+    }
+    production_ok = freshness["ok"] and warmup["ok"] and adverse["ok"] and liquidity["ok"]
     snap["micro"] = micro
-    snap["eligible"] = bool(micro["stage"] == "ENTRY_CANDIDATE" and snap.get("guard_ok"))
+    snap["eligible"] = bool(
+        micro["stage"] == "ENTRY_CANDIDATE"
+        and snap.get("guard_ok")
+        and production_ok
+    )
     return snap
+
+
+def binance_clock_status():
+    cfg=CFG["production_guard"]
+    start=time.time()*1000
+    row=market("/api/v3/time")
+    end=time.time()*1000
+    return clock_sync_status(
+        row.get("serverTime"),
+        start,
+        end,
+        max_offset_ms=cfg["max_clock_offset_ms"],
+        max_rtt_ms=cfg["max_clock_rtt_ms"],
+    )
 
 
 def validate_config():
@@ -806,6 +1004,14 @@ def validate_config():
         raise RuntimeError("Invalid correlation cap")
     if int(CFG["risk"].get("consecutive_loss_cooldown_count", 3)) < 2:
         raise RuntimeError("Invalid consecutive loss cooldown")
+    if CFG.get("data_integrity", {}).get("fail_closed") is not True:
+        raise RuntimeError("Data integrity must fail closed")
+    if float(CFG["production_guard"]["max_signal_age_ms"]) <= 0:
+        raise RuntimeError("Invalid signal freshness budget")
+    if float(CFG["smart_execution"]["max_slippage_bps"]) <= 0:
+        raise RuntimeError("Invalid slippage budget")
+    if CFG.get("security", {}).get("never_log_credentials") is not True:
+        raise RuntimeError("Credential logging must stay disabled")
 
 
 def consecutive_loss_cooldown(state):
@@ -834,6 +1040,11 @@ def main():
     blocked = []
 
     try:
+        clock = binance_clock_status()
+    except Exception as exc:
+        clock = {"ok":False,"reasons":["CLOCK_SYNC_UNAVAILABLE"],"detail":str(exc)[:120]}
+
+    try:
         uni = universe()
     except Exception as exc:
         state["blocked"] = [{"reason": "UNIVERSE_UNAVAILABLE", "detail": str(exc)[:160]}]
@@ -843,11 +1054,18 @@ def main():
         return state
 
     try:
+        btc1m = closed_bars("BTCUSDT", CFG["timeframes"]["micro"])
         btc1h = closed_bars("BTCUSDT", CFG["timeframes"]["trend"])
         btc4h = closed_bars("BTCUSDT", CFG["timeframes"]["macro"])
         btc = btc_regime(btc1h, btc4h)
+        btc_shock = btc_shock_status(
+            btc1m,
+            shock_1m=CFG["production_guard"]["btc_shock_1m_abs"],
+            shock_3m=CFG["production_guard"]["btc_shock_3m_abs"],
+        )
     except Exception as exc:
         btc = {"ok": False, "reason": f"BTC_DATA:{str(exc)[:120]}"}
+        btc_shock = {"ok":False,"shock":True,"reason":f"BTC_SHOCK_DATA:{str(exc)[:120]}"}
 
     snapshots = {}
     qv_map = {x["symbol"]: x["quote_volume_24h"] for x in uni}
@@ -947,6 +1165,7 @@ def main():
                 "vwap_distance_atr": micro["vwap_distance_atr"],
                 "price_velocity": micro["price_velocity"],
                 "chase_veto": micro["chase_veto"],
+                "production_guard": micro.get("production_guard"),
                 "relative_strength": snap.get("relative_strength"),
                 "regime": regime.get("state"),
             })
@@ -966,6 +1185,10 @@ def main():
     signals = []
     if evidence_blocks_entries(evidence):
         blocked.append({"reason": "PRECISION_EVIDENCE_GATE", "detail": evidence})
+    elif not clock.get("ok"):
+        blocked.append({"reason":"CLOCK_SYNC_VETO","detail":clock})
+    elif not btc_shock.get("ok"):
+        blocked.append({"reason":"BTC_SHOCK_VETO","detail":btc_shock})
     elif not data_integrity_ok:
         blocked.append({"reason": "DATA_INTEGRITY_VETO"})
     elif not regime.get("allow_new_longs"):
@@ -1003,6 +1226,16 @@ def main():
             key = snap["symbol"]
             if state.get("seen", {}).get(key) == snap["bar_time"]:
                 continue
+            event_risk=load_event_risk(
+                ROOT.parent / CFG["production_guard"]["event_risk_file"],
+                key,
+            )
+            snap["event_risk"]=event_risk
+            if not event_risk.get("ok"):
+                blocked.append({"symbol":key,"reason":event_risk.get("reason") or "EVENT_RISK","detail":event_risk})
+                append_decision(state,key,"WHY_SKIP",reason=event_risk.get("reason") or "EVENT_RISK")
+                state.setdefault("seen", {})[key] = snap["bar_time"]
+                continue
             corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
@@ -1014,6 +1247,14 @@ def main():
             state.setdefault("seen", {})[key] = snap["bar_time"]
             if result != "PAPER_OPENED":
                 blocked.append({"symbol": key, "score": snap["score"], "reason": result})
+                append_decision(state,key,"WHY_SKIP",reason=result,momentum_score=(snap.get("micro") or {}).get("score"))
+            else:
+                append_decision(
+                    state,key,"WHY_BUY",
+                    momentum_score=(snap.get("micro") or {}).get("score"),
+                    regime=regime.get("state"),
+                    execution_style=(snap.get("execution_plan") or {}).get("style"),
+                )
 
     state["signals"] = [{
         "symbol": x["symbol"],
@@ -1027,6 +1268,9 @@ def main():
         "obi": x.get("micro", {}).get("obi"),
         "agg_cvd": x.get("micro", {}).get("agg_cvd"),
         "depth_flow": x.get("micro", {}).get("depth_flow"),
+        "production_guard": x.get("micro", {}).get("production_guard"),
+        "execution_plan": x.get("execution_plan"),
+        "execution_quality": x.get("execution_quality"),
         "micro_breakout_hold": x.get("micro", {}).get("micro_breakout_hold"),
         "context_score_15m": x["score"],
         "context_checks_15m": x["checks"],
@@ -1035,6 +1279,8 @@ def main():
     state["momentum_watchlist"] = momentum_watchlist
     state["blocked"] = blocked
     state["btc_regime"] = btc
+    state["btc_shock"] = btc_shock
+    state["clock_sync"] = clock
     state["market_regime"] = regime
     state["relative_strength"] = rs_map
     state["data_integrity"] = {"ok":data_integrity_ok,"unavailable_fraction":integrity_ratio}
@@ -1046,7 +1292,8 @@ def main():
 
     print(json.dumps({
         "mode": "PAPER_ONLY", "engine": CFG["engine"], "cash_usdt": state["cash_usdt"],
-        "day_pnl": state["day_pnl"], "btc_regime": btc, "market_regime": regime,
+        "day_pnl": state["day_pnl"], "btc_regime": btc, "btc_shock": btc_shock,
+        "clock_sync": clock, "market_regime": regime,
         "data_integrity": state["data_integrity"], "precision_evidence": evidence, "positions": state["positions"],
         "signals": state["signals"], "momentum_watchlist": momentum_watchlist,
         "blocked": blocked, "last_run": state["last_run"],
