@@ -204,5 +204,25 @@ async function connect(){
 }
 function send(res,status,obj){const raw=JSON.stringify(obj);res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(raw);}
 const server=http.createServer((req,res)=>{const u=new URL(req.url||"/","http://"+(req.headers.host||"localhost"));if(u.pathname==="/health"){const h=health();return send(res,h.ok?200:503,h);}if(u.pathname==="/snapshot"){const sym=String(u.searchParams.get("symbol")||"").toUpperCase();return send(res,200,{ok:true,health:health(),snapshot:sym?snapshot(sym):null,snapshots:sym?undefined:runtime.universe.map(snapshot).filter(Boolean)});}return send(res,200,{ok:true,service:"tst-spot-stream-shadow",mode:"SHADOW_ONLY",liveTrading:false});});
-export async function start(){await clock().catch(e=>runtime.lastError=String(e));setInterval(()=>void clock().catch(e=>runtime.lastError=String(e)),60000);setInterval(()=>{if(runtime.connected&&runtime.lastMessageAt&&now()-runtime.lastMessageAt>5000){runtime.lastError="STREAM_STALE_RECONNECT";try{runtime.ws?.close();}catch{}}},1000);server.listen(PORT,"0.0.0.0");await connect();}
+async function ensureConnected(){
+  try{
+    await connect();
+  }catch(e){
+    runtime.connected=false;
+    runtime.lastError="CONNECT:"+String(e?.message||e);
+    setTimeout(()=>void ensureConnected(),1500);
+  }
+}
+export async function start(){
+  server.listen(PORT,"0.0.0.0");
+  await clock().catch(e=>runtime.lastError="CLOCK:"+String(e?.message||e));
+  setInterval(()=>void clock().catch(e=>runtime.lastError="CLOCK:"+String(e?.message||e)),60000);
+  setInterval(()=>{
+    if(runtime.connected&&runtime.lastMessageAt&&now()-runtime.lastMessageAt>5000){
+      runtime.lastError="STREAM_STALE_RECONNECT";
+      try{runtime.ws?.close();}catch{}
+    }
+  },1000);
+  void ensureConnected();
+}
 if(import.meta.url===pathToFileURL(process.argv[1]||"").href)start().catch(e=>{console.error("[stream-shadow]",String(e?.message||e));process.exit(1);});
