@@ -16,7 +16,7 @@ on:
       - '.github/workflows/v3-champion-challenger-shadow.yml'
 
 concurrency:
-  group: v3-champion-challenger-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
