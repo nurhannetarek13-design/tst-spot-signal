@@ -987,7 +987,7 @@ def enrich_microstructure(symbol, snap):
         bars3m=len(snap.get("_bars3m") or []),
         bars15m=len(snap.get("_bars15") or []),
         bars1h=len(snap.get("_bars1h") or []),
-        depth_samples=len(depth_samples),
+        depth_samples=(len(stream_samples) if use_stream else len(depth_samples)),
         min_1m=guard_cfg["warmup_min_1m"],
         min_3m=guard_cfg["warmup_min_3m"],
         min_15m=guard_cfg["warmup_min_15m"],
