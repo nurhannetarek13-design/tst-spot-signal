@@ -138,6 +138,7 @@ else:
       "status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,
       "candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],
       "symbol":m["symbol"],"symbols":symbols,"scope":scope,
+      "validationScope":(m.get("validation") or {}).get("historicalScope","FULL_CANDIDATE"),
       "family":m["family"],"timeframe":m["timeframe"],"params":p,
       "base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,
       "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
