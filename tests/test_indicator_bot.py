@@ -36,6 +36,10 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.CFG["entry"]["rsi_max"],68)
         self.assertEqual(bot.CFG["entry"]["min_relative_quote_volume"],1.3)
         self.assertEqual(bot.CFG["entry"]["min_taker_buy_ratio"],0.55)
+        self.assertEqual(bot.CFG["risk"]["max_risk_per_trade_fraction"],0.005)
+        self.assertFalse(bot.CFG["risk"]["allow_averaging_down"])
+        self.assertFalse(bot.CFG["risk"]["allow_martingale"])
+        self.assertEqual(bot.CFG["risk"]["leverage"],1)
 
     def test_six_indicator_snapshot_contains_exact_checks(self):
         snap=bot.indicator_snapshot(
@@ -91,7 +95,11 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"PAPER_OPENED")
         p=state["positions"]["TESTUSDT"]
         self.assertLess(p["stop"],snap["confirmed_swing_low"])
-        self.assertLessEqual(bot.stop_risk(p),bot.CFG["risk"]["max_risk_per_trade_usdt"]+1e-9)
+        allowed=min(
+            bot.CFG["risk"]["max_risk_per_trade_usdt"],
+            20.08*bot.CFG["risk"]["max_risk_per_trade_fraction"],
+        )
+        self.assertLessEqual(bot.stop_risk(p),allowed+1e-9)
         self.assertTrue(0 < p["stop"] < p["entry"] < p["target"])
 
     def test_abnormally_wide_swing_stop_is_skipped(self):
