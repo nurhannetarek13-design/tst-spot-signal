@@ -180,38 +180,44 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
     sr=snapshots[0];sid=int(sr["data"]["lastUpdateId"]);line=int(sr["line"])
     bids={float(p):float(q) for p,q in sr["data"]["bids"] if float(q)>0}
     asks={float(p):float(q) for p,q in sr["data"]["asks"] if float(q)>0}
-    last=sid;bridged=False;gaps=0;events=0;ticker_comp=ticker_exact=0
+    last=sid;bridged=False;bridge_line=None;gaps=0;events=0;ticker_comp=ticker_exact=0
     ticker_by_u={}
     trades=[]
     samples=[]
     candidates=[]
     flow=deque()
 
+    # Spot snapshots are generated via REST while WS depth updates are buffered.
+    # Therefore valid bridging depth messages may appear *before* the snapshot
+    # line in local-capture order. Collect all native messages first, then replay
+    # from the first update that overlaps snapshot.lastUpdateId+1.
+    depth_rows=[]
     for r in rows:
-        if int(r["line"])<=line:continue
         d=r["data"];ts=ts_ms(r)
         if ts is None:continue
-
-        is_ticker={"u","b","B","a","A"}.issubset(d)
-        if is_ticker:
+        if {"u","b","B","a","A"}.issubset(d):
             ticker_by_u[int(d["u"])]=(float(d["b"]),float(d["a"]))
             continue
-
-        if "a" in d and "p" in d and "q" in d and "m" in d:  # aggTrade
+        if "a" in d and "p" in d and "q" in d and "m" in d:
             p=float(d["p"]);q=float(d["q"]);buy=not bool(d["m"])
             trades.append({"ts":ts,"price":p,"quote":p*q,"buy":buy})
             continue
+        if {"U","u"}.issubset(d):
+            depth_rows.append((r,ts))
 
-        if not {"U","u"}.issubset(d):continue
+    depth_rows.sort(key=lambda item:(int(item[0]["data"]["u"]), int(item[0]["line"])))
+    for r,ts in depth_rows:
+        d=r["data"]
         U=int(d["U"]);u=int(d["u"])
         if u<=last:continue
         if not bridged:
             if not (U<=last+1<=u):
                 continue
             bridged=True
+            bridge_line=int(r["line"])
         elif U>last+1:
             gaps+=1
-            return {"status":"DEPTH_GAP","canonicalReplayReady":False,"gaps":gaps,"lastUpdateId":last,"U":U,"u":u}
+            return {"status":"DEPTH_GAP","canonicalReplayReady":False,"gaps":gaps,"lastUpdateId":last,"U":U,"u":u,"bridgeLine":bridge_line,"snapshotLine":line}
         ba,bc=apply_side(bids,d.get("b",[]));aa,ac=apply_side(asks,d.get("a",[]))
         flow.append((ts,ba,bc,aa,ac))
         while flow and ts-flow[0][0]>10_000:flow.popleft()
@@ -268,9 +274,10 @@ def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int
     integrity=bridged and gaps==0 and events>0
     execution_ok=bool(candidates and len(fillable)==len(candidates) and (max(slips) if slips else 999)<=12)
     return {
-        "status":"PASS" if integrity else "FAIL",
+        "status":"PASS" if integrity else ("SNAPSHOT_BRIDGE_NOT_FOUND" if not bridged else "FAIL"),
         "canonicalReplayReady":integrity,
         "symbol":symbol,"eventsApplied":events,"gaps":gaps,
+        "snapshotLine":line,"snapshotLastUpdateId":sid,"bridgeLine":bridge_line,
         "tickerComparable":ticker_comp,"tickerExact":ticker_exact,"tickerMatchRate":match,
         "candidateCount":len(candidates),"fillableCount":len(fillable),
         "slippageBps":{"median":median(slips),"max":max(slips) if slips else None},
