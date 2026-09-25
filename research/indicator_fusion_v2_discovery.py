@@ -92,6 +92,10 @@ def metrics(trades):
 def gate(m,min_trades=40,min_pf=1.05,max_dd=5.0):
     return m["trades"]>=min_trades and m["expectancyUSDT"]>0 and m["profitFactor"]>=min_pf and m["maxDrawdownUSDT"]<=max_dd
 
+def era_cut_index(index, cutoff):
+    """Count bars strictly before cutoff without assuming datetime storage units."""
+    return int((index < cutoff).sum())
+
 def main():
     rows=universe(); data={}; failures={}
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -106,7 +110,7 @@ def main():
     per={}; older_symbols=[]; recent_symbols=[]
     for s in symbols:
         d=data[s]; f=compute_indicator_fusion_v2(d,DEFAULT_PARAMS_V2)
-        # Avoid datetime unit drift (ms/us/ns) across pandas versions.\n        cut=int((d.index < cutoff).sum())
+        cut=era_cut_index(d.index,cutoff)
         per[s]={}
         if cut>=4000:
             older_symbols.append(s)
