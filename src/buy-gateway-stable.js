@@ -90,7 +90,7 @@ async function handleFastSignalIngest(request, env) {
   if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
 
   const b=await refreshBalance(env);
-  if (!b?.ok || b.credentialMode !== "LIVE" || !b.canTrade) {
+  if (!b?.ok || b.credentialMode !== "LIVE" || !b.canTrade || b.accountSafetyOk !== true) {
     return Response.json({ok:false,status:"ACCOUNT_PREFLIGHT_FAILED",autoBuy:false},{status:503});
   }
   const free=Number(b.usdt?.free||0);
@@ -257,10 +257,70 @@ function safeRelayDiagnostic(errorText) {
   return s ? "ACCOUNT_PREFLIGHT_FAILED" : "NONE";
 }
 
+export function evaluateCloudflareAccountSafety(restrictions = {}, accountStatus = {}, apiTradingStatus = {}) {
+  const reasons=[];
+  const account=String(accountStatus?.data ?? accountStatus?.status ?? "").trim();
+  const trading=(apiTradingStatus?.data && typeof apiTradingStatus.data==="object")
+    ? apiTradingStatus.data
+    : (apiTradingStatus || {});
+
+  if (restrictions.enableReading !== true) reasons.push("READ_PERMISSION_REQUIRED");
+  if (restrictions.enableSpotAndMarginTrading !== true) reasons.push("SPOT_TRADING_PERMISSION_REQUIRED");
+  if (restrictions.enableWithdrawals === true) reasons.push("WITHDRAWALS_MUST_BE_DISABLED");
+  if (restrictions.enableFutures === true) reasons.push("FUTURES_MUST_BE_DISABLED");
+  if (restrictions.enableMargin === true) reasons.push("MARGIN_MUST_BE_DISABLED");
+  if (restrictions.ipRestrict !== true) reasons.push("IP_RESTRICTION_REQUIRED");
+  if (account.toLowerCase() !== "normal") reasons.push("ACCOUNT_STATUS_NOT_NORMAL");
+  if (trading?.isLocked === true) reasons.push("API_TRADING_LOCKED");
+
+  return {
+    ok:reasons.length===0,
+    reasons,
+    accountStatus:account || null,
+    isLocked:trading?.isLocked === true,
+    plannedRecoverTime:Number(trading?.plannedRecoverTime || 0) || 0,
+    ipRestrict:restrictions.ipRestrict === true,
+    withdrawalsDisabled:restrictions.enableWithdrawals !== true,
+    futuresDisabled:restrictions.enableFutures !== true,
+    marginDisabled:restrictions.enableMargin !== true,
+    spotPermission:restrictions.enableSpotAndMarginTrading === true,
+    checkedAt:Date.now(),
+  };
+}
+
+async function refreshAccountSafety(env, force = false) {
+  if (!force) {
+    const cached=await getState(env,"binance:account-safety:last");
+    if (cached?.checkedAt && Date.now()-Number(cached.checkedAt)<5*60*1000) return cached;
+  }
+  try {
+    const [restrictions, accountStatus, apiTradingStatus]=await Promise.all([
+      signedBinance(env,"GET","/sapi/v1/account/apiRestrictions",{}),
+      signedBinance(env,"GET","/sapi/v1/account/status",{}),
+      signedBinance(env,"GET","/sapi/v1/account/apiTradingStatus",{}),
+    ]);
+    const result=evaluateCloudflareAccountSafety(restrictions,accountStatus,apiTradingStatus);
+    await putState(env,"binance:account-safety:last",result,10*60);
+    return result;
+  } catch (e) {
+    const result={
+      ok:false,
+      reasons:["ACCOUNT_SAFETY_UNAVAILABLE"],
+      diagnostic:safeRelayDiagnostic(String(e?.message||e)),
+      checkedAt:Date.now(),
+    };
+    await putState(env,"binance:account-safety:last",result,2*60);
+    return result;
+  }
+}
+
 async function refreshBalance(env) {
   const c = creds(env);
   try {
-    const account = await signedBinance(env, "GET", "/api/v3/account", {});
+    const [account, accountSafety] = await Promise.all([
+      signedBinance(env, "GET", "/api/v3/account", {}),
+      refreshAccountSafety(env, false),
+    ]);
     const balances = (account.balances || [])
       .map((b) => ({ asset: b.asset, free: Number(b.free || 0), locked: Number(b.locked || 0) }))
       .filter((b) => b.free > 0 || b.locked > 0);
@@ -269,6 +329,8 @@ async function refreshBalance(env) {
       ok: true,
       status: "ACCOUNT_BALANCE_OK",
       canTrade: Boolean(account.canTrade),
+      accountSafetyOk: accountSafety?.ok === true,
+      accountSafetyReasons: accountSafety?.reasons || ["ACCOUNT_SAFETY_UNAVAILABLE"],
       usdt: { free: usdt.free, locked: usdt.locked, total: usdt.free + usdt.locked },
       nonZeroAssets: balances,
       source: c.route,
@@ -313,8 +375,14 @@ async function executeConfirmedBuy(env, s) {
 
   await executionPriceGate(symbol, entryRef, stopRef, targetRef);
 
-  const account = await signedBinance(env, "GET", "/api/v3/account", {});
+  const [account, accountSafety] = await Promise.all([
+    signedBinance(env, "GET", "/api/v3/account", {}),
+    refreshAccountSafety(env, true),
+  ]);
   if (!account.canTrade) throw new Error("ACCOUNT_CANNOT_TRADE");
+  if (accountSafety?.ok !== true) {
+    throw new Error("ACCOUNT_SAFETY_BLOCKED:"+String(accountSafety?.reasons?.[0]||"UNKNOWN"));
+  }
   const freeUSDT = Number((account.balances || []).find((b) => b.asset === "USDT")?.free || 0);
   const quoteUSDT = dynamicQuote(freeUSDT, entryRef, stopRef, s.confirmedQuoteUSDT || s.recommendedUSDT);
   if (quoteUSDT < MIN_ORDER_USDT) throw new Error("SIZE_TOO_SMALL");
@@ -409,7 +477,7 @@ async function sendPromptForActive(env) {
 
   const active = (await getState(env, "paper:active")) || [];
   const b = await refreshBalance(env);
-  if (!b?.ok || !b.canTrade || b.credentialMode !== "LIVE") {
+  if (!b?.ok || !b.canTrade || b.accountSafetyOk !== true || b.credentialMode !== "LIVE") {
     return;
   }
   const free = Number(b.usdt?.free || 0);
@@ -495,7 +563,7 @@ async function handleTelegramWebhook(request, env) {
   const s = await getState(env, `live-signal:${id}`);
   if (action === "PREP" && s) {
     const b = await refreshBalance(env);
-    if (!b?.ok || b.credentialMode !== "LIVE") {
+    if (!b?.ok || !b.canTrade || b.accountSafetyOk !== true || b.credentialMode !== "LIVE") {
       await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Live Binance balance unavailable — no trade prepared", show_alert: true });
       return new Response("ok");
     }
@@ -575,9 +643,10 @@ async function notifyExecutionReadinessTransition(env, balance) {
     c.credentialMode==="LIVE" &&
     c.route===LIVE_ROUTE &&
     balance?.ok &&
-    balance?.canTrade
+    balance?.canTrade &&
+    balance?.accountSafetyOk === true
   );
-  const blocker=ready ? null : safeRelayDiagnostic(lastError?.error);
+  const blocker=ready ? null : (balance?.accountSafetyReasons?.[0] || safeRelayDiagnostic(lastError?.error));
   const previous=await getState(env,"live-readiness:transition-state");
   const current={
     ready,
@@ -657,9 +726,9 @@ export default {
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
       const balance = await refreshBalance(env);
       const lastError = balance ? null : await getState(env, "binance:balance:error");
-      const blocker = balance?.ok && balance?.canTrade
+      const blocker = balance?.ok && balance?.canTrade && balance?.accountSafetyOk === true
         ? null
-        : safeRelayDiagnostic(lastError?.error);
+        : (balance?.accountSafetyReasons?.[0] || safeRelayDiagnostic(lastError?.error));
       const infrastructureReady =
         c.credentialMode === "LIVE" &&
         c.route === LIVE_ROUTE &&
@@ -667,7 +736,8 @@ export default {
       const executionReady =
         infrastructureReady &&
         Boolean(balance?.ok) &&
-        Boolean(balance?.canTrade);
+        Boolean(balance?.canTrade) &&
+        balance?.accountSafetyOk === true;
       return Response.json({
         ok: true,
         status: executionReady ? "LIVE_EXECUTION_READY" : "LIVE_EXECUTION_BLOCKED",
@@ -685,6 +755,8 @@ export default {
         cloudflareBinanceCredentialsRequired: false,
         maxRiskUSDT: MAX_RISK_USDT,
         maxBuyUSDT: 10,
+        accountSafetyOk: balance?.accountSafetyOk === true,
+        accountSafetyReasons: balance?.accountSafetyReasons || [],
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
@@ -697,6 +769,8 @@ export default {
       return Response.json({
         ok: Boolean(balance?.ok),
         canTrade: Boolean(balance?.canTrade),
+        accountSafetyOk: balance?.accountSafetyOk === true,
+        accountSafetyReasons: balance?.accountSafetyReasons || [],
         credentialMode: c.credentialMode,
         autoBuy: false,
         executionRoute: c.route,
