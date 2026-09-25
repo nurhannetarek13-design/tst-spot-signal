@@ -6,6 +6,7 @@ from ready_bot.production_guard import (
     btc_shock_status,
     clock_sync_status,
     execution_quality_status,
+    estimate_sell_slippage,
     liquidity_disappearance_status,
     signal_freshness_status,
     warmup_status,
@@ -94,6 +95,26 @@ class ProductionGuardTests(unittest.TestCase):
         model=update_symbol_slippage_model(model,"SOLUSDT",8)
         self.assertEqual(model["SOLUSDT"]["count"],2)
         self.assertGreater(model["SOLUSDT"]["ewma_bps"],4)
+
+
+    def test_sell_depth_slippage_is_base_size_aware(self):
+        depth={"bids":[["100","0.05"],["99","1.0"]]}
+        x=estimate_sell_slippage(depth,0.10)
+        self.assertGreaterEqual(x["fill_ratio"],0.999)
+        self.assertLess(x["average_price"],100)
+        self.assertGreater(x["slippage_bps"],0)
+
+
+    def test_bid_cancellation_spike_is_rejected(self):
+        x=liquidity_disappearance_status({
+            "bid_liquidity_change_pct":-0.10,
+            "ask_liquidity_change_pct":0.05,
+            "cancellation_rate_10s":0.90,
+            "bid_cancel_quote_10s":3000,
+            "ask_cancel_quote_10s":500,
+        },max_cancellation_rate=0.75,bid_cancel_imbalance_ratio=1.5)
+        self.assertFalse(x["ok"])
+        self.assertIn("BID_CANCELLATION_SPIKE",x["reasons"])
 
 
 if __name__=="__main__":
