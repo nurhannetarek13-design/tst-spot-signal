@@ -652,6 +652,15 @@ def close_position(state, symbol, bid, reason, exit_depth=None):
         "exit_execution": depth_meta,
         "exit_slippage_bps": exit_slip,
     })
+    append_decision(
+        state, symbol, "WHY_EXIT",
+        reason=reason,
+        pnl_usdt=pnl,
+        mfe_r=p.get("mfe_r"),
+        mae_r=p.get("mae_r"),
+        exit_slippage_bps=exit_slip,
+        exit_execution_source=depth_meta.get("source"),
+    )
 
 
 def round_qty(qty, filters):
