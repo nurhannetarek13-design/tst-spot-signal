@@ -231,9 +231,27 @@ m=json.loads(MANIFEST_PATH.read_text())
 if not m.get("candidateFingerprint"):
     report={"engine":"NAUTILUS_TRADER","strategyId":STRATEGY_ID,"status":"NO_CANDIDATE","pass":False,"candidateFingerprint":None,"liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat()}
 else:
-    base=metrics(run_child(m["symbol"],m["timeframe"],BASE_FEE,m["family"],m["params"]))
-    stress=metrics(run_child(m["symbol"],m["timeframe"],STRESS_FEE,m["family"],m["params"]))
+    symbols=list(m.get("symbols") or [m["symbol"]])
+    scope=m.get("scope","SINGLE_SYMBOL")
+
+    def pooled(fee):
+        rows=[]
+        for symbol in symbols:
+            rows.extend(run_child(symbol,m["timeframe"],fee,m["family"],m["params"]))
+        return metrics(rows)
+
+    base=pooled(BASE_FEE)
+    stress=pooled(STRESS_FEE)
     independent=base["trades"]>=30 and base["profitFactor"]>=1.15 and base["expectancyUSDT"]>0 and stress["profitFactor"]>=1.0 and stress["expectancyUSDT"]>0
     passed=independent and base["trades"]>=100 and stress["trades"]>=100
-    report={"engine":"NAUTILUS_TRADER","strategyId":STRATEGY_ID,"status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,"candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],"symbol":m["symbol"],"family":m["family"],"timeframe":m["timeframe"],"params":m["params"],"base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,"generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),"notes":"NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."}
+    report={
+      "engine":"NAUTILUS_TRADER","strategyId":STRATEGY_ID,
+      "status":"PASS" if passed else "FAIL","pass":passed,"independentEnginePass":independent,
+      "candidateId":m["candidateId"],"candidateFingerprint":m["candidateFingerprint"],
+      "symbol":m["symbol"],"symbols":symbols,"scope":scope,
+      "family":m["family"],"timeframe":m["timeframe"],"params":m["params"],
+      "base":base,"stress2x":stress,"authorization":"RESEARCH_ONLY","liveTrading":False,
+      "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
+      "notes":"NautilusTrader validates the manifest-declared symbol scope. MULTI_SYMBOL_BASKET pools independent per-symbol CASH backtests for research only; no leverage and no live authorization."
+    }
 OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
