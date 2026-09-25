@@ -47,6 +47,8 @@ out={
     "candidateId":m.get("candidateId"),
     "candidateFingerprint":m.get("candidateFingerprint"),
     "symbol":m.get("symbol"),
+    "symbols":m.get("symbols") or [m.get("symbol")],
+    "scope":m.get("scope","SINGLE_SYMBOL"),
     "family":m.get("family"),
     "timeframe":m.get("timeframe"),
     "validationScope":scope,
@@ -58,6 +60,6 @@ out={
     "authorization":"RESEARCH_ONLY",
     "liveTrading":False,
     "generatedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "notes":"Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
+    "notes":"Freqtrade validates only the manifest-declared historical scope. MULTI_SYMBOL_POOLED_RESEARCH uses expanded dry-run capital/max-open only to avoid censoring simultaneous historical signals; it cannot authorize live trading."
 }
 pathlib.Path(sys.argv[3]).write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2))
