@@ -286,9 +286,29 @@ export async function executeV3ShadowIntent({
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
   pollMs = 250,
   maxRealizedSlippageBps = 12,
+  now = () => Date.now(),
 } = {}) {
   assertV3IntentShadowOnly(intent);
   if (!exchange) throw new Error("EXCHANGE_ADAPTER_REQUIRED");
+
+  const currentMs=Number(now());
+  const createdAtMs=Number(intent?.createdAtMs);
+  const decisionLatencyMs=Number(intent?.decisionLatencyMs);
+  const maxTotalLatencyMs=Number(intent?.maxTotalLatencyMs);
+  if(!Number.isFinite(currentMs)||!Number.isFinite(createdAtMs)||
+     !Number.isFinite(decisionLatencyMs)||!Number.isFinite(maxTotalLatencyMs)||
+     decisionLatencyMs<0||maxTotalLatencyMs<=0){
+    throw new Error("V3_LATENCY_CONTRACT_INVALID");
+  }
+  if(createdAtMs-currentMs>1000) throw new Error("EXECUTION_CLOCK_SKEW");
+  const queueLatencyMs=Math.max(0,currentMs-createdAtMs);
+  const totalLatencyMs=decisionLatencyMs+queueLatencyMs;
+  if(totalLatencyMs>maxTotalLatencyMs){
+    const error=new Error("STALE_EXECUTION_INTENT");
+    error.totalLatencyMs=totalLatencyMs;
+    error.maxTotalLatencyMs=maxTotalLatencyMs;
+    throw error;
+  }
 
   const key = executionIntentIdempotencyKey(intent);
   const reservation = await reservations.reserve(key, {
