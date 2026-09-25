@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'research/microstructure_replay_validator.py'
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
       - 'scripts/champion_challenger_gate.py'
       - 'validation/champion_challenger.json'
       - 'tests/test_microstructure_replay.py'
@@ -24,11 +26,13 @@ jobs:
       - name: Compile
         run: |
           python -m py_compile research/microstructure_replay_validator.py
+          python -m py_compile research/binance_spot_point_in_time_universe.py
           python -m py_compile scripts/champion_challenger_gate.py
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_microstructure_replay.py' -v
           python -m unittest discover -s tests -p 'test_champion_challenger.py' -v
+          python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
       - name: Assert no automatic promotion
         run: |
           python - <<'PY'
@@ -39,4 +43,5 @@ jobs:
           assert c['promotion_policy']['require_manual_review'] is True
           assert c['promotion_policy']['require_zero_lookahead_violations'] is True
           assert c['promotion_policy']['require_survivorship_bias_check'] is True
+          assert c['promotion_policy']['require_point_in_time_universe_artifact'] is True
           PY
