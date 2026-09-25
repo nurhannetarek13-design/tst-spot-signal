@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   assertV3IntentShadowOnly,
   executionIntentIdempotencyKey,
@@ -49,29 +51,90 @@ function combineFills(fills) {
   };
 }
 
-export function createV3ShadowReservationStore() {
-  const rows = new Map();
+export function createV3ShadowReservationStore(initialRows = []) {
+  const rows = new Map((initialRows || []).map(row => [row.key, structuredClone(row)]));
   return {
-    reserve(key) {
+    async reserve(key, value = {}) {
       if (rows.has(key)) return { ok: false, existing: structuredClone(rows.get(key)) };
-      const row = { key, status: "RESERVED", at: new Date().toISOString() };
+      const row = { key, ...value, status: "RESERVED", at: new Date().toISOString() };
       rows.set(key, row);
       return { ok: true, row: structuredClone(row) };
     },
-    complete(key, value) {
-      const row = { ...(rows.get(key) || { key }), ...value, status: "COMPLETED" };
+    async update(key, value = {}) {
+      const row = { ...(rows.get(key) || { key }), ...value, updatedAt: new Date().toISOString() };
       rows.set(key, row);
       return structuredClone(row);
     },
-    fail(key, value) {
-      const row = { ...(rows.get(key) || { key }), ...value, status: "FAILED" };
+    async complete(key, value) {
+      const row = { ...(rows.get(key) || { key }), ...value, status: "COMPLETED", updatedAt: new Date().toISOString() };
       rows.set(key, row);
       return structuredClone(row);
     },
-    get(key) {
+    async fail(key, value) {
+      const row = { ...(rows.get(key) || { key }), ...value, status: "FAILED", updatedAt: new Date().toISOString() };
+      rows.set(key, row);
+      return structuredClone(row);
+    },
+    async get(key) {
       const row = rows.get(key);
       return row ? structuredClone(row) : null;
     },
+    async listPending() {
+      return [...rows.values()]
+        .filter(row => !["COMPLETED", "FAILED"].includes(String(row.status || "").toUpperCase()))
+        .map(structuredClone);
+    },
+    async all() {
+      return [...rows.values()].map(structuredClone);
+    },
+  };
+}
+
+export async function createV3FileReservationStore(filePath) {
+  const target = path.resolve(String(filePath || ""));
+  if (!target) throw new Error("RESERVATION_FILE_REQUIRED");
+  let rows = [];
+  try {
+    const raw = JSON.parse(await fs.readFile(target, "utf8"));
+    rows = Array.isArray(raw?.rows) ? raw.rows : [];
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const memory = createV3ShadowReservationStore(rows);
+
+  async function persist() {
+    const payload = JSON.stringify({ version: 1, rows: await memory.all() }, null, 2);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    const temp = target + ".tmp";
+    await fs.writeFile(temp, payload, "utf8");
+    await fs.rename(temp, target);
+  }
+
+  return {
+    async reserve(key, value = {}) {
+      const out = await memory.reserve(key, value);
+      if (out.ok) await persist();
+      return out;
+    },
+    async update(key, value = {}) {
+      const out = await memory.update(key, value);
+      await persist();
+      return out;
+    },
+    async complete(key, value = {}) {
+      const out = await memory.complete(key, value);
+      await persist();
+      return out;
+    },
+    async fail(key, value = {}) {
+      const out = await memory.fail(key, value);
+      await persist();
+      return out;
+    },
+    get: key => memory.get(key),
+    listPending: () => memory.listPending(),
+    all: () => memory.all(),
+    filePath: target,
   };
 }
 
@@ -145,6 +208,77 @@ function realizedSlippageBps(reference, average) {
   return (avg / ref - 1) * 10000;
 }
 
+
+export async function recoverV3ShadowReservations({
+  exchange,
+  reservations,
+} = {}) {
+  if (!exchange?.getOrder) throw new Error("RECOVERY_GET_ORDER_ADAPTER_REQUIRED");
+  if (!reservations?.listPending) throw new Error("PERSISTENT_RESERVATION_STORE_REQUIRED");
+
+  const pending = await reservations.listPending();
+  const recovered = [];
+  for (const row of pending) {
+    const intent = row.intent;
+    if (!intent) {
+      await reservations.fail(row.key, { reason: "RECOVERY_INTENT_MISSING" });
+      recovered.push({ key: row.key, status: "FAILED", reason: "RECOVERY_INTENT_MISSING" });
+      continue;
+    }
+    assertV3IntentShadowOnly(intent);
+    const ids = [...new Set(row.clientOrderIds || [])];
+    const observed = [];
+    for (const cid of ids) {
+      try {
+        let order = normalizeOrder(await exchange.getOrder({ symbol: intent.symbol, clientOrderId: cid }));
+        if (!["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+          order = await cancelRemainder(exchange, intent.symbol, order);
+        }
+        observed.push(order);
+      } catch {}
+    }
+
+    const combined = combineFills(observed);
+    if (!(combined.executedQty > 0 && combined.averagePrice > 0)) {
+      await reservations.fail(row.key, {
+        reason: ids.length ? "RECOVERED_NO_FILL" : "RECOVERY_NO_ORDER_IDS",
+        recoveredOrders: observed,
+      });
+      recovered.push({ key: row.key, status: "FAILED", reason: "RECOVERED_NO_FILL" });
+      continue;
+    }
+
+    if (!exchange?.placeOcoSell) throw new Error("PROTECTION_ADAPTER_REQUIRED");
+    const protection = await exchange.placeOcoSell({
+      symbol: intent.symbol,
+      quantity: combined.executedQty,
+      stopPrice: intent.protection.stopPrice,
+      takeProfitPrice: intent.protection.takeProfitPrice,
+      clientTag: clientId(intent, 99),
+    });
+    if (!protection) throw new Error("RECOVERY_PROTECTION_NOT_CONFIRMED");
+
+    const slippageBps = realizedSlippageBps(intent.entry.referencePrice, combined.averagePrice);
+    await reservations.complete(row.key, {
+      result: "RECOVERED_FILLED_AND_PROTECTED",
+      recovered: true,
+      recoveredOrders: observed,
+      executedQty: combined.executedQty,
+      averagePrice: combined.averagePrice,
+      slippageBps,
+      protection,
+    });
+    recovered.push({
+      key: row.key,
+      status: "RECOVERED",
+      executedQty: combined.executedQty,
+      averagePrice: combined.averagePrice,
+      protection,
+    });
+  }
+  return { ok: true, pendingCount: pending.length, recovered };
+}
+
 export async function executeV3ShadowIntent({
   intent,
   exchange,
@@ -157,7 +291,11 @@ export async function executeV3ShadowIntent({
   if (!exchange) throw new Error("EXCHANGE_ADAPTER_REQUIRED");
 
   const key = executionIntentIdempotencyKey(intent);
-  const reservation = reservations.reserve(key);
+  const reservation = await reservations.reserve(key, {
+    intent: structuredClone(intent),
+    clientOrderIds: [],
+    stage: "RESERVED",
+  });
   if (!reservation.ok) {
     return {
       ok: true,
@@ -172,7 +310,9 @@ export async function executeV3ShadowIntent({
   const attempts = [];
   try {
     if (intent.entry.style === "MARKET") {
-      const order = await placeMarket({ exchange, intent, cid: clientId(intent, 0) });
+      const cid = clientId(intent, 0);
+      await reservations.update?.(key, { stage: "PLACING_ENTRY", clientOrderIds: [cid] });
+      const order = await placeMarket({ exchange, intent, cid });
       const reconciled = await refreshOrder(exchange, intent.symbol, order);
       attempts.push(reconciled);
       if (reconciled.executedQty > 0) fills.push(reconciled);
@@ -202,10 +342,18 @@ export async function executeV3ShadowIntent({
           ...intent,
           quoteAmountUsdt: remainingQuote,
         };
+        const cid = clientId(intent, attempt);
+        const existingReservation = await reservations.get?.(key);
+        const knownIds = Array.isArray(existingReservation?.clientOrderIds) ? existingReservation.clientOrderIds : [];
+        await reservations.update?.(key, {
+          stage: "PLACING_ENTRY",
+          clientOrderIds: [...new Set([...knownIds, cid])],
+          attempt,
+        });
         let order = await placeLimit({
           exchange,
           intent: localIntent,
-          cid: clientId(intent, attempt),
+          cid,
           price,
         });
         attempts.push(order);
@@ -247,7 +395,7 @@ export async function executeV3ShadowIntent({
 
     const combined = combineFills(fills);
     if (!(combined.executedQty > 0 && combined.averagePrice > 0)) {
-      const row = reservations.complete(key, {
+      const row = await reservations.complete(key, {
         result: "NO_FILL",
         attempts,
       });
@@ -275,7 +423,7 @@ export async function executeV3ShadowIntent({
     });
     if (!protection) throw new Error("PROTECTION_NOT_CONFIRMED");
 
-    const row = reservations.complete(key, {
+    const row = await reservations.complete(key, {
       result: "FILLED_AND_PROTECTED",
       executedQty: combined.executedQty,
       averagePrice: combined.averagePrice,
@@ -298,7 +446,7 @@ export async function executeV3ShadowIntent({
       reservation: row,
     };
   } catch (error) {
-    reservations.fail(key, { reason: String(error?.message || error) });
+    await reservations.fail(key, { reason: String(error?.message || error) });
     throw error;
   }
 }
