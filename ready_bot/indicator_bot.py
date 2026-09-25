@@ -111,6 +111,15 @@ def precision_evidence_status(config=None):
     }
 
 
+def evidence_blocks_entries(evidence, config=None):
+    config = config or CFG
+    gate = config.get("evidence_gate", {})
+    scope = gate.get("scope", "all_entries")
+    if scope == "live_only" and config.get("mode") == "paper":
+        return False
+    return not evidence.get("ok", False)
+
+
 def universe():
     uc = CFG["universe"]
     quote = uc["quote_asset"]
@@ -276,12 +285,15 @@ def btc_regime(btc1h, btc4h):
     e50_4 = ema(c4, 50)
     e200_4 = ema(c4, 200)
     ret1 = c1[-1] / c1[-2] - 1
-    ok = (
-        e20 is not None and e50 is not None and e50_4 is not None and e200_4 is not None
-        and e20 > e50 and e50_4 > e200_4
-        and ret1 > float(CFG["entry"]["btc_max_1h_drop"])
-    )
-    return {"ok": bool(ok), "ret1h": ret1, "ema20_1h": e20, "ema50_1h": e50,
+    one_hour_bullish = bool(e20 is not None and e50 is not None and e20 > e50)
+    macro_bullish = bool(e50_4 is not None and e200_4 is not None and e50_4 > e200_4)
+    crash_veto_clear = bool(ret1 > float(CFG["entry"]["btc_max_1h_drop"]))
+    # For PAPER observation, 1h softness is no longer a hard veto. We still
+    # require a bullish 4h regime and no sharp BTC drop.
+    ok = bool(macro_bullish and crash_veto_clear)
+    return {"ok": ok, "ret1h": ret1, "oneHourBullish": one_hour_bullish,
+            "macroBullish": macro_bullish, "crashVetoClear": crash_veto_clear,
+            "ema20_1h": e20, "ema50_1h": e50,
             "ema50_4h": e50_4, "ema200_4h": e200_4}
 
 
@@ -547,7 +559,7 @@ def main():
 
     evidence = precision_evidence_status()
     signals = []
-    if not evidence.get("ok"):
+    if evidence_blocks_entries(evidence):
         blocked.append({"reason": "PRECISION_EVIDENCE_GATE", "detail": evidence})
     elif not btc.get("ok"):
         blocked.append({"reason": "BTC_REGIME_VETO", "detail": btc})
