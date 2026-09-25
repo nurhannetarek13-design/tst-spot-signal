@@ -132,7 +132,8 @@
     "max_cancellation_rate_10s": 0.75,
     "bid_cancel_imbalance_ratio": 1.5,
     "max_stream_signal_age_ms": 5000,
-    "min_listing_age_days": 3
+    "min_listing_age_days": 3,
+    "max_total_detection_to_order_ms": 8000
   },
   "smart_execution": {
     "enabled": true,
