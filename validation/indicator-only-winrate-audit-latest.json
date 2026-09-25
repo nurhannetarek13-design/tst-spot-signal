@@ -25,8 +25,8 @@
     "TAOUSDT",
     "ADAUSDT",
     "XLMUSDT",
-    "PEPEUSDT",
     "WLDUSDT",
+    "PEPEUSDT",
     "ARBUSDT"
   ],
   "symbolsAudited": [
@@ -52,24 +52,24 @@
     "TAOUSDT",
     "ADAUSDT",
     "XLMUSDT",
-    "PEPEUSDT",
     "WLDUSDT",
+    "PEPEUSDT",
     "ARBUSDT"
   ],
   "dataFailures": {},
   "scoreThreshold": 90,
   "targetClaimWinRate": 0.99,
   "pessimistic": {
-    "resolvedTrades": 390,
-    "wins": 152,
-    "losses": 238,
-    "winRate": 0.38974358974358975
+    "resolvedTrades": 388,
+    "wins": 151,
+    "losses": 237,
+    "winRate": 0.38917525773195877
   },
   "optimisticUpperBound": {
-    "resolvedTrades": 390,
-    "wins": 152,
-    "losses": 238,
-    "winRate": 0.38974358974358975
+    "resolvedTrades": 388,
+    "wins": 151,
+    "losses": 237,
+    "winRate": 0.38917525773195877
   },
   "unresolvedWithin7d": 0,
   "perSymbol": {
@@ -92,19 +92,19 @@
     },
     "ETHUSDT": {
       "pessimistic": {
-        "resolvedTrades": 27,
-        "wins": 7,
+        "resolvedTrades": 26,
+        "wins": 6,
         "losses": 20,
-        "winRate": 0.25925925925925924
+        "winRate": 0.23076923076923078
       },
       "optimistic": {
-        "resolvedTrades": 27,
-        "wins": 7,
+        "resolvedTrades": 26,
+        "wins": 6,
         "losses": 20,
-        "winRate": 0.25925925925925924
+        "winRate": 0.23076923076923078
       },
       "unresolved": 0,
-      "signalBars": 85,
+      "signalBars": 84,
       "maxScore": 100.0
     },
     "XRPUSDT": {
@@ -126,19 +126,19 @@
     },
     "SOLUSDT": {
       "pessimistic": {
-        "resolvedTrades": 24,
+        "resolvedTrades": 23,
         "wins": 9,
-        "losses": 15,
-        "winRate": 0.375
+        "losses": 14,
+        "winRate": 0.391304347826087
       },
       "optimistic": {
-        "resolvedTrades": 24,
+        "resolvedTrades": 23,
         "wins": 9,
-        "losses": 15,
-        "winRate": 0.375
+        "losses": 14,
+        "winRate": 0.391304347826087
       },
       "unresolved": 0,
-      "signalBars": 69,
+      "signalBars": 68,
       "maxScore": 100.0
     },
     "ZECUSDT": {
@@ -447,23 +447,6 @@
       "signalBars": 19,
       "maxScore": 100.0
     },
-    "PEPEUSDT": {
-      "pessimistic": {
-        "resolvedTrades": 18,
-        "wins": 6,
-        "losses": 12,
-        "winRate": 0.3333333333333333
-      },
-      "optimistic": {
-        "resolvedTrades": 18,
-        "wins": 6,
-        "losses": 12,
-        "winRate": 0.3333333333333333
-      },
-      "unresolved": 0,
-      "signalBars": 54,
-      "maxScore": 100.0
-    },
     "WLDUSDT": {
       "pessimistic": {
         "resolvedTrades": 16,
@@ -479,6 +462,23 @@
       },
       "unresolved": 0,
       "signalBars": 48,
+      "maxScore": 100.0
+    },
+    "PEPEUSDT": {
+      "pessimistic": {
+        "resolvedTrades": 18,
+        "wins": 6,
+        "losses": 12,
+        "winRate": 0.3333333333333333
+      },
+      "optimistic": {
+        "resolvedTrades": 18,
+        "wins": 6,
+        "losses": 12,
+        "winRate": 0.3333333333333333
+      },
+      "unresolved": 0,
+      "signalBars": 54,
       "maxScore": 100.0
     },
     "ARBUSDT": {
@@ -512,5 +512,5 @@
   "claimSupported": false,
   "authorization": "AUDIT_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-09-25T19:27:48.385616+00:00"
+  "generatedAt": "2026-09-25T20:54:34.867970+00:00"
 }
