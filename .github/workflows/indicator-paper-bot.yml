@@ -40,7 +40,7 @@ jobs:
           python -m py_compile ready_bot/market_context.py
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
-          python -m unittest discover -s tests -p 'test_market_context.py' -v
+          python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
 
       - name: Run indicator-only PAPER engine at ~1-minute cadence
         shell: bash
