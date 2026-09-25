@@ -749,13 +749,25 @@ def open_position(state, snap, filters):
     if not quality.get("ok"):
         return "EXECUTION_QUALITY_REJECT"
 
+    slip_row=(state.get("slippage_model") or {}).get(snap["symbol"]) or {}
+    slip_count=int(slip_row.get("count") or 0)
+    hist_slip=(float(slip_row.get("ewma_bps")) if slip_row.get("ewma_bps") is not None else None)
+    current_slip=float(quality.get("slippage_bps") or 0.0)
+    min_hist=int(CFG["smart_execution"].get("min_symbol_slippage_samples",3))
+    effective_slip=max(current_slip,hist_slip) if hist_slip is not None and slip_count>=min_hist else current_slip
+    quality["historical_ewma_bps"]=hist_slip
+    quality["historical_sample_count"]=slip_count
+    quality["effective_slippage_bps"]=effective_slip
+    if effective_slip>float(CFG["smart_execution"]["max_slippage_bps"]):
+        return "SYMBOL_SLIPPAGE_MODEL_REJECT"
+
     guard=(snap.get("micro") or {}).get("production_guard") or {}
     plan=choose_execution_plan(
         symbol=snap["symbol"],
         quote_amount_usdt=notional,
         best_bid=snap["bid"],
         best_ask=snap["ask"],
-        estimated_slippage_bps=quality.get("slippage_bps"),
+        estimated_slippage_bps=quality.get("effective_slippage_bps"),
         fill_ratio=quality.get("fill_ratio"),
         tick_size=filters.get("tick_size"),
         momentum_score=(snap.get("micro") or {}).get("score") or 0,
@@ -1039,6 +1051,8 @@ def enrich_microstructure(symbol, snap):
         depth_flow,
         max_bid_drop_pct=guard_cfg["max_bid_liquidity_drop_pct"],
         max_ask_growth_pct=guard_cfg["max_ask_liquidity_growth_pct"],
+        max_cancellation_rate=guard_cfg["max_cancellation_rate_10s"],
+        bid_cancel_imbalance_ratio=guard_cfg["bid_cancel_imbalance_ratio"],
     )
 
     micro["production_guard"] = {
