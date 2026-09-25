@@ -270,7 +270,7 @@ def depth_flow_metrics(samples):
 
 def aggtrade_delta(aggtrades,window_ms=180000):
     if not aggtrades:
-        return {"delta_quote":0.0,"buy_quote":0.0,"sell_quote":0.0,"ratio":None,"slope_positive":False}
+        return {"delta_quote":0.0,"buy_quote":0.0,"sell_quote":0.0,"ratio":None,"slope_positive":False,"latest_event_ms":None}
     latest=max(int(x.get("T") or 0) for x in aggtrades)
     rows=[x for x in aggtrades if latest-int(x.get("T") or 0)<=window_ms]
     buckets={}
@@ -294,6 +294,7 @@ def aggtrade_delta(aggtrades,window_ms=180000):
         "sell_quote":sell,
         "ratio":ratio,
         "slope_positive":positive_slope(vals,min(3,len(vals))) if vals else False,
+        "latest_event_ms":latest,
     }
 
 
