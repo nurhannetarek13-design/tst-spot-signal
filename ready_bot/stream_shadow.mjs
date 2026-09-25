@@ -67,6 +67,7 @@ export function bookMetrics(s,t=Date.now()){
   const cancels=f.filter(x=>x.type==="cancel").reduce((z,x)=>z+x.quote,0);
   return {
     bestBid:bid,bestAsk:ask,spreadBps:mid?((ask-bid)/mid)*10000:null,
+    bidLiquidityQuote5:bq,askLiquidityQuote5:aq,
     obi:den>0?bq/den:null,microprice:micro,micropriceBiasBps:mid&&micro?((micro-mid)/mid)*10000:null,
     cancellationRate10s:adds+cancels>0?cancels/(adds+cancels):null,
     bidCancelQuote10s:f.filter(x=>x.type==="cancel"&&x.side==="bid").reduce((z,x)=>z+x.quote,0),
@@ -77,7 +78,18 @@ export function tradeMetrics(trades,t=Date.now()){
   const r=trades.filter(x=>t-x.ts<=60000);
   const buy=r.filter(x=>x.d>0).reduce((z,x)=>z+x.d,0),sell=Math.abs(r.filter(x=>x.d<0).reduce((z,x)=>z+x.d,0));
   const total=buy+sell;
-  return {deltaQuote60s:buy-sell,takerBuyRatio60s:total>0?buy/total:null,tradeEvents60s:r.length};
+  const buckets=new Map();
+  for(const x of r){
+    const k=Math.floor(x.ts/10000);
+    buckets.set(k,(buckets.get(k)||0)+x.d);
+  }
+  const vals=[...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  return {
+    deltaQuote60s:buy-sell,
+    takerBuyRatio60s:total>0?buy/total:null,
+    tradeEvents60s:r.length,
+    cvdSlopePositive10s:vals.length>=2 ? vals.at(-1)>vals[0] && vals.reduce((a,b)=>a+b,0)>0 : false,
+  };
 }
 async function universe(){
   const [info,tick]=await Promise.all([get("/api/v3/exchangeInfo"),get("/api/v3/ticker/24hr")]);
@@ -95,7 +107,7 @@ async function sync(symbol){
     for(const [p,q] of snap.bids||[])if(Number(q)>0)s.bids.set(Number(p),Number(q));
     for(const [p,q] of snap.asks||[])if(Number(q)>0)s.asks.set(Number(p),Number(q));
     let id=Number(snap.lastUpdateId||0);
-    const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id).sort((a,b)=>Number(a.U)-Number(b.U));
+    const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id);
     for(const e of pending){
       const st=sequenceStatus(id,e);if(st==="GAP")throw new Error("SYNC_GAP");if(st==="OLD")continue;
       const ts=Number(e.E||now());applySide(s.bids,e.b,s.flow,ts,"bid");applySide(s.asks,e.a,s.flow,ts,"ask");id=Number(e.u);s.lastDepth=ts;
