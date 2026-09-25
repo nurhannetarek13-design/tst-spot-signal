@@ -11,6 +11,7 @@ POLICY={
     "max_drawdown_fraction":0.10,
     "require_zero_lookahead_violations":True,
     "require_survivorship_bias_check":True,
+    "require_point_in_time_universe_artifact":True,
     "min_shadow_trades":50,
     "max_shadow_safety_incidents":0,
     "min_shadow_net_expectancy_usdt":0.0,
@@ -23,7 +24,11 @@ class ChampionChallengerTests(unittest.TestCase):
             "trades":120,"symbol_count":8,"profit_factor":1.3,
             "net_expectancy":0.02,"max_drawdown":0.05,
             "lookahead_violations":0,"survivorship_bias_checked":True,
-            "universe_source":"HISTORICAL_ALL_LISTED_INCLUDING_DELISTED",
+            "universe_source":"BINANCE_VISION_POINT_IN_TIME_SPOT_UNIVERSE",
+            "point_in_time_universe_evidence":{
+                "checked":True,"historicalSymbolCount":150,
+                "delistedSymbolCount":25,"months":60,
+            },
         }
 
     def good_shadow(self):
@@ -48,6 +53,14 @@ class ChampionChallengerTests(unittest.TestCase):
         replay["lookahead_violations"]=1
         x=evaluate(POLICY,replay,self.good_shadow())
         self.assertFalse(x["promotion_eligible_for_manual_review"])
+
+
+    def test_missing_point_in_time_artifact_blocks_promotion(self):
+        replay=self.good_replay()
+        replay.pop("point_in_time_universe_evidence")
+        x=evaluate(POLICY,replay,self.good_shadow())
+        self.assertFalse(x["promotion_eligible_for_manual_review"])
+        self.assertFalse(x["checks"]["point_in_time_universe_artifact"]["pass"])
 
 
 if __name__=="__main__":
