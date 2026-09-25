@@ -57,8 +57,10 @@ jobs:
           python -m unittest discover -s tests -p 'test_early_momentum.py' -v
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
           python -m unittest discover -s tests -p 'test_production_guard.py' -v
+          python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
           node --test test/stream-shadow.test.mjs
           node --test test/execution-safety.test.mjs
+          node --test test/v3-execution-intent.test.mjs
       - name: Assert staged contract
         run: |
           python - <<'PY'
