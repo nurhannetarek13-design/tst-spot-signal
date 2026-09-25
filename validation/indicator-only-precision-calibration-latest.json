@@ -10,23 +10,23 @@
   },
   "windows": {
     "train": [
-      "2025-09-30T19:33:56.177523+00:00",
-      "2025-12-29T19:33:56.177523+00:00"
+      "2025-04-03T19:37:44.902307+00:00",
+      "2025-09-30T19:37:44.902307+00:00"
     ],
     "validation": [
-      "2025-12-29T19:33:56.177523+00:00",
-      "2026-02-12T19:33:56.177523+00:00"
+      "2025-09-30T19:37:44.902307+00:00",
+      "2025-12-29T19:37:44.902307+00:00"
     ],
     "holdout": [
-      "2026-02-12T19:33:56.177523+00:00",
-      "2026-03-29T19:33:56.177523+00:00"
+      "2025-12-29T19:37:44.902307+00:00",
+      "2026-03-29T19:37:44.902307+00:00"
     ],
     "recentExcluded": [
-      "2026-03-29T19:33:56.177523+00:00",
-      "2026-09-25T19:33:56.177523+00:00"
+      "2026-03-29T19:37:44.902307+00:00",
+      "2026-09-25T19:37:44.902307+00:00"
     ]
   },
-  "gridSize": 1296,
+  "gridSize": 5184,
   "symbolsRequested": [
     "BTCUSDT",
     "ETHUSDT",
@@ -83,11 +83,11 @@
   ],
   "dataFailures": {},
   "baseRecordCounts": {
-    "train": 0,
-    "validation": 112,
-    "holdout": 26
+    "train": 1474,
+    "validation": 109,
+    "holdout": 140
   },
-  "trainQualifiedConfigs": 0,
+  "trainQualifiedConfigs": 92,
   "validationQualifiedConfigs": 0,
   "selected": null,
   "holdout": {
@@ -100,7 +100,26 @@
     "profitFactor": 0.0
   },
   "claimSupported": false,
-  "diagnosticBestHoldoutPeekingNotEligible": null,
+  "diagnosticBestHoldoutPeekingNotEligible": {
+    "params": {
+      "scoreMin": 90,
+      "takerMin": 0.6,
+      "taker3Min": 0.57,
+      "rvolMin": 2.5,
+      "rsiMax": 70,
+      "stopMult": 1.5,
+      "rewardRisk": 0.35
+    },
+    "metrics": {
+      "trades": 18,
+      "wins": 14,
+      "losses": 4,
+      "winRate": 0.7777777777777778,
+      "netPnlPerUnit": 323.5687573403503,
+      "expectancyPerUnit": 17.976042074463905,
+      "profitFactor": 15.80767474311913
+    }
+  },
   "notes": [
     "The final holdout is not used to select parameters.",
     "Recent 180 days are excluded because they were already inspected in the prior audit.",
@@ -109,5 +128,5 @@
     "Profitability includes configured buy/sell fee and slippage assumptions.",
     "A 99% claim is accepted only with >=100 profitable-trade observations on untouched holdout and positive net PnL."
   ],
-  "generatedAt": "2026-09-25T19:36:13.532971+00:00"
+  "generatedAt": "2026-09-25T19:41:13.551569+00:00"
 }
