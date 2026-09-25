@@ -24,10 +24,13 @@ async function get(path){
   }catch(e){
     if(!RELAY)throw e;
   }
-  const relayUrl=RELAY+"?path="+encodeURIComponent(path);
+  const relayPath=path==="/api/v3/time"?"/api/v3/exchangeInfo":path;
+  const relayUrl=RELAY+"?path="+encodeURIComponent(relayPath);
   const rr=await fetch(relayUrl,{headers:{"cache-control":"no-store"},signal:AbortSignal.timeout(10000)});
   if(!rr.ok)throw new Error("RELAY_"+rr.status+":"+path);
-  return await rr.json();
+  const data=await rr.json();
+  if(path==="/api/v3/time")return {serverTime:Number(data.serverTime||0)};
+  return data;
 }
 function eligible(s){
   const b=String(s.baseAsset||"");
