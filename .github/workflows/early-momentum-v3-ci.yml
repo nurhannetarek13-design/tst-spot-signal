@@ -7,6 +7,13 @@ on:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
       - 'ready_bot/indicator_config.json'
+      - 'scripts/v3_session_performance.py'
+      - 'tests/test_binance_spot_point_in_time_universe.py'
+      - 'research/binance_spot_point_in_time_universe.py'
+      - 'tests/test_backtest_integrity_gate.py'
+      - 'research/backtest_integrity_gate.py'
+      - 'test/v3-execution-intent.test.mjs'
+      - 'src/execution/v3-execution-intent.mjs'
       - 'test/execution-safety.test.mjs'
       - 'test/stream-shadow.test.mjs'
       - 'tests/test_production_guard.py'
@@ -46,6 +53,7 @@ jobs:
           python -m py_compile ready_bot/smart_execution.py
           node --check ready_bot/stream_shadow.mjs
           node --check server.mjs
+          node --check src/execution/v3-execution-intent.mjs
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
