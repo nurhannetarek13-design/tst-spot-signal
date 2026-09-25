@@ -44,6 +44,10 @@ def evaluate(policy, replay, shadow):
         add("survivorship_bias",
             replay.get("survivorship_bias_checked") is True,
             replay.get("survivorship_bias_checked"), True)
+        source=str(replay.get("universe_source") or "").upper()
+        add("historical_universe",
+            bool(source) and source not in {"CURRENT_ONLY","CURRENT_LISTINGS_ONLY","UNKNOWN"},
+            replay.get("universe_source"), "historical universe including delisted/removed pairs")
 
     add("shadow_trades",
         int(shadow.get("trades", 0)) >= int(policy["min_shadow_trades"]),
