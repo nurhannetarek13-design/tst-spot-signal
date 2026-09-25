@@ -75,7 +75,7 @@ export function tradeMetrics(trades,t=Date.now()){
     deltaQuote60s:buy-sell,
     takerBuyRatio60s:total>0?buy/total:null,
     tradeEvents60s:r.length,
-    cvdSlopePositive10s:vals.length>=2 ? vals.at(-1)>vals[0] : false,
+    cvdSlopePositive10s:vals.length>=2 ? (vals.at(-1)>vals[0] && vals.reduce((a,b)=>a+b,0)>0) : false,
   };
 }
 async function universe(){
@@ -88,19 +88,50 @@ async function universe(){
 }
 async function sync(symbol){
   const s=runtime.books.get(symbol);if(!s||s.syncing)return;s.syncing=true;
+  let retry=false;
   try{
     const snap=await get("/api/v3/depth?symbol="+encodeURIComponent(symbol)+"&limit=1000");
-    s.bids.clear();s.asks.clear();s.flow.length=0;
-    for(const [p,q] of snap.bids||[])if(Number(q)>0)s.bids.set(Number(p),Number(q));
-    for(const [p,q] of snap.asks||[])if(Number(q)>0)s.asks.set(Number(p),Number(q));
+    const nextBids=new Map(),nextAsks=new Map(),nextFlow=[];
+    for(const [p,q] of snap.bids||[])if(Number(q)>0)nextBids.set(Number(p),Number(q));
+    for(const [p,q] of snap.asks||[])if(Number(q)>0)nextAsks.set(Number(p),Number(q));
     let id=Number(snap.lastUpdateId||0);
-    const pending=s.buffer.splice(0).filter(e=>Number(e.u)>id).sort((a,b)=>Number(a.U)-Number(b.U));
+
+    // Preserve native WebSocket arrival order. Discard only events already
+    // covered by the REST snapshot; the first newer event must bridge id+1.
+    const pending=s.buffer.filter(e=>Number(e.u)>id);
+    let bridged=pending.length===0;
     for(const e of pending){
-      const st=sequenceStatus(id,e);if(st==="GAP")throw new Error("SYNC_GAP");if(st==="OLD")continue;
-      const ts=Number(e.E||now());applySide(s.bids,e.b,s.flow,ts,"bid");applySide(s.asks,e.a,s.flow,ts,"ask");id=Number(e.u);s.lastDepth=ts;
+      const U=Number(e.U),u=Number(e.u);
+      if(!bridged){
+        if(!(U<=id+1&&id+1<=u)){
+          if(U>id+1) throw new Error("SNAPSHOT_BRIDGE_GAP");
+          continue;
+        }
+        bridged=true;
+      }else if(U>id+1){
+        throw new Error("SYNC_GAP");
+      }
+      if(u<=id)continue;
+      const ts=Number(e.E||now());
+      applySide(nextBids,e.b,nextFlow,ts,"bid");
+      applySide(nextAsks,e.a,nextFlow,ts,"ask");
+      id=u;
+      s.lastDepth=ts;
     }
-    s.lastUpdateId=id;s.synced=true;s.warmSince=now();runtime.resyncs++;
-  }catch(e){runtime.lastError="SYNC:"+symbol+":"+String(e?.message||e);s.synced=false;}finally{s.syncing=false;}
+    if(pending.length>0&&!bridged)throw new Error("SNAPSHOT_BRIDGE_NOT_FOUND");
+
+    s.bids=nextBids;s.asks=nextAsks;s.flow=nextFlow;
+    s.lastUpdateId=id;s.synced=true;s.warmSince=now();
+    s.buffer=s.buffer.filter(e=>Number(e.u)>id);
+    runtime.resyncs++;
+  }catch(e){
+    runtime.lastError="SYNC:"+symbol+":"+String(e?.message||e);
+    s.synced=false;
+    retry=true;
+  }finally{
+    s.syncing=false;
+    if(retry&&runtime.connected)setTimeout(()=>void sync(symbol),300);
+  }
 }
 function depth(symbol,d){
   const s=runtime.books.get(symbol);if(!s)return;
