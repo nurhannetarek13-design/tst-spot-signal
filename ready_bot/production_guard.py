@@ -186,6 +186,42 @@ def estimate_buy_slippage(depth, quote_amount_usdt):
     }
 
 
+def estimate_sell_slippage(depth, base_qty):
+    """Walk bid levels for a base-sized SELL and return deterministic fill metrics."""
+    qty=float(base_qty)
+    bids=(depth or {}).get("bids") or []
+    if qty<=0 or not bids:
+        return {"ok":False,"reason":"DEPTH_UNAVAILABLE","fill_ratio":0.0,"slippage_bps":None}
+
+    remaining=qty
+    sold=0.0
+    quote=0.0
+    best=float(bids[0][0])
+    for level in bids:
+        px=float(level[0])
+        available=max(0.0,float(level[1]))
+        take=min(remaining,available)
+        if take>0 and px>0:
+            sold+=take
+            quote+=take*px
+            remaining-=take
+        if remaining<=1e-12:
+            break
+
+    fill_ratio=min(1.0,sold/qty) if qty>0 else 0.0
+    avg=quote/sold if sold>0 else None
+    slip=(1.0-avg/best)*10000 if avg is not None and best>0 else None
+    return {
+        "ok":fill_ratio>=0.999 and slip is not None,
+        "fill_ratio":fill_ratio,
+        "average_price":avg,
+        "best_bid":best,
+        "slippage_bps":slip,
+        "base_simulated":sold,
+        "quote_proceeds":quote,
+    }
+
+
 def execution_quality_status(depth, quote_amount_usdt, *, max_slippage_bps=12,
                              min_fill_ratio=0.999):
     estimate=estimate_buy_slippage(depth,quote_amount_usdt)
