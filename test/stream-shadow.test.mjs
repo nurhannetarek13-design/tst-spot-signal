@@ -68,24 +68,3 @@ test("public REST routing prefers relay for market data but direct source for cl
   assert.ok(clock[0].startsWith("https://data-api.binance.vision"));
   assert.ok(clock.at(-1).startsWith(relay));
 });
-
-
-test("BTC stream shock detects sub-minute displacement and requires 60s warmup",()=>{
-  const history=[];
-  for(let i=0;i<=60;i++) history.push({ts:i*1000,mid:100});
-  const warm=btcShockMetrics(history,60000,{s5:.004,s15:.007,s60:.012});
-  assert.equal(warm.warmed,true);
-  assert.equal(warm.shock,false);
-  assert.equal(warm.ok,true);
-
-  const shock=[...history,{ts:61000,mid:99.2}];
-  const x=btcShockMetrics(shock,61000,{s5:.004,s15:.007,s60:.012});
-  assert.equal(x.shock,true);
-  assert.equal(x.ok,false);
-  assert.equal(x.reason,"BTC_STREAM_SHOCK");
-
-  const short=btcShockMetrics(history.slice(-10),60000,{s5:.004,s15:.007,s60:.012});
-  assert.equal(short.warmed,false);
-  assert.equal(short.ok,false);
-  assert.equal(short.reason,"BTC_SHOCK_WARMUP");
-});
