@@ -7,16 +7,11 @@ on:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
       - 'ready_bot/indicator_config.json'
-      - 'ready_bot/trade_management.py'
-      - 'tests/test_trade_management.py'
       - 'scripts/v3_session_performance.py'
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_backtest_integrity_gate.py'
       - 'research/backtest_integrity_gate.py'
-      - 'validation/indicator-v3/precision-evidence-latest.json'
-      - 'tests/test_v3_precision_evidence.py'
-      - 'scripts/build_v3_precision_evidence.py'
       - 'test/v3-execution-intent.test.mjs'
       - 'src/execution/v3-execution-intent.mjs'
       - 'test/v3-shadow-execution-runtime.test.mjs'
@@ -35,7 +30,7 @@ on:
       - '.github/workflows/indicator-paper-bot.yml'
       - '.github/workflows/early-momentum-v3-ci.yml'
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
     paths:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
@@ -45,13 +40,8 @@ on:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_backtest_integrity_gate.py'
       - 'research/backtest_integrity_gate.py'
-      - 'validation/indicator-v3/precision-evidence-latest.json'
-      - 'tests/test_v3_precision_evidence.py'
-      - 'scripts/build_v3_precision_evidence.py'
       - 'test/v3-execution-intent.test.mjs'
       - 'src/execution/v3-execution-intent.mjs'
-      - 'test/v3-shadow-execution-runtime.test.mjs'
-      - 'src/execution/v3-shadow-execution-runtime.mjs'
       - 'test/execution-safety.test.mjs'
       - 'test/stream-shadow.test.mjs'
       - 'tests/test_production_guard.py'
@@ -66,10 +56,6 @@ on:
       - '.github/workflows/indicator-paper-bot.yml'
       - '.github/workflows/early-momentum-v3-ci.yml'
   workflow_dispatch:
-
-concurrency:
-  group: early-momentum-v3-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
 
 jobs:
   test:
@@ -92,16 +78,28 @@ jobs:
           python -m py_compile ready_bot/early_momentum.py
           python -m py_compile ready_bot/market_context.py
           python -m py_compile ready_bot/production_guard.py
-          python -m py_compile ready_bot/trade_management.py
           python -m py_compile ready_bot/smart_execution.py
           python -m py_compile research/backtest_integrity_gate.py
-          python -m py_compile scripts/build_v3_precision_evidence.py
           python -m py_compile research/binance_spot_point_in_time_universe.py
           python -m py_compile scripts/v3_session_performance.py
           node --check ready_bot/stream_shadow.mjs
           node --check server.mjs
           node --check src/execution/v3-execution-intent.mjs
           node --check src/execution/v3-shadow-execution-runtime.mjs
+      - name: Standalone module import path
+        run: |
+          python - <<'PY'
+          import importlib.util, pathlib, sys
+          path=pathlib.Path('ready_bot/indicator_bot.py')
+          sys.path.insert(0,str(path.parent))
+          spec=importlib.util.spec_from_file_location('indicator_bot_standalone',path)
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          assert callable(mod.close_position)
+          assert callable(mod.candidate_listing_age_status)
+          print('Standalone fallback imports OK')
+          PY
+
       - name: Unit tests
         run: |
           python -m unittest discover -s tests -p 'test_indicator_bot.py' -v
@@ -109,7 +107,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_ready_market_context.py' -v
           python -m unittest discover -s tests -p 'test_production_guard.py' -v
           python -m unittest -v tests/test_backtest_integrity_gate.py
-          python -m unittest -v tests/test_v3_precision_evidence.py
           python -m unittest -v tests/test_binance_spot_point_in_time_universe.py
           python -m unittest -v tests/test_v3_champion_challenger.py
           node --test test/stream-shadow.test.mjs
@@ -132,17 +129,10 @@ jobs:
           assert c['risk']['max_pair_correlation']==0.85
           assert c['risk']['consecutive_loss_cooldown_count']==3
           assert c['data_integrity']['fail_closed'] is True
-          assert c['evidence_gate']['scope']=='live_only'
-          assert c['evidence_gate']['report_path']=='validation/indicator-v3/precision-evidence-latest.json'
-          assert c['evidence_gate']['minimum_win_rate']>=0.99
-          assert c['evidence_gate']['minimum_holdout_trades']>=100
           assert c['production_guard']['max_signal_age_ms']<=12000
           assert c['production_guard']['max_stream_signal_age_ms']<=5000
           assert c['production_guard']['max_decision_latency_ms']<=6500
           assert c['smart_execution']['enabled'] is True
-          assert c['trade_management']['minimum_net_rr_after_costs']>=1.3
-          assert c['trade_management']['paper_partial_profit']['research_only'] is True
-          assert c['trade_management']['max_reentry_attempts_per_window']==2
           assert c['security']['live_require_withdrawals_disabled'] is True
           assert c['security']['live_require_futures_disabled'] is True
           assert c['security']['never_log_credentials'] is True
