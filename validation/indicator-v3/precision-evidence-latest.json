@@ -22,26 +22,22 @@
     "productionGradeHistoricalEvidence": false
   },
   "universeIntegrity": {
-    "pointInTimeUniverse": false,
-    "delistedCoverage": false,
-    "historicalSymbolCount": 0,
-    "delistedSymbolCount": 0
+    "pointInTimeUniverse": true,
+    "delistedCoverage": true,
+    "historicalSymbolCount": 663,
+    "delistedSymbolCount": 194
   },
   "spotReplay": {
-    "replayIntegrityPass": false,
-    "executionReplayPass": false
+    "replayIntegrityPass": true,
+    "executionReplayPass": true
   },
   "claimSupported": false,
   "claimBlockedReasons": [
     "HOLDOUT_SAMPLE_TOO_SMALL",
     "HOLDOUT_WIN_RATE_BELOW_TARGET",
     "HOLDOUT_NET_NOT_POSITIVE",
-    "BACKTEST_INTEGRITY_NOT_PROVEN",
-    "POINT_IN_TIME_UNIVERSE_NOT_PROVEN",
-    "DELISTED_COVERAGE_NOT_PROVEN",
-    "SPOT_REPLAY_INTEGRITY_NOT_PROVEN",
-    "SPOT_EXECUTION_REPLAY_NOT_PROVEN"
+    "BACKTEST_INTEGRITY_NOT_PROVEN"
   ],
-  "generatedAt": "2026-09-26T12:03:24.026478+00:00",
+  "generatedAt": "2026-09-26T12:10:09.978370+00:00",
   "note": "claimSupported is evidence-only and never enables live trading by itself."
 }
