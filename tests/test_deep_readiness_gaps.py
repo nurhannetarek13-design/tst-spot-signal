@@ -88,9 +88,9 @@ def test_promotion_integrity_requires_every_research_protection():
 def test_readiness_audit_never_overclaims_external_dependencies():
  m=load("freqtrade/readiness_audit.py","audit")
  a=m.audit()
- assert a["full"]==15 and a["partial"]==5 and not a["architecture_complete"] and not a["live_authorized"]
- b=m.audit(offsite_dr=True,live_factor_history=True,live_queue_telemetry=True,live_post_fill_telemetry=True,fee_fx_complete=True)
- assert b["full"]==20 and b["architecture_complete"] and not b["live_authorized"]
+ assert a["full"]==15 and a["partial"]==6 and not a["architecture_complete"] and not a["live_authorized"]
+ b=m.audit(offsite_dr=True,live_factor_history=True,live_queue_telemetry=True,live_post_fill_telemetry=True,fee_fx_complete=True)\n c=m.audit(offsite_dr=True,live_factor_history=True,live_queue_telemetry=True,live_post_fill_telemetry=True,fee_fx_complete=True,live_l2_spoofing=True)
+ assert b["full"]==20 and b["partial"]==1 and not b["architecture_complete"] and not b["live_authorized"]\n assert c["full"]==21 and c["architecture_complete"] and not c["live_authorized"]
 
 
 def test_execution_telemetry_persists_queue_and_toxicity(tmp_path):
