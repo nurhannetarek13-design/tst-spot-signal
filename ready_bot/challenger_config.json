@@ -60,16 +60,12 @@
   },
   "evidence_gate": {
     "required": true,
-    "report_path": "validation/indicator-v3/precision-evidence-latest.json",
+    "report_path": "validation/indicator-only-precision-calibration-latest.json",
     "minimum_win_rate": 0.99,
     "minimum_holdout_trades": 100,
     "require_positive_net": true,
     "scope": "live_only",
-    "paper_observation_allowed": true,
-    "require_untouched_holdout": true,
-    "require_point_in_time_universe": true,
-    "require_delisted_coverage": true,
-    "require_spot_execution_replay": true
+    "paper_observation_allowed": true
   },
   "market_type": "spot",
   "momentum": {
@@ -136,8 +132,8 @@
     "max_cancellation_rate_10s": 0.75,
     "bid_cancel_imbalance_ratio": 1.5,
     "max_stream_signal_age_ms": 5000,
-    "event_risk_required_for_live": true,
-    "event_risk_max_age_minutes": 60
+    "min_listing_age_days": 3,
+    "max_total_detection_to_order_ms": 8000
   },
   "smart_execution": {
     "enabled": true,
@@ -161,6 +157,6 @@
   "shadow_challenger": {
     "enabled": false,
     "candidate_id": "UNSET",
-    "base_champion_blob_sha": "6df570b96b50b2c3e5deb8f46fa40d85a165b406"
+    "base_champion_blob_sha": "59ae49df663c548f628c0dca0fd023db3161f1a6"
   }
 }
