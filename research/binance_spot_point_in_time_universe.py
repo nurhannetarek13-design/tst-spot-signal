@@ -16,7 +16,9 @@ from collections import defaultdict
 
 FILE_RE=re.compile(r"(?:^|/)([A-Z0-9_]+USDT)(?:/15m)?/[^/]*?-15m-(\d{4}-\d{2})\.zip$")
 
-STABLE_BASES={"USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE"}
+# Keep historical-universe exclusions byte-for-byte aligned with the live/paper
+# Spot runtime so research never validates assets the runtime would refuse.
+STABLE_BASES={"USDC","FDUSD","TUSD","USDP","DAI","BUSD","USD1","RLUSD","USDE","EUR","AEUR","TRY","BRL","GBP","AUD"}
 LEV_SUFFIXES=("UP","DOWN","BULL","BEAR")
 
 

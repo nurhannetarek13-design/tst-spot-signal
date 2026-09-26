@@ -5,7 +5,7 @@ from research.binance_spot_point_in_time_universe import build
 
 class PointInTimeUniverseTests(unittest.TestCase):
     def test_archive_presence_includes_delisted_symbols(self):
-        symbols=["BTCUSDT","OLDUSDT","USDCUSDT","BTCUPUSDT"]
+        symbols=["BTCUSDT","OLDUSDT","USDCUSDT","BTCUPUSDT","EURUSDT","TRYUSDT","GBPUSDT"]
         files=[
             "BTCUSDT/15m/BTCUSDT-15m-2025-01.zip",
             "BTCUSDT/15m/BTCUSDT-15m-2025-02.zip",
@@ -23,6 +23,9 @@ class PointInTimeUniverseTests(unittest.TestCase):
         self.assertNotIn("OLDUSDT",x["pointInTimeUniverseByMonth"]["2025-02"])
         self.assertNotIn("USDCUSDT",x["symbolLifetimes"])
         self.assertNotIn("BTCUPUSDT",x["symbolLifetimes"])
+        self.assertNotIn("EURUSDT",x["symbolLifetimes"])
+        self.assertNotIn("TRYUSDT",x["symbolLifetimes"])
+        self.assertNotIn("GBPUSDT",x["symbolLifetimes"])
 
 
 if __name__=="__main__":
