@@ -9,6 +9,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    from production_safety_kernel import append_ledger_event, verify_ledger, version_stamp
+except ImportError:
+    append_ledger_event = verify_ledger = version_stamp = None
 from zoneinfo import ZoneInfo
 
 # Canonical live state defaults to Railway's persistent /data volume.
@@ -17,6 +22,7 @@ EVENT_PATH = Path(os.getenv('TST_TRADE_EVENT_PATH', '/data/tst_trade_events.json
 RESERVATION_PATH = Path(os.getenv('TST_EXECUTION_RESERVATION_PATH', '/data/tst_execution_reservations.json'))
 LOCK_PATH = Path(os.getenv('TST_TRADE_LOCK_PATH', '/data/tst_trade_state.lock'))
 RISK_TIMEZONE = os.getenv('RISK_TIMEZONE', 'Africa/Cairo')
+LEDGER_PATH = Path(os.getenv('TST_LEDGER_PATH', '/data/tst_execution_ledger.json'))
 
 
 class _InterProcessRLock:
@@ -140,10 +146,37 @@ def save_reservations(state: dict[str, Any]) -> None:
         _atomic_write(RESERVATION_PATH, state)
 
 
+def _append_ledger(kind: str, **data: Any) -> None:
+    if append_ledger_event is None:
+        return
+    try:
+        try:
+            ledger=json.loads(LEDGER_PATH.read_text(encoding='utf-8'))
+            if not isinstance(ledger,list) or not verify_ledger(ledger):
+                raise RuntimeError('LEDGER_INTEGRITY_FAILURE')
+        except FileNotFoundError:
+            ledger=[]
+        event={'kind':kind,**data,'version':version_stamp({}) if version_stamp else {}}
+        ledger=append_ledger_event(ledger,event)
+        LEDGER_PATH.parent.mkdir(parents=True,exist_ok=True)
+        fd,tmp=tempfile.mkstemp(prefix=LEDGER_PATH.name+'.',dir=str(LEDGER_PATH.parent))
+        try:
+            with os.fdopen(fd,'w',encoding='utf-8') as fh:
+                json.dump(ledger,fh,separators=(',',':'),ensure_ascii=False,default=str); fh.flush(); os.fsync(fh.fileno())
+            os.replace(tmp,LEDGER_PATH)
+        finally:
+            try:
+                if os.path.exists(tmp): os.unlink(tmp)
+            except Exception: pass
+    except Exception as exc:
+        raise RuntimeError(f'LEDGER_WRITE_FAILED:{type(exc).__name__}:{str(exc)[:120]}')
+
 def append_event(kind: str, **data: Any) -> None:
     with _LOCK:
         EVENT_PATH.parent.mkdir(parents=True, exist_ok=True)
         row = {'ts': time.time(), 'kind': kind, **data}
+        if kind in {'EXECUTION_RESERVED','BUY_FILLED','OCO_ACTIVE','POSITION_CLOSED','POSITION_RECOVERED','PROTECTION_LOST_NO_EXIT','BUY_RECOVERED_BY_CLIENT_ID','OCO_RECOVERED_BY_CLIENT_ID'}:
+            _append_ledger(kind, **data)
         with EVENT_PATH.open('a', encoding='utf-8') as f:
             f.write(json.dumps(row, separators=(',', ':'), ensure_ascii=False) + '\n')
             f.flush()
