@@ -14,6 +14,7 @@ def configure(tmp: str):
     os.environ['TST_TRADE_EVENT_PATH']=str(Path(tmp)/'events.jsonl')
     os.environ['TST_EXECUTION_RESERVATION_PATH']=str(Path(tmp)/'reservations.json')
     os.environ['TST_TRADE_LOCK_PATH']=str(Path(tmp)/'state.lock')
+    os.environ['TST_LEDGER_PATH']=str(Path(tmp)/'ledger.json')
 
 
 def main():

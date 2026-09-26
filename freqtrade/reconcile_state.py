@@ -11,6 +11,7 @@ closed position; it becomes PROTECTION_PENDING so fresh entries fail closed.
 import hashlib,hmac,json,os,sys,time,urllib.error,urllib.parse,urllib.request
 from collections import defaultdict
 import trade_state
+import execution_health
 
 API_BASES=['https://api.binance.com','https://api-gcp.binance.com','https://api1.binance.com','https://api2.binance.com','https://api3.binance.com','https://api4.binance.com']
 POLL_SEC=max(30,int(os.getenv('RECONCILE_POLL_SEC','60')))
@@ -148,6 +149,7 @@ def run_once():
             print(f"[reconcile] CRITICAL {pos.get('symbol')} OCO ended without SELL fill; position remains open/unprotected and fresh entries are blocked",flush=True)
 
     snap=trade_state.portfolio_snapshot(); perf=trade_state.performance_snapshot()
+    execution_health.mark_ok(component='reconcile', open_count=snap['open_count'], incomplete_count=snap['incomplete_count'], stop_risk_usdt=snap['stop_risk_usdt'], realized_pnl_today_usdt=perf['realized_pnl_today_usdt'])
     print(f"[reconcile] OK bot_open_ocos={len(open_ocos)} tracked_open={snap['open_count']} risk={snap['stop_risk_usdt']:.4f} incomplete={snap['incomplete_count']} pnl_today={perf['realized_pnl_today_usdt']:+.4f} streak={perf['consecutive_losses']}",flush=True)
 
 
@@ -155,7 +157,9 @@ def main():
     print(f'[reconcile] ONLINE read_only=True poll={POLL_SEC}s ownership_prefix=TSTO- fail_closed=True pnl_reconciliation=ON cost_buffer={PNL_COST_BUFFER_PCT:.3%}',flush=True)
     while True:
         try: run_once()
-        except Exception as exc: print(f'[reconcile] loop warning {type(exc).__name__}: {str(exc)[:180]}',flush=True)
+        except Exception as exc:
+            execution_health.mark_error(f'{type(exc).__name__}:{str(exc)[:180]}',component='reconcile')
+            print(f'[reconcile] loop warning {type(exc).__name__}: {str(exc)[:180]}',flush=True)
         time.sleep(POLL_SEC)
 
 if __name__=='__main__':

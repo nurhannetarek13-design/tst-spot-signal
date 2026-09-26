@@ -5,6 +5,7 @@ WORKDIR /freqtrade
 
 COPY user_data/config_nfi_dryrun.json /freqtrade/user_data/config_nfi_dryrun.json
 COPY run_ready_bot.sh /freqtrade/run_ready_bot.sh
+COPY . /freqtrade/
 COPY fast_entry_engine.py /freqtrade/fast_entry_engine.py
 COPY entrypoint.sh /freqtrade/entrypoint.sh
 RUN sed -i 's/NFI_MAX_PAIRS = 28/NFI_MAX_PAIRS = 32/' /freqtrade/run_ready_bot.sh \
