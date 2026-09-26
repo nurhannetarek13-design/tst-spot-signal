@@ -16,6 +16,7 @@ on:
       - 'validation/indicator-v3/spot-v3-replay-aggregate.json'
       - 'validation/indicator-v3/backtest-integrity-input.json'
       - 'scripts/build_v3_forward_holdout.py'
+      - 'scripts/build_v3_backtest_integrity_input.py'
       - 'scripts/build_v3_precision_evidence.py'
       - 'scripts/v3_session_performance.py'
       - 'research/backtest_integrity_gate.py'
@@ -45,10 +46,12 @@ jobs:
       - name: Compile and test evidence builders
         run: |
           python -m py_compile scripts/build_v3_forward_holdout.py
+          python -m py_compile scripts/build_v3_backtest_integrity_input.py
           python -m py_compile scripts/build_v3_precision_evidence.py
           python -m py_compile scripts/v3_session_performance.py
           python -m py_compile research/backtest_integrity_gate.py
           python -m unittest -v tests/test_v3_forward_holdout.py
+          python -m unittest -v tests/test_build_v3_backtest_integrity_input.py
           python -m unittest -v tests/test_v3_precision_evidence.py
           python -m unittest -v tests/test_backtest_integrity_gate.py
 
