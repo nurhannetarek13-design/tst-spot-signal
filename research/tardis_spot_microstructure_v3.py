@@ -27,7 +27,13 @@ ROUNDTRIP_COST_BPS=28.0
 DEFAULT_EXECUTION_LATENCY_MS=500
 
 
-def _fetch_raw(symbol:str,date:str,offset:int,filters:list[dict])->str:
+def fetch_minute(symbol:str,date:str,offset:int)->str:
+    filters=[
+        {"channel":"depthSnapshot","symbols":[symbol.lower()]},
+        {"channel":"depth","symbols":[symbol.lower()]},
+        {"channel":"bookTicker","symbols":[symbol.lower()]},
+        {"channel":"aggTrade","symbols":[symbol.lower()]},
+    ]
     encoded=urllib.parse.quote(json.dumps(filters,separators=(",",":")),safe='[]{}":,')
     url=f"{BASE}?from={urllib.parse.quote(date,safe=':-TZ')}&filters={encoded}&offset={int(offset)}"
     p=subprocess.run(
@@ -36,29 +42,6 @@ def _fetch_raw(symbol:str,date:str,offset:int,filters:list[dict])->str:
         capture_output=True,check=True,timeout=180,
     )
     return p.stdout.decode("utf-8","replace")
-
-
-def fetch_bootstrap_snapshot(symbol:str,date:str,max_offsets:int=3)->str:
-    # Tardis Spot public/sample responses may omit generated depthSnapshot when
-    # depth is requested together with other channels. Fetch the generated
-    # bootstrap explicitly and prepend it to the replay stream.
-    variants=([symbol.lower()],[symbol.upper()])
-    for off in range(max(1,int(max_offsets))):
-        for symbols in variants:
-            body=_fetch_raw(symbol,date,off,[{"channel":"depthSnapshot","symbols":symbols}])
-            if "lastUpdateId" in body and "bids" in body and "asks" in body:
-                return body
-    return ""
-
-
-def fetch_minute(symbol:str,date:str,offset:int)->str:
-    # Generated snapshots are fetched separately by fetch_bootstrap_snapshot.
-    filters=[
-        {"channel":"depth","symbols":[symbol.lower()]},
-        {"channel":"bookTicker","symbols":[symbol.lower()]},
-        {"channel":"aggTrade","symbols":[symbol.lower()]},
-    ]
-    return _fetch_raw(symbol,date,offset,filters)
 
 
 def fetch_window(symbol:str,date:str,start_offset:int,minutes:int,warmup_from_zero:bool=True)->str:
@@ -72,11 +55,7 @@ def fetch_window(symbol:str,date:str,start_offset:int,minutes:int,warmup_from_ze
         for fut in as_completed(futs):
             off=futs[fut]
             bodies[off]=fut.result()
-    parts=[]
-    snapshot=fetch_bootstrap_snapshot(symbol,date,3)
-    if snapshot:
-        parts.append(snapshot.rstrip("\n"))
-    parts.extend(bodies[off].rstrip("\n") for off in offsets if bodies.get(off))
+    parts=[bodies[off].rstrip("\n") for off in offsets if bodies.get(off)]
     return "\n".join(parts)+("\n" if parts else "")
 
 
@@ -205,27 +184,7 @@ def historical_context(trades,ts):
 
 def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int,quote_usdt:float=10.0):
     snapshots=[r for r in rows if "lastUpdateId" in r["data"] and "bids" in r["data"] and "asks" in r["data"]]
-    if not snapshots:
-        streams={}
-        for r in rows:
-            key=str(r.get("stream") or "<none>")
-            streams[key]=streams.get(key,0)+1
-        samples=[
-            {
-                "line":r.get("line"),
-                "stream":r.get("stream"),
-                "keys":sorted(list((r.get("data") or {}).keys()))[:20],
-                "generated":bool((r.get("data") or {}).get("generated")),
-            }
-            for r in rows[:8]
-        ]
-        return {
-            "status":"NO_SNAPSHOT",
-            "canonicalReplayReady":False,
-            "rawRows":len(rows),
-            "streams":streams,
-            "sampleRows":samples,
-        }
+    if not snapshots:return {"status":"NO_SNAPSHOT","canonicalReplayReady":False}
     sr=snapshots[0];sid=int(sr["data"]["lastUpdateId"]);line=int(sr["line"])
     bids={float(p):float(q) for p,q in sr["data"]["bids"] if float(q)>0}
     asks={float(p):float(q) for p,q in sr["data"]["asks"] if float(q)>0}
