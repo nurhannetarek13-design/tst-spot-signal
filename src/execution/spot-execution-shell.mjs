@@ -18,14 +18,18 @@ export function assertCanOpenPosition({ policy = DEFAULT_EXECUTION_POLICY, state
   const realizedPnlToday = Number(state.realizedPnlTodayUsdt || 0);
   const openPositions = Number(state.openPositions || 0);
   const quoteAmount = finitePositive(order.quoteAmountUsdt, 'quoteAmountUsdt');
+  const maxDailyLossUsdt = finitePositive(policy.maxDailyLossUsdt, 'maxDailyLossUsdt');
+  const maxOpenPositions = finitePositive(policy.maxOpenPositions, 'maxOpenPositions');
+  const maxQuotePerTradeUsdt = finitePositive(policy.maxQuotePerTradeUsdt, 'maxQuotePerTradeUsdt');
+  const maxRiskPerTradeUsdt = finitePositive(policy.maxRiskPerTradeUsdt, 'maxRiskPerTradeUsdt');
 
-  if (realizedPnlToday <= -Math.abs(Number(policy.maxDailyLossUsdt))) {
+  if (realizedPnlToday <= -Math.abs(maxDailyLossUsdt)) {
     throw new Error('DAILY_LOSS_CAP_REACHED');
   }
-  if (openPositions >= Number(policy.maxOpenPositions)) {
+  if (openPositions >= maxOpenPositions) {
     throw new Error('MAX_OPEN_POSITIONS_REACHED');
   }
-  if (quoteAmount > Number(policy.maxQuotePerTradeUsdt)) {
+  if (quoteAmount > maxQuotePerTradeUsdt) {
     throw new Error('MAX_TRADE_SIZE_EXCEEDED');
   }
   if (policy.requireProtectiveExit && (!order.stopPrice || !order.takeProfitPrice)) {
@@ -42,7 +46,7 @@ export function assertCanOpenPosition({ policy = DEFAULT_EXECUTION_POLICY, state
   if (!Number.isFinite(grossStopRiskUsdt) || grossStopRiskUsdt <= 0) {
     throw new Error('INVALID_STOP_RISK');
   }
-  if (grossStopRiskUsdt > Number(policy.maxRiskPerTradeUsdt) + 1e-12) {
+  if (grossStopRiskUsdt > maxRiskPerTradeUsdt + 1e-12) {
     throw new Error('MAX_RISK_PER_TRADE_EXCEEDED');
   }
   return true;
