@@ -1,4 +1,3 @@
-# validation-refresh-pr106
 name: Early Momentum V3 CI
 
 on:
@@ -8,6 +7,10 @@ on:
       - 'ready_bot/indicator_bot.py'
       - 'ready_bot/early_momentum.py'
       - 'ready_bot/indicator_config.json'
+      - '.github/workflows/v3-forward-evidence-refresh.yml'
+      - 'validation/indicator-v3/forward-holdout-policy.json'
+      - 'tests/test_v3_forward_holdout.py'
+      - 'scripts/build_v3_forward_holdout.py'
       - 'scripts/v3_session_performance.py'
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - 'research/binance_spot_point_in_time_universe.py'
@@ -137,4 +140,5 @@ jobs:
           assert c['security']['live_require_withdrawals_disabled'] is True
           assert c['security']['live_require_futures_disabled'] is True
           assert c['security']['never_log_credentials'] is True
+          assert c['evidence_gate']['report_path']=='validation/indicator-v3/precision-evidence-latest.json'
           PY
