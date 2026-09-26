@@ -138,6 +138,27 @@ class H(BaseHTTPRequestHandler):
                 if not mode.get('new_entries'):
                     trade_state.append_event('DEGRADED_MODE_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,mode=mode.get('mode'))
                     return self.send_json(503,{'ok':False,'status':'EXCHANGE_DEGRADED_ENTRY_BLOCK','mode':mode.get('mode')})
+                # Capacity must be evaluated from fresh Binance data at execution time,
+                # never trusted from an old signal/webhook payload.
+                try:
+                    sym=symbol
+                    with urllib.request.urlopen(f'https://api.binance.com/api/v3/depth?symbol={sym}&limit=20',timeout=4) as rr:
+                        ob=json.loads(rr.read() or b'{}')
+                    with urllib.request.urlopen(f'https://api.binance.com/api/v3/trades?symbol={sym}&limit=100',timeout=4) as rr:
+                        trades=json.loads(rr.read() or b'[]')
+                    bids=ob.get('bids') or []; asks=ob.get('asks') or []
+                    best_bid=float(bids[0][0]); best_ask=float(asks[0][0]); mid=(best_bid+best_ask)/2
+                    depth=sum(float(p)*float(q) for p,q in (bids+asks) if abs(float(p)/mid-1)<=0.0025)
+                    flow=sum(float(x.get('price') or 0)*float(x.get('qty') or 0) for x in trades)
+                    prices=[float(x.get('price') or 0) for x in trades if float(x.get('price') or 0)>0]
+                    short_vol=(max(prices)-min(prices))/mid if prices and mid>0 else 0
+                    body['depth_near_touch_usdt']=depth
+                    body['recent_trade_flow_usdt']=flow
+                    body['spread_bps']=(best_ask-best_bid)/mid*10000
+                    body['short_volatility']=short_vol
+                except Exception as exc:
+                    trade_state.append_event('CAPACITY_LIVE_DATA_BLOCK',signal_id=signal_id,symbol=symbol,error=type(exc).__name__)
+                    return self.send_json(503,{'ok':False,'status':'CAPACITY_LIVE_DATA_UNAVAILABLE'})
                 cap=capacity_gate.evaluate(body)
                 if not cap.get('passed'):
                     trade_state.append_event('CAPACITY_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,status=cap.get('status'))
