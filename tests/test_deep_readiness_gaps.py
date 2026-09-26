@@ -63,6 +63,8 @@ def test_spoofing_cancellation_diagnostics():
 
 
 def test_capacity_gate_blocks_missing_live_liquidity():
+ import sys
+ sys.path.insert(0,str(ROOT/"freqtrade"))
  m=load("freqtrade/capacity_gate.py","cap")
  assert m.evaluate({"quote_amount_usdt":10})["status"]=="CAPACITY_UNKNOWN"
  ok=m.evaluate({"quote_amount_usdt":1,"depth_near_touch_usdt":10000,"recent_trade_flow_usdt":10000,"spread_bps":1,"short_volatility":.001})
