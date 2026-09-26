@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import binance_filters
 import trade_state
+import degraded_mode
 
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
@@ -105,6 +106,19 @@ class H(BaseHTTPRequestHandler):
 
         try:
             if action=='BUY':
+                health={
+                    'market_ws_ok': body.get('market_ws_ok', True),
+                    'user_stream_ok': body.get('user_stream_ok', True),
+                    'rest_ok': body.get('rest_ok', True),
+                    'db_ok': body.get('db_ok', True),
+                    'maintenance': body.get('exchange_maintenance', False),
+                    'rate_limit_ratio': body.get('rate_limit_ratio', 0),
+                    'latency_ms': body.get('exchange_latency_ms', 0),
+                }
+                mode=degraded_mode.degraded_policy(health)
+                if not mode.get('new_entries'):
+                    trade_state.append_event('DEGRADED_MODE_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,mode=mode.get('mode'))
+                    return self.send_json(503,{'ok':False,'status':'EXCHANGE_DEGRADED_ENTRY_BLOCK','mode':mode.get('mode')})
                 try: quote=float(body.get('quote_amount_usdt') or 0)
                 except Exception: quote=0
                 if not (5<=quote<=MAX_EXECUTION_STAKE_USDT):
