@@ -12,7 +12,7 @@ function candidate(symbol, score, notional = 5) {
     liveApproved: false,
     score,
     entry: 2,
-    stop: 1.95,
+    stop: 1.96,
     target: 2.12,
     qty: notional / 2,
     notional,
@@ -60,7 +60,7 @@ test('refuses a live policy at the batch layer', async () => {
       candidates: [candidate('AAAUSDT', 90)],
       stateStore,
       exchange,
-      policy: { liveTrading: true, paperMode: false, maxOpenPositions: 3, maxDailyLossUsdt: 2, maxQuotePerTradeUsdt: 10, requireProtectiveExit: true },
+      policy: { liveTrading: true, paperMode: false, maxOpenPositions: 3, maxDailyLossUsdt: 2, maxQuotePerTradeUsdt: 10, maxRiskPerTradeUsdt: 0.11, requireProtectiveExit: true },
     }),
     /BATCH_RUNTIME_PAPER_ONLY/,
   );
