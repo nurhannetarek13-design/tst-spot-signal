@@ -7,7 +7,10 @@ on:
       - 'tests/test_production_safety_kernel.py'
       - 'freqtrade/event_integrity.py'
       - 'freqtrade/symbol_lifecycle.py'
-      - 'freqtrade/production_observability.py'
+      - 'freqtrade/production_observability.py freqtrade/portfolio_control.py freqtrade/chaos_safety.py freqtrade/trade_state.py'
+      - 'freqtrade/portfolio_control.py'
+      - 'freqtrade/chaos_safety.py'
+      - 'freqtrade/trade_state.py'
       - '.github/workflows/production-safety-kernel-ci.yml'
   workflow_dispatch:
 permissions:
@@ -24,5 +27,7 @@ jobs:
         run: python -m py_compile freqtrade/production_safety_kernel.py freqtrade/independent_watchdog.py freqtrade/event_integrity.py freqtrade/symbol_lifecycle.py freqtrade/production_observability.py
       - name: Safety kernel tests
         run: python -m pytest -q tests/test_production_safety_kernel.py
+      - name: Chaos safety suite
+        run: cd freqtrade && python chaos_safety.py
       - name: Existing execution state-machine regression
         run: cd freqtrade && python test_execution_state_machine.py
