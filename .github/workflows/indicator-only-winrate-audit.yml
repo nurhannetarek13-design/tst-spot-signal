@@ -3,6 +3,11 @@ name: Indicator-Only Win-Rate Audit
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/indicator_only_winrate_audit.py'
+      - '.github/workflows/indicator-only-winrate-audit.yml'
   push:
     branches: [main]
     paths:
@@ -52,6 +57,7 @@ jobs:
           path: validation/indicator-only-winrate-audit-latest.json
           retention-days: 14
       - name: Persist audit snapshot
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           cp validation/indicator-only-winrate-audit-latest.json /tmp/audit.json
           for i in 1 2 3 4 5; do
