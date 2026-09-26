@@ -1,0 +1,29 @@
+{
+  "engine": "BACKTEST_INTEGRITY_GATE_V1",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "productionGradeHistoricalEvidence": false,
+  "checks": {
+    "pointInTimeUniverse": false,
+    "delistedCoverage": false,
+    "chronologicalOOS": true,
+    "walkForward": true,
+    "unseenSymbolHoldout": true,
+    "lookAheadAudit": true,
+    "feesIncluded": true,
+    "spreadIncluded": true,
+    "slippageIncluded": true,
+    "latencyIncluded": false,
+    "partialFillsIncluded": false
+  },
+  "historicalSymbolCount": 24,
+  "delistedSymbolCount": 0,
+  "reasons": [
+    "pointInTimeUniverse:MISSING_OR_FALSE",
+    "delistedCoverage:MISSING_OR_FALSE",
+    "latencyIncluded:MISSING_OR_FALSE",
+    "partialFillsIncluded:MISSING_OR_FALSE",
+    "NO_DELISTED_SYMBOLS"
+  ],
+  "note": "Historical evidence failing this gate may still be diagnostic, but cannot support promotion."
+}

@@ -11,12 +11,12 @@
     "trades": 0,
     "wins": 0,
     "losses": 0,
-    "winRate": 0,
-    "netPnlPerUnit": 0,
-    "expectancyPerUnit": 0,
-    "profitFactor": 0,
-    "untouched": false,
-    "costsIncluded": false
+    "winRate": 0.0,
+    "netPnlPerUnit": 0.0,
+    "expectancyPerUnit": 0.0,
+    "profitFactor": 0.0,
+    "untouched": true,
+    "costsIncluded": true
   },
   "backtestIntegrity": {
     "productionGradeHistoricalEvidence": false
@@ -33,8 +33,6 @@
   },
   "claimSupported": false,
   "claimBlockedReasons": [
-    "HOLDOUT_NOT_EXPLICITLY_UNTOUCHED",
-    "REALISTIC_COSTS_NOT_CONFIRMED",
     "HOLDOUT_SAMPLE_TOO_SMALL",
     "HOLDOUT_WIN_RATE_BELOW_TARGET",
     "HOLDOUT_NET_NOT_POSITIVE",
@@ -44,6 +42,6 @@
     "SPOT_REPLAY_INTEGRITY_NOT_PROVEN",
     "SPOT_EXECUTION_REPLAY_NOT_PROVEN"
   ],
-  "generatedAt": null,
-  "note": "Fail-closed placeholder. No 99% profitability claim is currently proven."
+  "generatedAt": "2026-09-26T12:03:24.026478+00:00",
+  "note": "claimSupported is evidence-only and never enables live trading by itself."
 }

@@ -1,0 +1,17 @@
+{
+  "engine": "V3_SESSION_PERFORMANCE_DIAGNOSTIC",
+  "authorization": "PAPER_SHADOW_ONLY",
+  "liveTrading": false,
+  "autoSessionBlocking": false,
+  "sessions": {
+    "UNKNOWN": {
+      "n": 1,
+      "diagnosticOnly": true,
+      "expectancyUSDT": -0.03294848639999781,
+      "hitRate": 0.0,
+      "profitFactor": 0.0,
+      "medianEntrySlippageBps": null,
+      "medianDecisionLatencyMs": null
+    }
+  }
+}

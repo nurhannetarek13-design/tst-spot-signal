@@ -1,0 +1,31 @@
+{
+  "authorization": "PAPER_EVIDENCE_ONLY",
+  "claimBlockedReasons": [
+    "FORWARD_SAMPLE_TOO_SMALL",
+    "FORWARD_WIN_RATE_BELOW_TARGET",
+    "FORWARD_NET_NOT_POSITIVE"
+  ],
+  "claimReady": false,
+  "configGitBlobShaActual": "dde390f3e260294f9fc2187c10220e3ac923e6e0",
+  "configGitBlobShaExpected": "dde390f3e260294f9fc2187c10220e3ac923e6e0",
+  "configUnchanged": true,
+  "costsIncluded": true,
+  "engine": "INDICATOR_V3_FORWARD_HOLDOUT_METRICS_V1",
+  "expectancyPerUnit": 0.0,
+  "expectancyUSDT": 0.0,
+  "expectedEngine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
+  "freezeAt": "2026-09-26T11:50:00Z",
+  "liveTrading": false,
+  "losses": 0,
+  "malformedTrades": [],
+  "missingCostFields": [],
+  "netPnlPerUnit": 0,
+  "netPnlUSDT": 0,
+  "note": "Prospective PAPER evidence only. claimReady never enables live trading by itself.",
+  "profitFactor": 0.0,
+  "sampleSymbols": [],
+  "trades": 0,
+  "untouched": true,
+  "winRate": 0.0,
+  "wins": 0
+}
