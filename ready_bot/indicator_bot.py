@@ -1561,6 +1561,28 @@ def main():
                 except Exception as exc:
                     blocked.append({"symbol": symbol, "reason": "MICROSTRUCTURE_UNAVAILABLE", "detail": str(exc)[:160]})
 
+    # Open positions get a fresh microstructure read as well. Entry discovery
+    # and trade management must use the same live order-flow evidence.
+    open_micro = [
+        (symbol, snapshots[symbol])
+        for symbol in list(state["positions"])
+        if symbol in snapshots
+    ]
+    if open_micro:
+        with ThreadPoolExecutor(max_workers=min(3, len(open_micro))) as pool:
+            futures={pool.submit(enrich_microstructure,symbol,snap):symbol for symbol,snap in open_micro}
+            for future in as_completed(futures):
+                symbol=futures[future]
+                try:
+                    snapshots[symbol]=future.result()
+                    snapshots[symbol]["regime"]=regime
+                except Exception as exc:
+                    blocked.append({
+                        "symbol":symbol,
+                        "reason":"OPEN_POSITION_MICROSTRUCTURE_UNAVAILABLE",
+                        "detail":str(exc)[:160],
+                    })
+
     momentum_watchlist = []
     for symbol, snap in snapshots.items():
         micro = snap.get("micro")
@@ -1680,6 +1702,10 @@ def main():
                     momentum_score=(snap.get("micro") or {}).get("score"),
                     regime=regime.get("state"),
                     execution_style=(snap.get("execution_plan") or {}).get("style"),
+                    setup_type=snap.get("setup_type"),
+                    entry_zone=snap.get("entry_zone"),
+                    net_rr_after_costs=(snap.get("net_reward_risk") or {}).get("net_rr"),
+                    liquidity_quote_cap=snap.get("liquidity_quote_cap"),
                 )
 
     state["signals"] = [{
