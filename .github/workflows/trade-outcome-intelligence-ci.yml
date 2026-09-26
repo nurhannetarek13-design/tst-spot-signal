@@ -1,0 +1,32 @@
+name: Trade Outcome Intelligence CI
+on:
+  pull_request:
+    paths:
+      - 'ready_bot/trade_outcome_intelligence.py'
+      - 'tests/test_trade_outcome_intelligence.py'
+      - '.github/workflows/trade-outcome-intelligence-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip pytest
+      - name: Compile
+        run: python -m py_compile ready_bot/trade_outcome_intelligence.py
+      - name: Unit tests
+        run: python -m pytest -q tests/test_trade_outcome_intelligence.py
+      - name: Assert diagnostic-only contract
+        run: |
+          python - <<'PY'
+          from ready_bot.trade_outcome_intelligence import attribute_closed_trade
+          x=attribute_closed_trade({"status":"CLOSED","closed_at":"x","pnl_usdt":0})
+          assert x["diagnostic_only"] is True
+          assert x["may_authorize_live"] is False
+          assert x["may_increase_size"] is False
+          PY
