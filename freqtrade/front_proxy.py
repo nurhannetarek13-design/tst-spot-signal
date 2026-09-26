@@ -15,6 +15,7 @@ import trade_state
 import degraded_mode
 from recovery_security_contracts import validate_binance_payload
 import capacity_gate
+import production_runtime_hardening as runtime_hardening
 from pathlib import Path
 
 PORT=int(os.getenv('PORT','8080'))
@@ -109,6 +110,13 @@ class H(BaseHTTPRequestHandler):
 
         try:
             if action=='BUY':
+                try:
+                    guard=json.loads(Path(os.getenv('TST_PRODUCTION_GUARD_STATE','/data/tst_production_guard.json')).read_text(encoding='utf-8'))
+                except Exception:
+                    guard={}
+                if guard.get('allow_new_entries') is not True:
+                    trade_state.append_event('PRODUCTION_RUNTIME_GUARD_BLOCK',signal_id=signal_id,symbol=symbol,guard=guard)
+                    return self.send_json(503,{'ok':False,'status':'PRODUCTION_RUNTIME_GUARD_BLOCK'})
                 health={
                     'market_ws_ok': body.get('market_ws_ok', True),
                     'user_stream_ok': body.get('user_stream_ok', True),
