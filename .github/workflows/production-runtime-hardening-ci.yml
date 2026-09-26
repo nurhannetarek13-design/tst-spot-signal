@@ -17,10 +17,10 @@ jobs:
         with: {python-version: '3.11'}
       - run: python -m py_compile freqtrade/production_runtime_hardening.py
       - run: pip install pytest
-      - run: pytest -q tests/test_production_runtime_hardening.py
+      - run: mkdir -p /tmp/tst-runtime-hardening && TST_RUNTIME_HARDENING_DIR=/tmp/tst-runtime-hardening pytest -q tests/test_production_runtime_hardening.py
       - name: fail-closed contract
         run: |
-          python - <<'PY'
+          TST_RUNTIME_HARDENING_DIR=/tmp/tst-runtime-hardening python - <<'PY'
           import sys
           sys.path.insert(0,'freqtrade')
           import production_runtime_hardening as p
