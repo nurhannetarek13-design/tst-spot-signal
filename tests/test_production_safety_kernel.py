@@ -128,3 +128,14 @@ def test_canary_guard_rolls_back_on_safety_or_regression():
       "slippage_bps":2,"safety_events":1,"ledger_ok":True,"reconciliation_ok":True},
       {"execution_latency_p95_ms":100,"slippage_bps":2})
     assert bad["rollback"] is True and {"API_ERROR_RATE","SAFETY_EVENT"} <= set(bad["reasons"])
+
+
+def test_canary_rolls_back_on_safety_or_execution_regression():
+    m=_load("canary_guard")
+    baseline={"execution_latency_p95_ms":100,"slippage_bps":2}
+    good={"signals":100,"api_errors":0,"rejected_orders":0,"execution_latency_p95_ms":110,"slippage_bps":2.5,
+          "safety_events":0,"ledger_ok":True,"reconciliation_ok":True}
+    bad=dict(good); bad["safety_events"]=1
+    assert m.canary_decision(good,baseline)["promote"] is True
+    x=m.canary_decision(bad,baseline)
+    assert x["rollback"] is True and x["automatic_live_promotion"] is False
