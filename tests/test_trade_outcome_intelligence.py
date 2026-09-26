@@ -1,5 +1,5 @@
 import pytest
-from ready_bot.trade_outcome_intelligence import attribute_closed_trade, aggregate_attributions
+from ready_bot.trade_outcome_intelligence import attribute_closed_trade, aggregate_attributions, attach_new_closed_trade_attributions
 
 def test_rejects_open_trade():
     with pytest.raises(ValueError):
@@ -35,3 +35,28 @@ def test_aggregation_needs_sample_before_evidence_ready():
     assert g["trades"]==10
     assert g["evidence_ready"] is False
     assert out["may_authorize_live"] is False
+
+
+def test_closed_trade_lifecycle_is_idempotent_and_evidence_only():
+    state={"closed_trades":[{
+        "symbol":"ABCUSDT","strategy":"BREAKOUT_RETEST","entry":1.0,"exit":0.99,
+        "pnl_usdt":-0.1,"reason":"FAILED_BREAKOUT","opened_at":"a","closed_at":"b"
+    }]}
+    first=attach_new_closed_trade_attributions(state,0,min_sample=2)
+    assert len(first["attributions"])==1
+    assert first["attributions"][0]["exit_reason"]=="FAILED_BREAKOUT"
+    assert "FAILED_BREAKOUT" in first["attributions"][0]["loss_factors"]
+    assert first["evidence"]["groups"]["BREAKOUT_RETEST|UNKNOWN"]["evidence_ready"] is False
+    again=attach_new_closed_trade_attributions(state,0,min_sample=2)
+    assert len(again["attributions"])==1
+    assert again["may_authorize_live"] is False
+    assert again["may_increase_size"] is False
+
+def test_new_close_only_does_not_recount_history():
+    state={"closed_trades":[
+        {"symbol":"AUSDT","strategy":"X","pnl_usdt":1,"reason":"TARGET","opened_at":"1","closed_at":"2"},
+        {"symbol":"BUSDT","strategy":"Y","pnl_usdt":-1,"reason":"STOP","opened_at":"3","closed_at":"4"},
+    ]}
+    store=attach_new_closed_trade_attributions(state,1,min_sample=1)
+    assert len(store["attributions"])==1
+    assert store["attributions"][0]["symbol"]=="BUSDT"
