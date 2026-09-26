@@ -186,7 +186,27 @@ def historical_context(trades,ts):
 
 def replay(rows:list[dict[str,Any]],symbol:str,eval_start_ms:int,eval_end_ms:int,quote_usdt:float=10.0):
     snapshots=[r for r in rows if "lastUpdateId" in r["data"] and "bids" in r["data"] and "asks" in r["data"]]
-    if not snapshots:return {"status":"NO_SNAPSHOT","canonicalReplayReady":False}
+    if not snapshots:
+        streams={}
+        for r in rows:
+            key=str(r.get("stream") or "<none>")
+            streams[key]=streams.get(key,0)+1
+        samples=[
+            {
+                "line":r.get("line"),
+                "stream":r.get("stream"),
+                "keys":sorted(list((r.get("data") or {}).keys()))[:20],
+                "generated":bool((r.get("data") or {}).get("generated")),
+            }
+            for r in rows[:8]
+        ]
+        return {
+            "status":"NO_SNAPSHOT",
+            "canonicalReplayReady":False,
+            "rawRows":len(rows),
+            "streams":streams,
+            "sampleRows":samples,
+        }
     sr=snapshots[0];sid=int(sr["data"]["lastUpdateId"]);line=int(sr["line"])
     bids={float(p):float(q) for p,q in sr["data"]["bids"] if float(q)>0}
     asks={float(p):float(q) for p,q in sr["data"]["asks"] if float(q)>0}
