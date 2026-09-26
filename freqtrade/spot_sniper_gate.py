@@ -29,6 +29,15 @@ import time
 
 import live_ev_gate
 import market_context
+from pathlib import Path
+import json
+
+DEEP_STATE_PATH=Path(os.getenv('TST_DEEP_READINESS_STATE','/data/tst_deep_readiness_state.json'))
+
+def _deep_state():
+    try:
+        row=json.loads(DEEP_STATE_PATH.read_text(encoding='utf-8')); return row if isinstance(row,dict) else {}
+    except Exception:return {}
 
 TOP_N = max(1, min(10, int(os.getenv('SPOT_SNIPER_TOP_N', '3'))))
 MAX_CONTEXT_AGE_SEC = max(120, int(os.getenv('SPOT_SNIPER_MAX_CONTEXT_AGE_SEC', '600')))
@@ -115,6 +124,11 @@ def evaluate(payload: dict) -> dict:
         score = float(payload.get('score') or 0.0)
     except Exception:
         score = 0.0
+
+    deep=_deep_state()
+    transition=(deep.get('regime_transition') or {}).get('state')
+    if transition in {'REGIME_TRANSITION','REGIME_UNCERTAIN'} or deep.get('allow_new_trade') is False:
+        return _reject('UNCERTAINTY_REJECT',f'deep-readiness:{transition or "UNKNOWN"}',regime=regime,age=age,lane=lane)
 
     if PANIC_BLOCK and regime == 'PANIC_HIGH_VOL_BEAR':
         return _reject('REGIME_REJECT', 'panic-high-vol-bear', regime=regime, age=age, lane=lane)
