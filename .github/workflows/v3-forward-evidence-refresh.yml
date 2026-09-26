@@ -2,6 +2,8 @@ name: V3 Forward Evidence Refresh
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '7 5 * * *'
   push:
@@ -28,7 +30,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -99,6 +101,7 @@ jobs:
           PY
 
       - name: Persist latest evidence package
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           mkdir -p /tmp/v3-evidence
           cp validation/indicator-v3/holdout-metrics.json /tmp/v3-evidence/
