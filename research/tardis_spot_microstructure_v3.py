@@ -28,8 +28,10 @@ DEFAULT_EXECUTION_LATENCY_MS=500
 
 
 def fetch_minute(symbol:str,date:str,offset:int)->str:
+    # Tardis emits generated <symbol>@depthSnapshot messages alongside the
+    # Binance depth feed. Request depth itself; do not filter depthSnapshot
+    # separately or the generated bootstrap snapshot may be omitted.
     filters=[
-        {"channel":"depthSnapshot","symbols":[symbol.lower()]},
         {"channel":"depth","symbols":[symbol.lower()]},
         {"channel":"bookTicker","symbols":[symbol.lower()]},
         {"channel":"aggTrade","symbols":[symbol.lower()]},
