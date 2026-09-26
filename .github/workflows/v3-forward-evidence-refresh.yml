@@ -16,6 +16,7 @@ on:
       - 'validation/indicator-v3/spot-v3-replay-aggregate.json'
       - 'validation/indicator-v3/backtest-integrity-input.json'
       - 'scripts/build_v3_forward_holdout.py'
+      - 'scripts/build_v3_backtest_integrity_input.py'
       - 'scripts/build_v3_precision_evidence.py'
       - 'scripts/v3_session_performance.py'
       - 'research/backtest_integrity_gate.py'
@@ -45,10 +46,12 @@ jobs:
       - name: Compile and test evidence builders
         run: |
           python -m py_compile scripts/build_v3_forward_holdout.py
+          python -m py_compile scripts/build_v3_backtest_integrity_input.py
           python -m py_compile scripts/build_v3_precision_evidence.py
           python -m py_compile scripts/v3_session_performance.py
           python -m py_compile research/backtest_integrity_gate.py
           python -m unittest -v tests/test_v3_forward_holdout.py
+          python -m unittest -v tests/test_build_v3_backtest_integrity_input.py
           python -m unittest -v tests/test_v3_precision_evidence.py
           python -m unittest -v tests/test_backtest_integrity_gate.py
 
@@ -65,6 +68,14 @@ jobs:
           python scripts/v3_session_performance.py \
             --state ready_bot/indicator_state.json \
             --output validation/indicator-v3/session-performance.json
+
+      - name: Assemble historical integrity evidence
+        run: |
+          python scripts/build_v3_backtest_integrity_input.py \
+            --base validation/indicator-v3/backtest-integrity-input.json \
+            --universe validation/indicator-v3/point-in-time-universe.json \
+            --replay validation/indicator-v3/spot-v3-replay-aggregate.json \
+            --output validation/indicator-v3/backtest-integrity-input.json
 
       - name: Build historical integrity status
         run: |
@@ -106,6 +117,7 @@ jobs:
           mkdir -p /tmp/v3-evidence
           cp validation/indicator-v3/holdout-metrics.json /tmp/v3-evidence/
           cp validation/indicator-v3/session-performance.json /tmp/v3-evidence/
+          cp validation/indicator-v3/backtest-integrity-input.json /tmp/v3-evidence/
           cp validation/indicator-v3/backtest-integrity-latest.json /tmp/v3-evidence/
           cp validation/indicator-v3/precision-evidence-latest.json /tmp/v3-evidence/
 
@@ -119,6 +131,7 @@ jobs:
             git add \
               validation/indicator-v3/holdout-metrics.json \
               validation/indicator-v3/session-performance.json \
+              validation/indicator-v3/backtest-integrity-input.json \
               validation/indicator-v3/backtest-integrity-latest.json \
               validation/indicator-v3/precision-evidence-latest.json
             git diff --cached --quiet && exit 0
