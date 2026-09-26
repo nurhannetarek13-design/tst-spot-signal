@@ -51,3 +51,12 @@ def test_recovery_schema_security_and_latency(tmp_path):
  assert m.verify_signed_webhook(raw,signature=sig,timestamp=ts,nonce=nonce,secret=sec,seen_nonces=set())["ok"]
  l=load("freqtrade/latency_attribution.py","lat")
  assert l.latency_trace({"exchange_event":1,"ingestion":1.2},{"exchange_event->ingestion":100})["degraded"]
+
+
+def test_spoofing_cancellation_diagnostics():
+ m=load("freqtrade/spoofing_diagnostics.py","sp")
+ snaps=[]
+ for i in range(3):
+  snaps += [{"ts_ms":i*2000,"bids":[[100+i,200]],"asks":[]},{"ts_ms":i*2000+500,"bids":[],"asks":[]}]
+ x=m.spoofing_diagnostics(snaps,min_wall_usdt=10000,max_lifetime_ms=1000)
+ assert x["suspected_spoofing"] and x["fast_cancel_rate"]==1.0
