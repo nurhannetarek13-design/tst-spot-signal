@@ -1,0 +1,126 @@
+name: V3 Forward Evidence Refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 5 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'ready_bot/indicator_state.json'
+      - 'ready_bot/indicator_config.json'
+      - 'validation/indicator-v3/forward-holdout-policy.json'
+      - 'validation/indicator-v3/point-in-time-universe.json'
+      - 'validation/indicator-v3/spot-v3-replay-aggregate.json'
+      - 'validation/indicator-v3/backtest-integrity-input.json'
+      - 'scripts/build_v3_forward_holdout.py'
+      - 'scripts/build_v3_precision_evidence.py'
+      - 'scripts/v3_session_performance.py'
+      - 'research/backtest_integrity_gate.py'
+      - '.github/workflows/v3-forward-evidence-refresh.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v3-forward-evidence-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test evidence builders
+        run: |
+          python -m py_compile scripts/build_v3_forward_holdout.py
+          python -m py_compile scripts/build_v3_precision_evidence.py
+          python -m py_compile scripts/v3_session_performance.py
+          python -m py_compile research/backtest_integrity_gate.py
+          python -m unittest -v tests/test_v3_forward_holdout.py
+          python -m unittest -v tests/test_v3_precision_evidence.py
+          python -m unittest -v tests/test_backtest_integrity_gate.py
+
+      - name: Build prospective forward holdout
+        run: |
+          python scripts/build_v3_forward_holdout.py \
+            --state ready_bot/indicator_state.json \
+            --policy validation/indicator-v3/forward-holdout-policy.json \
+            --config ready_bot/indicator_config.json \
+            --output validation/indicator-v3/holdout-metrics.json
+
+      - name: Build time-of-day diagnostics
+        run: |
+          python scripts/v3_session_performance.py \
+            --state ready_bot/indicator_state.json \
+            --output validation/indicator-v3/session-performance.json
+
+      - name: Build historical integrity status
+        run: |
+          python research/backtest_integrity_gate.py
+
+      - name: Build unified V3 precision evidence
+        run: |
+          python scripts/build_v3_precision_evidence.py \
+            --holdout validation/indicator-v3/holdout-metrics.json \
+            --backtest validation/indicator-v3/backtest-integrity-latest.json \
+            --universe validation/indicator-v3/point-in-time-universe.json \
+            --replay validation/indicator-v3/spot-v3-replay-aggregate.json \
+            --output validation/indicator-v3/precision-evidence-latest.json
+
+      - name: Assert evidence can never self-enable live
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('validation/indicator-v3/precision-evidence-latest.json'))
+          h=json.load(open('validation/indicator-v3/holdout-metrics.json'))
+          s=json.load(open('validation/indicator-v3/session-performance.json'))
+          assert p['liveTrading'] is False
+          assert h['liveTrading'] is False
+          assert s['liveTrading'] is False
+          assert s['autoSessionBlocking'] is False
+          print(json.dumps({
+            'claimSupported':p['claimSupported'],
+            'claimBlockedReasons':p['claimBlockedReasons'],
+            'forwardTrades':h['trades'],
+            'forwardWinRate':h['winRate'],
+            'forwardNetPnlUSDT':h['netPnlUSDT'],
+            'configUnchanged':h['configUnchanged'],
+          },indent=2))
+          PY
+
+      - name: Persist latest evidence package
+        run: |
+          mkdir -p /tmp/v3-evidence
+          cp validation/indicator-v3/holdout-metrics.json /tmp/v3-evidence/
+          cp validation/indicator-v3/session-performance.json /tmp/v3-evidence/
+          cp validation/indicator-v3/backtest-integrity-latest.json /tmp/v3-evidence/
+          cp validation/indicator-v3/precision-evidence-latest.json /tmp/v3-evidence/
+
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/indicator-v3
+            cp /tmp/v3-evidence/*.json validation/indicator-v3/
+            git config user.name 'v3-evidence-bot'
+            git config user.email 'v3-evidence-bot@users.noreply.github.com'
+            git add \
+              validation/indicator-v3/holdout-metrics.json \
+              validation/indicator-v3/session-performance.json \
+              validation/indicator-v3/backtest-integrity-latest.json \
+              validation/indicator-v3/precision-evidence-latest.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Refresh V3 forward evidence package'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
