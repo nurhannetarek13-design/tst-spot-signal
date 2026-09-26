@@ -197,6 +197,51 @@ def net_reward_risk(entry, stop, target, fee_rate, entry_slip_bps, exit_slip_bps
     }
 
 
+
+def execution_flow_score(*, obi, taker_ratio, cvd_delta, cvd_slope_positive):
+    score=0.0
+    if obi is not None:
+        if float(obi)>=0.58:
+            score+=15
+        elif float(obi)>=0.55:
+            score+=8
+    if taker_ratio is not None:
+        if float(taker_ratio)>=0.57:
+            score+=20
+        elif float(taker_ratio)>=0.53:
+            score+=10
+    if float(cvd_delta or 0)>0 and bool(cvd_slope_positive):
+        score+=15
+    return score
+
+
+def trade_quality_degradation_status(original_micro, current_flow, cfg):
+    agg=(original_micro or {}).get("agg_cvd") or {}
+    original=execution_flow_score(
+        obi=(original_micro or {}).get("obi"),
+        taker_ratio=agg.get("ratio"),
+        cvd_delta=agg.get("delta_quote"),
+        cvd_slope_positive=agg.get("slope_positive"),
+    )
+    current=execution_flow_score(
+        obi=current_flow.get("obi"),
+        taker_ratio=current_flow.get("taker_ratio"),
+        cvd_delta=current_flow.get("cvd_delta"),
+        cvd_slope_positive=current_flow.get("cvd_slope_positive"),
+    )
+    drop=original-current
+    degraded=bool(
+        current<float(cfg["minimum_preexecution_flow_score"])
+        or drop>float(cfg["maximum_preexecution_score_drop"])
+    )
+    return {
+        "ok":not degraded,
+        "original_flow_score":original,
+        "current_flow_score":current,
+        "score_drop":drop,
+        "reason":"TRADE_QUALITY_DEGRADED" if degraded else None,
+    }
+
 def setup_excursion_profile(closed_trades, setup, min_sample=30):
     rows=[
         x for x in (closed_trades or [])
