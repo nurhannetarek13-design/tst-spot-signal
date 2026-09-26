@@ -1,0 +1,58 @@
+name: Deep Readiness Gaps CI
+on:
+  pull_request:
+    paths:
+      - 'freqtrade/deep_readiness.py'
+      - 'freqtrade/exact_accounting.py'
+      - 'freqtrade/degraded_mode.py'
+      - 'freqtrade/recovery_security_contracts.py'
+      - 'freqtrade/latency_attribution.py'
+      - 'freqtrade/capacity_gate.py'
+      - 'freqtrade/readiness_audit.py'
+      - 'freqtrade/execution_telemetry.py'
+      - 'research/promotion_integrity.py'
+      - 'docs/OPERATIONAL_RUNBOOK.md'
+      - 'research/research_integrity.py'
+      - 'tests/test_deep_readiness_gaps.py'
+      - 'freqtrade/front_proxy.py'
+      - 'freqtrade/reconcile_state.py'
+      - 'freqtrade/deep_readiness_runtime.py'
+      - 'freqtrade/entrypoint.sh'
+      - 'freqtrade/spoofing_diagnostics.py'
+      - 'docs/PRODUCTION_INCIDENT_RUNBOOK.md'
+      - 'freqtrade/Dockerfile.railway'
+      - '.github/workflows/deep-readiness-gaps-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --upgrade pip pytest
+      - name: Compile
+        run: python -m py_compile freqtrade/deep_readiness.py freqtrade/exact_accounting.py freqtrade/degraded_mode.py freqtrade/recovery_security_contracts.py freqtrade/latency_attribution.py freqtrade/deep_readiness_runtime.py freqtrade/reconcile_state.py freqtrade/spoofing_diagnostics.py research/research_integrity.py
+      - name: Deep readiness tests
+        run: python -m pytest -q tests/test_deep_readiness_gaps.py
+      - name: Runtime integration contract
+        run: |
+          grep -F "import degraded_mode" freqtrade/front_proxy.py
+          grep -F "EXCHANGE_DEGRADED_ENTRY_BLOCK" freqtrade/front_proxy.py
+          grep -F "REGIME_TRANSITION_ENTRY_BLOCK" freqtrade/front_proxy.py
+          grep -F "exact_accounting.fill_accounting" freqtrade/reconcile_state.py
+          grep -F "deep_readiness_runtime.py" freqtrade/entrypoint.sh
+          grep -F "COPY deep_readiness.py /freqtrade/deep_readiness.py" freqtrade/Dockerfile.railway
+          grep -F "COPY exact_accounting.py /freqtrade/exact_accounting.py" freqtrade/Dockerfile.railway
+          grep -F "COPY capacity_gate.py /freqtrade/capacity_gate.py" freqtrade/Dockerfile.railway
+          grep -F "COPY readiness_audit.py /freqtrade/readiness_audit.py" freqtrade/Dockerfile.railway
+          grep -F "COPY execution_telemetry.py /freqtrade/execution_telemetry.py" freqtrade/Dockerfile.railway
+          grep -F "CAPACITY_ENTRY_BLOCK" freqtrade/front_proxy.py
+          grep -F "UPSTREAM_SCHEMA_CONTRACT_BLOCK" freqtrade/front_proxy.py
+          grep -F "UNCERTAINTY_REJECT" freqtrade/spot_sniper_gate.py
+          grep -F "RPO 5 minutes" docs/OPERATIONAL_RUNBOOK.md
+      - name: Assert non-authorizing research contract
+        run: |
+          ! grep -R "liveTrading.*true\|AUTO_TRADING_ENABLED.*1" freqtrade/deep_readiness.py freqtrade/exact_accounting.py research/research_integrity.py

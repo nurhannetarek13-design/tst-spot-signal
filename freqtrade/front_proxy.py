@@ -12,6 +12,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import binance_filters
 import trade_state
+import degraded_mode
+from recovery_security_contracts import validate_binance_payload
+import capacity_gate
+from pathlib import Path
 
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
@@ -105,6 +109,31 @@ class H(BaseHTTPRequestHandler):
 
         try:
             if action=='BUY':
+                health={
+                    'market_ws_ok': body.get('market_ws_ok', True),
+                    'user_stream_ok': body.get('user_stream_ok', True),
+                    'rest_ok': body.get('rest_ok', True),
+                    'db_ok': body.get('db_ok', True),
+                    'maintenance': body.get('exchange_maintenance', False),
+                    'rate_limit_ratio': body.get('rate_limit_ratio', 0),
+                    'latency_ms': body.get('exchange_latency_ms', 0),
+                }
+                mode=degraded_mode.degraded_policy(health)
+                try:
+                    dr=json.loads(Path(os.getenv('TST_DEEP_READINESS_STATE','/data/tst_deep_readiness_state.json')).read_text(encoding='utf-8'))
+                except Exception:
+                    dr={}
+                transition=((dr.get('regime_transition') or {}).get('state') or 'REGIME_UNCERTAIN')
+                if transition!='REGIME_STABLE':
+                    trade_state.append_event('REGIME_TRANSITION_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,state=transition)
+                    return self.send_json(503,{'ok':False,'status':'REGIME_TRANSITION_ENTRY_BLOCK','regimeState':transition})
+                if not mode.get('new_entries'):
+                    trade_state.append_event('DEGRADED_MODE_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,mode=mode.get('mode'))
+                    return self.send_json(503,{'ok':False,'status':'EXCHANGE_DEGRADED_ENTRY_BLOCK','mode':mode.get('mode')})
+                cap=capacity_gate.evaluate(body)
+                if not cap.get('passed'):
+                    trade_state.append_event('CAPACITY_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,status=cap.get('status'))
+                    return self.send_json(409,{'ok':False,'status':cap.get('status'),'reason':cap.get('reason'),'capacity':cap})
                 try: quote=float(body.get('quote_amount_usdt') or 0)
                 except Exception: quote=0
                 if not (5<=quote<=MAX_EXECUTION_STAKE_USDT):
@@ -186,6 +215,12 @@ class H(BaseHTTPRequestHandler):
             trade_state.update_reservation(signal_id,action,status='UNKNOWN',error='NON_OBJECT_JSON')
             print(f'[make-relay] {action} upstream non-object-json status={status}',flush=True)
             return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action,'signal_id':signal_id})
+
+        contract=validate_binance_payload(row,{'ok':bool,'status':str})
+        if not contract.get('ok'):
+            trade_state.update_reservation(signal_id,action,status='UNKNOWN',error='UPSTREAM_SCHEMA_CONTRACT')
+            trade_state.append_event('UPSTREAM_SCHEMA_CONTRACT_BLOCK',signal_id=signal_id,action=action,symbol=symbol,errors=contract.get('errors'))
+            return self.send_json(502,{'ok':False,'status':'UPSTREAM_SCHEMA_CONTRACT_BLOCK','errors':contract.get('errors')})
 
         try:
             if status < 400 and row.get('ok') is True:
