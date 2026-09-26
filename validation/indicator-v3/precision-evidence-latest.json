@@ -24,8 +24,8 @@
   "universeIntegrity": {
     "pointInTimeUniverse": true,
     "delistedCoverage": true,
-    "historicalSymbolCount": 663,
-    "delistedSymbolCount": 194
+    "historicalSymbolCount": 660,
+    "delistedSymbolCount": 192
   },
   "spotReplay": {
     "replayIntegrityPass": true,
@@ -38,6 +38,6 @@
     "HOLDOUT_NET_NOT_POSITIVE",
     "BACKTEST_INTEGRITY_NOT_PROVEN"
   ],
-  "generatedAt": "2026-09-26T12:11:28.374196+00:00",
+  "generatedAt": "2026-09-26T12:17:38.469009+00:00",
   "note": "claimSupported is evidence-only and never enables live trading by itself."
 }
