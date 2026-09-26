@@ -82,6 +82,18 @@ def _rebuild_unknown_open_oco(row):
         print(f'[reconcile] rebuild warning {type(exc).__name__}: {str(exc)[:180]}',flush=True); return False
 
 
+def _commission_fx_to_usdt(fills):
+    assets={str(x.get('commission_asset') or '') for x in fills if x.get('commission_asset') and str(x.get('commission_asset'))!='USDT'}
+    fx={}
+    for asset in assets:
+        try:
+            row=_signed_get('/api/v3/ticker/price',{'symbol':asset+'USDT'})
+            px=float(row.get('price') or 0)
+            if px>0: fx[asset]=px
+        except Exception:
+            pass
+    return fx
+
 def _trades_for_order(symbol:str, order_id:int):
     rows=_signed_get('/api/v3/myTrades',{'symbol':symbol,'orderId':int(order_id),'limit':1000})
     out=[]
@@ -123,7 +135,8 @@ def _exit_from_finished_list(symbol:str,row:dict,pos:dict):
         buy_fills=_trades_for_order(symbol,buy_oid) if buy_oid>0 else []
         sell_fills=_trades_for_order(symbol,sell_oid) if sell_oid>0 else []
         if buy_fills and sell_fills:
-            accounting=exact_accounting.fill_accounting(buy_fills=buy_fills,sell_fills=sell_fills)
+            fee_fx=_commission_fx_to_usdt(buy_fills+sell_fills)
+            accounting=exact_accounting.fill_accounting(buy_fills=buy_fills,sell_fills=sell_fills,fee_fx=fee_fx)
             if accounting.get('exact') and accounting.get('net_pnl_quote') is not None: pnl=float(accounting['net_pnl_quote'])
     except Exception as exc:
         trade_state.append_event('EXACT_ACCOUNTING_DEFERRED',signal_id=pos.get('signal_id'),symbol=symbol,error=type(exc).__name__)
