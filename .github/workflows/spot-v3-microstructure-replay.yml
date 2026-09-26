@@ -62,9 +62,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, date: '2021-09-01', offset: 25}
-          - {symbol: ETHUSDT, date: '2021-09-01', offset: 25}
-          - {symbol: SOLUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: BTCUSDT, date: '2021-09-01', offset: 5}
+          - {symbol: ETHUSDT, date: '2021-09-01', offset: 5}
+          - {symbol: SOLUSDT, date: '2021-09-01', offset: 5}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
