@@ -79,6 +79,7 @@ jobs:
             --start-offset '${{ matrix.offset }}' \
             --minutes 4 \
             --quote-usdt 10 \
+            --no-warmup \
             --output 'validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json' \
             --assert-replay
       - name: Assert replay scope cannot authorize live
