@@ -11,18 +11,18 @@ on:
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - '.github/workflows/binance-spot-point-in-time-universe.yml'
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
     paths:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_binance_spot_point_in_time_universe.py'
       - '.github/workflows/binance-spot-point-in-time-universe.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-
-concurrency:
-  group: spot-point-in-time-universe-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
 
 jobs:
   build:
