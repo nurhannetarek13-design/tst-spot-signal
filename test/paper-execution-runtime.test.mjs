@@ -60,6 +60,7 @@ test('paper runtime refuses a live-authorized plan even if candidate is live app
     maxDailyLossUsdt: 2,
     maxOpenPositions: 3,
     maxQuotePerTradeUsdt: 10,
+    maxRiskPerTradeUsdt: 0.11,
     requireProtectiveExit: true,
   };
 
