@@ -32,4 +32,6 @@ jobs:
       - name: Chaos safety suite
         run: cd freqtrade && python chaos_safety.py
       - name: Existing execution state-machine regression
+        env:
+          TST_LEDGER_PATH: /tmp/tst_execution_ledger.json
         run: cd freqtrade && python test_execution_state_machine.py
