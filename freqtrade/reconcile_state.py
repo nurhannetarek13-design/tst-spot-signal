@@ -12,6 +12,7 @@ import hashlib,hmac,json,os,sys,time,urllib.error,urllib.parse,urllib.request
 from collections import defaultdict
 import trade_state
 import execution_health
+import exact_accounting
 
 API_BASES=['https://api.binance.com','https://api-gcp.binance.com','https://api1.binance.com','https://api2.binance.com','https://api3.binance.com','https://api4.binance.com']
 POLL_SEC=max(30,int(os.getenv('RECONCILE_POLL_SEC','60')))
@@ -81,6 +82,14 @@ def _rebuild_unknown_open_oco(row):
         print(f'[reconcile] rebuild warning {type(exc).__name__}: {str(exc)[:180]}',flush=True); return False
 
 
+def _trades_for_order(symbol:str, order_id:int):
+    rows=_signed_get('/api/v3/myTrades',{'symbol':symbol,'orderId':int(order_id),'limit':1000})
+    out=[]
+    for x in rows if isinstance(rows,list) else []:
+        if int(x.get('orderId') or 0)==int(order_id): out.append({'qty':x.get('qty'),'price':x.get('price'),'commission':x.get('commission'),'commission_asset':x.get('commissionAsset')})
+    return out
+
+
 def _exit_from_finished_list(symbol:str,row:dict,pos:dict):
     """Return the executed SELL child, if any; otherwise None."""
     orders=row.get('orders') or []
@@ -108,14 +117,23 @@ def _exit_from_finished_list(symbol:str,row:dict,pos:dict):
     cost_basis=entry*qty if entry>0 else 0.0
     conservative_cost=cost_basis*PNL_COST_BUFFER_PCT
     pnl=quote-cost_basis-conservative_cost if cost_basis>0 else 0.0
+    accounting=None
+    try:
+        buy_oid=int(pos.get('buy_order_id') or 0); sell_oid=int(o.get('orderId') or 0)
+        buy_fills=_trades_for_order(symbol,buy_oid) if buy_oid>0 else []
+        sell_fills=_trades_for_order(symbol,sell_oid) if sell_oid>0 else []
+        if buy_fills and sell_fills:
+            accounting=exact_accounting.fill_accounting(buy_fills=buy_fills,sell_fills=sell_fills)
+            if accounting.get('exact') and accounting.get('net_pnl_quote') is not None: pnl=float(accounting['net_pnl_quote'])
+    except Exception as exc:
+        trade_state.append_event('EXACT_ACCOUNTING_DEFERRED',signal_id=pos.get('signal_id'),symbol=symbol,error=type(exc).__name__)
     closed_ms=int(o.get('updateTime') or o.get('time') or 0)
-    return {
-        'exit_price':exit_price,'exit_qty':qty,'exit_quote':quote,'realized_pnl_usdt':pnl,
-        'close_reason':reason,'exit_order_id':int(o.get('orderId') or 0),
-        'exit_order_type':typ,'exit_binance_status':o.get('status'),
-        'pnl_cost_buffer_pct':PNL_COST_BUFFER_PCT,
-        'closed_at':closed_ms/1000.0 if closed_ms>0 else time.time(),
-    }
+    extra={'pnl_cost_buffer_pct':PNL_COST_BUFFER_PCT,'exact_accounting':False}
+    if accounting:
+        extra.update({'exact_accounting':bool(accounting.get('exact')),'gross_pnl_quote':str(accounting.get('gross_pnl_quote')),'fees_quote':str(accounting.get('fees_quote')),'fee_unknown':accounting.get('fee_unknown'),'residual_inventory_qty':str(accounting.get('residual_inventory_qty'))})
+    return {'exit_price':exit_price,'exit_qty':qty,'exit_quote':quote,'realized_pnl_usdt':pnl,
+        'close_reason':reason,'exit_order_id':int(o.get('orderId') or 0),'exit_order_type':typ,'exit_binance_status':o.get('status'),**extra,
+        'closed_at':closed_ms/1000.0 if closed_ms>0 else time.time()}
 
 
 def run_once():
