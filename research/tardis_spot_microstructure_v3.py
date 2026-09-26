@@ -27,15 +27,7 @@ ROUNDTRIP_COST_BPS=28.0
 DEFAULT_EXECUTION_LATENCY_MS=500
 
 
-def fetch_minute(symbol:str,date:str,offset:int)->str:
-    # Tardis emits generated <symbol>@depthSnapshot messages alongside the
-    # Binance depth feed. Request depth itself; do not filter depthSnapshot
-    # separately or the generated bootstrap snapshot may be omitted.
-    filters=[
-        {"channel":"depth","symbols":[symbol.lower()]},
-        {"channel":"bookTicker","symbols":[symbol.lower()]},
-        {"channel":"aggTrade","symbols":[symbol.lower()]},
-    ]
+def _fetch_raw(symbol:str,date:str,offset:int,filters:list[dict])->str:
     encoded=urllib.parse.quote(json.dumps(filters,separators=(",",":")),safe='[]{}":,')
     url=f"{BASE}?from={urllib.parse.quote(date,safe=':-TZ')}&filters={encoded}&offset={int(offset)}"
     p=subprocess.run(
@@ -44,6 +36,29 @@ def fetch_minute(symbol:str,date:str,offset:int)->str:
         capture_output=True,check=True,timeout=180,
     )
     return p.stdout.decode("utf-8","replace")
+
+
+def fetch_bootstrap_snapshot(symbol:str,date:str,max_offsets:int=3)->str:
+    # Tardis Spot public/sample responses may omit generated depthSnapshot when
+    # depth is requested together with other channels. Fetch the generated
+    # bootstrap explicitly and prepend it to the replay stream.
+    variants=([symbol.lower()],[symbol.upper()])
+    for off in range(max(1,int(max_offsets))):
+        for symbols in variants:
+            body=_fetch_raw(symbol,date,off,[{"channel":"depthSnapshot","symbols":symbols}])
+            if "lastUpdateId" in body and "bids" in body and "asks" in body:
+                return body
+    return ""
+
+
+def fetch_minute(symbol:str,date:str,offset:int)->str:
+    # Generated snapshots are fetched separately by fetch_bootstrap_snapshot.
+    filters=[
+        {"channel":"depth","symbols":[symbol.lower()]},
+        {"channel":"bookTicker","symbols":[symbol.lower()]},
+        {"channel":"aggTrade","symbols":[symbol.lower()]},
+    ]
+    return _fetch_raw(symbol,date,offset,filters)
 
 
 def fetch_window(symbol:str,date:str,start_offset:int,minutes:int,warmup_from_zero:bool=True)->str:
@@ -57,7 +72,11 @@ def fetch_window(symbol:str,date:str,start_offset:int,minutes:int,warmup_from_ze
         for fut in as_completed(futs):
             off=futs[fut]
             bodies[off]=fut.result()
-    parts=[bodies[off].rstrip("\n") for off in offsets if bodies.get(off)]
+    parts=[]
+    snapshot=fetch_bootstrap_snapshot(symbol,date,3)
+    if snapshot:
+        parts.append(snapshot.rstrip("\n"))
+    parts.extend(bodies[off].rstrip("\n") for off in offsets if bodies.get(off))
     return "\n".join(parts)+("\n" if parts else "")
 
 
