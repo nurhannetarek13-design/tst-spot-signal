@@ -94,6 +94,8 @@ jobs:
           assert d['liveTrading'] is False
           assert d['canonicalReplayReady'] is True
           assert d['executionReplayPass'] is True
+          assert d['configuredLatencyMs'] >= 0
+          assert d['executionProbeLatencyMs']['max'] is not None
           assert d['executionProbeCount'] >= 3
           assert d['executionProbeFillRate'] >= 0.95
           assert d['edgeProven'] is False
@@ -177,6 +179,11 @@ jobs:
           print(json.dumps(out,indent=2))
           assert out['replayIntegrityPass'] is True
           assert out['executionReplayPass'] is True
+          assert out['latencyIncluded'] is True
+          assert out['partialFillsIncluded'] is True
+          assert out['spreadIncluded'] is True
+          assert out['slippageIncluded'] is True
+          assert out['roundTripCostBps'] > 0
           assert out['edgeProven'] is False
           assert out['liveReady'] is False
           PY
