@@ -14,6 +14,7 @@ import binance_filters
 import trade_state
 import degraded_mode
 from recovery_security_contracts import validate_binance_payload
+import capacity_gate
 from pathlib import Path
 
 PORT=int(os.getenv('PORT','8080'))
@@ -129,6 +130,10 @@ class H(BaseHTTPRequestHandler):
                 if not mode.get('new_entries'):
                     trade_state.append_event('DEGRADED_MODE_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,mode=mode.get('mode'))
                     return self.send_json(503,{'ok':False,'status':'EXCHANGE_DEGRADED_ENTRY_BLOCK','mode':mode.get('mode')})
+                cap=capacity_gate.evaluate(body)
+                if not cap.get('passed'):
+                    trade_state.append_event('CAPACITY_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,status=cap.get('status'))
+                    return self.send_json(409,{'ok':False,'status':cap.get('status'),'reason':cap.get('reason'),'capacity':cap})
                 try: quote=float(body.get('quote_amount_usdt') or 0)
                 except Exception: quote=0
                 if not (5<=quote<=MAX_EXECUTION_STAKE_USDT):
