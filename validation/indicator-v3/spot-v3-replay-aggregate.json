@@ -1,0 +1,16 @@
+{
+  "engine": "SPOT_V3_MICROSTRUCTURE_REPLAY_AGGREGATE",
+  "authorization": "RESEARCH_ONLY",
+  "liveTrading": false,
+  "replayIntegrityPass": true,
+  "executionReplayPass": true,
+  "candidateCount": 0,
+  "fillableCount": 0,
+  "executionProbeCount": 12,
+  "filledExecutionProbeCount": 12,
+  "medianCellSlippageBps": 0.0,
+  "edgeProven": false,
+  "liveReady": false,
+  "decision": "EXECUTION_REPLAY_EVIDENCE_ONLY",
+  "note": "Execution probes are independent of V3 entry signals. CandidateCount may be zero. This artifact cannot prove the full V3 strategy or authorize live trading."
+}
