@@ -1,14 +1,15 @@
 {
   "authorization": "PAPER_EVIDENCE_ONLY",
   "claimBlockedReasons": [
+    "FORWARD_HOLDOUT_NOT_UNTOUCHED",
     "FORWARD_SAMPLE_TOO_SMALL",
     "FORWARD_WIN_RATE_BELOW_TARGET",
     "FORWARD_NET_NOT_POSITIVE"
   ],
   "claimReady": false,
-  "configGitBlobShaActual": "dde390f3e260294f9fc2187c10220e3ac923e6e0",
+  "configGitBlobShaActual": "59ae49df663c548f628c0dca0fd023db3161f1a6",
   "configGitBlobShaExpected": "dde390f3e260294f9fc2187c10220e3ac923e6e0",
-  "configUnchanged": true,
+  "configUnchanged": false,
   "costsIncluded": true,
   "engine": "INDICATOR_V3_FORWARD_HOLDOUT_METRICS_V1",
   "expectancyPerUnit": 0.0,
@@ -25,7 +26,7 @@
   "profitFactor": 0.0,
   "sampleSymbols": [],
   "trades": 0,
-  "untouched": true,
+  "untouched": false,
   "winRate": 0.0,
   "wins": 0
 }
