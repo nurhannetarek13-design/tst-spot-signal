@@ -65,6 +65,7 @@ try:
         execution_quality_status,
         estimate_sell_slippage,
         liquidity_disappearance_status,
+        listing_age_status,
         load_event_risk,
         signal_freshness_status,
         utc_session_label,
@@ -81,7 +82,9 @@ except ImportError:
         btc_shock_status,
         clock_sync_status,
         execution_quality_status,
+        estimate_sell_slippage,
         liquidity_disappearance_status,
+        listing_age_status,
         load_event_risk,
         signal_freshness_status,
         utc_session_label,
@@ -91,47 +94,6 @@ except ImportError:
         choose_execution_plan,
         realized_slippage_bps,
         update_symbol_slippage_model,
-    )
-
-try:
-    from .trade_management import (
-        adaptive_trade_levels,
-        attribute_trade,
-        build_entry_zone,
-        build_invalidation,
-        classify_trade_setup,
-        current_flow_state,
-        entry_in_zone,
-        liquidity_quote_cap,
-        momentum_failure,
-        net_reward_risk,
-        profit_protection_state,
-        reentry_status,
-        register_exit_for_reentry,
-        setup_excursion_profile,
-        setup_rules,
-        thesis_invalidated,
-        trade_quality_degradation_status,
-    )
-except ImportError:
-    from trade_management import (
-        adaptive_trade_levels,
-        attribute_trade,
-        build_entry_zone,
-        build_invalidation,
-        classify_trade_setup,
-        current_flow_state,
-        entry_in_zone,
-        liquidity_quote_cap,
-        momentum_failure,
-        net_reward_risk,
-        profit_protection_state,
-        reentry_status,
-        register_exit_for_reentry,
-        setup_excursion_profile,
-        setup_rules,
-        thesis_invalidated,
-        trade_quality_degradation_status,
     )
 
 ROOT = Path(__file__).resolve().parent
@@ -180,7 +142,6 @@ def load_state():
             "decision_log": [],
             "slippage_model": {},
             "exit_slippage_model": {},
-            "reentry": {},
             "signals": [],
             "blocked": [],
             "last_run": None,
@@ -193,7 +154,6 @@ def load_state():
     s.setdefault("decision_log", [])
     s.setdefault("slippage_model", {})
     s.setdefault("exit_slippage_model", {})
-    s.setdefault("reentry", {})
     return s
 
 
@@ -341,6 +301,20 @@ def stream_shadow_micro_snapshot(symbol):
     if health.get("ok") is not True or snap.get("synced") is not True or snap.get("fresh") is not True or snap.get("warmed") is not True:
         raise RuntimeError("STREAM_SHADOW_NOT_HEALTHY")
     return snap
+
+
+def candidate_listing_age_status(symbol):
+    days=max(1,int(CFG["production_guard"].get("min_listing_age_days",3)))
+    try:
+        bars=closed_bars(symbol,"1d",limit=days+2)
+        return listing_age_status(bars,min_complete_days=days)
+    except Exception as exc:
+        return {
+            "ok":False,
+            "reason":"LISTING_AGE_UNAVAILABLE",
+            "detail":str(exc)[:120],
+            "required_days":days,
+        }
 
 
 def symbol_filters(symbol):
@@ -644,12 +618,14 @@ def account_equity_at_cost(state):
     return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
 
 
-def _paper_sell_fill(symbol, qty, bid, exit_depth=None):
-    ref=float(bid)
+def close_position(state, symbol, bid, reason, exit_depth=None):
+    p = state["positions"].pop(symbol)
+    fee = float(CFG["risk"]["fee_rate"])
+    ref = float(bid)
     depth_meta={"source":"FALLBACK","fill_ratio":None,"slippage_bps":None}
     try:
-        depth=exit_depth or depth20(symbol)
-        est=estimate_sell_slippage(depth,float(qty))
+        depth = exit_depth or depth20(symbol)
+        est = estimate_sell_slippage(depth, p["qty"])
         if est.get("ok") and est.get("average_price"):
             fill=float(est["average_price"])
             depth_meta={
@@ -671,102 +647,38 @@ def _paper_sell_fill(symbol, qty, bid, exit_depth=None):
             "slippage_bps":fallback_rate*10000,
             "detail":str(exc)[:120],
         }
-    return fill,depth_meta
 
-
-def partial_close_position(state, symbol, bid, fraction, reason, exit_depth=None):
-    p=state["positions"][symbol]
-    frac=max(0.0,min(1.0,float(fraction)))
-    if frac<=0 or frac>=1:
-        return "INVALID_PARTIAL_FRACTION"
-    current_qty=float(p["qty"])
-    qty=current_qty*frac
-    if qty<=0:
-        return "INVALID_PARTIAL_QTY"
-
-    fill,depth_meta=_paper_sell_fill(symbol,qty,bid,exit_depth)
-    fee=float(CFG["risk"]["fee_rate"])
-    cost_fraction=float(p["cost"])*(qty/current_qty)
-    proceeds=qty*fill*(1-fee)
-    pnl=proceeds-cost_fraction
-
-    p["qty"]=current_qty-qty
-    p["cost"]=max(0.0,float(p["cost"])-cost_fraction)
-    p["realized_partial_pnl_usdt"]=float(p.get("realized_partial_pnl_usdt") or 0.0)+pnl
-    p.setdefault("partial_exits",[]).append({
-        "at":now_iso(),"reason":reason,"fraction_of_current":frac,
-        "qty":qty,"fill":fill,"pnl_usdt":pnl,"execution":depth_meta,
+    proceeds = p["qty"] * fill * (1 - fee)
+    pnl = proceeds - p["cost"]
+    state["cash_usdt"] += proceeds
+    state["day_pnl"] += pnl
+    exit_slip=realized_slippage_bps(ref,fill,"SELL")
+    state["exit_slippage_model"]=update_symbol_slippage_model(
+        state.get("exit_slippage_model"),symbol,exit_slip
+    )
+    state["closed_trades"].append({
+        "symbol": symbol, "engine": CFG["engine"], "entry": p["entry"], "exit": fill,
+        "qty": p["qty"], "pnl_usdt": pnl, "reason": reason,
+        "score_at_entry": p.get("score"), "opened_at": p["opened_at"], "closed_at": now_iso(),
+        "momentum_score": p.get("momentum_score"),
+        "market_regime": p.get("market_regime"),
+        "relative_strength": p.get("relative_strength"),
+        "entry_context": p.get("entry_context"),
+        "mfe_r": p.get("mfe_r"),
+        "mae_r": p.get("mae_r"),
+        "exit_execution": depth_meta,
+        "exit_slippage_bps": exit_slip,
     })
-    state["cash_usdt"]+=proceeds
-    state["day_pnl"]+=pnl
-    exit_slip=realized_slippage_bps(float(bid),fill,"SELL")
-    state["exit_slippage_model"]=update_symbol_slippage_model(
-        state.get("exit_slippage_model"),symbol,exit_slip
-    )
     append_decision(
-        state,symbol,"WHY_PARTIAL_EXIT",
-        reason=reason,qty=qty,pnl_usdt=pnl,
-        remaining_qty=p["qty"],exit_slippage_bps=exit_slip,
-    )
-    return "PAPER_PARTIAL_CLOSED"
-
-
-def close_position(state, symbol, bid, reason, exit_depth=None):
-    p=state["positions"].pop(symbol)
-    fee=float(CFG["risk"]["fee_rate"])
-    fill,depth_meta=_paper_sell_fill(symbol,p["qty"],bid,exit_depth)
-    proceeds=p["qty"]*fill*(1-fee)
-    final_leg_pnl=proceeds-p["cost"]
-    partial_pnl=float(p.get("realized_partial_pnl_usdt") or 0.0)
-    total_pnl=partial_pnl+final_leg_pnl
-    state["cash_usdt"]+=proceeds
-    state["day_pnl"]+=final_leg_pnl
-
-    exit_slip=realized_slippage_bps(float(bid),fill,"SELL")
-    state["exit_slippage_model"]=update_symbol_slippage_model(
-        state.get("exit_slippage_model"),symbol,exit_slip
-    )
-    attribution=attribute_trade(p,total_pnl,reason)
-    closed={
-        "symbol":symbol,"engine":CFG["engine"],"entry":p["entry"],"exit":fill,
-        "setup_type":p.get("setup_type"),
-        "original_qty":p.get("original_qty",p["qty"]),
-        "final_qty":p["qty"],
-        "qty":p.get("original_qty",p["qty"]),
-        "pnl_usdt":total_pnl,
-        "final_leg_pnl_usdt":final_leg_pnl,
-        "partial_pnl_usdt":partial_pnl,
-        "partial_exits":p.get("partial_exits",[]),
-        "reason":reason,
-        "score_at_entry":p.get("score"),"opened_at":p["opened_at"],"closed_at":now_iso(),
-        "momentum_score":p.get("momentum_score"),
-        "market_regime":p.get("market_regime"),
-        "relative_strength":p.get("relative_strength"),
-        "entry_context":p.get("entry_context"),
-        "entry_zone":p.get("entry_zone"),
-        "invalidation":p.get("invalidation"),
-        "profit_stage":p.get("profit_stage"),
-        "winner_extensions":p.get("winner_extensions",0),
-        "mfe_r":p.get("mfe_r"),
-        "mae_r":p.get("mae_r"),
-        "excursion_profile_at_entry":p.get("excursion_profile_at_entry"),
-        "adaptive_levels":p.get("adaptive_levels"),
-        "exit_execution":depth_meta,
-        "exit_slippage_bps":exit_slip,
-        "attribution":attribution,
-    }
-    state["closed_trades"].append(closed)
-    register_exit_for_reentry(
-        state,symbol,reason,p.get("setup_type"),CFG["trade_management"]
-    )
-    append_decision(
-        state,symbol,"WHY_EXIT",
-        reason=reason,pnl_usdt=total_pnl,
-        setup_type=p.get("setup_type"),
-        mfe_r=p.get("mfe_r"),mae_r=p.get("mae_r"),
-        attribution=attribution,
+        state,
+        symbol,
+        "WHY_EXIT",
+        reason=reason,
+        pnl_usdt=pnl,
+        exit_price=fill,
         exit_slippage_bps=exit_slip,
-        exit_execution_source=depth_meta.get("source"),
+        mfe_r=p.get("mfe_r"),
+        mae_r=p.get("mae_r"),
     )
 
 
@@ -803,103 +715,69 @@ def open_position(state, snap, filters):
         return "SYMBOL_FILTER_MISMATCH"
     if not math.isfinite(float(snap.get("ask", 0))) or float(snap.get("ask", 0)) <= 0:
         return "INVALID_ENTRY_PRICE"
-
-    risk_cfg=CFG["risk"]
-    tm_cfg=CFG["trade_management"]
-    symbol=snap["symbol"]
+    risk_cfg = CFG["risk"]
     if len(state["positions"]) >= int(risk_cfg["max_open_positions"]):
         return "MAX_OPEN_POSITIONS"
     if state["day_pnl"] <= -abs(float(risk_cfg["max_daily_loss_usdt"])):
         return "DAILY_LOSS_CAP"
-    if symbol in state["positions"]:
+    if snap["symbol"] in state["positions"]:
         return "POSITION_ALREADY_OPEN"
 
-    setup=classify_trade_setup(snap,tm_cfg)
-    rules=setup_rules(setup,tm_cfg)
-    if setup=="UNSUPPORTED_SETUP" or rules is None:
-        return "UNSUPPORTED_TRADE_SETUP"
-    snap["setup_type"]=setup
-
-    reentry=reentry_status(state,symbol,snap,tm_cfg)
-    snap["reentry_status"]=reentry
-    if not reentry.get("ok"):
-        return str(reentry.get("reason") or "REENTRY_BLOCKED")
-
-    entry_zone=build_entry_zone(snap,setup,tm_cfg)
-    snap["entry_zone"]=entry_zone
-    if not entry_zone.get("ok"):
-        return str(entry_zone.get("reason") or "ENTRY_ZONE_INVALID")
-
-    entry=simulated_fill(snap["ask"],"buy")
-    atr_abs=snap.get("atr_15m")
-    swing_low=snap.get("confirmed_swing_low")
-    if atr_abs is None or not math.isfinite(float(atr_abs)) or float(atr_abs)<=0:
+    entry = simulated_fill(snap["ask"], "buy")
+    atr_abs = snap.get("atr_15m")
+    swing_low = snap.get("confirmed_swing_low")
+    if atr_abs is None or not math.isfinite(float(atr_abs)) or float(atr_abs) <= 0:
         return "ATR_UNAVAILABLE"
-    if swing_low is None or not math.isfinite(float(swing_low)) or float(swing_low)<=0:
+    if swing_low is None or not math.isfinite(float(swing_low)) or float(swing_low) <= 0:
         return "NO_CONFIRMED_SWING_LOW"
 
-    atr_abs=float(atr_abs)
-    swing_low=float(swing_low)
-    atr_stop=entry-atr_abs*float(risk_cfg["stop_atr_multiplier"])
-    swing_stop=swing_low-atr_abs*float(risk_cfg["swing_atr_buffer"])
-    stop=min(atr_stop,swing_stop,entry*(1-float(risk_cfg["min_stop_fraction"])))
-    if stop<=0 or stop>=entry:
+    atr_abs = float(atr_abs)
+    swing_low = float(swing_low)
+    atr_stop = entry - atr_abs * float(risk_cfg["stop_atr_multiplier"])
+    swing_stop = swing_low - atr_abs * float(risk_cfg["swing_atr_buffer"])
+    stop = min(atr_stop, swing_stop, entry * (1 - float(risk_cfg["min_stop_fraction"])))
+    if stop <= 0 or stop >= entry:
         return "INVALID_STOP"
-    stop_fraction=(entry-stop)/entry
-    if stop_fraction>float(risk_cfg["max_stop_fraction"]):
+    stop_fraction = (entry - stop) / entry
+    if stop_fraction > float(risk_cfg["max_stop_fraction"]):
         return "STOP_TOO_WIDE"
-    target=entry+(entry-stop)*float(risk_cfg["reward_risk"])
+    target = entry + (entry - stop) * float(risk_cfg["reward_risk"])
 
-    fee=float(risk_cfg["fee_rate"])
-    equity=account_equity_at_cost(state)
+    fee = float(risk_cfg["fee_rate"])
+    equity = account_equity_at_cost(state)
     regime_mult=max(0.0,min(1.0,float(snap.get("risk_multiplier",1.0))))
-    risk_budget=min(
+    risk_budget = min(
         float(risk_cfg["max_risk_per_trade_usdt"]),
-        equity*float(risk_cfg["max_risk_per_trade_fraction"]),
-    )*regime_mult
-    if risk_budget<=0:
+        equity * float(risk_cfg["max_risk_per_trade_fraction"]),
+    ) * regime_mult
+    if risk_budget <= 0:
         return "REGIME_RISK_ZERO"
-
-    stake_by_risk=risk_budget/max(
-        stop_fraction+2*fee+float(risk_cfg["slippage_rate"]),1e-9
-    )
-    notional=min(
-        float(risk_cfg["max_quote_per_trade_usdt"]),
-        stake_by_risk,
-        state["cash_usdt"]/(1+fee),
-    )
-    if notional<=0:
+    stake_by_risk = risk_budget / max(stop_fraction + 2 * fee + float(risk_cfg["slippage_rate"]), 1e-9)
+    notional = min(float(risk_cfg["max_quote_per_trade_usdt"]), stake_by_risk,
+                   state["cash_usdt"] / (1 + fee))
+    if notional <= 0:
         return "NO_CASH"
+    if not (float(filters["min_notional"]) <= notional <= float(filters["max_notional"])):
+        return "EXCHANGE_NOTIONAL_FILTER"
 
+    # Final execution-quality gate uses current depth for the actual sized quote.
+    # This happens only after the signal has passed all strategy/context guards.
     try:
-        depth=snap.get("_execution_depth") or depth20(symbol)
+        depth = snap.get("_execution_depth") or depth20(snap["symbol"])
+        quality = execution_quality_status(
+            depth,
+            notional,
+            max_slippage_bps=CFG["production_guard"]["max_estimated_slippage_bps"],
+            min_fill_ratio=CFG["production_guard"]["min_depth_fill_ratio"],
+        )
     except Exception as exc:
         snap["execution_quality"]={"ok":False,"reasons":["DEPTH_CHECK_FAILED"],"detail":str(exc)[:120]}
         return "EXECUTION_DEPTH_UNAVAILABLE"
-
-    liquidity_cap=liquidity_quote_cap(
-        depth,
-        CFG["production_guard"]["max_estimated_slippage_bps"],
-        tm_cfg["max_depth_utilization_fraction"],
-    )
-    snap["liquidity_quote_cap"]=liquidity_cap
-    notional=min(notional,liquidity_cap)
-    if notional<float(filters["min_notional"]):
-        return "LIQUIDITY_SIZE_BELOW_MIN_NOTIONAL"
-    if notional>float(filters["max_notional"]):
-        return "EXCHANGE_NOTIONAL_FILTER"
-
-    quality=execution_quality_status(
-        depth,
-        notional,
-        max_slippage_bps=CFG["production_guard"]["max_estimated_slippage_bps"],
-        min_fill_ratio=CFG["production_guard"]["min_depth_fill_ratio"],
-    )
     snap["execution_quality"]=quality
     if not quality.get("ok"):
         return "EXECUTION_QUALITY_REJECT"
 
-    slip_row=(state.get("slippage_model") or {}).get(symbol) or {}
+    slip_row=(state.get("slippage_model") or {}).get(snap["symbol"]) or {}
     slip_count=int(slip_row.get("count") or 0)
     hist_slip=(float(slip_row.get("ewma_bps")) if slip_row.get("ewma_bps") is not None else None)
     current_slip=float(quality.get("slippage_bps") or 0.0)
@@ -911,34 +789,9 @@ def open_position(state, snap, filters):
     if effective_slip>float(CFG["smart_execution"]["max_slippage_bps"]):
         return "SYMBOL_SLIPPAGE_MODEL_REJECT"
 
-    # Last-moment flow recheck: a great signal may degrade while sizing/executing.
-    try:
-        dm=depth_snapshot_metrics(depth,int(CFG["momentum"]["obi_levels"]))
-        if snap.get("_execution_agg") is not None:
-            agg_now=snap["_execution_agg"]
-        elif snap.get("_execution_depth") is not None:
-            agg_now=(snap.get("micro") or {}).get("agg_cvd") or {}
-        else:
-            agg_now=aggtrade_delta(recent_aggtrades(symbol,500))
-        current_flow={
-            "obi":dm.get("obi"),
-            "taker_ratio":agg_now.get("ratio"),
-            "cvd_delta":agg_now.get("delta_quote"),
-            "cvd_slope_positive":agg_now.get("slope_positive"),
-        }
-        quality_degradation=trade_quality_degradation_status(
-            snap.get("micro") or {},current_flow,tm_cfg
-        )
-    except Exception as exc:
-        snap["quality_degradation"]={"ok":False,"reason":"PREEXECUTION_RECHECK_FAILED","detail":str(exc)[:120]}
-        return "PREEXECUTION_RECHECK_FAILED"
-    snap["quality_degradation"]=quality_degradation
-    if not quality_degradation.get("ok"):
-        return "TRADE_QUALITY_DEGRADED"
-
     guard=(snap.get("micro") or {}).get("production_guard") or {}
     plan=choose_execution_plan(
-        symbol=symbol,
+        symbol=snap["symbol"],
         quote_amount_usdt=notional,
         best_bid=snap["bid"],
         best_ask=snap["ask"],
@@ -955,6 +808,7 @@ def open_position(state, snap, filters):
     if not plan.get("ok"):
         return str(plan.get("reason") or "SMART_EXECUTION_REJECT")
 
+    # PAPER fill models the current depth instead of a single global slippage constant.
     depth_avg=float(quality.get("average_price") or snap["ask"])
     if plan.get("style")=="AGGRESSIVE_LIMIT":
         limit_price=float(plan["limit_price"])
@@ -964,279 +818,144 @@ def open_position(state, snap, filters):
     else:
         entry=max(float(snap["ask"]),depth_avg)
 
-    if not entry_in_zone(entry,entry_zone):
-        return "ENTRY_ZONE_INVALIDATED"
-
-    stop=min(atr_stop,swing_stop,entry*(1-float(risk_cfg["min_stop_fraction"])))
-    if stop<=0 or stop>=entry:
+    # Keep the original absolute protective thesis; recompute target/R after modeled fill.
+    stop = min(atr_stop, swing_stop, entry * (1 - float(risk_cfg["min_stop_fraction"])))
+    if stop <= 0 or stop >= entry:
         return "INVALID_STOP_AFTER_EXECUTION"
     stop_fraction=(entry-stop)/entry
     if stop_fraction>float(risk_cfg["max_stop_fraction"]):
         return "STOP_TOO_WIDE_AFTER_EXECUTION"
     target=entry+(entry-stop)*float(risk_cfg["reward_risk"])
 
-    invalidation=build_invalidation(snap,setup,entry,stop,tm_cfg)
-    if not invalidation.get("ok"):
-        return "INVALIDATION_LEVEL_UNAVAILABLE"
-
-    net_rr=net_reward_risk(
-        entry,stop,target,fee,
-        quality.get("effective_slippage_bps") or 0,
-        tm_cfg["expected_exit_slippage_bps"],
-    )
-    snap["net_reward_risk"]=net_rr
-    if net_rr.get("net_rr") is None or float(net_rr["net_rr"])<float(tm_cfg["minimum_net_rr_after_costs"]):
-        return "NET_RR_TOO_LOW"
-
-    qty=round_qty(notional/entry,filters)
-    if qty<float(filters["min_qty"]) or qty>float(filters["max_qty"]):
+    qty = round_qty(notional / entry, filters)
+    if qty < float(filters["min_qty"]) or qty > float(filters["max_qty"]):
         return "EXCHANGE_LOT_FILTER"
-    cost=qty*entry*(1+fee)
-    if cost>state["cash_usdt"]+1e-9:
+    cost = qty * entry * (1 + fee)
+    if cost > state["cash_usdt"] + 1e-9:
         return "INSUFFICIENT_CASH"
 
     signal_id=signal_id_for_snapshot(snap)
     if signal_id in (state.get("executed_signal_ids") or {}):
         return "DUPLICATE_SIGNAL_ID"
 
-    profile=setup_excursion_profile(
-        state.get("closed_trades") or [],setup,tm_cfg["minimum_excursion_samples"]
-    )
-    adaptive=adaptive_trade_levels(profile,tm_cfg)
-    pos={
-        "engine":CFG["engine"],"signal_id":signal_id,"setup_type":setup,
-        "entry":entry,"qty":qty,"original_qty":qty,"cost":cost,"original_cost":cost,
-        "stop":stop,"target":target,"initial_stop":stop,
-        "initial_risk_abs":entry-stop,"breakeven":False,
-        "profit_stage":"INITIAL","winner_extensions":0,
-        "partial_exits":[],"realized_partial_pnl_usdt":0.0,
-        "partial_tp1_done":False,"partial_tp2_done":False,
-        "opened_at":now_iso(),"bar_time":snap["bar_time"],"score":snap["score"],
-        "score_total":snap.get("score_total",6),"checks":snap.get("checks",{}),
-        "confirmed_swing_low":swing_low,
-        "entry_zone":entry_zone,
-        "invalidation":invalidation,
-        "net_reward_risk":net_rr,
-        "liquidity_quote_cap":liquidity_cap,
-        "quality_degradation_at_entry":quality_degradation,
-        "excursion_profile_at_entry":profile,
-        "adaptive_levels":adaptive,
-        "momentum_score":snap.get("micro",{}).get("score"),
-        "momentum_stage":snap.get("micro",{}).get("stage"),
-        "relative_strength":snap.get("relative_strength"),
-        "market_regime":snap.get("regime",{}).get("state") if isinstance(snap.get("regime"),dict) else snap.get("regime"),
-        "portfolio_corr":snap.get("portfolio_corr"),
-        "execution_plan":snap.get("execution_plan"),
-        "execution_quality":snap.get("execution_quality"),
-        "entry_context":{
-            "setup_type":setup,
-            "taker_last3":snap.get("micro",{}).get("taker_last3"),
-            "rvol_1m":snap.get("micro",{}).get("rvol_1m"),
-            "rvol_3m":snap.get("micro",{}).get("rvol_3m"),
-            "obi":snap.get("micro",{}).get("obi"),
-            "agg_cvd":snap.get("micro",{}).get("agg_cvd"),
-            "spread_bps":snap.get("spread_bps"),
-            "adx_15m":snap.get("adx_15m"),
-            "rsi_15m":snap.get("rsi_15m"),
-            "vwap_distance_atr":(snap.get("micro_pre") or {}).get("vwap_distance_atr"),
-            "session":((snap.get("micro") or {}).get("production_guard") or {}).get("session"),
-            "decision_latency_ms":((snap.get("micro") or {}).get("production_guard") or {}).get("decision_latency_ms"),
-            "adverse_selection":((snap.get("micro") or {}).get("production_guard") or {}).get("adverse_selection"),
-            "liquidity_disappearance":((snap.get("micro") or {}).get("production_guard") or {}).get("liquidity_disappearance"),
-            "estimated_entry_slippage_bps":quality.get("effective_slippage_bps"),
-            "execution_style":(snap.get("execution_plan") or {}).get("style"),
-            "net_rr_after_costs":net_rr.get("net_rr"),
-            "quality_degradation":quality_degradation,
+    pos = {
+        "engine": CFG["engine"], "signal_id": signal_id, "entry": entry, "qty": qty, "cost": cost,
+        "stop": stop, "target": target, "initial_stop": stop,
+        "initial_risk_abs": entry - stop, "breakeven": False,
+        "opened_at": now_iso(), "bar_time": snap["bar_time"], "score": snap["score"],
+        "score_total": snap.get("score_total", 6), "checks": snap.get("checks", {}),
+        "confirmed_swing_low": swing_low,
+        "momentum_score": snap.get("micro", {}).get("score"),
+        "momentum_stage": snap.get("micro", {}).get("stage"),
+        "relative_strength": snap.get("relative_strength"),
+        "market_regime": snap.get("regime", {}).get("state") if isinstance(snap.get("regime"), dict) else snap.get("regime"),
+        "portfolio_corr": snap.get("portfolio_corr"),
+        "execution_plan": snap.get("execution_plan"),
+        "execution_quality": snap.get("execution_quality"),
+        "entry_context": {
+            "taker_last3": snap.get("micro", {}).get("taker_last3"),
+            "rvol_1m": snap.get("micro", {}).get("rvol_1m"),
+            "rvol_3m": snap.get("micro", {}).get("rvol_3m"),
+            "obi": snap.get("micro", {}).get("obi"),
+            "agg_cvd": snap.get("micro", {}).get("agg_cvd"),
+            "spread_bps": snap.get("spread_bps"),
+            "adx_15m": snap.get("adx_15m"),
+            "rsi_15m": snap.get("rsi_15m"),
+            "session": ((snap.get("micro") or {}).get("production_guard") or {}).get("session"),
+            "decision_latency_ms": ((snap.get("micro") or {}).get("production_guard") or {}).get("decision_latency_ms"),
+            "max_total_latency_ms": CFG["production_guard"]["max_total_detection_to_order_ms"],
+            "adverse_selection": ((snap.get("micro") or {}).get("production_guard") or {}).get("adverse_selection"),
+            "liquidity_disappearance": ((snap.get("micro") or {}).get("production_guard") or {}).get("liquidity_disappearance"),
+            "estimated_entry_slippage_bps": (snap.get("execution_quality") or {}).get("slippage_bps"),
+            "execution_style": (snap.get("execution_plan") or {}).get("style"),
         },
-        "peak_price":entry,"trough_price":entry,"mfe_r":0.0,"mae_r":0.0,
+        "peak_price": entry,
+        "trough_price": entry,
+        "mfe_r": 0.0,
+        "mae_r": 0.0,
     }
-
-    actual=stop_risk(pos)
-    if actual>min(float(risk_cfg["max_risk_per_trade_usdt"]),risk_budget)+1e-9:
+    actual = stop_risk(pos)
+    if actual > min(float(risk_cfg["max_risk_per_trade_usdt"]), risk_budget) + 1e-9:
         return "RISK_PER_TRADE"
-    portfolio=portfolio_stop_risk(state)+actual
-    if portfolio>float(risk_cfg["max_portfolio_stop_risk_usdt"])+1e-9:
+    portfolio = portfolio_stop_risk(state) + actual
+    if portfolio > float(risk_cfg["max_portfolio_stop_risk_usdt"]) + 1e-9:
         return "PORTFOLIO_STOP_RISK"
-    if max(0.0,-state["day_pnl"])+portfolio>float(risk_cfg["max_daily_loss_usdt"])+1e-9:
+    if max(0.0, -state["day_pnl"]) + portfolio > float(risk_cfg["max_daily_loss_usdt"]) + 1e-9:
         return "REMAINING_DAILY_RISK"
 
-    state["cash_usdt"]-=cost
-    state["positions"][symbol]=pos
-    state.setdefault("executed_signal_ids",{})[signal_id]={"symbol":symbol,"opened_at":now_iso()}
+    state["cash_usdt"] -= cost
+    state["positions"][snap["symbol"]] = pos
+    state.setdefault("executed_signal_ids", {})[signal_id]={"symbol":snap["symbol"],"opened_at":now_iso()}
+    # Bound persistent idempotency history.
     if len(state["executed_signal_ids"])>2000:
         oldest=list(state["executed_signal_ids"])[:-1500]
         for key in oldest:
             state["executed_signal_ids"].pop(key,None)
     realized=realized_slippage_bps(float(snap["ask"]),entry,"BUY")
-    state["slippage_model"]=update_symbol_slippage_model(
-        state.get("slippage_model"),symbol,realized
-    )
+    state["slippage_model"]=update_symbol_slippage_model(state.get("slippage_model"),snap["symbol"],realized)
     return "PAPER_OPENED"
 
 
 def manage_position(state, symbol, snap):
-    p=state["positions"][symbol]
+    p = state["positions"][symbol]
     bid=float(snap["bid"])
     atr_now=snap.get("atr_15m")
-    tm_cfg=CFG["trade_management"]
     p["peak_price"]=max(float(p.get("peak_price") or p["entry"]),bid)
     p["trough_price"]=min(float(p.get("trough_price") or p["entry"]),bid)
     r0=max(float(p.get("initial_risk_abs") or 0),1e-12)
     p["mfe_r"]=max(float(p.get("mfe_r") or 0.0),(p["peak_price"]-p["entry"])/r0)
     p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
 
-    # Catastrophe/protective stop remains first and unconditional.
-    if bid<=float(p["stop"]):
-        close_position(state,symbol,bid,"STOP",snap.get("_exit_depth"))
+    if bid <= p["stop"]:
+        close_position(state, symbol, bid, "STOP", snap.get("_exit_depth"))
+        return
+    if bid >= p["target"]:
+        close_position(state, symbol, bid, "TARGET", snap.get("_exit_depth"))
         return
 
+    exit_cfg=CFG.get("exit",{})
     try:
         opened=datetime.fromisoformat(str(p["opened_at"]).replace("Z","+00:00"))
         age_minutes=max(0.0,(datetime.now(timezone.utc)-opened).total_seconds()/60.0)
     except Exception:
         age_minutes=0.0
-    age_candles=int(age_minutes)
 
-    setup=p.get("setup_type")
-    rules=setup_rules(setup,tm_cfg) if setup else None
+    pre=snap.get("micro_pre") or {}
+    taker_latest=pre.get("taker_latest")
+    vwap_now=pre.get("vwap")
+    cvd_positive=bool(pre.get("cvd_positive"))
 
-    # Legacy PAPER positions opened before this engine keep conservative old
-    # management until they close; new intelligent rules never infer a thesis.
-    if rules is None:
-        exit_cfg=CFG.get("exit",{})
-        pre=snap.get("micro_pre") or {}
-        taker_latest=pre.get("taker_latest")
-        vwap_now=pre.get("vwap")
-        cvd_positive=bool(pre.get("cvd_positive"))
-        if age_minutes>=float(exit_cfg.get("momentum_fade_min_age_minutes",5)):
-            fade=(
-                taker_latest is not None
-                and float(taker_latest)<float(exit_cfg.get("momentum_fade_taker_below",0.48))
-                and not cvd_positive
-                and vwap_now is not None
-                and bid<float(vwap_now)
-            )
-            if fade:
-                close_position(state,symbol,bid,"MOMENTUM_FADE",snap.get("_exit_depth"))
-                return
-        if (
-            age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
-            and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
-        ):
-            close_position(state,symbol,bid,"TIME_NO_FOLLOW_THROUGH",snap.get("_exit_depth"))
-            return
-        if bid>=float(p["target"]):
-            close_position(state,symbol,bid,"TARGET",snap.get("_exit_depth"))
-            return
-        if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
-            close_position(state,symbol,bid,"HARD_TIME_STOP",snap.get("_exit_depth"))
-            return
-        if p["initial_risk_abs"]>0 and bid>=p["entry"]+float(CFG["risk"]["breakeven_at_r"])*p["initial_risk_abs"]:
-            p["stop"]=max(p["stop"],p["entry"])
-            p["breakeven"]=True
-        if p["breakeven"] and atr_now and atr_now>0:
-            trail=bid-float(CFG["risk"]["trailing_atr_multiplier"])*float(atr_now)
-            p["stop"]=max(p["stop"],trail)
-        return
-
-    thesis=thesis_invalidated(p,snap,tm_cfg)
-    p["last_thesis_check"]=thesis
-    flow=thesis.get("flow") or current_flow_state(snap,tm_cfg)
-    if thesis.get("invalid"):
-        close_position(
-            state,symbol,bid,str(thesis.get("reason") or "THESIS_INVALIDATED"),
-            snap.get("_exit_depth")
+    # Thesis invalidation: buyers lose control and price slips back under VWAP.
+    if age_minutes>=float(exit_cfg.get("momentum_fade_min_age_minutes",5)):
+        fade=(
+            taker_latest is not None
+            and float(taker_latest)<float(exit_cfg.get("momentum_fade_taker_below",0.48))
+            and not cvd_positive
+            and vwap_now is not None
+            and bid<float(vwap_now)
         )
-        return
+        if fade:
+            close_position(state, symbol, bid, "MOMENTUM_FADE", snap.get("_exit_depth"))
+            return
 
-    adaptive=p.get("adaptive_levels") or adaptive_trade_levels(
-        p.get("excursion_profile_at_entry") or {},tm_cfg
-    )
-    p["adaptive_levels"]=adaptive
-
-    # MAE only becomes an exit signal when current flow also confirms weakness.
+    # If the trade never produces meaningful favorable excursion, free capital.
     if (
-        float(p.get("mae_r") or 0.0)>=float(adaptive["mae_failure_r"])
-        and flow.get("failure_count",0)>=2
+        age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
+        and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
     ):
-        close_position(state,symbol,bid,"MAE_FAILURE",snap.get("_exit_depth"))
+        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH", snap.get("_exit_depth"))
         return
 
-    if age_candles>=int(tm_cfg["momentum_failure_min_age_candles"]):
-        mf=momentum_failure(p,snap,tm_cfg)
-        p["last_momentum_failure_check"]=mf
-        if mf.get("failed"):
-            close_position(state,symbol,bid,"MOMENTUM_FAILURE",snap.get("_exit_depth"))
-            return
-
-    no_follow=int(rules["no_follow_through_candles"])
-    if (
-        age_candles>=no_follow
-        and float(p.get("mfe_r") or 0.0)<float(CFG["exit"]["min_mfe_r_for_hold"])
-        and not flow.get("continuation_strong")
-    ):
-        close_position(state,symbol,bid,"TIME_NO_FOLLOW_THROUGH",snap.get("_exit_depth"))
+    if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
+        close_position(state, symbol, bid, "HARD_TIME_STOP", snap.get("_exit_depth"))
         return
 
-    if age_minutes>=float(CFG["exit"].get("hard_time_stop_minutes",120)):
-        close_position(state,symbol,bid,"HARD_TIME_STOP",snap.get("_exit_depth"))
-        return
-
-    current_r=(bid-float(p["entry"]))/r0
-    partial_cfg=tm_cfg["paper_partial_profit"]
-    if partial_cfg.get("enabled") is True:
-        if not p.get("partial_tp1_done") and current_r>=float(adaptive["tp1_r"]):
-            desired=float(p.get("original_qty") or p["qty"])*float(partial_cfg["tp1_fraction"])
-            frac=min(0.95,desired/max(float(p["qty"]),1e-12))
-            if 0<frac<1:
-                result=partial_close_position(
-                    state,symbol,bid,frac,"TP1_RESEARCH",snap.get("_exit_depth")
-                )
-                if result=="PAPER_PARTIAL_CLOSED":
-                    p["partial_tp1_done"]=True
-        if symbol not in state["positions"]:
-            return
-        p=state["positions"][symbol]
-        if not p.get("partial_tp2_done") and current_r>=float(adaptive["tp2_r"]):
-            desired=float(p.get("original_qty") or p["qty"])*float(partial_cfg["tp2_fraction"])
-            frac=min(0.95,desired/max(float(p["qty"]),1e-12))
-            if 0<frac<1:
-                result=partial_close_position(
-                    state,symbol,bid,frac,"TP2_RESEARCH",snap.get("_exit_depth")
-                )
-                if result=="PAPER_PARTIAL_CLOSED":
-                    p["partial_tp2_done"]=True
-
-    protection=profit_protection_state(
-        p,bid,atr_now,snap.get("confirmed_swing_low"),flow,tm_cfg
-    )
-    p["profit_stage"]=protection["stage"]
-    p["stop"]=max(float(p["stop"]),float(protection["stop"]))
-    p["breakeven"]=p["stop"]>=float(p["entry"])
-
-    # At the nominal target, extend a strong winner once rather than forcing
-    # the entire remaining position out.
-    if bid>=float(p["target"]):
-        ext_cfg=tm_cfg["winner_extension"]
-        extensions=int(p.get("winner_extensions") or 0)
-        if (
-            ext_cfg.get("enabled") is True
-            and flow.get("continuation_strong")
-            and extensions<int(ext_cfg["max_extensions"])
-        ):
-            p["winner_extensions"]=extensions+1
-            p["target"]=float(p["target"])+r0*float(ext_cfg["extension_r"])
-            p["stop"]=max(float(p["stop"]),float(p["entry"])+r0*float(tm_cfg["lock_profit_r"]))
-            p["profit_stage"]="WINNER_EXTENDED"
-            append_decision(
-                state,symbol,"WHY_HOLD_WINNER",
-                setup_type=setup,current_r=current_r,
-                new_target=p["target"],new_stop=p["stop"],
-                flow=flow,
-            )
-        else:
-            close_position(state,symbol,bid,"TARGET",snap.get("_exit_depth"))
-            return
+    if p["initial_risk_abs"] > 0 and bid >= p["entry"] + float(CFG["risk"]["breakeven_at_r"]) * p["initial_risk_abs"]:
+        p["stop"] = max(p["stop"], p["entry"])
+        p["breakeven"] = True
+    if p["breakeven"] and atr_now and atr_now > 0:
+        trail = bid - float(CFG["risk"]["trailing_atr_multiplier"]) * float(atr_now)
+        p["stop"] = max(p["stop"], trail)
 
 
 def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
@@ -1561,28 +1280,6 @@ def main():
                 except Exception as exc:
                     blocked.append({"symbol": symbol, "reason": "MICROSTRUCTURE_UNAVAILABLE", "detail": str(exc)[:160]})
 
-    # Open positions get a fresh microstructure read as well. Entry discovery
-    # and trade management must use the same live order-flow evidence.
-    open_micro = [
-        (symbol, snapshots[symbol])
-        for symbol in list(state["positions"])
-        if symbol in snapshots
-    ]
-    if open_micro:
-        with ThreadPoolExecutor(max_workers=min(3, len(open_micro))) as pool:
-            futures={pool.submit(enrich_microstructure,symbol,snap):symbol for symbol,snap in open_micro}
-            for future in as_completed(futures):
-                symbol=futures[future]
-                try:
-                    snapshots[symbol]=future.result()
-                    snapshots[symbol]["regime"]=regime
-                except Exception as exc:
-                    blocked.append({
-                        "symbol":symbol,
-                        "reason":"OPEN_POSITION_MICROSTRUCTURE_UNAVAILABLE",
-                        "detail":str(exc)[:160],
-                    })
-
     momentum_watchlist = []
     for symbol, snap in snapshots.items():
         micro = snap.get("micro")
@@ -1671,11 +1368,6 @@ def main():
             event_risk=load_event_risk(
                 ROOT.parent / CFG["production_guard"]["event_risk_file"],
                 key,
-                required=(
-                    CFG.get("mode") != "paper"
-                    and CFG["production_guard"].get("event_risk_required_for_live") is True
-                ),
-                max_age_minutes=CFG["production_guard"].get("event_risk_max_age_minutes"),
             )
             snap["event_risk"]=event_risk
             if not event_risk.get("ok"):
@@ -1683,11 +1375,18 @@ def main():
                 append_decision(state,key,"WHY_SKIP",reason=event_risk.get("reason") or "EVENT_RISK")
                 state.setdefault("seen", {})[key] = decision_id
                 continue
+            listing_age=candidate_listing_age_status(key)
+            snap["listing_age"]=listing_age
+            if not listing_age.get("ok"):
+                blocked.append({"symbol":key,"reason":listing_age.get("reason") or "NEW_LISTING_QUARANTINE","detail":listing_age})
+                append_decision(state,key,"WHY_SKIP",reason=listing_age.get("reason") or "NEW_LISTING_QUARANTINE")
+                state.setdefault("seen", {})[key] = decision_id
+                continue
             corr=max_open_position_correlation(snap, list(state["positions"]), snapshots, points=48)
             snap["portfolio_corr"]=corr
             if corr.get("max_corr") is not None and float(corr["max_corr"])>float(CFG["risk"]["max_pair_correlation"]):
                 blocked.append({"symbol":key,"reason":"CORRELATION_TOO_HIGH","detail":corr})
-                append_decision(state,key,"WHY_SKIP",reason="CORRELATION_TOO_HIGH",detail=corr)
+                append_decision(state,key,"WHY_SKIP",reason="CORRELATION_TOO_HIGH",max_corr=corr.get("max_corr"))
                 state.setdefault("seen", {})[key] = decision_id
                 continue
             snap["risk_multiplier"]=float(regime.get("risk_multiplier",1.0))
@@ -1702,10 +1401,6 @@ def main():
                     momentum_score=(snap.get("micro") or {}).get("score"),
                     regime=regime.get("state"),
                     execution_style=(snap.get("execution_plan") or {}).get("style"),
-                    setup_type=snap.get("setup_type"),
-                    entry_zone=snap.get("entry_zone"),
-                    net_rr_after_costs=(snap.get("net_reward_risk") or {}).get("net_rr"),
-                    liquidity_quote_cap=snap.get("liquidity_quote_cap"),
                 )
 
     state["signals"] = [{
@@ -1723,6 +1418,7 @@ def main():
         "production_guard": x.get("micro", {}).get("production_guard"),
         "execution_plan": x.get("execution_plan"),
         "execution_quality": x.get("execution_quality"),
+        "listing_age": x.get("listing_age"),
         "micro_breakout_hold": x.get("micro", {}).get("micro_breakout_hold"),
         "context_score_15m": x["score"],
         "context_checks_15m": x["checks"],
