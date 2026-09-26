@@ -1,8 +1,11 @@
 from decimal import Decimal
 import importlib.util
+import sys
 from pathlib import Path
 
-P=Path(__file__).resolve().parents[1]/"freqtrade"/"production_safety_kernel.py"
+FREQ=Path(__file__).resolve().parents[1]/"freqtrade"
+if str(FREQ) not in sys.path: sys.path.insert(0,str(FREQ))
+P=FREQ/"production_safety_kernel.py"
 spec=importlib.util.spec_from_file_location("psk",P); psk=importlib.util.module_from_spec(spec); spec.loader.exec_module(psk)
 
 def test_fsm_blocks_illegal_transition():
@@ -43,7 +46,7 @@ def test_version_stamp_is_stable_for_same_config():
 
 def _load(name):
     q=Path(__file__).resolve().parents[1]/"freqtrade"/f"{name}.py"
-    z=importlib.util.spec_from_file_location(name,q); m=importlib.util.module_from_spec(z); z.loader.exec_module(m); return m
+    z=importlib.util.spec_from_file_location(name,q); m=importlib.util.module_from_spec(z); sys.modules[name]=m; z.loader.exec_module(m); return m
 
 def test_sequence_guard_rejects_old_and_gaps_until_resync():
     m=_load("event_integrity"); g=m.SequenceGuard()
