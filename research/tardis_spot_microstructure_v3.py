@@ -50,7 +50,7 @@ def fetch_window(symbol:str,date:str,start_offset:int,minutes:int,warmup_from_ze
     # Each Tardis offset is an independent minute request. Download concurrently
     # but concatenate strictly by offset so replay ordering semantics do not change.
     bodies={}
-    with ThreadPoolExecutor(max_workers=min(6,max(1,len(offsets)))) as pool:
+    with ThreadPoolExecutor(max_workers=min(12,max(1,len(offsets)))) as pool:
         futs={pool.submit(fetch_minute,symbol,date,off):off for off in offsets}
         for fut in as_completed(futs):
             off=futs[fut]
