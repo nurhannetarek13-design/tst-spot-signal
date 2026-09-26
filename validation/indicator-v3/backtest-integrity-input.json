@@ -1,0 +1,18 @@
+{
+  "source": "CURRENT_V3_HISTORICAL_STATUS",
+  "pointInTimeUniverse": false,
+  "delistedCoverage": false,
+  "chronologicalOOS": true,
+  "walkForward": true,
+  "unseenSymbolHoldout": true,
+  "lookAheadAudit": true,
+  "feesIncluded": true,
+  "spreadIncluded": true,
+  "slippageIncluded": true,
+  "latencyIncluded": false,
+  "partialFillsIncluded": false,
+  "historicalSymbolCount": 24,
+  "delistedSymbolCount": 0,
+  "roundTripCostBps": 28,
+  "note": "Fail-closed placeholder reflecting current evidence. Must be replaced only by documented point-in-time universe evidence."
+}

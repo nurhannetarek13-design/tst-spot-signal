@@ -3,6 +3,7 @@ import express from "express";
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const ALLOWED_PATHS = new Set([
+  "/api/v3/time",
   "/api/v3/ticker/24hr",
   "/api/v3/ticker/bookTicker",
   "/api/v3/exchangeInfo",

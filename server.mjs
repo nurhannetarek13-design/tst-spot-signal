@@ -154,6 +154,25 @@ app.get("/market-data", async (req, res) => {
   }
 });
 
+export function evaluateAccountTradingSafety(accountStatus = {}, apiTradingStatus = {}) {
+  const account = String(accountStatus?.data ?? accountStatus?.status ?? "").trim();
+  const apiData = apiTradingStatus?.data && typeof apiTradingStatus.data === "object"
+    ? apiTradingStatus.data
+    : apiTradingStatus || {};
+  const isLocked = apiData?.isLocked === true;
+  const plannedRecoverTime = Number(apiData?.plannedRecoverTime || 0);
+  const reasons = [];
+  if (account.toLowerCase() !== "normal") reasons.push("ACCOUNT_STATUS_NOT_NORMAL");
+  if (isLocked) reasons.push("API_TRADING_LOCKED");
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    accountStatus: account || null,
+    isLocked,
+    plannedRecoverTime: Number.isFinite(plannedRecoverTime) ? plannedRecoverTime : null,
+  };
+}
+
 export function evaluateApiRestrictions(row = {}) {
   const safe = {
     ipRestrict: row.ipRestrict === true,
@@ -178,11 +197,19 @@ app.get("/executor/api-key-safety", async (_req, res) => {
     if (!hasBinanceSigningKey()) {
       return res.status(409).json({ ok:false, status:"API_NOT_CONNECTED", noSecretValuesExposed:true });
     }
-    const restrictions = await signedBinance("GET", "/sapi/v1/account/apiRestrictions", {});
-    const result = evaluateApiRestrictions(restrictions);
-    return res.status(result.ok ? 200 : 409).json({
-      ...result,
-      status: result.ok ? "API_KEY_SAFETY_OK" : "API_KEY_SAFETY_BLOCKED",
+    const [restrictions, accountStatus, apiTradingStatus] = await Promise.all([
+      signedBinance("GET", "/sapi/v1/account/apiRestrictions", {}),
+      signedBinance("GET", "/sapi/v1/account/status", {}),
+      signedBinance("GET", "/sapi/v1/account/apiTradingStatus", {}),
+    ]);
+    const permissions = evaluateApiRestrictions(restrictions);
+    const trading = evaluateAccountTradingSafety(accountStatus, apiTradingStatus);
+    const ok = permissions.ok && trading.ok;
+    return res.status(ok ? 200 : 409).json({
+      ok,
+      permissions,
+      trading,
+      status: ok ? "API_KEY_SAFETY_OK" : "API_KEY_SAFETY_BLOCKED",
       noSecretValuesExposed:true,
     });
   } catch (error) {

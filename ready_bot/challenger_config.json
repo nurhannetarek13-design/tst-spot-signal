@@ -153,5 +153,10 @@
     "live_require_futures_disabled": true,
     "live_require_ip_restriction": true,
     "never_log_credentials": true
+  },
+  "shadow_challenger": {
+    "enabled": false,
+    "candidate_id": "UNSET",
+    "base_champion_blob_sha": "59ae49df663c548f628c0dca0fd023db3161f1a6"
   }
 }

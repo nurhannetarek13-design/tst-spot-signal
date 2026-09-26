@@ -1,0 +1,49 @@
+{
+  "engine": "INDICATOR_V3_PRECISION_EVIDENCE_V1",
+  "authorization": "EVIDENCE_ONLY",
+  "liveTrading": false,
+  "target": {
+    "minimumWinRate": 0.99,
+    "minimumHoldoutTrades": 100,
+    "requirePositiveNet": true
+  },
+  "holdout": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "winRate": 0,
+    "netPnlPerUnit": 0,
+    "expectancyPerUnit": 0,
+    "profitFactor": 0,
+    "untouched": false,
+    "costsIncluded": false
+  },
+  "backtestIntegrity": {
+    "productionGradeHistoricalEvidence": false
+  },
+  "universeIntegrity": {
+    "pointInTimeUniverse": false,
+    "delistedCoverage": false,
+    "historicalSymbolCount": 0,
+    "delistedSymbolCount": 0
+  },
+  "spotReplay": {
+    "replayIntegrityPass": false,
+    "executionReplayPass": false
+  },
+  "claimSupported": false,
+  "claimBlockedReasons": [
+    "HOLDOUT_NOT_EXPLICITLY_UNTOUCHED",
+    "REALISTIC_COSTS_NOT_CONFIRMED",
+    "HOLDOUT_SAMPLE_TOO_SMALL",
+    "HOLDOUT_WIN_RATE_BELOW_TARGET",
+    "HOLDOUT_NET_NOT_POSITIVE",
+    "BACKTEST_INTEGRITY_NOT_PROVEN",
+    "POINT_IN_TIME_UNIVERSE_NOT_PROVEN",
+    "DELISTED_COVERAGE_NOT_PROVEN",
+    "SPOT_REPLAY_INTEGRITY_NOT_PROVEN",
+    "SPOT_EXECUTION_REPLAY_NOT_PROVEN"
+  ],
+  "generatedAt": null,
+  "note": "Fail-closed placeholder. No 99% profitability claim is currently proven."
+}

@@ -35,6 +35,8 @@ jobs:
             r.get('ok') is True,
             r.get('infrastructureReady') is True,
             r.get('executionReady') is True,
+            r.get('accountSafetyOk') is True,
+            r.get('accountSafetyReasons') == [],
             r.get('railwayDependency') is False,
             r.get('binanceCredentialOwner') == 'VERCEL_ONLY',
             r.get('cloudflareBinanceCredentialsRequired') is False,
