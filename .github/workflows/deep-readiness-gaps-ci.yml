@@ -13,6 +13,8 @@ on:
       - 'freqtrade/reconcile_state.py'
       - 'freqtrade/deep_readiness_runtime.py'
       - 'freqtrade/entrypoint.sh'
+      - 'freqtrade/spoofing_diagnostics.py'
+      - 'docs/PRODUCTION_INCIDENT_RUNBOOK.md'
       - 'freqtrade/Dockerfile.railway'
       - '.github/workflows/deep-readiness-gaps-ci.yml'
   workflow_dispatch:
@@ -27,7 +29,7 @@ jobs:
         with: {python-version: '3.11'}
       - run: python -m pip install --upgrade pip pytest
       - name: Compile
-        run: python -m py_compile freqtrade/deep_readiness.py freqtrade/exact_accounting.py freqtrade/degraded_mode.py freqtrade/recovery_security_contracts.py freqtrade/latency_attribution.py freqtrade/deep_readiness_runtime.py freqtrade/reconcile_state.py research/research_integrity.py
+        run: python -m py_compile freqtrade/deep_readiness.py freqtrade/exact_accounting.py freqtrade/degraded_mode.py freqtrade/recovery_security_contracts.py freqtrade/latency_attribution.py freqtrade/deep_readiness_runtime.py freqtrade/reconcile_state.py freqtrade/spoofing_diagnostics.py research/research_integrity.py
       - name: Deep readiness tests
         run: python -m pytest -q tests/test_deep_readiness_gaps.py
       - name: Runtime integration contract
