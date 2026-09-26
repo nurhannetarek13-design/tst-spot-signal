@@ -27,6 +27,16 @@ def _creds():
     return k,s
 
 
+def _public_get(path,params):
+    q=urllib.parse.urlencode(params or {}); last=None
+    for base in API_BASES:
+        try:
+            url=f'{base}{path}' + (f'?{q}' if q else '')
+            req=urllib.request.Request(url,headers={'User-Agent':'tst-reconciler/1.3'})
+            with urllib.request.urlopen(req,timeout=8) as r:return json.loads(r.read() or b'{}')
+        except Exception as exc:last=exc
+    raise RuntimeError(f'BINANCE_PUBLIC_READ_FAILED:{type(last).__name__}:{str(last)[:120]}')
+
 def _signed_get(path,params):
     k,s=_creds(); p=dict(params); p['timestamp']=int(time.time()*1000); p['recvWindow']=5000
     q=urllib.parse.urlencode(p); sig=hmac.new(s.encode(),q.encode(),hashlib.sha256).hexdigest(); last=None
@@ -87,7 +97,7 @@ def _commission_fx_to_usdt(fills):
     fx={}
     for asset in assets:
         try:
-            row=_signed_get('/api/v3/ticker/price',{'symbol':asset+'USDT'})
+            row=_public_get('/api/v3/ticker/price',{'symbol':asset+'USDT'})
             px=float(row.get('price') or 0)
             if px>0: fx[asset]=px
         except Exception:
