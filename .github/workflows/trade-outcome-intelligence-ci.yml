@@ -4,6 +4,7 @@ on:
     paths:
       - 'ready_bot/trade_outcome_intelligence.py'
       - 'tests/test_trade_outcome_intelligence.py'
+      - 'ready_bot/paper_observer.py'
       - '.github/workflows/trade-outcome-intelligence-ci.yml'
   workflow_dispatch:
 permissions:
