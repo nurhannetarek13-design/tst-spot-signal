@@ -91,3 +91,14 @@ def test_readiness_audit_never_overclaims_external_dependencies():
  assert a["full"]==15 and a["partial"]==5 and not a["architecture_complete"] and not a["live_authorized"]
  b=m.audit(offsite_dr=True,live_factor_history=True,live_queue_telemetry=True,live_post_fill_telemetry=True,fee_fx_complete=True)
  assert b["full"]==20 and b["architecture_complete"] and not b["live_authorized"]
+
+
+def test_execution_telemetry_persists_queue_and_toxicity(tmp_path):
+ import sys
+ sys.path.insert(0,str(ROOT/"freqtrade"))
+ m=load("freqtrade/execution_telemetry.py","tele")
+ m.PATH=tmp_path/"tele.jsonl"
+ q=m.record_queue(symbol="BTCUSDT",order_id=1,queue_ahead_usdt=10,trade_through_usdt_per_sec=100,cancellation_rate=.1,age_sec=.1)
+ assert q["decision"]=="WAIT"
+ t=m.record_post_fill(symbol="BTCUSDT",order_id=1,side="BUY",fill_price=100,prices={"100ms":99.9,"500ms":99.8})
+ assert t["toxic"] and m.PATH.exists()
