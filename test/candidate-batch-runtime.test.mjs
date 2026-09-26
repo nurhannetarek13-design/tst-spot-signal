@@ -60,7 +60,7 @@ test('refuses a live policy at the batch layer', async () => {
       candidates: [candidate('AAAUSDT', 90)],
       stateStore,
       exchange,
-      policy: { liveTrading: true, paperMode: false, maxOpenPositions: 3, maxDailyLossUsdt: 2, maxQuotePerTradeUsdt: 10, requireProtectiveExit: true },
+      policy: { liveTrading: true, paperMode: false, maxOpenPositions: 3, maxDailyLossUsdt: 2, maxQuotePerTradeUsdt: 10, maxRiskPerTradeUsdt: 0.11, requireProtectiveExit: true },
     }),
     /BATCH_RUNTIME_PAPER_ONLY/,
   );
