@@ -113,3 +113,15 @@ def test_capital_allocator_respects_hard_caps():
 def test_chaos_suite_fails_closed():
     m=_load("chaos_safety"); x=m.run_chaos_suite()
     assert x["ok"] is True and x["live_authorized"] is False
+
+
+def test_canary_guard_rolls_back_on_safety_or_regression():
+    m=_load("canary_guard")
+    good=m.canary_decision({"signals":100,"api_errors":0,"rejected_orders":0,"execution_latency_p95_ms":100,
+      "slippage_bps":2,"safety_events":0,"ledger_ok":True,"reconciliation_ok":True},
+      {"execution_latency_p95_ms":100,"slippage_bps":2})
+    assert good["promote"] is True and good["automatic_live_promotion"] is False
+    bad=m.canary_decision({"signals":100,"api_errors":3,"rejected_orders":0,"execution_latency_p95_ms":100,
+      "slippage_bps":2,"safety_events":1,"ledger_ok":True,"reconciliation_ok":True},
+      {"execution_latency_p95_ms":100,"slippage_bps":2})
+    assert bad["rollback"] is True and {"API_ERROR_RATE","SAFETY_EVENT"} <= set(bad["reasons"])
