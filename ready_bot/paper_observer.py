@@ -10,6 +10,7 @@ import json
 import multi_bot as core
 import native_paper as runner
 from paper_audit import reconcile_legacy_locks, record_run
+from trade_outcome_intelligence import attach_new_closed_trade_attributions
 
 
 def run(config):
@@ -23,8 +24,9 @@ def run(config):
         core.save_state(prior)
     current = runner.run(config)
     report = record_run(current, closed_before, repaired)
+    outcome_intelligence = attach_new_closed_trade_attributions(current, closed_before)
     core.save_state(current)
-    print(json.dumps(dict(paper_audit=report, legacy_locks_repaired=repaired), indent=2))
+    print(json.dumps(dict(paper_audit=report, trade_outcome_intelligence=outcome_intelligence, legacy_locks_repaired=repaired), indent=2))
     return current
 
 
