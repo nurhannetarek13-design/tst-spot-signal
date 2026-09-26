@@ -3,7 +3,8 @@ from __future__ import annotations
 import json,os,time
 from pathlib import Path
 import market_context
-from deep_readiness import regime_transition
+import trade_state
+from deep_readiness import regime_transition, dynamic_portfolio_exposure, portfolio_stress
 from recovery_security_contracts import snapshot
 
 PATH=Path(os.getenv("TST_DEEP_READINESS_STATE","/data/tst_deep_readiness_state.json"))
@@ -25,8 +26,19 @@ def run_once(previous=None,last_backup=0):
     if now-last_backup>=BACKUP_EVERY:
         try: backup=snapshot("/data",str(BACKUP_DIR)); last_backup=now
         except Exception as exc: backup={"error":type(exc).__name__}
+    positions=trade_state.open_positions()
+    portfolio_rows=[]
+    for p in positions:
+        entry=float(p.get("entry") or 0); stop=float(p.get("stop") or 0); qty=float(p.get("quantity") or 0)
+        portfolio_rows.append({"symbol":p.get("symbol"),"risk_usdt":max(0,entry-stop)*qty,"notional_usdt":entry*qty,"btc_beta":float(p.get("btc_beta") or 1)})
+    # Runtime blocks on missing factor history rather than pretending correlations are zero.
+    factor_ready=all(isinstance(p.get("return_history"),list) and len(p.get("return_history"))>=5 for p in positions) if positions else True
+    returns={str(p.get("symbol")):p.get("return_history") or [] for p in positions}
+    corr=dynamic_portfolio_exposure(portfolio_rows,returns) if factor_ready else {"state":"UNKNOWN","effective_portfolio_risk_usdt":None}
+    stress=portfolio_stress(portfolio_rows,{"BTC_-1":{"btc_move":-.01},"BTC_-3":{"btc_move":-.03,"spread_mult":3,"slippage_mult":4},"BTC_-5":{"btc_move":-.05,"alt_liquidity_change":-.4,"spread_mult":3,"slippage_mult":4}})
     row={"updated_at":now,"regime_features":cur,"regime_transition":transition,"last_backup":backup,
-         "allow_new_trade":bool(snap) and transition.get("state")=="REGIME_STABLE","may_authorize_live":False}
+         "portfolio_factor_ready":factor_ready,"portfolio_correlation":corr,"portfolio_stress":stress,
+         "allow_new_trade":bool(snap) and transition.get("state")=="REGIME_STABLE" and factor_ready,"may_authorize_live":False}
     _atomic(row); return row,last_backup
 
 def main():
