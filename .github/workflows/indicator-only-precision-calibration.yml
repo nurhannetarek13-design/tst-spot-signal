@@ -1,3 +1,4 @@
+# Legacy V1 research is intentionally frozen and must not track V3 runtime config changes.
 name: Indicator-Only Precision Calibration
 # retrigger after calibration syntax fix
 
@@ -7,7 +8,6 @@ on:
     branches: [main]
     paths:
       - 'research/indicator_only_precision_calibration.py'
-      - 'ready_bot/indicator_config.json'
       - '.github/workflows/indicator-only-precision-calibration.yml'
 
 permissions:
