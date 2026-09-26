@@ -45,6 +45,8 @@ jobs:
             r.get('autoBuy') is False,
             r.get('noBalanceValuesExposed') is True,
             r.get('noSecretValuesExposed') is True,
+            0 < float(r.get('maxRiskUSDT')) <= 0.11,
+            0 < float(r.get('maxBuyUSDT')) <= 10.0,
           ]
           if not all(required):
               raise SystemExit("LIVE_EXECUTION_BLOCKED: "+str(r.get('blocker')))
