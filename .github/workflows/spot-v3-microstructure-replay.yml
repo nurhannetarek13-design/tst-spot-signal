@@ -2,6 +2,8 @@ name: Spot V3 Microstructure Replay
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * *'
   pull_request:
     branches: [main]
   push:
@@ -15,7 +17,7 @@ on:
       - '.github/workflows/spot-v3-microstructure-replay.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
@@ -115,6 +117,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: spot-v3-replay-*
@@ -145,7 +150,8 @@ jobs:
             'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok and execution_ok else 'REPLAY_REJECTED',
             'note':'Execution probes are independent of V3 entry signals. CandidateCount may be zero. This artifact cannot prove the full V3 strategy or authorize live trading.'
           }
-          pathlib.Path('spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
+          pathlib.Path('validation/indicator-v3').mkdir(parents=True,exist_ok=True)
+          pathlib.Path('validation/indicator-v3/spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
           print(json.dumps(out,indent=2))
           assert out['replayIntegrityPass'] is True
           assert out['executionReplayPass'] is True
@@ -155,5 +161,25 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: spot-v3-replay-aggregate
-          path: spot-v3-replay-aggregate.json
+          path: validation/indicator-v3/spot-v3-replay-aggregate.json
           if-no-files-found: error
+
+
+      - name: Persist Spot replay evidence
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          cp validation/indicator-v3/spot-v3-replay-aggregate.json /tmp/spot-v3-replay-aggregate.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/indicator-v3
+            cp /tmp/spot-v3-replay-aggregate.json validation/indicator-v3/spot-v3-replay-aggregate.json
+            git config user.name 'v3-evidence-bot'
+            git config user.email 'v3-evidence-bot@users.noreply.github.com'
+            git add validation/indicator-v3/spot-v3-replay-aggregate.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update V3 Spot replay evidence'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
