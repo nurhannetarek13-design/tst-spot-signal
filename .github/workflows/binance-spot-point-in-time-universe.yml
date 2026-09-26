@@ -1,4 +1,3 @@
-# validation-refresh-pr106
 name: Binance Spot Point-in-Time Universe
 
 on:
@@ -23,7 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   build:
@@ -81,3 +81,32 @@ jobs:
           path: validation/indicator-v3/point-in-time-universe.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Persist point-in-time universe evidence
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          cp validation/indicator-v3/point-in-time-universe.json /tmp/point-in-time-universe.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p validation/indicator-v3
+            cp /tmp/point-in-time-universe.json validation/indicator-v3/point-in-time-universe.json
+            git config user.name 'v3-evidence-bot'
+            git config user.email 'v3-evidence-bot@users.noreply.github.com'
+            git add validation/indicator-v3/point-in-time-universe.json
+            git diff --cached --quiet && exit 0
+            git commit -m 'Update V3 point-in-time universe evidence'
+            git push origin HEAD:main && exit 0
+            sleep $((i*2))
+          done
+          exit 1
+
+      - name: Dispatch V3 forward evidence refresh
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run v3-forward-evidence-refresh.yml --ref main
+
+
+  # Explicit orchestration is required because pushes created with GITHUB_TOKEN
+  # do not trigger downstream workflows automatically.
