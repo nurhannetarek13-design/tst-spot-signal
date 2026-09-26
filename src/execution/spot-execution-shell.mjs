@@ -4,6 +4,7 @@ export const DEFAULT_EXECUTION_POLICY = Object.freeze({
   maxDailyLossUsdt: 2,
   maxOpenPositions: 3,
   maxQuotePerTradeUsdt: 10,
+  maxRiskPerTradeUsdt: 0.11,
   requireProtectiveExit: true,
 });
 
@@ -35,6 +36,14 @@ export function assertCanOpenPosition({ policy = DEFAULT_EXECUTION_POLICY, state
   }
   if (Number(order.takeProfitPrice) <= Number(order.entryPrice)) {
     throw new Error('INVALID_TAKE_PROFIT_PRICE');
+  }
+  const grossStopRiskUsdt = quoteAmount
+    * ((Number(order.entryPrice) - Number(order.stopPrice)) / Number(order.entryPrice));
+  if (!Number.isFinite(grossStopRiskUsdt) || grossStopRiskUsdt <= 0) {
+    throw new Error('INVALID_STOP_RISK');
+  }
+  if (grossStopRiskUsdt > Number(policy.maxRiskPerTradeUsdt) + 1e-12) {
+    throw new Error('MAX_RISK_PER_TRADE_EXCEEDED');
   }
   return true;
 }
