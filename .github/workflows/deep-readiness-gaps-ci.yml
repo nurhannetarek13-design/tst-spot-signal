@@ -7,6 +7,9 @@ on:
       - 'freqtrade/degraded_mode.py'
       - 'freqtrade/recovery_security_contracts.py'
       - 'freqtrade/latency_attribution.py'
+      - 'freqtrade/capacity_gate.py'
+      - 'research/promotion_integrity.py'
+      - 'docs/OPERATIONAL_RUNBOOK.md'
       - 'research/research_integrity.py'
       - 'tests/test_deep_readiness_gaps.py'
       - 'freqtrade/front_proxy.py'
@@ -41,6 +44,11 @@ jobs:
           grep -F "deep_readiness_runtime.py" freqtrade/entrypoint.sh
           grep -F "COPY deep_readiness.py /freqtrade/deep_readiness.py" freqtrade/Dockerfile.railway
           grep -F "COPY exact_accounting.py /freqtrade/exact_accounting.py" freqtrade/Dockerfile.railway
+          grep -F "COPY capacity_gate.py /freqtrade/capacity_gate.py" freqtrade/Dockerfile.railway
+          grep -F "CAPACITY_ENTRY_BLOCK" freqtrade/front_proxy.py
+          grep -F "UPSTREAM_SCHEMA_CONTRACT_BLOCK" freqtrade/front_proxy.py
+          grep -F "UNCERTAINTY_REJECT" freqtrade/spot_sniper_gate.py
+          grep -F "RPO 5 minutes" docs/OPERATIONAL_RUNBOOK.md
       - name: Assert non-authorizing research contract
         run: |
           ! grep -R "liveTrading.*true\|AUTO_TRADING_ENABLED.*1" freqtrade/deep_readiness.py freqtrade/exact_accounting.py research/research_integrity.py
