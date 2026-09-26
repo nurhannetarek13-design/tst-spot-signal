@@ -1,0 +1,31 @@
+name: Production Runtime Hardening CI
+on:
+  pull_request:
+    paths:
+      - 'freqtrade/production_runtime_hardening.py'
+      - 'freqtrade/production_runtime_guard.py'
+      - 'tests/test_production_runtime_hardening.py'
+      - '.github/workflows/production-runtime-hardening-ci.yml'
+  push:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m py_compile freqtrade/production_runtime_hardening.py
+      - run: pip install pytest
+      - run: pytest -q tests/test_production_runtime_hardening.py
+      - name: fail-closed contract
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0,'freqtrade')
+          import production_runtime_hardening as p
+          assert not p.startup_readiness({})['ready']
+          assert p.quote_asset_risk(usdt_usd=.97,spread_bps=1,depth_usd=1e7)['mode']=='PROTECTION_ONLY'
+          assert not p.clock_drift(local_ms=1500,exchange_ms=0)['allow_microstructure_entries']
+          print('PRODUCTION_HARDENING_FAIL_CLOSED_OK')
+          PY
