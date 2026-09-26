@@ -9,6 +9,7 @@ on:
       - 'freqtrade/latency_attribution.py'
       - 'freqtrade/capacity_gate.py'
       - 'freqtrade/readiness_audit.py'
+      - 'freqtrade/execution_telemetry.py'
       - 'research/promotion_integrity.py'
       - 'docs/OPERATIONAL_RUNBOOK.md'
       - 'research/research_integrity.py'
@@ -47,6 +48,7 @@ jobs:
           grep -F "COPY exact_accounting.py /freqtrade/exact_accounting.py" freqtrade/Dockerfile.railway
           grep -F "COPY capacity_gate.py /freqtrade/capacity_gate.py" freqtrade/Dockerfile.railway
           grep -F "COPY readiness_audit.py /freqtrade/readiness_audit.py" freqtrade/Dockerfile.railway
+          grep -F "COPY execution_telemetry.py /freqtrade/execution_telemetry.py" freqtrade/Dockerfile.railway
           grep -F "CAPACITY_ENTRY_BLOCK" freqtrade/front_proxy.py
           grep -F "UPSTREAM_SCHEMA_CONTRACT_BLOCK" freqtrade/front_proxy.py
           grep -F "UNCERTAINTY_REJECT" freqtrade/spot_sniper_gate.py
