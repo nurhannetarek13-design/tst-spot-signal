@@ -180,6 +180,7 @@ def load_state():
             "decision_log": [],
             "slippage_model": {},
             "exit_slippage_model": {},
+            "reentry": {},
             "signals": [],
             "blocked": [],
             "last_run": None,
@@ -192,6 +193,7 @@ def load_state():
     s.setdefault("decision_log", [])
     s.setdefault("slippage_model", {})
     s.setdefault("exit_slippage_model", {})
+    s.setdefault("reentry", {})
     return s
 
 
