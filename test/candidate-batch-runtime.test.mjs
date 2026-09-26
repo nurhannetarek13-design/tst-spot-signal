@@ -12,7 +12,7 @@ function candidate(symbol, score, notional = 5) {
     liveApproved: false,
     score,
     entry: 2,
-    stop: 1.95,
+    stop: 1.96,
     target: 2.12,
     qty: notional / 2,
     notional,
