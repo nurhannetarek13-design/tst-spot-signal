@@ -32,9 +32,16 @@ def run_once(previous=None,last_backup=0):
         entry=float(p.get("entry") or 0); stop=float(p.get("stop") or 0); qty=float(p.get("quantity") or 0)
         portfolio_rows.append({"symbol":p.get("symbol"),"risk_usdt":max(0,entry-stop)*qty,"notional_usdt":entry*qty,"btc_beta":float(p.get("btc_beta") or 1)})
     # Runtime blocks on missing factor history rather than pretending correlations are zero.
-    factor_ready=all(isinstance(p.get("return_history"),list) and len(p.get("return_history"))>=5 for p in positions) if positions else True
+    # Correlation evidence is required only when portfolio interaction can exist.
+    # A single open position has no cross-position correlation risk to estimate.
+    # For 2+ positions, missing return history remains fail-closed.
+    factor_required=len(positions)>=2
+    factor_ready=(not factor_required) or all(isinstance(p.get("return_history"),list) and len(p.get("return_history"))>=5 for p in positions)
     returns={str(p.get("symbol")):p.get("return_history") or [] for p in positions}
-    corr=dynamic_portfolio_exposure(portfolio_rows,returns) if factor_ready else {"state":"UNKNOWN","effective_portfolio_risk_usdt":None}
+    if not factor_required:
+        corr={"state":"NOT_APPLICABLE_SINGLE_POSITION","effective_portfolio_risk_usdt":sum(float(x.get("risk_usdt") or 0) for x in portfolio_rows)}
+    else:
+        corr=dynamic_portfolio_exposure(portfolio_rows,returns) if factor_ready else {"state":"UNKNOWN","effective_portfolio_risk_usdt":None}
     stress=portfolio_stress(portfolio_rows,{"BTC_-1":{"btc_move":-.01},"BTC_-3":{"btc_move":-.03,"spread_mult":3,"slippage_mult":4},"BTC_-5":{"btc_move":-.05,"alt_liquidity_change":-.4,"spread_mult":3,"slippage_mult":4}})
     row={"updated_at":now,"regime_features":cur,"regime_transition":transition,"last_backup":backup,
          "portfolio_factor_ready":factor_ready,"portfolio_correlation":corr,"portfolio_stress":stress,
