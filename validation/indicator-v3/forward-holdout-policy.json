@@ -1,0 +1,16 @@
+{
+  "engine": "INDICATOR_V3_FORWARD_HOLDOUT_V1",
+  "authorization": "PAPER_OBSERVATION_ONLY",
+  "liveTrading": false,
+  "frozen": true,
+  "freezeAt": "2026-09-26T11:50:00Z",
+  "expectedEngine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
+  "configPath": "ready_bot/indicator_config.json",
+  "configGitBlobSha": "dde390f3e260294f9fc2187c10220e3ac923e6e0",
+  "statePath": "ready_bot/indicator_state.json",
+  "minimumTradesForClaim": 100,
+  "minimumWinRateForClaim": 0.99,
+  "requirePositiveNet": true,
+  "requireExecutionCostFields": true,
+  "note": "Prospective PAPER holdout. Any config-byte change invalidates untouched status."
+}
