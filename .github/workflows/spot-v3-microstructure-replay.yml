@@ -70,7 +70,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay Spot execution mechanics window
+      - name: Replay Spot execution mechanics window with bounded warmup
         run: |
           mkdir -p validation/indicator-v3/spot-replay
           PYTHONPATH=. python research/tardis_spot_microstructure_v3.py \
