@@ -19,6 +19,12 @@ export function v3PaperPositionToExecutionIntent(symbol, position={}){
   const stopPrice=finitePositive(position.stop,"stop");
   const takeProfitPrice=finitePositive(position.target,"target");
   const quoteAmountUsdt=finitePositive(position.cost,"cost");
+  const openedAtMs=Date.parse(String(position.opened_at||""));
+  if(!Number.isFinite(openedAtMs)) throw new Error("V3_OPENED_AT_INVALID");
+  const decisionLatencyMs=Number(position.entry_context?.decision_latency_ms);
+  const maxTotalLatencyMs=Number(position.entry_context?.max_total_latency_ms);
+  if(!Number.isFinite(decisionLatencyMs)||decisionLatencyMs<0) throw new Error("V3_DECISION_LATENCY_INVALID");
+  if(!Number.isFinite(maxTotalLatencyMs)||maxTotalLatencyMs<=0) throw new Error("V3_TOTAL_LATENCY_BUDGET_INVALID");
   if(stopPrice>=entryPrice) throw new Error("V3_STOP_NOT_BELOW_ENTRY");
   if(takeProfitPrice<=entryPrice) throw new Error("V3_TARGET_NOT_ABOVE_ENTRY");
 
@@ -27,6 +33,9 @@ export function v3PaperPositionToExecutionIntent(symbol, position={}){
     authorization:"SHADOW_ONLY",
     liveApproved:false,
     signalId,
+    createdAtMs:openedAtMs,
+    decisionLatencyMs,
+    maxTotalLatencyMs,
     symbol:sym,
     side:"BUY",
     quoteAmountUsdt,
