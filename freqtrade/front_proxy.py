@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import binance_filters
 import trade_state
 import degraded_mode
+from recovery_security_contracts import validate_binance_payload
 from pathlib import Path
 
 PORT=int(os.getenv('PORT','8080'))
@@ -209,6 +210,12 @@ class H(BaseHTTPRequestHandler):
             trade_state.update_reservation(signal_id,action,status='UNKNOWN',error='NON_OBJECT_JSON')
             print(f'[make-relay] {action} upstream non-object-json status={status}',flush=True)
             return self.send_json(502,{'ok':False,'status':'MAKE_BAD_JSON_RESPONSE','action':action,'signal_id':signal_id})
+
+        contract=validate_binance_payload(row,{'ok':bool,'status':str})
+        if not contract.get('ok'):
+            trade_state.update_reservation(signal_id,action,status='UNKNOWN',error='UPSTREAM_SCHEMA_CONTRACT')
+            trade_state.append_event('UPSTREAM_SCHEMA_CONTRACT_BLOCK',signal_id=signal_id,action=action,symbol=symbol,errors=contract.get('errors'))
+            return self.send_json(502,{'ok':False,'status':'UPSTREAM_SCHEMA_CONTRACT_BLOCK','errors':contract.get('errors')})
 
         try:
             if status < 400 and row.get('ok') is True:
