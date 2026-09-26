@@ -12,7 +12,7 @@ const candidate = {
   liveApproved: false,
   score: 91,
   entry: 2,
-  stop: 1.95,
+  stop: 1.96,
   target: 2.12,
   qty: 2.5,
   notional: 5,
@@ -30,7 +30,7 @@ test('paper candidate completes entry, OCO protection, state persistence and not
   assert.equal(result.fill.status, 'FILLED');
   assert.equal(result.protection.status, 'ACTIVE');
   assert.equal(result.state.openPositions, 1);
-  assert.equal(result.state.positions.ABCUSDT.stopPrice, 1.95);
+  assert.equal(result.state.positions.ABCUSDT.stopPrice, 1.96);
   assert.equal(messages.length, 2);
 
   const orders = await exchange.listOrders();
