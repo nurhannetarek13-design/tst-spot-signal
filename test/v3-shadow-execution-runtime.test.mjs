@@ -258,7 +258,7 @@ test("crash recovery cancels open remainder before protecting partial fill", asy
     stage:"PLACING_ENTRY",
   });
 
-  let cancelled=0,protected=0;
+  let cancelled=0,protectedQty=0;
   const exchange={
     async getOrder({clientOrderId}){
       return {clientOrderId,status:"PARTIALLY_FILLED",executedQty:0.04,cumulativeQuoteQty:4,averagePrice:100};
@@ -267,10 +267,10 @@ test("crash recovery cancels open remainder before protecting partial fill", asy
       cancelled++;
       return {clientOrderId,status:"CANCELED",executedQty:0.04,cumulativeQuoteQty:4,averagePrice:100};
     },
-    async placeOcoSell(args){protected=args.quantity;return {orderListId:"partial-recovery",...args,status:"ACTIVE"};},
+    async placeOcoSell(args){protectedQty=args.quantity;return {orderListId:"partial-recovery",...args,status:"ACTIVE"};},
   };
   const out=await recoverV3ShadowReservations({exchange,reservations});
   assert.equal(out.ok,true);
   assert.equal(cancelled,1);
-  assert.equal(protected,0.04);
+  assert.equal(protectedQty,0.04);
 });
