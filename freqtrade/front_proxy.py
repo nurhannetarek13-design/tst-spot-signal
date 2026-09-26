@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import binance_filters
 import trade_state
 import degraded_mode
+from pathlib import Path
 
 PORT=int(os.getenv('PORT','8080'))
 BRIDGE_PORT=int(os.getenv('BRIDGE_PORT','8082'))
@@ -116,6 +117,14 @@ class H(BaseHTTPRequestHandler):
                     'latency_ms': body.get('exchange_latency_ms', 0),
                 }
                 mode=degraded_mode.degraded_policy(health)
+                try:
+                    dr=json.loads(Path(os.getenv('TST_DEEP_READINESS_STATE','/data/tst_deep_readiness_state.json')).read_text(encoding='utf-8'))
+                except Exception:
+                    dr={}
+                transition=((dr.get('regime_transition') or {}).get('state') or 'REGIME_UNCERTAIN')
+                if transition!='REGIME_STABLE':
+                    trade_state.append_event('REGIME_TRANSITION_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,state=transition)
+                    return self.send_json(503,{'ok':False,'status':'REGIME_TRANSITION_ENTRY_BLOCK','regimeState':transition})
                 if not mode.get('new_entries'):
                     trade_state.append_event('DEGRADED_MODE_ENTRY_BLOCK',signal_id=signal_id,symbol=symbol,mode=mode.get('mode'))
                     return self.send_json(503,{'ok':False,'status':'EXCHANGE_DEGRADED_ENTRY_BLOCK','mode':mode.get('mode')})
