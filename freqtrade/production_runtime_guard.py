@@ -27,7 +27,7 @@ def sample():
  except Exception: ram=0
  disk=shutil.disk_usage("/data"); disk_pct=(disk.used/disk.total*100) if disk.total else 100
  infra=h.infrastructure_backpressure(cpu_pct=cpu,ram_pct=ram,disk_pct=disk_pct,db_pool_pct=0,backlog=0,worker_lag_ms=0)
- checks={"reconcile":Path("/data/reconciliation_ok").exists(),"l2_synced":Path("/data/tst_deep_readiness_state.json").exists(),"indicators_warm":Path("/data/tst_deep_readiness_state.json").exists(),"risk_loaded":Path("/data/trade_state.json").exists(),"metadata_current":True,"clock_ok":clock.get("status")=="OK","quote_asset_ok":q.get("mode")=="NORMAL"}
+ checks={"reconcile":Path("/data/reconciliation_ok").exists(),"l2_synced":Path("/data/tst_deep_readiness_state.json").exists(),"indicators_warm":Path("/data/tst_deep_readiness_state.json").exists(),"risk_loaded":Path(os.getenv("TST_TRADE_STATE_PATH","/data/tst_live_positions.json")).exists(),"metadata_current":True,"clock_ok":clock.get("status")=="OK","quote_asset_ok":q.get("mode")=="NORMAL"}
  ready=h.startup_readiness(checks)
  row={"ts":time.time(),"clock":clock,"quote_asset":q,"infrastructure":infra,"readiness":ready,"allow_new_entries":ready["ready"] and infra["allow_new_entries"] and q.get("allow_new_entries",False) and clock.get("allow_microstructure_entries",False),"live_authorized":False}
  tmp=STATE.with_suffix(".tmp");tmp.write_text(json.dumps(row,separators=(",",":")));os.replace(tmp,STATE);return row
