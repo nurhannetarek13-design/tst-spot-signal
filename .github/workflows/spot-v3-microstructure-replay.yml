@@ -2,8 +2,6 @@ name: Spot V3 Microstructure Replay
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '23 4 * * *'
   pull_request:
     branches: [main]
   push:
@@ -17,8 +15,7 @@ on:
       - '.github/workflows/spot-v3-microstructure-replay.yml'
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
@@ -65,15 +62,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, date: '2021-09-01', offset: 5}
-          - {symbol: ETHUSDT, date: '2021-09-01', offset: 5}
-          - {symbol: SOLUSDT, date: '2021-09-01', offset: 5}
+          - {symbol: BTCUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: ETHUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: SOLUSDT, date: '2021-09-01', offset: 25}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay Spot execution mechanics window with canonical warm-up
+      - name: Replay Spot execution mechanics window
         run: |
           mkdir -p validation/indicator-v3/spot-replay
           PYTHONPATH=. python research/tardis_spot_microstructure_v3.py \
@@ -82,6 +79,7 @@ jobs:
             --start-offset '${{ matrix.offset }}' \
             --minutes 4 \
             --quote-usdt 10 \
+            --no-warmup \
             --output 'validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json' \
             --assert-replay
       - name: Assert replay scope cannot authorize live
@@ -118,9 +116,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: spot-v3-replay-*
@@ -151,8 +146,7 @@ jobs:
             'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok and execution_ok else 'REPLAY_REJECTED',
             'note':'Execution probes are independent of V3 entry signals. CandidateCount may be zero. This artifact cannot prove the full V3 strategy or authorize live trading.'
           }
-          pathlib.Path('validation/indicator-v3').mkdir(parents=True,exist_ok=True)
-          pathlib.Path('validation/indicator-v3/spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
+          pathlib.Path('spot-v3-replay-aggregate.json').write_text(json.dumps(out,indent=2))
           print(json.dumps(out,indent=2))
           assert out['replayIntegrityPass'] is True
           assert out['executionReplayPass'] is True
@@ -162,35 +156,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: spot-v3-replay-aggregate
-          path: validation/indicator-v3/spot-v3-replay-aggregate.json
+          path: spot-v3-replay-aggregate.json
           if-no-files-found: error
-
-
-      - name: Persist Spot replay evidence
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: |
-          cp validation/indicator-v3/spot-v3-replay-aggregate.json /tmp/spot-v3-replay-aggregate.json
-          for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p validation/indicator-v3
-            cp /tmp/spot-v3-replay-aggregate.json validation/indicator-v3/spot-v3-replay-aggregate.json
-            git config user.name 'v3-evidence-bot'
-            git config user.email 'v3-evidence-bot@users.noreply.github.com'
-            git add validation/indicator-v3/spot-v3-replay-aggregate.json
-            git diff --cached --quiet && exit 0
-            git commit -m 'Update V3 Spot replay evidence'
-            git push origin HEAD:main && exit 0
-            sleep $((i*2))
-          done
-          exit 1
-
-      - name: Dispatch V3 forward evidence refresh
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run v3-forward-evidence-refresh.yml --ref main
-
-
-  # Explicit orchestration is required because pushes created with GITHUB_TOKEN
-  # do not trigger downstream workflows automatically.
