@@ -12,6 +12,8 @@ on:
       - 'freqtrade/canary_guard.py'
       - 'freqtrade/trade_state.py'
       - 'freqtrade/reconcile_state.py'
+      - 'freqtrade/Dockerfile'
+      - 'freqtrade/entrypoint.sh'
       - 'tests/test_production_safety_kernel.py'
       - '.github/workflows/production-safety-kernel-ci.yml'
   workflow_dispatch:
@@ -43,6 +45,12 @@ jobs:
         run: python -m pytest -q tests/test_production_safety_kernel.py
       - name: Chaos safety suite
         run: cd freqtrade && python chaos_safety.py
+      - name: Deployment wiring contract
+        run: |
+          grep -F 'COPY . /freqtrade/' freqtrade/Dockerfile
+          grep -F 'python -u /freqtrade/independent_watchdog.py &' freqtrade/entrypoint.sh
+          grep -F 'kill -0 "$WATCHDOG_PID"' freqtrade/entrypoint.sh
+          grep -F 'kill -0 "$RECOVERY_PID"' freqtrade/entrypoint.sh
       - name: Existing execution state-machine regression
         env:
           TST_LEDGER_PATH: /tmp/tst_execution_ledger.json
