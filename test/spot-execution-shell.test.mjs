@@ -35,6 +35,15 @@ test('blocks trade above configured stop-risk cap', () => {
   );
 });
 
+test('missing risk cap fails closed', () => {
+  const policy = { ...DEFAULT_EXECUTION_POLICY };
+  delete policy.maxRiskPerTradeUsdt;
+  assert.throws(
+    () => buildExecutionPlan({ intent, policy }),
+    /maxRiskPerTradeUsdt must be > 0/,
+  );
+});
+
 test('blocks once daily loss cap is reached', () => {
   assert.throws(
     () => buildExecutionPlan({ intent, state: { openPositions: 0, realizedPnlTodayUsdt: -2 } }),
