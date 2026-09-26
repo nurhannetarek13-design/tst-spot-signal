@@ -1075,65 +1075,168 @@ def open_position(state, snap, filters):
 
 
 def manage_position(state, symbol, snap):
-    p = state["positions"][symbol]
+    p=state["positions"][symbol]
     bid=float(snap["bid"])
     atr_now=snap.get("atr_15m")
+    tm_cfg=CFG["trade_management"]
     p["peak_price"]=max(float(p.get("peak_price") or p["entry"]),bid)
     p["trough_price"]=min(float(p.get("trough_price") or p["entry"]),bid)
     r0=max(float(p.get("initial_risk_abs") or 0),1e-12)
     p["mfe_r"]=max(float(p.get("mfe_r") or 0.0),(p["peak_price"]-p["entry"])/r0)
     p["mae_r"]=max(float(p.get("mae_r") or 0.0),(p["entry"]-p["trough_price"])/r0)
 
-    if bid <= p["stop"]:
-        close_position(state, symbol, bid, "STOP", snap.get("_exit_depth"))
-        return
-    if bid >= p["target"]:
-        close_position(state, symbol, bid, "TARGET", snap.get("_exit_depth"))
+    # Catastrophe/protective stop remains first and unconditional.
+    if bid<=float(p["stop"]):
+        close_position(state,symbol,bid,"STOP",snap.get("_exit_depth"))
         return
 
-    exit_cfg=CFG.get("exit",{})
     try:
         opened=datetime.fromisoformat(str(p["opened_at"]).replace("Z","+00:00"))
         age_minutes=max(0.0,(datetime.now(timezone.utc)-opened).total_seconds()/60.0)
     except Exception:
         age_minutes=0.0
+    age_candles=int(age_minutes)
 
-    pre=snap.get("micro_pre") or {}
-    taker_latest=pre.get("taker_latest")
-    vwap_now=pre.get("vwap")
-    cvd_positive=bool(pre.get("cvd_positive"))
+    setup=p.get("setup_type")
+    rules=setup_rules(setup,tm_cfg) if setup else None
 
-    # Thesis invalidation: buyers lose control and price slips back under VWAP.
-    if age_minutes>=float(exit_cfg.get("momentum_fade_min_age_minutes",5)):
-        fade=(
-            taker_latest is not None
-            and float(taker_latest)<float(exit_cfg.get("momentum_fade_taker_below",0.48))
-            and not cvd_positive
-            and vwap_now is not None
-            and bid<float(vwap_now)
+    # Legacy PAPER positions opened before this engine keep conservative old
+    # management until they close; new intelligent rules never infer a thesis.
+    if rules is None:
+        exit_cfg=CFG.get("exit",{})
+        pre=snap.get("micro_pre") or {}
+        taker_latest=pre.get("taker_latest")
+        vwap_now=pre.get("vwap")
+        cvd_positive=bool(pre.get("cvd_positive"))
+        if age_minutes>=float(exit_cfg.get("momentum_fade_min_age_minutes",5)):
+            fade=(
+                taker_latest is not None
+                and float(taker_latest)<float(exit_cfg.get("momentum_fade_taker_below",0.48))
+                and not cvd_positive
+                and vwap_now is not None
+                and bid<float(vwap_now)
+            )
+            if fade:
+                close_position(state,symbol,bid,"MOMENTUM_FADE",snap.get("_exit_depth"))
+                return
+        if (
+            age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
+            and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
+        ):
+            close_position(state,symbol,bid,"TIME_NO_FOLLOW_THROUGH",snap.get("_exit_depth"))
+            return
+        if bid>=float(p["target"]):
+            close_position(state,symbol,bid,"TARGET",snap.get("_exit_depth"))
+            return
+        if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
+            close_position(state,symbol,bid,"HARD_TIME_STOP",snap.get("_exit_depth"))
+            return
+        if p["initial_risk_abs"]>0 and bid>=p["entry"]+float(CFG["risk"]["breakeven_at_r"])*p["initial_risk_abs"]:
+            p["stop"]=max(p["stop"],p["entry"])
+            p["breakeven"]=True
+        if p["breakeven"] and atr_now and atr_now>0:
+            trail=bid-float(CFG["risk"]["trailing_atr_multiplier"])*float(atr_now)
+            p["stop"]=max(p["stop"],trail)
+        return
+
+    thesis=thesis_invalidated(p,snap,tm_cfg)
+    p["last_thesis_check"]=thesis
+    flow=thesis.get("flow") or current_flow_state(snap,tm_cfg)
+    if thesis.get("invalid"):
+        close_position(
+            state,symbol,bid,str(thesis.get("reason") or "THESIS_INVALIDATED"),
+            snap.get("_exit_depth")
         )
-        if fade:
-            close_position(state, symbol, bid, "MOMENTUM_FADE", snap.get("_exit_depth"))
+        return
+
+    adaptive=p.get("adaptive_levels") or adaptive_trade_levels(
+        p.get("excursion_profile_at_entry") or {},tm_cfg
+    )
+    p["adaptive_levels"]=adaptive
+
+    # MAE only becomes an exit signal when current flow also confirms weakness.
+    if (
+        float(p.get("mae_r") or 0.0)>=float(adaptive["mae_failure_r"])
+        and flow.get("failure_count",0)>=2
+    ):
+        close_position(state,symbol,bid,"MAE_FAILURE",snap.get("_exit_depth"))
+        return
+
+    if age_candles>=int(tm_cfg["momentum_failure_min_age_candles"]):
+        mf=momentum_failure(p,snap,tm_cfg)
+        p["last_momentum_failure_check"]=mf
+        if mf.get("failed"):
+            close_position(state,symbol,bid,"MOMENTUM_FAILURE",snap.get("_exit_depth"))
             return
 
-    # If the trade never produces meaningful favorable excursion, free capital.
+    no_follow=int(rules["no_follow_through_candles"])
     if (
-        age_minutes>=float(exit_cfg.get("no_follow_through_minutes",30))
-        and float(p.get("mfe_r") or 0.0)<float(exit_cfg.get("min_mfe_r_for_hold",0.50))
+        age_candles>=no_follow
+        and float(p.get("mfe_r") or 0.0)<float(CFG["exit"]["min_mfe_r_for_hold"])
+        and not flow.get("continuation_strong")
     ):
-        close_position(state, symbol, bid, "TIME_NO_FOLLOW_THROUGH", snap.get("_exit_depth"))
+        close_position(state,symbol,bid,"TIME_NO_FOLLOW_THROUGH",snap.get("_exit_depth"))
         return
 
-    if age_minutes>=float(exit_cfg.get("hard_time_stop_minutes",120)):
-        close_position(state, symbol, bid, "HARD_TIME_STOP", snap.get("_exit_depth"))
+    if age_minutes>=float(CFG["exit"].get("hard_time_stop_minutes",120)):
+        close_position(state,symbol,bid,"HARD_TIME_STOP",snap.get("_exit_depth"))
         return
 
-    if p["initial_risk_abs"] > 0 and bid >= p["entry"] + float(CFG["risk"]["breakeven_at_r"]) * p["initial_risk_abs"]:
-        p["stop"] = max(p["stop"], p["entry"])
-        p["breakeven"] = True
-    if p["breakeven"] and atr_now and atr_now > 0:
-        trail = bid - float(CFG["risk"]["trailing_atr_multiplier"]) * float(atr_now)
-        p["stop"] = max(p["stop"], trail)
+    current_r=(bid-float(p["entry"]))/r0
+    partial_cfg=tm_cfg["paper_partial_profit"]
+    if partial_cfg.get("enabled") is True:
+        if not p.get("partial_tp1_done") and current_r>=float(adaptive["tp1_r"]):
+            desired=float(p.get("original_qty") or p["qty"])*float(partial_cfg["tp1_fraction"])
+            frac=min(0.95,desired/max(float(p["qty"]),1e-12))
+            if 0<frac<1:
+                result=partial_close_position(
+                    state,symbol,bid,frac,"TP1_RESEARCH",snap.get("_exit_depth")
+                )
+                if result=="PAPER_PARTIAL_CLOSED":
+                    p["partial_tp1_done"]=True
+        if symbol not in state["positions"]:
+            return
+        p=state["positions"][symbol]
+        if not p.get("partial_tp2_done") and current_r>=float(adaptive["tp2_r"]):
+            desired=float(p.get("original_qty") or p["qty"])*float(partial_cfg["tp2_fraction"])
+            frac=min(0.95,desired/max(float(p["qty"]),1e-12))
+            if 0<frac<1:
+                result=partial_close_position(
+                    state,symbol,bid,frac,"TP2_RESEARCH",snap.get("_exit_depth")
+                )
+                if result=="PAPER_PARTIAL_CLOSED":
+                    p["partial_tp2_done"]=True
+
+    protection=profit_protection_state(
+        p,bid,atr_now,snap.get("confirmed_swing_low"),flow,tm_cfg
+    )
+    p["profit_stage"]=protection["stage"]
+    p["stop"]=max(float(p["stop"]),float(protection["stop"]))
+    p["breakeven"]=p["stop"]>=float(p["entry"])
+
+    # At the nominal target, extend a strong winner once rather than forcing
+    # the entire remaining position out.
+    if bid>=float(p["target"]):
+        ext_cfg=tm_cfg["winner_extension"]
+        extensions=int(p.get("winner_extensions") or 0)
+        if (
+            ext_cfg.get("enabled") is True
+            and flow.get("continuation_strong")
+            and extensions<int(ext_cfg["max_extensions"])
+        ):
+            p["winner_extensions"]=extensions+1
+            p["target"]=float(p["target"])+r0*float(ext_cfg["extension_r"])
+            p["stop"]=max(float(p["stop"]),float(p["entry"])+r0*float(tm_cfg["lock_profit_r"]))
+            p["profit_stage"]="WINNER_EXTENDED"
+            append_decision(
+                state,symbol,"WHY_HOLD_WINNER",
+                setup_type=setup,current_r=current_r,
+                new_target=p["target"],new_stop=p["stop"],
+                flow=flow,
+            )
+        else:
+            close_position(state,symbol,bid,"TARGET",snap.get("_exit_depth"))
+            return
 
 
 def fetch_symbol_snapshot(symbol, quote_volume_hint=None):
