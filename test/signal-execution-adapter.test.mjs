@@ -10,7 +10,7 @@ const candidate = {
   liveApproved: false,
   score: 91,
   entry: 2,
-  stop: 1.95,
+  stop: 1.96,
   target: 2.12,
   qty: 2.5,
   notional: 5,
@@ -22,7 +22,7 @@ test('approved paper candidate becomes a paper execution plan', () => {
   assert.equal(plan.authorization, 'PAPER_ONLY');
   assert.equal(plan.entry.symbol, 'ABCUSDT');
   assert.equal(plan.entry.quoteAmountUsdt, 5);
-  assert.equal(plan.protection.stopPrice, 1.95);
+  assert.equal(plan.protection.stopPrice, 1.96);
   assert.equal(plan.candidate.score, 91);
 });
 
