@@ -13,6 +13,8 @@ on:
       - 'freqtrade/trade_state.py'
       - 'freqtrade/reconcile_state.py'
       - 'freqtrade/Dockerfile'
+      - 'freqtrade/Dockerfile.railway'
+      - 'freqtrade/runtime_bootstrap.sh'
       - 'freqtrade/entrypoint.sh'
       - 'tests/test_production_safety_kernel.py'
       - '.github/workflows/production-safety-kernel-ci.yml'
@@ -48,6 +50,9 @@ jobs:
       - name: Deployment wiring contract
         run: |
           grep -F 'COPY . /freqtrade/' freqtrade/Dockerfile
+          grep -F 'COPY production_safety_kernel.py /freqtrade/production_safety_kernel.py' freqtrade/Dockerfile.railway
+          grep -F 'COPY independent_watchdog.py /freqtrade/independent_watchdog.py' freqtrade/Dockerfile.railway
+          grep -F 'COPY canary_guard.py /freqtrade/canary_guard.py' freqtrade/Dockerfile.railway
           grep -F 'python -u /freqtrade/independent_watchdog.py &' freqtrade/entrypoint.sh
           grep -F 'kill -0 "$WATCHDOG_PID"' freqtrade/entrypoint.sh
           grep -F 'kill -0 "$RECOVERY_PID"' freqtrade/entrypoint.sh
