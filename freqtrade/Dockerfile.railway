@@ -36,6 +36,8 @@ COPY capacity_gate.py /freqtrade/capacity_gate.py
 COPY readiness_audit.py /freqtrade/readiness_audit.py
 COPY execution_telemetry.py /freqtrade/execution_telemetry.py
 COPY spoofing_diagnostics.py /freqtrade/spoofing_diagnostics.py
+COPY production_runtime_hardening.py /freqtrade/production_runtime_hardening.py
+COPY production_runtime_guard.py /freqtrade/production_runtime_guard.py
 COPY test_execution_state.py /freqtrade/test_execution_state.py
 COPY test_spot_sniper_safety.py /freqtrade/test_spot_sniper_safety.py
 COPY market_context.py /freqtrade/market_context.py
