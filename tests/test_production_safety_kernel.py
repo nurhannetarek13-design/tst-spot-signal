@@ -92,3 +92,24 @@ def test_observability_and_postmortem():
     pm=m.build_postmortem({"type":"SAFETY_EVENT","behavior":"BLOCK","decision":"NO_NEW_TRADE"},
       {"version":{"code_commit":"abc"}},{"expected_behavior":"BLOCK"})
     assert pm["behavior_matched_spec"] is True and pm["diagnostic_only"] is True
+
+
+def test_strategy_virtual_books_do_not_hide_bad_strategy():
+    m=_load("portfolio_control")
+    books=m.virtual_books([],[
+      {"status":"CLOSED","strategy":"A","realized_pnl_usdt":"2"},
+      {"status":"CLOSED","strategy":"B","realized_pnl_usdt":"-3"}])
+    assert books["A"]["realized_pnl_usdt"]==Decimal("2")
+    assert books["B"]["realized_pnl_usdt"]==Decimal("-3")
+
+def test_capital_allocator_respects_hard_caps():
+    m=_load("portfolio_control")
+    c=[{"symbol":"A","strategy":"S1","eligible":True,"net_ev":"0.02","confidence":"0.9","liquidity_score":"0.9","volatility":"0.02","requested_usdt":"10"},
+       {"symbol":"B","strategy":"S2","eligible":True,"net_ev":"0.01","confidence":"0.8","liquidity_score":"0.8","volatility":"0.02","requested_usdt":"10"}]
+    x=m.allocate_capital(c,"20",max_total_usdt="12",max_per_trade_usdt="7",max_positions=3)
+    assert x["allocated_usdt"]<=Decimal("12")
+    assert all(a["allocated_usdt"]<=Decimal("7") for a in x["allocations"])
+
+def test_chaos_suite_fails_closed():
+    m=_load("chaos_safety"); x=m.run_chaos_suite()
+    assert x["ok"] is True and x["live_authorized"] is False
