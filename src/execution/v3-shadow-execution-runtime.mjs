@@ -82,10 +82,10 @@ export function createV3ShadowReservationStore(initialRows = []) {
     async listPending() {
       return [...rows.values()]
         .filter(row => !["COMPLETED", "FAILED"].includes(String(row.status || "").toUpperCase()))
-        .map(structuredClone);
+        .map(row => structuredClone(row));
     },
     async all() {
-      return [...rows.values()].map(structuredClone);
+      return [...rows.values()].map(row => structuredClone(row));
     },
   };
 }
