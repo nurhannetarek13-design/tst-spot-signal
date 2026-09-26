@@ -93,6 +93,47 @@ except ImportError:
         update_symbol_slippage_model,
     )
 
+try:
+    from .trade_management import (
+        adaptive_trade_levels,
+        attribute_trade,
+        build_entry_zone,
+        build_invalidation,
+        classify_trade_setup,
+        current_flow_state,
+        entry_in_zone,
+        liquidity_quote_cap,
+        momentum_failure,
+        net_reward_risk,
+        profit_protection_state,
+        reentry_status,
+        register_exit_for_reentry,
+        setup_excursion_profile,
+        setup_rules,
+        thesis_invalidated,
+        trade_quality_degradation_status,
+    )
+except ImportError:
+    from trade_management import (
+        adaptive_trade_levels,
+        attribute_trade,
+        build_entry_zone,
+        build_invalidation,
+        classify_trade_setup,
+        current_flow_state,
+        entry_in_zone,
+        liquidity_quote_cap,
+        momentum_failure,
+        net_reward_risk,
+        profit_protection_state,
+        reentry_status,
+        register_exit_for_reentry,
+        setup_excursion_profile,
+        setup_rules,
+        thesis_invalidated,
+        trade_quality_degradation_status,
+    )
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("TST_INDICATOR_CONFIG", str(ROOT / "indicator_config.json")))
 STATE_PATH = Path(os.getenv("TST_INDICATOR_STATE", str(ROOT / "indicator_state.json")))
