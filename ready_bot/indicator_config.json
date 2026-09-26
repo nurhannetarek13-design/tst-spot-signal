@@ -235,6 +235,7 @@
       "enabled": true,
       "max_extensions": 1,
       "extension_r": 1
-    }
+    },
+    "momentum_failure_min_age_candles": 2
   }
 }
