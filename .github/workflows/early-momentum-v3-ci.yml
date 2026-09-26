@@ -16,6 +16,8 @@ on:
       - 'research/binance_spot_point_in_time_universe.py'
       - 'tests/test_backtest_integrity_gate.py'
       - 'research/backtest_integrity_gate.py'
+      - 'tests/test_build_v3_backtest_integrity.py'
+      - 'scripts/build_v3_backtest_integrity.py'
       - 'test/v3-execution-intent.test.mjs'
       - 'src/execution/v3-execution-intent.mjs'
       - 'test/v3-shadow-execution-runtime.test.mjs'
@@ -84,6 +86,7 @@ jobs:
           python -m py_compile ready_bot/production_guard.py
           python -m py_compile ready_bot/smart_execution.py
           python -m py_compile research/backtest_integrity_gate.py
+          python -m py_compile scripts/build_v3_backtest_integrity.py
           python -m py_compile research/binance_spot_point_in_time_universe.py
           python -m py_compile scripts/v3_session_performance.py
           node --check ready_bot/stream_shadow.mjs

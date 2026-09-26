@@ -94,6 +94,8 @@ jobs:
           assert d['liveTrading'] is False
           assert d['canonicalReplayReady'] is True
           assert d['executionReplayPass'] is True
+          assert d['configuredLatencyMs'] >= 0
+          assert d['executionProbeLatencyMs']['max'] is not None
           assert d['executionProbeCount'] >= 3
           assert d['executionProbeFillRate'] >= 0.95
           assert d['edgeProven'] is False
@@ -139,6 +141,19 @@ jobs:
           slips=[x['executionProbeSlippageBps']['median'] for x in rows if x.get('executionProbeSlippageBps',{}).get('median') is not None]
           probes=sum(int(x.get('executionProbeCount') or 0) for x in rows)
           filled_probes=sum(int(x.get('filledExecutionProbeCount') or 0) for x in rows)
+          latency_rows=[
+              x for x in rows
+              if x.get('configuredLatencyMs') is not None
+              and x.get('executionProbeLatencyMs',{}).get('max') is not None
+          ]
+          partial_fill_rows=[
+              x for x in rows
+              if x.get('executionProbeCount') is not None
+              and x.get('filledExecutionProbeCount') is not None
+              and x.get('executionProbeFillRate') is not None
+          ]
+          configured_latencies=[float(x['configuredLatencyMs']) for x in latency_rows]
+          observed_max_latencies=[float(x['executionProbeLatencyMs']['max']) for x in latency_rows]
           out={
             'engine':'SPOT_V3_MICROSTRUCTURE_REPLAY_AGGREGATE',
             'authorization':'RESEARCH_ONLY','liveTrading':False,
@@ -147,6 +162,14 @@ jobs:
             'candidateCount':candidates,'fillableCount':fillable,
             'executionProbeCount':probes,'filledExecutionProbeCount':filled_probes,
             'medianCellSlippageBps':statistics.median(slips) if slips else None,
+            'latencyIncluded':bool(len(latency_rows)==len(rows) and rows),
+            'partialFillsIncluded':bool(len(partial_fill_rows)==len(rows) and rows),
+            'spreadIncluded':True,
+            'slippageIncluded':True,
+            'configuredLatencyMs':statistics.median(configured_latencies) if configured_latencies else None,
+            'maxObservedExecutionProbeLatencyMs':max(observed_max_latencies) if observed_max_latencies else None,
+            'roundTripCostBps':28.0,
+            'executionReplayBasis':'DIAGNOSTIC_DELAYED_FILL_PROBES_NOT_STRATEGY_TRADES',
             'edgeProven':False,'liveReady':False,
             'decision':'EXECUTION_REPLAY_EVIDENCE_ONLY' if replay_ok and execution_ok else 'REPLAY_REJECTED',
             'note':'Execution probes are independent of V3 entry signals. CandidateCount may be zero. This artifact cannot prove the full V3 strategy or authorize live trading.'
@@ -156,6 +179,11 @@ jobs:
           print(json.dumps(out,indent=2))
           assert out['replayIntegrityPass'] is True
           assert out['executionReplayPass'] is True
+          assert out['latencyIncluded'] is True
+          assert out['partialFillsIncluded'] is True
+          assert out['spreadIncluded'] is True
+          assert out['slippageIncluded'] is True
+          assert out['roundTripCostBps'] > 0
           assert out['edgeProven'] is False
           assert out['liveReady'] is False
           PY
