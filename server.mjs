@@ -221,6 +221,20 @@ app.get("/executor/api-key-safety", async (_req, res) => {
   }
 });
 
+// Compatibility probe used by older executor/signer health checks.
+// Read-only: validates route availability only and can never place an order.
+app.all(["/signer/validate", "/executor/signer/validate"], async (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    status: "SIGNER_VALIDATION_COMPAT",
+    executor: "VERCEL_SPOT_EXECUTOR",
+    apiConnected: hasBinanceSigningKey(),
+    liveTradingEnabled: executorConfig().enabled,
+    orderPlaced: false,
+    fundsUsed: false,
+  });
+});
+
 app.get("/executor/status", async (_req, res) => {
   const cfg = executorConfig();
   return res.json({
