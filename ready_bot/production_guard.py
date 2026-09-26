@@ -257,43 +257,21 @@ def utc_session_label(now=None):
     return "LATE_US_ASIA_TRANSITION"
 
 
-def load_event_risk(path, symbol, now=None, *, required=False, max_age_minutes=None):
+def load_event_risk(path, symbol, now=None):
     """Explicit operational event-risk file.
 
-    PAPER may observe without an external feed. A future non-paper runtime can
-    require a fresh feed and fail closed when the file is missing or stale.
+    This is intentionally deterministic: uncertain external news never gets
+    silently converted into a trade. Operators/automation may populate the file.
     """
     p=Path(path)
     if not p.exists():
-        if required:
-            return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FEED_MISSING","source":"NO_FILE","fresh":False}
-        return {"ok":True,"blocked":False,"reason":None,"source":"NO_FILE","fresh":False}
+        return {"ok":True,"blocked":False,"reason":None,"source":"NO_FILE"}
     try:
         data=json.loads(p.read_text())
     except Exception as exc:
-        return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FILE_INVALID","detail":str(exc)[:120],"fresh":False}
+        return {"ok":False,"blocked":True,"reason":"EVENT_RISK_FILE_INVALID","detail":str(exc)[:120]}
 
-    now_dt=now or datetime.now(timezone.utc)
-    now_ts=now_dt.timestamp()
-
-    generated=data.get("generated_at")
-    fresh=True
-    age_minutes=None
-    if max_age_minutes is not None:
-        try:
-            if not generated:
-                fresh=False
-            else:
-                gen_dt=datetime.fromisoformat(str(generated).replace("Z","+00:00"))
-                age_minutes=max(0.0,(now_dt-gen_dt).total_seconds()/60.0)
-                fresh=age_minutes<=float(max_age_minutes)
-        except Exception:
-            fresh=False
-    if required and not fresh:
-        return {
-            "ok":False,"blocked":True,"reason":"EVENT_RISK_FEED_STALE",
-            "source":"EVENT_RISK_FILE","fresh":False,"age_minutes":age_minutes,
-        }
+    now_ts=(now or datetime.now(timezone.utc)).timestamp()
 
     def active_until(value):
         if not value:
@@ -305,10 +283,39 @@ def load_event_risk(path, symbol, now=None, *, required=False, max_age_minutes=N
             return True
 
     if active_until(data.get("global_halt_until")):
-        return {"ok":False,"blocked":True,"reason":"GLOBAL_EVENT_RISK","detail":data.get("global_reason"),"fresh":fresh,"age_minutes":age_minutes}
+        return {"ok":False,"blocked":True,"reason":"GLOBAL_EVENT_RISK","detail":data.get("global_reason")}
 
     row=(data.get("symbols") or {}).get(str(symbol).upper())
     if isinstance(row,dict) and active_until(row.get("until")):
-        return {"ok":False,"blocked":True,"reason":"SYMBOL_EVENT_RISK","detail":row.get("reason"),"fresh":fresh,"age_minutes":age_minutes}
+        return {"ok":False,"blocked":True,"reason":"SYMBOL_EVENT_RISK","detail":row.get("reason")}
 
-    return {"ok":True,"blocked":False,"reason":None,"source":"EVENT_RISK_FILE","fresh":fresh,"age_minutes":age_minutes}
+    return {"ok":True,"blocked":False,"reason":None,"source":"EVENT_RISK_FILE"}
+
+
+def listing_age_status(daily_bars, *, min_complete_days=3, now_ms=None):
+    """Quarantine very new Spot listings before execution.
+
+    Uses only closed daily bars available at decision time. This is an event-risk
+    guard, not an alpha filter.
+    """
+    bars=list(daily_bars or [])
+    need=max(1,int(min_complete_days))
+    if len(bars)<need:
+        return {
+            "ok":False,
+            "reason":"NEW_LISTING_QUARANTINE",
+            "complete_days":len(bars),
+            "required_days":need,
+            "age_days":None,
+        }
+    now=float(now_ms if now_ms is not None else time.time()*1000)
+    first=float(bars[0].get("t") or 0)
+    age_days=(now-first)/86_400_000 if first>0 else None
+    ok=age_days is not None and age_days>=float(need)
+    return {
+        "ok":bool(ok),
+        "reason":None if ok else "NEW_LISTING_QUARANTINE",
+        "complete_days":len(bars),
+        "required_days":need,
+        "age_days":age_days,
+    }
