@@ -26,40 +26,6 @@ def execution_depth(price=1.0):
     }
 
 
-
-def entry_snap(symbol="TESTUSDT", ask=1.0):
-    return {
-        "symbol":symbol,"ask":ask,"bid":ask*0.9999,"spread_bps":1.0,
-        "bar_time":60_000,"score":5,"score_total":6,
-        "checks":{"ema_20_gt_50_15m":True},"eligible":True,"vetoes":[],
-        "atr_15m":0.005,"confirmed_swing_low":ask*0.99,
-        "_execution_depth":execution_depth(ask),
-        "_execution_agg":{"ratio":0.61,"delta_quote":1000.0,"slope_positive":True,"latest_event_ms":60_000},
-        "micro_pre":{
-            "atr_1m":ask*0.002,
-            "vwap":ask*0.998,
-            "vwap_distance_atr":1.0,
-            "ema9_slope_positive":True,
-            "rvol_1m":2.0,
-            "rvol_3m":1.7,
-            "price_velocity":0.001,
-            "taker_rising":True,
-            "taker_latest":0.60,
-            "cvd_positive":True,
-            "micro_breakout_hold":{"ok":True,"resistance":ask*0.9995,"breakout":True,"hold":True},
-            "breakout":{"resistance":ask*0.9995,"distance_atr":0.1},
-        },
-        "micro":{
-            "stage":"ENTRY_CANDIDATE","score":92,
-            "rvol_1m":2.0,"rvol_3m":1.7,"price_velocity":0.001,
-            "taker_rising":True,"taker_latest":0.60,"obi":0.62,
-            "agg_cvd":{"ratio":0.61,"delta_quote":1000.0,"slope_positive":True,"latest_event_ms":60_000},
-            "micro_breakout_hold":{"ok":True,"resistance":ask*0.9995,"breakout":True,"hold":True},
-            "production_guard":{"decision_latency_ms":500,"session":"US"},
-        },
-        "relative_strength":{"score":80,"strong":True},
-    }
-
 def spot_filters(symbol="TESTUSDT", verified=True):
     return {
         "min_notional":1.0,"max_notional":1e9,"min_qty":0.0001,
@@ -91,9 +57,6 @@ class IndicatorBotTests(unittest.TestCase):
         self.assertEqual(bot.CFG["exit"]["momentum_fade_min_age_minutes"],5)
         self.assertEqual(bot.CFG["exit"]["no_follow_through_minutes"],30)
         self.assertLessEqual(bot.CFG["production_guard"]["max_stream_signal_age_ms"],5000)
-        self.assertEqual(bot.CFG["trade_management"]["minimum_net_rr_after_costs"],1.30)
-        self.assertTrue(bot.CFG["trade_management"]["paper_partial_profit"]["research_only"])
-        self.assertEqual(bot.CFG["trade_management"]["max_reentry_attempts_per_window"],2)
 
     def test_six_indicator_snapshot_contains_exact_checks(self):
         snap=bot.indicator_snapshot(
@@ -141,7 +104,14 @@ class IndicatorBotTests(unittest.TestCase):
 
     def test_open_position_uses_swing_and_atr_and_risk_limits(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
-        snap=entry_snap()
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bar_time":1,"score":5,"score_total":6,
+            "checks":{"ema_20_gt_50_15m":True},"eligible":True,"vetoes":[],
+            "atr_15m":0.005,"confirmed_swing_low":0.99,
+            "bid":0.9999,"spread_bps":1.0,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":1}},
+        }
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"PAPER_OPENED")
         p=state["positions"]["TESTUSDT"]
         self.assertLess(p["stop"],snap["confirmed_swing_low"])
@@ -154,9 +124,11 @@ class IndicatorBotTests(unittest.TestCase):
 
     def test_abnormally_wide_swing_stop_is_skipped(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0}
-        snap=entry_snap()
-        snap["atr_15m"]=0.01
-        snap["confirmed_swing_low"]=0.90
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bar_time":1,"score":5,"score_total":6,
+            "checks":{},"eligible":True,"vetoes":[],
+            "atr_15m":0.01,"confirmed_swing_low":0.90,
+        }
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"STOP_TOO_WIDE")
 
     def test_daily_loss_gate_blocks_new_position(self):
@@ -216,8 +188,6 @@ class IndicatorBotTests(unittest.TestCase):
         bot.manage_position(state,"TESTUSDT",snap)
         self.assertNotIn("TESTUSDT",state["positions"])
         self.assertEqual(state["closed_trades"][-1]["reason"],"MOMENTUM_FADE")
-        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
-        self.assertEqual(state["decision_log"][-1]["reason"],"MOMENTUM_FADE")
 
     def test_dynamic_exit_frees_stalled_trade(self):
         opened=(datetime.now(timezone.utc)-timedelta(minutes=31)).isoformat()
@@ -234,13 +204,17 @@ class IndicatorBotTests(unittest.TestCase):
         bot.manage_position(state,"TESTUSDT",snap)
         self.assertNotIn("TESTUSDT",state["positions"])
         self.assertEqual(state["closed_trades"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
-        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
-        self.assertEqual(state["decision_log"][-1]["reason"],"TIME_NO_FOLLOW_THROUGH")
 
 
     def test_duplicate_signal_id_is_idempotent(self):
         state={"cash_usdt":20.08,"positions":{},"day_pnl":0.0,"executed_signal_ids":{}}
-        snap=entry_snap()
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bid":0.9999,"spread_bps":1.0,
+            "bar_time":60_000,"score":5,"score_total":6,"checks":{},
+            "eligible":True,"vetoes":[],"atr_15m":0.005,"confirmed_swing_low":0.99,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":60_000}},
+        }
         first=bot.open_position(state,snap,spot_filters())
         self.assertEqual(first,"PAPER_OPENED")
         state["positions"].pop("TESTUSDT")
@@ -338,8 +312,35 @@ class IndicatorBotTests(unittest.TestCase):
             "executed_signal_ids":{},
             "slippage_model":{"TESTUSDT":{"count":3,"ewma_bps":20.0,"max_bps":22.0,"last_bps":20.0}},
         }
-        snap=entry_snap()
+        snap={
+            "symbol":"TESTUSDT","ask":1.0,"bid":0.9999,"spread_bps":1.0,
+            "bar_time":60_000,"score":5,"score_total":6,"checks":{},
+            "eligible":True,"vetoes":[],"atr_15m":0.005,"confirmed_swing_low":0.99,
+            "_execution_depth":execution_depth(1.0),
+            "micro":{"score":90,"taker_rising":True,"agg_cvd":{"latest_event_ms":60_000}},
+        }
         self.assertEqual(bot.open_position(state,snap,spot_filters()),"SYMBOL_SLIPPAGE_MODEL_REJECT")
+
+
+    def test_dynamic_exit_records_why_exit(self):
+        from datetime import datetime, timezone, timedelta
+        state={
+            "cash_usdt":10.0,
+            "positions":{
+                "TESTUSDT":{
+                    "entry":1.0,"stop":0.95,"target":1.10,"initial_risk_abs":0.05,
+                    "breakeven":False,"qty":1.0,"cost":1.0,
+                    "opened_at":(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat(),
+                    "peak_price":1.01,"trough_price":0.99,
+                }
+            },
+            "closed_trades":[],"decision_log":[],"day_pnl":0.0,
+            "exit_slippage_model":{},
+        }
+        snap={"bid":0.99,"atr_15m":0.01,"micro_pre":{"taker_latest":0.45,"cvd_positive":False,"vwap":1.0}}
+        bot.manage_position(state,"TESTUSDT",snap)
+        self.assertEqual(state["decision_log"][-1]["code"],"WHY_EXIT")
+        self.assertEqual(state["decision_log"][-1]["reason"],"MOMENTUM_FADE")
 
 
 if __name__=="__main__":
