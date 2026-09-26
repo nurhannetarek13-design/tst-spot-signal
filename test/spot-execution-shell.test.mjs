@@ -28,6 +28,13 @@ test('blocks trade above configured size', () => {
   );
 });
 
+test('blocks trade above configured stop-risk cap', () => {
+  assert.throws(
+    () => buildExecutionPlan({ intent: { ...intent, stopPrice: 58800 } }),
+    /MAX_RISK_PER_TRADE_EXCEEDED/,
+  );
+});
+
 test('blocks once daily loss cap is reached', () => {
   assert.throws(
     () => buildExecutionPlan({ intent, state: { openPositions: 0, realizedPnlTodayUsdt: -2 } }),
