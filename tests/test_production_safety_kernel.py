@@ -78,3 +78,17 @@ def test_symbol_metadata_stale_and_decimal_normalization():
     try:c.get("SOLUSDT",now=111)
     except RuntimeError as e: assert str(e)=="SYMBOL_METADATA_STALE"
     else: raise AssertionError("stale metadata accepted")
+
+
+def test_feature_flag_assignment_is_deterministic():
+    m=_load("production_observability"); flags={"CVD_V2":{"enabled":True,"percent":10}}
+    assert m.feature_enabled("CVD_V2","sig-1",flags)==m.feature_enabled("CVD_V2","sig-1",flags)
+    assert not m.feature_enabled("OFF","sig-1",{"OFF":{"enabled":False,"percent":100}})
+
+def test_observability_and_postmortem():
+    m=_load("production_observability"); x=m.Metrics()
+    x.inc("rejected_orders"); x.observe("execution_latency_ms",100); x.observe("execution_latency_ms",200)
+    snap=x.snapshot(); assert snap["counts"]["rejected_orders"]==1 and snap["samples"]["execution_latency_ms"]["max"]==200
+    pm=m.build_postmortem({"type":"SAFETY_EVENT","behavior":"BLOCK","decision":"NO_NEW_TRADE"},
+      {"version":{"code_commit":"abc"}},{"expected_behavior":"BLOCK"})
+    assert pm["behavior_matched_spec"] is True and pm["diagnostic_only"] is True
