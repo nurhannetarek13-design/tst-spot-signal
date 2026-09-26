@@ -6,6 +6,7 @@ const MAX_SYMBOLS=Math.max(3,Math.min(30,Number(process.env.STREAM_MAX_SYMBOLS||
 const MIN_QV=Number(process.env.STREAM_MIN_QUOTE_VOLUME_USDT||20000000);
 const MAX_CLOCK_OFFSET_MS=Number(process.env.STREAM_MAX_CLOCK_OFFSET_MS||750);
 const MAX_CLOCK_RTT_MS=Number(process.env.STREAM_MAX_CLOCK_RTT_MS||1500);
+const STREAM_WARMUP_MS=Math.max(3000,Number(process.env.STREAM_WARMUP_MS||15000));
 const PUBLIC_RELAY=String(process.env.PUBLIC_MARKET_RELAY_URL||"").replace(/\/$/,"");
 const REST_BASES=[
   "https://data-api.binance.vision",
@@ -176,7 +177,7 @@ function trade(symbol,d){
 }
 function snapshot(symbol){
   const s=runtime.books.get(symbol);if(!s)return null;const t=now(),da=s.lastDepth==null?Infinity:t-s.lastDepth,ta=s.lastTrade==null?Infinity:t-s.lastTrade;
-  return {symbol,synced:s.synced,warmed:s.synced&&s.warmSince!=null&&t-s.warmSince>=3000,fresh:s.synced&&da<=3000&&ta<=12000,
+  return {symbol,synced:s.synced,warmed:s.synced&&s.warmSince!=null&&t-s.warmSince>=STREAM_WARMUP_MS,fresh:s.synced&&da<=3000&&ta<=12000,
     depthAgeMs:Number.isFinite(da)?da:null,tradeAgeMs:Number.isFinite(ta)?ta:null,lastUpdateId:s.lastUpdateId,sequenceGaps:s.gaps,
     ...bookMetrics(s,t),...tradeMetrics(s.trades,t)};
 }
