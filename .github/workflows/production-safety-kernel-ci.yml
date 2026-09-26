@@ -7,10 +7,12 @@ on:
       - 'tests/test_production_safety_kernel.py'
       - 'freqtrade/event_integrity.py'
       - 'freqtrade/symbol_lifecycle.py'
-      - 'freqtrade/production_observability.py freqtrade/portfolio_control.py freqtrade/chaos_safety.py freqtrade/trade_state.py'
+      - 'freqtrade/production_observability.py freqtrade/portfolio_control.py freqtrade/chaos_safety.py freqtrade/trade_state.py freqtrade/reconcile_state.py freqtrade/canary_guard.py'
       - 'freqtrade/portfolio_control.py'
       - 'freqtrade/chaos_safety.py'
       - 'freqtrade/trade_state.py'
+      - 'freqtrade/reconcile_state.py'
+      - 'freqtrade/canary_guard.py'
       - '.github/workflows/production-safety-kernel-ci.yml'
   workflow_dispatch:
 permissions:
