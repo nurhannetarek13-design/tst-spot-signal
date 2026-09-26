@@ -81,3 +81,11 @@ def test_promotion_integrity_requires_every_research_protection():
  assert good["promotion_allowed"] and not good["automatic_live_authorization"]
  bad=m.promotion_gate(calibration={},drift={},fdr={},baselines={},dependency={},forward={},champion={})
  assert not bad["promotion_allowed"] and len(bad["reasons"])>=6
+
+
+def test_readiness_audit_never_overclaims_external_dependencies():
+ m=load("freqtrade/readiness_audit.py","audit")
+ a=m.audit()
+ assert a["full"]==15 and a["partial"]==5 and not a["architecture_complete"] and not a["live_authorized"]
+ b=m.audit(offsite_dr=True,live_factor_history=True,live_queue_telemetry=True,live_post_fill_telemetry=True,fee_fx_complete=True)
+ assert b["full"]==20 and b["architecture_complete"] and not b["live_authorized"]
