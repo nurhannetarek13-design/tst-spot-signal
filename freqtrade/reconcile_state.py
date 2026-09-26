@@ -191,6 +191,7 @@ def run_once():
 
     snap=trade_state.portfolio_snapshot(); perf=trade_state.performance_snapshot()
     execution_health.mark_ok(component='reconcile', open_count=snap['open_count'], incomplete_count=snap['incomplete_count'], stop_risk_usdt=snap['stop_risk_usdt'], realized_pnl_today_usdt=perf['realized_pnl_today_usdt'])
+    Path('/data/reconciliation_ok').write_text(str(time.time()),encoding='utf-8')
     print(f"[reconcile] OK bot_open_ocos={len(open_ocos)} tracked_open={snap['open_count']} risk={snap['stop_risk_usdt']:.4f} incomplete={snap['incomplete_count']} pnl_today={perf['realized_pnl_today_usdt']:+.4f} streak={perf['consecutive_losses']}",flush=True)
 
 

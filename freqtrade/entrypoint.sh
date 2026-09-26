@@ -17,7 +17,7 @@ else
 fi
 
 cleanup() {
-  kill "${FRONT_PROXY_PID:-}" "${EV_VALIDATION_PID:-}" "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${WATCHDOG_PID:-}" "${DEEP_READINESS_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${DYNAMIC_EXIT_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
+  kill "${FRONT_PROXY_PID:-}" "${EV_VALIDATION_PID:-}" "${SHADOW_EV_PID:-}" "${SHADOW_RESEARCH_PID:-}" "${MARKET_CONTEXT_PID:-}" "${WATCHDOG_PID:-}" "${PRODUCTION_GUARD_PID:-}" "${DEEP_READINESS_PID:-}" "${RECOVERY_PID:-}" "${RECONCILE_PID:-}" "${DYNAMIC_EXIT_PID:-}" "${OUTCOME_ENGINE_PID:-}" "${SOL_MONITOR_PID:-}" "${NEW_LISTING_PID:-}" "${FAST_PID:-}" "$BOT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT TERM INT
 
@@ -89,6 +89,10 @@ echo "[entrypoint] independent safety watchdog started pid=${WATCHDOG_PID}"
 python -u /freqtrade/deep_readiness_runtime.py &
 DEEP_READINESS_PID=$!
 echo "[entrypoint] deep readiness transition/DR worker started pid=${DEEP_READINESS_PID}"
+
+python -u /freqtrade/production_runtime_guard.py &
+PRODUCTION_GUARD_PID=$!
+echo "[entrypoint] production runtime hardening guard started pid=${PRODUCTION_GUARD_PID}"
 
 # Market context is useful for the final fail-closed Spot Sniper gate, but public
 # Binance context collection can occasionally be slow. Never block the primary
@@ -172,6 +176,11 @@ while true; do
   if ! kill -0 "$DEEP_READINESS_PID" 2>/dev/null; then
     echo "[entrypoint] CRITICAL deep-readiness worker exited; fail-closed restart" >&2
     wait "$DEEP_READINESS_PID" || true
+    exit 1
+  fi
+  if ! kill -0 "$PRODUCTION_GUARD_PID" 2>/dev/null; then
+    echo "[entrypoint] CRITICAL production runtime guard exited; fail-closed restart" >&2
+    wait "$PRODUCTION_GUARD_PID" || true
     exit 1
   fi
   if ! kill -0 "$WATCHDOG_PID" 2>/dev/null; then
