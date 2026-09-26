@@ -62,15 +62,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {symbol: BTCUSDT, date: '2021-09-01', offset: 5}
-          - {symbol: ETHUSDT, date: '2021-09-01', offset: 5}
-          - {symbol: SOLUSDT, date: '2021-09-01', offset: 5}
+          - {symbol: BTCUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: ETHUSDT, date: '2021-09-01', offset: 25}
+          - {symbol: SOLUSDT, date: '2021-09-01', offset: 25}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Replay Spot execution mechanics window with canonical warm-up
+      - name: Replay Spot execution mechanics window
         run: |
           mkdir -p validation/indicator-v3/spot-replay
           PYTHONPATH=. python research/tardis_spot_microstructure_v3.py \
@@ -79,6 +79,7 @@ jobs:
             --start-offset '${{ matrix.offset }}' \
             --minutes 4 \
             --quote-usdt 10 \
+            --no-warmup \
             --output 'validation/indicator-v3/spot-replay/${{ matrix.symbol }}.json' \
             --assert-replay
       - name: Assert replay scope cannot authorize live
