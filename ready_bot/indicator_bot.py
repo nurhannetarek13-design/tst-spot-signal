@@ -644,14 +644,12 @@ def account_equity_at_cost(state):
     return float(state.get("cash_usdt", 0.0)) + sum(float(p.get("cost", 0.0)) for p in state.get("positions", {}).values())
 
 
-def close_position(state, symbol, bid, reason, exit_depth=None):
-    p = state["positions"].pop(symbol)
-    fee = float(CFG["risk"]["fee_rate"])
-    ref = float(bid)
+def _paper_sell_fill(symbol, qty, bid, exit_depth=None):
+    ref=float(bid)
     depth_meta={"source":"FALLBACK","fill_ratio":None,"slippage_bps":None}
     try:
-        depth = exit_depth or depth20(symbol)
-        est = estimate_sell_slippage(depth, p["qty"])
+        depth=exit_depth or depth20(symbol)
+        est=estimate_sell_slippage(depth,float(qty))
         if est.get("ok") and est.get("average_price"):
             fill=float(est["average_price"])
             depth_meta={
@@ -673,34 +671,100 @@ def close_position(state, symbol, bid, reason, exit_depth=None):
             "slippage_bps":fallback_rate*10000,
             "detail":str(exc)[:120],
         }
+    return fill,depth_meta
 
-    proceeds = p["qty"] * fill * (1 - fee)
-    pnl = proceeds - p["cost"]
-    state["cash_usdt"] += proceeds
-    state["day_pnl"] += pnl
-    exit_slip=realized_slippage_bps(ref,fill,"SELL")
+
+def partial_close_position(state, symbol, bid, fraction, reason, exit_depth=None):
+    p=state["positions"][symbol]
+    frac=max(0.0,min(1.0,float(fraction)))
+    if frac<=0 or frac>=1:
+        return "INVALID_PARTIAL_FRACTION"
+    current_qty=float(p["qty"])
+    qty=current_qty*frac
+    if qty<=0:
+        return "INVALID_PARTIAL_QTY"
+
+    fill,depth_meta=_paper_sell_fill(symbol,qty,bid,exit_depth)
+    fee=float(CFG["risk"]["fee_rate"])
+    cost_fraction=float(p["cost"])*(qty/current_qty)
+    proceeds=qty*fill*(1-fee)
+    pnl=proceeds-cost_fraction
+
+    p["qty"]=current_qty-qty
+    p["cost"]=max(0.0,float(p["cost"])-cost_fraction)
+    p["realized_partial_pnl_usdt"]=float(p.get("realized_partial_pnl_usdt") or 0.0)+pnl
+    p.setdefault("partial_exits",[]).append({
+        "at":now_iso(),"reason":reason,"fraction_of_current":frac,
+        "qty":qty,"fill":fill,"pnl_usdt":pnl,"execution":depth_meta,
+    })
+    state["cash_usdt"]+=proceeds
+    state["day_pnl"]+=pnl
+    exit_slip=realized_slippage_bps(float(bid),fill,"SELL")
     state["exit_slippage_model"]=update_symbol_slippage_model(
         state.get("exit_slippage_model"),symbol,exit_slip
     )
-    state["closed_trades"].append({
-        "symbol": symbol, "engine": CFG["engine"], "entry": p["entry"], "exit": fill,
-        "qty": p["qty"], "pnl_usdt": pnl, "reason": reason,
-        "score_at_entry": p.get("score"), "opened_at": p["opened_at"], "closed_at": now_iso(),
-        "momentum_score": p.get("momentum_score"),
-        "market_regime": p.get("market_regime"),
-        "relative_strength": p.get("relative_strength"),
-        "entry_context": p.get("entry_context"),
-        "mfe_r": p.get("mfe_r"),
-        "mae_r": p.get("mae_r"),
-        "exit_execution": depth_meta,
-        "exit_slippage_bps": exit_slip,
-    })
     append_decision(
-        state, symbol, "WHY_EXIT",
-        reason=reason,
-        pnl_usdt=pnl,
-        mfe_r=p.get("mfe_r"),
-        mae_r=p.get("mae_r"),
+        state,symbol,"WHY_PARTIAL_EXIT",
+        reason=reason,qty=qty,pnl_usdt=pnl,
+        remaining_qty=p["qty"],exit_slippage_bps=exit_slip,
+    )
+    return "PAPER_PARTIAL_CLOSED"
+
+
+def close_position(state, symbol, bid, reason, exit_depth=None):
+    p=state["positions"].pop(symbol)
+    fee=float(CFG["risk"]["fee_rate"])
+    fill,depth_meta=_paper_sell_fill(symbol,p["qty"],bid,exit_depth)
+    proceeds=p["qty"]*fill*(1-fee)
+    final_leg_pnl=proceeds-p["cost"]
+    partial_pnl=float(p.get("realized_partial_pnl_usdt") or 0.0)
+    total_pnl=partial_pnl+final_leg_pnl
+    state["cash_usdt"]+=proceeds
+    state["day_pnl"]+=final_leg_pnl
+
+    exit_slip=realized_slippage_bps(float(bid),fill,"SELL")
+    state["exit_slippage_model"]=update_symbol_slippage_model(
+        state.get("exit_slippage_model"),symbol,exit_slip
+    )
+    attribution=attribute_trade(p,total_pnl,reason)
+    closed={
+        "symbol":symbol,"engine":CFG["engine"],"entry":p["entry"],"exit":fill,
+        "setup_type":p.get("setup_type"),
+        "original_qty":p.get("original_qty",p["qty"]),
+        "final_qty":p["qty"],
+        "qty":p.get("original_qty",p["qty"]),
+        "pnl_usdt":total_pnl,
+        "final_leg_pnl_usdt":final_leg_pnl,
+        "partial_pnl_usdt":partial_pnl,
+        "partial_exits":p.get("partial_exits",[]),
+        "reason":reason,
+        "score_at_entry":p.get("score"),"opened_at":p["opened_at"],"closed_at":now_iso(),
+        "momentum_score":p.get("momentum_score"),
+        "market_regime":p.get("market_regime"),
+        "relative_strength":p.get("relative_strength"),
+        "entry_context":p.get("entry_context"),
+        "entry_zone":p.get("entry_zone"),
+        "invalidation":p.get("invalidation"),
+        "profit_stage":p.get("profit_stage"),
+        "winner_extensions":p.get("winner_extensions",0),
+        "mfe_r":p.get("mfe_r"),
+        "mae_r":p.get("mae_r"),
+        "excursion_profile_at_entry":p.get("excursion_profile_at_entry"),
+        "adaptive_levels":p.get("adaptive_levels"),
+        "exit_execution":depth_meta,
+        "exit_slippage_bps":exit_slip,
+        "attribution":attribution,
+    }
+    state["closed_trades"].append(closed)
+    register_exit_for_reentry(
+        state,symbol,reason,p.get("setup_type"),CFG["trade_management"]
+    )
+    append_decision(
+        state,symbol,"WHY_EXIT",
+        reason=reason,pnl_usdt=total_pnl,
+        setup_type=p.get("setup_type"),
+        mfe_r=p.get("mfe_r"),mae_r=p.get("mae_r"),
+        attribution=attribution,
         exit_slippage_bps=exit_slip,
         exit_execution_source=depth_meta.get("source"),
     )
