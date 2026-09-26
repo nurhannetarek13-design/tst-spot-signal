@@ -60,3 +60,24 @@ def test_spoofing_cancellation_diagnostics():
   snaps += [{"ts_ms":i*2000,"bids":[[100+i,200]],"asks":[]},{"ts_ms":i*2000+500,"bids":[],"asks":[]}]
  x=m.spoofing_diagnostics(snaps,min_wall_usdt=10000,max_lifetime_ms=1000)
  assert x["suspected_spoofing"] and x["fast_cancel_rate"]==1.0
+
+
+def test_capacity_gate_blocks_missing_live_liquidity():
+ m=load("freqtrade/capacity_gate.py","cap")
+ assert m.evaluate({"quote_amount_usdt":10})["status"]=="CAPACITY_UNKNOWN"
+ ok=m.evaluate({"quote_amount_usdt":1,"depth_near_touch_usdt":10000,"recent_trade_flow_usdt":10000,"spread_bps":1,"short_volatility":.001})
+ assert ok["passed"]
+
+def test_promotion_integrity_requires_every_research_protection():
+ m=load("research/promotion_integrity.py","promo")
+ good=m.promotion_gate(
+   calibration={"groups":{"x":{"evidence_ready":True}}},
+   drift={"block_promotion":False},
+   fdr={"hypotheses_tested":10,"accepted":1},
+   baselines={"complexity_justified":True},
+   dependency={"independence_review_required":False},
+   forward={"evidence_pass":True},
+   champion={"shadow_pass":True})
+ assert good["promotion_allowed"] and not good["automatic_live_authorization"]
+ bad=m.promotion_gate(calibration={},drift={},fdr={},baselines={},dependency={},forward={},champion={})
+ assert not bad["promotion_allowed"] and len(bad["reasons"])>=6
