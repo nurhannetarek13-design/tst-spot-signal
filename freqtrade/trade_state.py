@@ -404,6 +404,10 @@ def portfolio_snapshot() -> dict[str, Any]:
             qty = float(pos.get('quantity') or 0)
             if entry > 0 and stop > 0 and qty > 0:
                 risk += max(0.0, entry - stop) * qty
+                # A stop intent in local state is not exchange protection.
+                # Only an active OCO proves the filled position is protected.
+                if str(pos.get('status') or '') != 'OCO_ACTIVE':
+                    incomplete += 1
             else:
                 incomplete += 1
         except Exception:
