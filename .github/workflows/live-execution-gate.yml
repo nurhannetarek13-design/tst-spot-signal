@@ -10,6 +10,8 @@ on:
       - "src/ops-supervisor.js"
       - "src/bridge-auth.js"
       - "src/live-cutover-policy.js"
+      - "src/make-live-client.js"
+      - "src/binance-spot-filters.js"
       - ".github/workflows/live-execution-gate.yml"
 
 permissions:
