@@ -2,7 +2,7 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
-import { manualBuyAndProtect, makeReadOnlyHeartbeat, MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
+import { makeReadOnlyHeartbeat, MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -354,6 +354,8 @@ export default {
         armed: String(env.E2E_ARMED || "").toLowerCase() === "true",
         liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+        manualOnly: true,
+        automaticExecution: false,
         result: result || null,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
@@ -394,7 +396,8 @@ export default {
         executorOwnershipOk: ownershipFresh,
         offsiteSnapshotFresh: snapshotFresh,
         executorConfigured,
-        liveTrading: false,
+        manualExecutionAllowed: gate.go && readLivePolicy(env).liveExecutionEnabled === true && readLivePolicy(env).autonomousEnabled !== true,
+        liveTrading: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousExecution: false,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
@@ -475,65 +478,14 @@ export default {
       }
 
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
-      const policy = readLivePolicy(env);
-      if (e2eArmed && policy.liveExecutionEnabled === true && policy.autonomousEnabled !== true) {
-        const existing = await getState(env, "cutover:e2e:result");
-        if (!existing) {
-          const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
-          const heartbeats = (await getState(env, "ops:heartbeats")) || {};
-          const unknown = (await getState(env, "live:unknown-orders")) || [];
-          const unprotected = (await getState(env, "live:unprotected-positions")) || [];
-          const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
-          const bridgeHealth = (await getState(env, "bridge:health")) || null;
-          const ownership = (await getState(env, "bridge:ownership")) || null;
-          const now = Date.now();
-          const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
-          const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
-          const gate = evaluateGoNoGo({
-            supervisorState: next.state,
-            reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
-            snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
-            watchdogHealthy: !next.stale?.length,
-            binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-            executionRouteHealthy: executorConfigured && bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
-            executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
-            unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
-            unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
-            dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
-            policy,
-          });
-          if (gate.go) {
-            const claimed = await claimState(env, "cutover:e2e:once", { at: now }, 7 * 24 * 60 * 60);
-            if (claimed) {
-              const input = {
-                signal_id: "CUTOVER_E2E_20260928",
-                symbol: String(env.E2E_SYMBOL || "BTCUSDT"),
-                quote_amount_usdt: Math.min(5.5, Math.max(5, Number(env.E2E_QUOTE_USDT || 5))),
-                take_profit_price: Number(env.E2E_TP_PRICE || 0),
-                stop_loss_price: Number(env.E2E_SL_PRICE || 0),
-              };
-              let result;
-              try {
-                result = await manualBuyAndProtect(env, input);
-              } catch (e) {
-                result = {
-                  ok: false,
-                  status: "E2E_INTERNAL_ERROR",
-                  reconciliationRequired: true,
-                  mayResend: false,
-                  reason: String(e?.message || e).slice(0, 120),
-                };
-              }
-              await putState(env, "cutover:e2e:result", { ...result, input, at: Date.now() }, 30 * 24 * 60 * 60);
-              if (["EXECUTION_STATUS_UNKNOWN", "OCO_STATUS_UNKNOWN", "E2E_INTERNAL_ERROR", "PROTECTION_NORMALIZATION_FAILED"].includes(String(result?.status || ""))) {
-                const rows = Array.isArray(unknown) ? unknown : [];
-                rows.push({ signalId: input.signal_id, status: result.status, at: Date.now() });
-                await putState(env, "live:unknown-orders", rows.slice(-20));
-              }
-              await tg(env, `🧪 LIVE CUTOVER E2E\nStatus: ${result?.status || "UNKNOWN"}\nSymbol: ${input.symbol}\nAmount: ${input.quote_amount_usdt} USDT\nAutonomous: OFF`);
-            }
-          }
-        }
+      if (e2eArmed) {
+        await putState(env, "cutover:e2e:armed-status", {
+          at: Date.now(),
+          manualOnly: true,
+          automaticExecution: false,
+          liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+          autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+        });
       }
     })());
   },
