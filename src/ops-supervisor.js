@@ -1,4 +1,5 @@
 import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
+import { deriveOpsState } from "./ops-state-machine.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -36,66 +37,22 @@ async function heartbeat(env, components, meta = {}) {
   await putState(env, "ops:heartbeats", current);
   return current;
 }
-function hbAt(hb, name) {
-  const row = hb?.[name];
-  return Number(typeof row === "number" ? row : row?.at || 0);
-}
 async function computeState(env) {
   const now = Date.now();
   const hb = (await getState(env, "ops:heartbeats")) || {};
   const previous = (await getState(env, "ops:state")) || { state: "WARMING_UP", since: now };
   const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
   const scheduler = (await getState(env, "ops:scheduler:last")) || null;
-  const critical = ["scanner", "market-data", "strategy", "risk", "watchdog", "binance-readonly", "reconciler", "protection"];
-  const stale = critical.filter((c) => !hbAt(hb, c) || now - hbAt(hb, c) > HEARTBEAT_STALE_MS);
-
-  let state = "HEALTHY";
-  let reason = null;
-  if (stale.length) {
-    state = "DEGRADED";
-    reason = `STALE_HEARTBEAT:${stale.join(",")}`;
-  } else if (reconciliation?.ok === false) {
-    state = "PROTECTION_ONLY";
-    reason = reconciliation.reason || "RECONCILIATION_FAILED";
-  } else if (["DEGRADED", "PROTECTION_ONLY"].includes(previous.state)) {
-    state = "RECOVERING";
-    reason = "RECOVERY_STABILIZATION";
-  } else if (previous.state === "RECOVERING") {
-    if (now - Number(previous.since || now) < RECOVERY_HOLD_MS) {
-      state = "RECOVERING";
-      reason = "RECOVERY_STABILIZATION";
-    } else {
-      state = "RECONCILING";
-      reason = "POST_RECOVERY_RECONCILIATION";
-    }
-  } else if (previous.state === "RECONCILING") {
-    if (!reconciliation || now - Number(reconciliation.at || 0) > HEARTBEAT_STALE_MS) {
-      state = "RECONCILING";
-      reason = "WAITING_FOR_FRESH_RECONCILIATION";
-    } else if (reconciliation.ok !== true) {
-      state = "PROTECTION_ONLY";
-      reason = reconciliation.reason || "RECONCILIATION_FAILED";
-    } else {
-      state = "WARMING_UP";
-      reason = "POST_RECOVERY_WARMUP";
-    }
-  } else if (previous.state === "WARMING_UP" && now - Number(previous.since || now) < WARMUP_MS) {
-    state = "WARMING_UP";
-    reason = "WARMUP_WINDOW";
-  }
-
-  const next = {
-    state,
-    reason,
-    stale,
-    since: previous.state === state ? previous.since : now,
-    checkedAt: now,
-    schedulerLastAt: Number(scheduler?.at || 0) || null,
-    reconciliationAt: Number(reconciliation?.at || 0) || null,
-    newEntriesAllowed: false,
-    liveTrading: false,
-    autonomousExecution: false,
-  };
+  const next = deriveOpsState({
+    now,
+    heartbeats: hb,
+    previous,
+    reconciliation,
+    scheduler,
+    heartbeatStaleMs: HEARTBEAT_STALE_MS,
+    recoveryHoldMs: RECOVERY_HOLD_MS,
+    warmupMs: WARMUP_MS,
+  });
   await putState(env, "ops:state", next);
   return next;
 }
