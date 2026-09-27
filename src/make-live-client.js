@@ -2,8 +2,13 @@ import { signBridgeEnvelope } from "./bridge-auth.js";
 import { readLivePolicy } from "./live-cutover-policy.js";
 import { normalizeSpotProtection } from "./binance-spot-filters.js";
 
-const BUY_URL = "https://hook.eu1.make.com/soxizns5lax7zpfm84ve0mzblbw2h63h";
-const OCO_URL = "https://hook.eu1.make.com/uwcpj6oq39e1ddsau2zk07g3q78vlovs";
+export const MAKE_EXECUTION_ROUTE = Object.freeze({
+  version: "v2",
+  buy: Object.freeze({ id: "BUY_V2", url: "https://hook.eu1.make.com/r9cqpv68bbj2zb01jitfmzk8iqb2zh16" }),
+  oco: Object.freeze({ id: "OCO_V2", url: "https://hook.eu1.make.com/yn7vndobsf378u5hbec7jfnuam25ulcj" }),
+});
+const BUY_URL = MAKE_EXECUTION_ROUTE.buy.url;
+const OCO_URL = MAKE_EXECUTION_ROUTE.oco.url;
 
 function clientIds(signalId) {
   const base = String(signalId || "sig").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "sig";
@@ -106,8 +111,7 @@ export async function manualBuyAndProtect(env, input) {
 
 export async function makeReadOnlyHeartbeat(env) {
   const bucket = Math.floor(Date.now() / (15 * 60 * 1000));
-  return postSigned(env, BUY_URL, {
-    signal_id: `watchdog${bucket}`,
+  const base = {
     action: "HEARTBEAT",
     symbol: "BTCUSDT",
     quote_amount_usdt: 0,
@@ -121,5 +125,22 @@ export async function makeReadOnlyHeartbeat(env) {
     limit_client_order_id: "",
     confirmed: false,
     dry_run: true,
-  }, 15000);
+  };
+  const buy = await postSigned(env, BUY_URL, { ...base, signal_id: `watchdogbuy${bucket}` }, 15000);
+  const oco = await postSigned(env, OCO_URL, { ...base, signal_id: `watchdogoco${bucket}` }, 15000);
+  const ok = buy?.transportOk === true && oco?.transportOk === true;
+  return {
+    transportOk: ok,
+    httpStatus: Math.max(Number(buy?.httpStatus || 0), Number(oco?.httpStatus || 0)),
+    body: {
+      status: ok ? "MAKE_V2_HEARTBEAT_OK" : "MAKE_V2_HEARTBEAT_FAILED",
+      routeVersion: MAKE_EXECUTION_ROUTE.version,
+      buyRouteId: MAKE_EXECUTION_ROUTE.buy.id,
+      ocoRouteId: MAKE_EXECUTION_ROUTE.oco.id,
+      buyStatus: String(buy?.body?.status || buy?.status || ""),
+      ocoStatus: String(oco?.body?.status || oco?.status || ""),
+    },
+    buy,
+    oco,
+  };
 }
