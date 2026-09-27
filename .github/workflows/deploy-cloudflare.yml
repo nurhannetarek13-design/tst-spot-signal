@@ -12,6 +12,7 @@ on:
       - "api/binance-signed-relay.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
+      - "src/ops-supervisor.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -41,8 +42,12 @@ jobs:
           node --check src/buy-gateway-stable.js
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
+          node --check src/ops-supervisor.js
           node --check api/binance-signed-relay.mjs
-          grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
+          grep -q '"main": "src/ops-supervisor.js"' wrangler.jsonc
+          grep -q 'autonomousExecution: false' src/ops-supervisor.js
+          grep -q 'deadManMonitoring: true' src/ops-supervisor.js
+          grep -q 'recoveryStateMachine: true' src/ops-supervisor.js
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
           grep -q 'binanceCredentialOwner: "VERCEL_ONLY"' src/buy-gateway-stable.js
@@ -149,6 +154,29 @@ jobs:
           assert r.get('status') == 'TELEGRAM_WEBHOOK_OK'
           assert r.get('urlMatches') is True
           assert r.get('callbackQueryAllowed') is True
+          PY
+
+      - name: Verify 24/7 fail-closed supervisor
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/ops-status?nonce=$(date +%s%N)" \
+            -o /tmp/ops.json
+          cat /tmp/ops.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/ops.json'))
+          assert r.get('ok') is True
+          assert r.get('persistentScheduler') is True
+          assert r.get('deadManMonitoring') is True
+          assert r.get('recoveryStateMachine') is True
+          assert r.get('alertEscalation') is True
+          assert r.get('liveTrading') is False
+          assert r.get('autonomousExecution') is False
+          assert r.get('noSecretValuesExposed') is True
           PY
 
       - name: Verify scanner cannot auto-buy
