@@ -7,6 +7,9 @@ on:
     paths:
       - "api/binance-signed-relay.mjs"
       - "src/buy-gateway-stable.js"
+      - "src/ops-supervisor.js"
+      - "src/bridge-auth.js"
+      - "src/live-cutover-policy.js"
       - ".github/workflows/live-execution-gate.yml"
 
 permissions:
@@ -20,37 +23,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check live execution readiness
+      - name: Check production operational Go No-Go
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 25 \
             -H 'cache-control: no-store' \
-            "$WORKER_URL/live-readiness?nonce=$(date +%s%N)" -o /tmp/readiness.json
-          cat /tmp/readiness.json
+            "$WORKER_URL/go-no-go?nonce=$(date +%s%N)" -o /tmp/gate.json
+          cat /tmp/gate.json
           python - <<'PY'
           import json
-          r=json.load(open('/tmp/readiness.json'))
+          r=json.load(open('/tmp/gate.json'))
           required=[
             r.get('ok') is True,
-            r.get('infrastructureReady') is True,
-            r.get('executionReady') is True,
-            r.get('accountSafetyOk') is True,
-            r.get('accountSafetyReasons') == [],
-            r.get('railwayDependency') is False,
-            r.get('binanceCredentialOwner') == 'VERCEL_ONLY',
-            r.get('cloudflareBinanceCredentialsRequired') is False,
-            r.get('telegramConfigured') is True,
-            r.get('userConfirmationRequired') is True,
-            r.get('autoBuy') is False,
-            r.get('noBalanceValuesExposed') is True,
+            r.get('go') is True,
+            r.get('status') == 'GO',
+            r.get('activationAllowed') is False,
+            'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
+            'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
+            r.get('bridgeFresh') is True,
+            r.get('executorOwnershipOk') is True,
+            r.get('offsiteSnapshotFresh') is True,
+            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+            r.get('liveTrading') is False,
+            r.get('autonomousExecution') is False,
             r.get('noSecretValuesExposed') is True,
-            0 < float(r.get('maxRiskUSDT')) <= 0.11,
-            0 < float(r.get('maxBuyUSDT')) <= 10.0,
           ]
           if not all(required):
-              raise SystemExit("LIVE_EXECUTION_BLOCKED: "+str(r.get('blocker')))
-          print("LIVE_EXECUTION_READY")
+              raise SystemExit("OPERATIONAL_NO_GO: "+str(r.get('failed')))
+          print("OPERATIONAL_GO_LIVE_FLAGS_OFF")
+          PY
+
+      - name: Verify legacy Vercel signer is revoked
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 20 \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data '{}' \
+            "https://tst-spot-signal.vercel.app/api/binance-signed-relay" \
+            -o /tmp/legacy.json -w '%{http_code}' > /tmp/legacy.code
+          cat /tmp/legacy.json
+          python - <<'PY'
+          import json
+          code=open('/tmp/legacy.code').read().strip()
+          r=json.load(open('/tmp/legacy.json'))
+          assert code == '410'
+          assert r.get('status') == 'LEGACY_VERCEL_SIGNER_REVOKED'
+          assert r.get('fallbackAllowed') is False
           PY
 
       - name: Verify scanner remains confirmation-only
