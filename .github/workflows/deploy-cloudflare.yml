@@ -186,12 +186,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 40             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?nonce=$(date +%s%N)"             -o /tmp/scanner.json
-          cat /tmp/scanner.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/scanner.json'))
-          assert r.get('ok') is True
-          assert r.get('liveTrading') is False
-          assert r.get('executorAllowed') is False
+          ok=0
+          for attempt in $(seq 1 10); do
+            rm -f /tmp/scanner.json
+            curl --silent --show-error --max-time 40 \
+              -H 'cache-control: no-store' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/scanner-status?attempt=${attempt}&nonce=$(date +%s%N)" \
+              -o /tmp/scanner.json || true
+            cat /tmp/scanner.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/scanner.json'))
+          except Exception: sys.exit(1)
+          checks=[
+            r.get('ok') is True,
+            r.get('liveTrading') is False,
+            r.get('executorAllowed') is False,
+          ]
+          sys.exit(0 if all(checks) else 1)
           PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
