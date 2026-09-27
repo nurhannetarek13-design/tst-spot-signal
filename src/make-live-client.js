@@ -125,8 +125,10 @@ export async function makeReadOnlyHeartbeat(env) {
     confirmed: false,
     dry_run: true,
   };
-  const buy = await postSigned(env, BUY_URL, { ...base, signal_id: `watchdogbuy${bucket}`, action: "BUY" }, 15000);
-  const oco = await postSigned(env, OCO_URL, { ...base, signal_id: `watchdogoco${bucket}`, action: "OCO" }, 15000);
+  const [buy, oco] = await Promise.all([
+    postSigned(env, BUY_URL, { ...base, signal_id: `watchdogbuy${bucket}`, action: "BUY" }, 15000),
+    postSigned(env, OCO_URL, { ...base, signal_id: `watchdogoco${bucket}`, action: "OCO" }, 15000),
+  ]);
   const ok = buy?.transportOk === true && oco?.transportOk === true;
   return {
     transportOk: ok,
