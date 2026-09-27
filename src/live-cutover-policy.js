@@ -13,30 +13,41 @@ export function evaluateGoNoGo({
   watchdogHealthy,
   binanceConnectionOk,
   executionRouteHealthy,
+  executorOwnershipOk = true,
   unknownOrders = 0,
   unprotectedPositions = 0,
   dailyLossUSDT = 0,
   policy = LIVE_POLICY,
 } = {}) {
-  const checks = {
-    LIVE_EXECUTION_ENABLED: policy.liveExecutionEnabled === true,
-    AUTONOMOUS_ENABLED: policy.autonomousEnabled === true,
+  const operationalChecks = {
     SUPERVISOR_HEALTHY: supervisorState === "HEALTHY",
     RECONCILIATION_OK: reconciliationOk === true,
     SNAPSHOT_FRESH: snapshotFresh === true,
     WATCHDOG_HEALTHY: watchdogHealthy === true,
     BINANCE_CONNECTION_OK: binanceConnectionOk === true,
     EXECUTION_ROUTE_HEALTHY: executionRouteHealthy === true,
+    EXECUTOR_OWNERSHIP_OK: executorOwnershipOk === true,
     NO_UNKNOWN_ORDERS: Number(unknownOrders || 0) === 0,
     NO_UNPROTECTED_POSITIONS: Number(unprotectedPositions || 0) === 0,
     DAILY_RISK_AVAILABLE: Number(dailyLossUSDT || 0) > -Math.abs(Number(policy.dailyLossCapUSDT || 0)),
   };
-  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  const activationChecks = {
+    LIVE_EXECUTION_ENABLED: policy.liveExecutionEnabled === true,
+    AUTONOMOUS_ENABLED: policy.autonomousEnabled === true,
+  };
+  const failedOperational = Object.entries(operationalChecks).filter(([, ok]) => !ok).map(([name]) => name);
+  const failedActivation = Object.entries(activationChecks).filter(([, ok]) => !ok).map(([name]) => name);
+  const operationalGo = failedOperational.length === 0;
+  const activationAllowed = operationalGo && failedActivation.length === 0;
   return {
-    go: failed.length === 0,
-    status: failed.length === 0 ? "GO" : "NO_GO",
-    failed,
-    checks,
+    go: operationalGo,
+    status: operationalGo ? "GO" : "NO_GO",
+    activationAllowed,
+    activationStatus: activationAllowed ? "LIVE_ALLOWED" : "LIVE_DISABLED",
+    failed: failedOperational,
+    activationFailed: failedActivation,
+    checks: operationalChecks,
+    activationChecks,
     policy: {
       maxOrderUSDT: Number(policy.maxOrderUSDT),
       maxOpenPositions: Number(policy.maxOpenPositions),
