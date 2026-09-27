@@ -6,6 +6,21 @@ export const LIVE_POLICY = Object.freeze({
   dailyLossCapUSDT: 0.5,
 });
 
+export function readLivePolicy(env = {}) {
+  const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
+  const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
+  const requestedOrder = Number(env.MAX_ORDER_USDT ?? 5.5);
+  const requestedPositions = Number(env.MAX_OPEN_POSITIONS ?? 1);
+  const requestedDailyLoss = Number(env.DAILY_LOSS_CAP_USDT ?? 0.5);
+  return Object.freeze({
+    liveExecutionEnabled,
+    autonomousEnabled,
+    maxOrderUSDT: Number.isFinite(requestedOrder) ? Math.min(5.5, Math.max(5, requestedOrder)) : 5.5,
+    maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(1, Math.floor(requestedPositions))) : 1,
+    dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) ? Math.min(0.5, Math.max(0.1, requestedDailyLoss)) : 0.5,
+  });
+}
+
 export function evaluateGoNoGo({
   supervisorState,
   reconciliationOk,
