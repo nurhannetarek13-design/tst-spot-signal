@@ -15,6 +15,7 @@ on:
       - "src/ops-supervisor.js"
       - "src/bridge-auth.js"
       - "src/live-cutover-policy.js"
+      - "src/make-live-client.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -48,6 +49,7 @@ jobs:
           node --check src/ops-state-machine.js
           node --check src/bridge-auth.js
           node --check src/live-cutover-policy.js
+          node --check src/make-live-client.js
           node scripts/test-ops-recovery.mjs
           node scripts/test-live-cutover-policy.mjs
           node --check api/binance-signed-relay.mjs
@@ -202,21 +204,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 20             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?nonce=$(date +%s%N)"             -o /tmp/gate.json
-          cat /tmp/gate.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/gate.json'))
-          assert r.get('ok') is True
-          assert r.get('go') is True
-          assert r.get('activationAllowed') is False
-          assert 'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', [])
-          assert 'AUTONOMOUS_ENABLED' in r.get('activationFailed', [])
-          assert r.get('bridgeFresh') is True
-          assert r.get('executorOwnershipOk') is True
-          assert r.get('offsiteSnapshotFresh') is True
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          ok=0
+          for attempt in $(seq 1 10); do
+            rm -f /tmp/gate.json
+            curl --silent --show-error --max-time 20 \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?attempt=${attempt}&nonce=$(date +%s%N)" \
+              -o /tmp/gate.json || true
+            cat /tmp/gate.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/gate.json'))
+          except Exception: sys.exit(1)
+          checks=[
+            r.get('ok') is True,
+            r.get('go') is True,
+            r.get('activationAllowed') is False,
+            'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
+            'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
+            r.get('bridgeFresh') is True,
+            r.get('executorOwnershipOk') is True,
+            r.get('offsiteSnapshotFresh') is True,
+            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+          ]
+          sys.exit(0 if all(checks) else 1)
           PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
 
       - name: Verify scanner cannot auto-buy
         if: always()
