@@ -10,6 +10,10 @@ on:
       - "api/binance-signed-relay.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
+      - "src/ops-supervisor.js"
+      - "src/bridge-auth.js"
+      - "src/live-cutover-policy.js"
+      - "src/make-live-client.js"
       - "wrangler.jsonc"
 
 permissions:
@@ -34,7 +38,7 @@ jobs:
           r=json.load(open('/tmp/runtime.json'))
           assert r.get('ok') is True
           assert r.get('credentialMode') == 'LIVE'
-          assert r.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT'
+          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('telegramConfigured') is True
           assert r.get('atomicConfirmClaim') is True
           assert r.get('fastSignalIngest') is True
@@ -57,14 +61,47 @@ jobs:
           assert r.get('ok') is True
           assert r.get('infrastructureReady') is True
           assert r.get('railwayDependency') is False
-          assert r.get('binanceCredentialOwner') == 'VERCEL_ONLY'
+          assert r.get('binanceCredentialOwner') == 'MAKE_CONNECTION'
           assert r.get('cloudflareBinanceCredentialsRequired') is False
           assert r.get('telegramConfigured') is True
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
+          assert r.get('autonomousExecution') is False
+          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          assert r.get('oldVercelFallback') is False
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           print('executionReady=', r.get('executionReady'), 'blocker=', r.get('blocker'))
+          PY
+
+
+      - name: Verify HMAC bridge and operational Go No-Go
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 -X POST \
+            -H 'content-type: application/json' \
+            --data '{"signal_id":"runtimecheck","symbol":"BTCUSDT"}' \
+            "$WORKER_URL/bridge-auth-selftest?nonce=$(date +%s%N)" -o /tmp/bridge.json
+          cat /tmp/bridge.json
+          curl --fail --silent --show-error --max-time 20 \
+            "$WORKER_URL/go-no-go?nonce=$(date +%s%N)" -o /tmp/gate.json
+          cat /tmp/gate.json
+          python - <<'PY'
+          import json
+          b=json.load(open('/tmp/bridge.json'))
+          g=json.load(open('/tmp/gate.json'))
+          assert b.get('ok') is True
+          assert b.get('first') == 'BRIDGE_AUTH_OK'
+          assert b.get('replay') == 'REPLAY_BLOCKED'
+          assert b.get('oldVercelFallback') is False
+          assert g.get('ok') is True
+          assert g.get('go') is True
+          assert g.get('activationAllowed') is False
+          assert 'LIVE_EXECUTION_ENABLED' in g.get('activationFailed', [])
+          assert 'AUTONOMOUS_ENABLED' in g.get('activationFailed', [])
+          assert g.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           PY
 
       - name: Verify Telegram webhook ownership
