@@ -2,7 +2,7 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
-import { manualBuyAndProtect } from "./make-live-client.js";
+import { manualBuyAndProtect, makeReadOnlyHeartbeat } from "./make-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -280,6 +280,18 @@ export default {
       await putState(env, "ops:scheduler:last", { at: Date.now(), source: "CLOUDFLARE_CRON" });
       const next = await computeState(env);
       await alertTransition(env, next);
+
+      const executorConfiguredNow = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const lastMakeWatchdog = (await getState(env, "make:combined-watchdog:last-dispatch")) || null;
+      if (executorConfiguredNow && Date.now() - Number(lastMakeWatchdog?.at || 0) >= 14 * 60 * 1000) {
+        const watchdog = await makeReadOnlyHeartbeat(env);
+        await putState(env, "make:combined-watchdog:last-dispatch", {
+          at: Date.now(),
+          transportOk: watchdog?.transportOk === true,
+          httpStatus: Number(watchdog?.httpStatus || 0),
+          status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
+        });
+      }
 
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
       const policy = readLivePolicy(env);
