@@ -1,4 +1,5 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
+import { manualBuyAndProtect } from "./make-live-client.js";
 export { SignalState };
 
 const SIGNAL_TTL_SEC = 10 * 60;
@@ -322,6 +323,9 @@ async function refreshBalance(env) {
 async function executeConfirmedBuy(env, s) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
+  if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
+    throw new Error("MAKE_EXECUTOR_V2_NOT_READY");
+  }
 
   const symbol = String(s.symbol || "").toUpperCase();
   if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) throw new Error("BAD_SYMBOL");
@@ -339,102 +343,63 @@ async function executeConfirmedBuy(env, s) {
   if (!market || market.status !== "TRADING" || !market.isSpotTradingAllowed || market.quoteAsset !== "USDT") {
     throw new Error("PAIR_NOT_TRADABLE_SPOT");
   }
-
   await executionPriceGate(symbol, entryRef, stopRef, targetRef);
 
-  const [account, accountSafety] = await Promise.all([
-    signedBinance(env, "GET", "/api/v3/account", {}),
-    refreshAccountSafety(env, true),
-  ]);
-  if (!account.canTrade) throw new Error("ACCOUNT_CANNOT_TRADE");
-  if (accountSafety?.ok !== true) {
-    throw new Error("ACCOUNT_SAFETY_BLOCKED:"+String(accountSafety?.reasons?.[0]||"UNKNOWN"));
-  }
-  const freeUSDT = Number((account.balances || []).find((b) => b.asset === "USDT")?.free || 0);
-  const quoteUSDT = dynamicQuote(freeUSDT, entryRef, stopRef, s.confirmedQuoteUSDT || s.recommendedUSDT);
-  if (quoteUSDT < MIN_ORDER_USDT) throw new Error("SIZE_TOO_SMALL");
-  if (freeUSDT < quoteUSDT) throw new Error("INSUFFICIENT_USDT");
+  const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
+  if (!Number.isFinite(requested) || requested < 5) throw new Error("SIZE_TOO_SMALL");
+  const quoteUSDT = Math.floor(Math.min(requested, 5.5) * 100) / 100;
 
-  const buy = await signedBinance(env, "POST", "/api/v3/order", {
+  const result = await manualBuyAndProtect(env, {
+    signal_id: String(s.id || ""),
     symbol,
-    side: "BUY",
-    type: "MARKET",
-    quoteOrderQty: quoteUSDT.toFixed(2),
-    newOrderRespType: "FULL",
-    newClientOrderId: `TSTU${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+    quote_amount_usdt: quoteUSDT,
+    take_profit_price: targetRef,
+    stop_loss_price: stopRef,
   });
-  const executedQty = Number(buy.executedQty || 0);
-  const quoteQty = Number(buy.cummulativeQuoteQty || 0);
-  if (!(executedQty > 0 && quoteQty > 0)) throw new Error("MARKET_BUY_ZERO_FILL");
 
-  const avg = quoteQty / executedQty;
-  const lot = market.filters.find((x) => x.filterType === "LOT_SIZE");
-  const pf = market.filters.find((x) => x.filterType === "PRICE_FILTER");
-  const step = Number(lot?.stepSize || "0.00000001");
-  const tick = Number(pf?.tickSize || "0.00000001");
-  const modelTp = avg * (targetRef / entryRef);
-  let tp = floorTo(modelTp, tick);
-  if (tick / modelTp <= 0.001 && tp - tick > avg) tp = floorTo(tp - tick, tick);
-  const stop = floorTo(avg * (stopRef / entryRef), tick);
-  const stopLimit = floorTo(stop * 0.997, tick);
-  const sellQty = floorTo(executedQty * 0.999, step);
-  if (!(sellQty > 0 && stopLimit <= stop && stop < avg && tp > avg && tp <= modelTp + 1e-12)) {
-    throw new Error("PROTECTION_LEVEL_CALC_FAILED");
-  }
-
-  let oco = null, ocoError = null;
-  try {
-    oco = await signedBinance(env, "POST", "/api/v3/orderList/oco", {
+  if (result?.status === "OCO_PLACED") {
+    return {
+      ok: true,
+      status: "BOUGHT_AND_PROTECTED",
       symbol,
-      side: "SELL",
-      quantity: sellQty,
-      aboveType: "LIMIT_MAKER",
-      abovePrice: tp,
-      belowType: "STOP_LOSS_LIMIT",
-      belowStopPrice: stop,
-      belowPrice: stopLimit,
-      belowTimeInForce: "GTC",
-      listClientOrderId: `TSTO${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
-    });
-  } catch (e) {
-    ocoError = String(e?.message || e);
+      quoteUSDT: Number(result?.buy?.body?.quote_spent || quoteUSDT),
+      recommendedUSDT: quoteUSDT,
+      executedQty: Number(result?.executedQty || 0),
+      avg: Number(result?.buy?.body?.weighted_price || entryRef),
+      tp: targetRef,
+      stop: stopRef,
+      ocoPlaced: true,
+      emergencyClosed: false,
+      autoBuy: false,
+      userConfirmed: true,
+      executionRoute: "MAKE_V2",
+    };
   }
 
-  let emergencyClose = null;
-  let emergencyCloseError = null;
-  if (!oco) {
-    try {
-      emergencyClose = await signedBinance(env, "POST", "/api/v3/order", {
-        symbol,
-        side: "SELL",
-        type: "MARKET",
-        quantity: sellQty,
-        newOrderRespType: "FULL",
-        newClientOrderId: `TSTE${String(s.id || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}`,
-      });
-    } catch (e) {
-      emergencyCloseError = String(e?.message || e);
-    }
+  if (result?.status === "PROTECTION_FAILED_EMERGENCY_CLOSED") {
+    return {
+      ok: true,
+      status: "PROTECTION_FAILED_EMERGENCY_CLOSED",
+      symbol,
+      quoteUSDT: Number(result?.buy?.body?.quote_spent || quoteUSDT),
+      recommendedUSDT: quoteUSDT,
+      executedQty: Number(result?.executedQty || 0),
+      avg: Number(result?.buy?.body?.weighted_price || entryRef),
+      tp: targetRef,
+      stop: stopRef,
+      ocoPlaced: false,
+      emergencyClosed: true,
+      autoBuy: false,
+      userConfirmed: true,
+      executionRoute: "MAKE_V2",
+    };
   }
 
-  return {
-    ok: true,
-    status: oco ? "BOUGHT_AND_PROTECTED" : (emergencyClose ? "PROTECTION_FAILED_EMERGENCY_CLOSED" : "PROTECTION_FAILED_EMERGENCY_CLOSE_FAILED"),
-    symbol,
-    quoteUSDT: quoteQty,
-    recommendedUSDT: quoteUSDT,
-    executedQty,
-    avg,
-    tp,
-    stop,
-    stopLimit,
-    ocoPlaced: Boolean(oco),
-    ocoError,
-    emergencyClosed: Boolean(emergencyClose),
-    emergencyCloseError,
-    autoBuy: false,
-    userConfirmed: true,
-  };
+  const status = String(result?.status || "MAKE_V2_EXECUTION_FAILED");
+  if (result?.reconciliationRequired === true) {
+    throw new Error(`${status}:RECONCILIATION_REQUIRED:NO_RESEND`);
+  }
+  throw new Error(status);
 }
 
 async function sendPromptForActive(env) {
@@ -529,17 +494,16 @@ async function handleTelegramWebhook(request, env) {
 
   const s = await getState(env, `live-signal:${id}`);
   if (action === "PREP" && s) {
-    const b = await refreshBalance(env);
-    if (!b?.ok || !b.canTrade || b.accountSafetyOk !== true || b.credentialMode !== "LIVE") {
-      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Live Binance balance unavailable — no trade prepared", show_alert: true });
+    if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Make V2 executor is not ready — no trade prepared", show_alert: true });
       return new Response("ok");
     }
-    const free = Number(b.usdt?.free || 0);
-    const rec = dynamicQuote(free, Number(s.entry), Number(s.stop));
-    if (rec < MIN_ORDER_USDT) {
-      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Free USDT is below the safe minimum", show_alert: true });
+    const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
+    if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Order size is below the safe minimum", show_alert: true });
       return new Response("ok");
     }
+    const rec = Math.floor(Math.min(requested, 5.5) * 100) / 100;
     const p = { ...s, confirmedQuoteUSDT: rec, prepareExpiresAt: Date.now() + PREPARE_TTL_SEC * 1000 };
     await putState(env, `prepared:${id}`, p, PREPARE_TTL_SEC);
     await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Trade prepared — no purchase yet" });
