@@ -724,13 +724,31 @@ export default {
       const reconciliation = await getState(env, "ops:reconciliation:last");
       const opsState = await getState(env, "ops:state");
       const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
-      const infrastructureReady = c.route === LIVE_ROUTE && telegramConfigured;
-      const blocker = executorConfigured ? "LIVE_POLICY_DISABLED" : "MAKE_EXECUTOR_V2_INCOMPLETE";
+      const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
+      const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
+      const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
+      const infrastructureReady = c.route === LIVE_ROUTE
+        && telegramConfigured
+        && executorConfigured
+        && reconciliation?.ok === true
+        && opsState?.state === "HEALTHY";
+      const executionReady = infrastructureReady && liveExecutionEnabled && e2eArmed && !autonomousEnabled;
+      const blocker = !executorConfigured
+        ? "MAKE_EXECUTOR_V2_INCOMPLETE"
+        : !infrastructureReady
+          ? "OPERATIONAL_GO_REQUIRED"
+          : !liveExecutionEnabled
+            ? "LIVE_POLICY_DISABLED"
+            : autonomousEnabled
+              ? "AUTONOMOUS_MUST_BE_OFF_FOR_MANUAL_E2E"
+              : !e2eArmed
+                ? "MANUAL_E2E_NOT_ARMED"
+                : null;
       return Response.json({
         ok: true,
-        status: "LIVE_EXECUTION_BLOCKED",
+        status: executionReady ? "MANUAL_LIVE_E2E_ARMED" : "LIVE_EXECUTION_BLOCKED",
         infrastructureReady,
-        executionReady: false,
+        executionReady,
         blocker,
         credentialMode: c.credentialMode,
         executionRoute: c.route,
@@ -738,7 +756,10 @@ export default {
         scannerRunning: true,
         userConfirmationRequired: true,
         autoBuy: false,
-        autonomousExecution: false,
+        liveExecutionEnabled,
+        e2eArmed,
+        autonomousExecution: autonomousEnabled,
+        manualOnly: true,
         railwayDependency: false,
         binanceCredentialOwner: "MAKE_CONNECTION",
         cloudflareBinanceCredentialsRequired: false,

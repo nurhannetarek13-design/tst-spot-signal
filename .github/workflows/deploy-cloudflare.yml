@@ -77,6 +77,10 @@ jobs:
           grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
+          grep -q '"LIVE_EXECUTION_ENABLED": "true"' wrangler.jsonc
+          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"E2E_ARMED": "true"' wrangler.jsonc
+          node scripts/test-make-v2-manual-route.mjs
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
           grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
           grep -q 'TELEGRAM_WEBHOOK_OK' src/buy-gateway-stable.js
@@ -149,12 +153,16 @@ jobs:
           assert r.get('autonomousExecution') is False
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
-          assert r.get('blocker') == 'LIVE_POLICY_DISABLED'
+          assert r.get('status') == 'MANUAL_LIVE_E2E_ARMED'
+          assert r.get('executionReady') is True
+          assert r.get('blocker') is None
           assert r.get('executorConfigured') is True
+          assert r.get('liveExecutionEnabled') is True
+          assert r.get('e2eArmed') is True
+          assert r.get('autonomousExecution') is False
+          assert r.get('manualOnly') is True
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
-          if not r.get('executionReady'):
-              print("LIVE EXECUTION BLOCKED:", r.get('blocker'))
           PY
 
       - name: Verify Telegram callback webhook
@@ -213,7 +221,7 @@ jobs:
           assert r.get('status') == 'MAKE_V2_DRY_PROBE_DISPATCHED'
           assert r.get('routeVersion') == 'v2'
           assert r.get('financialAction') is False
-          assert r.get('liveExecutionEnabled') is False
+          assert r.get('liveExecutionEnabled') is True
           assert r.get('autonomousEnabled') is False
           assert r.get('buyVerified') is True
           assert r.get('ocoVerified') is True
@@ -299,9 +307,13 @@ jobs:
           except Exception: sys.exit(1)
           checks=[
             r.get('ok') is True,
+            r.get('go') is True,
             r.get('activationAllowed') is False,
-            'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
+            'LIVE_EXECUTION_ENABLED' not in r.get('activationFailed', []),
             'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
+            r.get('e2eArmed') is True,
+            r.get('manualE2EComplete') is False,
+            r.get('manualExecutionAllowed') is True,
             r.get('bridgeFresh') is True,
             r.get('executorOwnershipOk') is True,
             r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',

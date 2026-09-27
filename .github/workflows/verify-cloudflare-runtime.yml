@@ -67,6 +67,12 @@ jobs:
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
           assert r.get('autonomousExecution') is False
+          assert r.get('liveExecutionEnabled') is True
+          assert r.get('e2eArmed') is True
+          assert r.get('manualOnly') is True
+          assert r.get('executionReady') is True
+          assert r.get('status') == 'MANUAL_LIVE_E2E_ARMED'
+          assert r.get('blocker') is None
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
           assert r.get('noBalanceValuesExposed') is True
@@ -97,10 +103,13 @@ jobs:
           assert b.get('replay') == 'REPLAY_BLOCKED'
           assert b.get('oldVercelFallback') is False
           assert g.get('ok') is True
-          assert g.get('go') is False
+          assert g.get('go') is True
           assert g.get('activationAllowed') is False
-          assert 'LIVE_EXECUTION_ENABLED' in g.get('activationFailed', [])
+          assert 'LIVE_EXECUTION_ENABLED' not in g.get('activationFailed', [])
           assert 'AUTONOMOUS_ENABLED' in g.get('activationFailed', [])
+          assert g.get('e2eArmed') is True
+          assert g.get('manualE2EComplete') is False
+          assert g.get('manualExecutionAllowed') is True
           assert g.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           PY
 
