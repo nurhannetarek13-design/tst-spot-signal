@@ -97,7 +97,7 @@ jobs:
           assert b.get('replay') == 'REPLAY_BLOCKED'
           assert b.get('oldVercelFallback') is False
           assert g.get('ok') is True
-          assert g.get('go') is True
+          assert g.get('go') is False
           assert g.get('activationAllowed') is False
           assert 'LIVE_EXECUTION_ENABLED' in g.get('activationFailed', [])
           assert 'AUTONOMOUS_ENABLED' in g.get('activationFailed', [])
