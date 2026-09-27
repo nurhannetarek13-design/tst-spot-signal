@@ -1,5 +1,5 @@
 import { signBridgeEnvelope } from "./bridge-auth.js";
-import { LIVE_POLICY } from "./live-cutover-policy.js";
+import { readLivePolicy } from "./live-cutover-policy.js";
 
 const BUY_URL = "https://hook.eu1.make.com/soxizns5lax7zpfm84ve0mzblbw2h63h";
 const OCO_URL = "https://hook.eu1.make.com/uwcpj6oq39e1ddsau2zk07g3q78vlovs";
@@ -27,10 +27,11 @@ async function postSigned(env, url, payload, timeoutMs = 20000) {
 }
 
 export async function manualBuyAndProtect(env, input) {
-  if (LIVE_POLICY.liveExecutionEnabled !== true) {
+  const policy = readLivePolicy(env);
+  if (policy.liveExecutionEnabled !== true) {
     return { ok: false, status: "LIVE_EXECUTION_DISABLED", noOrderSent: true };
   }
-  const quote = Math.min(Number(input.quote_amount_usdt || 0), Number(LIVE_POLICY.maxOrderUSDT));
+  const quote = Math.min(Number(input.quote_amount_usdt || 0), Number(policy.maxOrderUSDT));
   if (!(quote >= 5 && quote <= 5.5)) return { ok: false, status: "ORDER_SIZE_BLOCKED", noOrderSent: true };
 
   const common = {
