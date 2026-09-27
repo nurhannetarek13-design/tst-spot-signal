@@ -356,6 +356,7 @@ export default {
         autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
         manualOnly: true,
         automaticExecution: false,
+        completed: result?.ok === true && result?.manual === true,
         result: result || null,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
@@ -375,6 +376,9 @@ export default {
       const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
       const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
       const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const e2eResult = (await getState(env, "cutover:e2e:result")) || null;
+      const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
+      const manualE2EComplete = e2eResult?.ok === true && e2eResult?.manual === true;
       const gate = evaluateGoNoGo({
         supervisorState: ops.state,
         reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
@@ -396,7 +400,12 @@ export default {
         executorOwnershipOk: ownershipFresh,
         offsiteSnapshotFresh: snapshotFresh,
         executorConfigured,
-        manualExecutionAllowed: gate.go && readLivePolicy(env).liveExecutionEnabled === true && readLivePolicy(env).autonomousEnabled !== true,
+        e2eArmed,
+        manualE2EComplete,
+        manualExecutionAllowed: gate.go
+          && readLivePolicy(env).liveExecutionEnabled === true
+          && readLivePolicy(env).autonomousEnabled !== true
+          && (e2eArmed || manualE2EComplete),
         liveTrading: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousExecution: false,
         noSecretValuesExposed: true,
