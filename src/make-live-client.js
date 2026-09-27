@@ -112,7 +112,6 @@ export async function manualBuyAndProtect(env, input) {
 export async function makeReadOnlyHeartbeat(env) {
   const bucket = Math.floor(Date.now() / (15 * 60 * 1000));
   const base = {
-    action: "HEARTBEAT",
     symbol: "BTCUSDT",
     quote_amount_usdt: 0,
     take_profit_price: 0,
@@ -126,8 +125,8 @@ export async function makeReadOnlyHeartbeat(env) {
     confirmed: false,
     dry_run: true,
   };
-  const buy = await postSigned(env, BUY_URL, { ...base, signal_id: `watchdogbuy${bucket}` }, 15000);
-  const oco = await postSigned(env, OCO_URL, { ...base, signal_id: `watchdogoco${bucket}` }, 15000);
+  const buy = await postSigned(env, BUY_URL, { ...base, signal_id: `watchdogbuy${bucket}`, action: "BUY" }, 15000);
+  const oco = await postSigned(env, OCO_URL, { ...base, signal_id: `watchdogoco${bucket}`, action: "OCO" }, 15000);
   const ok = buy?.transportOk === true && oco?.transportOk === true;
   return {
     transportOk: ok,
