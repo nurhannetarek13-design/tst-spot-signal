@@ -54,6 +54,9 @@ export async function manualBuyAndProtect(env, input) {
   };
   const buy = await postSigned(env, BUY_URL, { ...common, action: "BUY", quote_amount_usdt: quote });
   if (buy.unknown) return { ok: false, status: "EXECUTION_STATUS_UNKNOWN", reconciliationRequired: true, mayResend: false };
+  if (String(buy.body?.status || "") === "BUY_SUBMISSION_UNKNOWN") {
+    return { ok: false, status: "BUY_SUBMISSION_UNKNOWN", reconciliationRequired: true, mayResend: false, buy };
+  }
   if (!buy.transportOk || buy.body?.status !== "BUY_FILLED") return { ok: false, status: buy.body?.status || "BUY_REJECTED", buy };
 
   const qty = Number(buy.body.executed_qty || 0);
@@ -91,6 +94,9 @@ export async function manualBuyAndProtect(env, input) {
     stop_limit_price: normalized.stopLimit,
   });
   if (oco.unknown) return { ok: false, status: "OCO_STATUS_UNKNOWN", reconciliationRequired: true, mayResend: false, buy, clientIds: ids };
+  if (String(oco.body?.status || "") === "OCO_SUBMISSION_UNKNOWN") {
+    return { ok: false, status: "OCO_SUBMISSION_UNKNOWN", reconciliationRequired: true, mayResend: false, buy, oco, clientIds: ids };
+  }
   if (!oco.transportOk || !["OCO_PLACED","PROTECTION_FAILED_EMERGENCY_CLOSED"].includes(String(oco.body?.status || ""))) {
     return { ok: false, status: oco.body?.status || "OCO_REJECTED", buy, oco, clientIds: ids };
   }
