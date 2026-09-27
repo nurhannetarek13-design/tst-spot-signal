@@ -719,6 +719,7 @@ export default {
         maxBuyUSDT: 5.5,
         reconciliationOk: reconciliation?.ok === true,
         supervisorState: opsState?.state || null,
+        executorConfigured,
         oldVercelFallback: false,
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
