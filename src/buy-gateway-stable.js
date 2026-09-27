@@ -676,14 +676,15 @@ export default {
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
         executionRoute: c.route,
-        binanceCredentialOwner: "VERCEL_ONLY",
+        binanceCredentialOwner: "MAKE_CONNECTION",
         cloudflareBinanceCredentialsRequired: false,
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
         autoBuy: false,
-        makeBuyConfigured: Boolean(env.MAKE_ONE_TAP_WEBHOOK_URL),
-        makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
+        makeExecutionGatewayPrepared: true,
+        makeExecutionGatewayActive: false,
+        oldVercelFallback: false,
         noSecretValuesExposed: true,
       });
     }
@@ -691,57 +692,47 @@ export default {
     if (url.pathname === "/live-readiness") {
       const c = creds(env);
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
-      const balance = await refreshBalance(env);
-      const lastError = balance ? null : await getState(env, "binance:balance:error");
-      const blocker = balance?.ok && balance?.canTrade && balance?.accountSafetyOk === true
-        ? null
-        : (balance?.accountSafetyReasons?.[0] || safeRelayDiagnostic(lastError?.error));
-      const infrastructureReady =
-        c.credentialMode === "LIVE" &&
-        c.route === LIVE_ROUTE &&
-        telegramConfigured;
-      const executionReady =
-        infrastructureReady &&
-        Boolean(balance?.ok) &&
-        Boolean(balance?.canTrade) &&
-        balance?.accountSafetyOk === true;
+      const reconciliation = await getState(env, "ops:reconciliation:last");
+      const opsState = await getState(env, "ops:state");
+      const infrastructureReady = c.route === LIVE_ROUTE && telegramConfigured;
       return Response.json({
         ok: true,
-        status: executionReady ? "LIVE_EXECUTION_READY" : "LIVE_EXECUTION_BLOCKED",
+        status: "LIVE_EXECUTION_BLOCKED",
         infrastructureReady,
-        executionReady,
-        blocker,
+        executionReady: false,
+        blocker: "LIVE_POLICY_DISABLED",
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         telegramConfigured,
         scannerRunning: true,
         userConfirmationRequired: true,
         autoBuy: false,
+        autonomousExecution: false,
         railwayDependency: false,
-        binanceCredentialOwner: "VERCEL_ONLY",
+        binanceCredentialOwner: "MAKE_CONNECTION",
         cloudflareBinanceCredentialsRequired: false,
         maxRiskUSDT: MAX_RISK_USDT,
-        maxBuyUSDT: 10,
-        accountSafetyOk: balance?.accountSafetyOk === true,
-        accountSafetyReasons: balance?.accountSafetyReasons || [],
+        maxBuyUSDT: 5.5,
+        reconciliationOk: reconciliation?.ok === true,
+        supervisorState: opsState?.state || null,
+        oldVercelFallback: false,
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
 
     if (url.pathname === "/balance-refresh") {
-      const c = creds(env);
-      const balance = await refreshBalance(env);
-      const lastError = balance ? null : await getState(env, "binance:balance:error");
+      const reconciliation = await getState(env, "ops:reconciliation:last");
       return Response.json({
-        ok: Boolean(balance?.ok),
-        canTrade: Boolean(balance?.canTrade),
-        accountSafetyOk: balance?.accountSafetyOk === true,
-        accountSafetyReasons: balance?.accountSafetyReasons || [],
-        credentialMode: c.credentialMode,
+        ok: reconciliation?.ok === true,
+        canTrade: false,
+        accountSafetyOk: false,
+        accountSafetyReasons: ["LIVE_POLICY_DISABLED"],
+        credentialMode: creds(env).credentialMode,
         autoBuy: false,
-        executionRoute: c.route,
-        diagnosticCode: safeRelayDiagnostic(lastError?.error),
+        executionRoute: LIVE_ROUTE,
+        diagnosticCode: "MAKE_READ_ONLY_WATCHDOG",
+        oldVercelFallback: false,
         noBalanceValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
