@@ -96,3 +96,24 @@ export async function manualBuyAndProtect(env, input) {
   }
   return { ok: oco.body?.status === "OCO_PLACED", status: oco.body?.status, buy, oco, executedQty: qty, protectedQty: normalized.quantity, clientIds: ids, filters: { stepSize: normalized.stepSize, tickSize: normalized.tickSize, minNotional: normalized.minNotional } };
 }
+
+
+export async function makeReadOnlyHeartbeat(env) {
+  const bucket = Math.floor(Date.now() / (15 * 60 * 1000));
+  return postSigned(env, BUY_URL, {
+    signal_id: `watchdog${bucket}`,
+    action: "HEARTBEAT",
+    symbol: "BTCUSDT",
+    quote_amount_usdt: 0,
+    take_profit_price: 0,
+    stop_loss_price: 0,
+    stop_limit_price: 0,
+    quantity: 0,
+    order_list_id: 0,
+    list_client_order_id: "",
+    stop_client_order_id: "",
+    limit_client_order_id: "",
+    confirmed: false,
+    dry_run: true,
+  }, 15000);
+}
