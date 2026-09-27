@@ -2,7 +2,7 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
-const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
+const HEARTBEAT_STALE_MS = 20 * 60 * 1000;
 const RECOVERY_HOLD_MS = 60 * 1000;
 const WARMUP_MS = 2 * 60 * 1000;
 
@@ -164,6 +164,7 @@ export default {
         ...ops,
         persistentScheduler: true,
         deadManMonitoring: true,
+        externalHeartbeatCadenceSeconds: 900,
         recoveryStateMachine: true,
         alertEscalation: true,
         liveTrading: false,
