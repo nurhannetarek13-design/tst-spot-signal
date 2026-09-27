@@ -226,13 +226,14 @@ export default {
       const bridgeFresh = bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
       const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
       const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
+      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
       const gate = evaluateGoNoGo({
         supervisorState: ops.state,
         reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
         snapshotFresh,
         watchdogHealthy: !ops.stale?.length,
         binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-        executionRouteHealthy: bridgeFresh,
+        executionRouteHealthy: bridgeFresh && executorConfigured,
         executorOwnershipOk: ownershipFresh,
         unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
         unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
@@ -246,6 +247,7 @@ export default {
         bridgeFresh,
         executorOwnershipOk: ownershipFresh,
         offsiteSnapshotFresh: snapshotFresh,
+        executorConfigured,
         liveTrading: false,
         autonomousExecution: false,
         noSecretValuesExposed: true,
@@ -293,13 +295,14 @@ export default {
           const ownership = (await getState(env, "bridge:ownership")) || null;
           const now = Date.now();
           const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+          const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
           const gate = evaluateGoNoGo({
             supervisorState: next.state,
             reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
             snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
             watchdogHealthy: !next.stale?.length,
             binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-            executionRouteHealthy: bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
+            executionRouteHealthy: executorConfigured && bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
             executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
             unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
             unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
