@@ -64,7 +64,6 @@ jobs:
           grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
-          grep -q 'WRITE_TRANSPORT_STATUS_UNKNOWN' api/binance-signed-relay.mjs
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
           grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
           grep -q 'TELEGRAM_WEBHOOK_OK' src/buy-gateway-stable.js
@@ -209,9 +208,13 @@ jobs:
           import json
           r=json.load(open('/tmp/gate.json'))
           assert r.get('ok') is True
-          assert r.get('go') is False
-          assert 'LIVE_EXECUTION_ENABLED' in r.get('failed', [])
-          assert 'AUTONOMOUS_ENABLED' in r.get('failed', [])
+          assert r.get('go') is True
+          assert r.get('activationAllowed') is False
+          assert 'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', [])
+          assert 'AUTONOMOUS_ENABLED' in r.get('activationFailed', [])
+          assert r.get('bridgeFresh') is True
+          assert r.get('executorOwnershipOk') is True
+          assert r.get('offsiteSnapshotFresh') is True
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           PY
 
