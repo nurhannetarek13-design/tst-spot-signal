@@ -12,6 +12,7 @@ on:
       - "src/live-cutover-policy.js"
       - "src/make-live-client.js"
       - "src/binance-spot-filters.js"
+      - "wrangler.jsonc"
       - ".github/workflows/live-execution-gate.yml"
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           ok=0
-          for attempt in $(seq 1 10); do
+          for attempt in $(seq 1 90); do
             rm -f /tmp/gate.json
             curl --silent --show-error --max-time 25 \
               -H 'cache-control: no-store' \
@@ -43,8 +44,8 @@ jobs:
           except Exception: sys.exit(1)
           required=[
             r.get('ok') is True,
-            r.get('go') is False,
-            r.get('status') == 'NO_GO',
+            r.get('go') is True,
+            r.get('status') == 'GO',
             r.get('activationAllowed') is False,
             'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
             'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
@@ -52,8 +53,16 @@ jobs:
             r.get('executorOwnershipOk') is True,
             r.get('offsiteSnapshotFresh') is True,
             r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
-            r.get('executorConfigured') is False,
-            'EXECUTION_ROUTE_HEALTHY' in r.get('failed', []),
+            r.get('executorConfigured') is True,
+            r.get('checks',{}).get('SUPERVISOR_HEALTHY') is True,
+            r.get('checks',{}).get('RECONCILIATION_OK') is True,
+            r.get('checks',{}).get('SNAPSHOT_FRESH') is True,
+            r.get('checks',{}).get('WATCHDOG_HEALTHY') is True,
+            r.get('checks',{}).get('BINANCE_CONNECTION_OK') is True,
+            r.get('checks',{}).get('EXECUTION_ROUTE_HEALTHY') is True,
+            r.get('checks',{}).get('NO_UNKNOWN_ORDERS') is True,
+            r.get('checks',{}).get('NO_UNPROTECTED_POSITIONS') is True,
+            r.get('checks',{}).get('DAILY_RISK_AVAILABLE') is True,
             r.get('liveTrading') is False,
             r.get('autonomousExecution') is False,
             r.get('noSecretValuesExposed') is True,
@@ -64,7 +73,7 @@ jobs:
             sleep 3
           done
           test "$ok" = 1
-          echo "OPERATIONAL_NO_GO_EXECUTOR_V2_INCOMPLETE"
+          echo "OPERATIONAL_GO_V2_READY_LIVE_POLICY_DISABLED"
 
       - name: Verify legacy Vercel signer is revoked
         shell: bash
