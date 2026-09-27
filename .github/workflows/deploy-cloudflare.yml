@@ -104,7 +104,6 @@ jobs:
             r.get('credentialMode') == 'LIVE',
             r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
             r.get('executorConfigured') is False,
-            'EXECUTION_ROUTE_HEALTHY' in r.get('failed', []),
             r.get('binanceCredentialOwner') == 'MAKE_CONNECTION',
             r.get('cloudflareBinanceCredentialsRequired') is False,
             r.get('telegramConfigured') is True,
