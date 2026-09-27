@@ -1,7 +1,8 @@
 import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
-import { LIVE_POLICY, evaluateGoNoGo } from "./live-cutover-policy.js";
+import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
+import { manualBuyAndProtect } from "./make-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -184,6 +185,43 @@ export default {
       const row = await recordReconciliation(env, await request.json().catch(() => ({})));
       return Response.json({ ok: true, status: "RECONCILIATION_RECORDED", reconciliation: row, liveTrading: false });
     }
+    if (url.pathname === "/manual-live-e2e" && request.method === "POST") {
+      const ops = await computeState(env);
+      const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
+      const heartbeats = (await getState(env, "ops:heartbeats")) || {};
+      const unknown = (await getState(env, "live:unknown-orders")) || [];
+      const unprotected = (await getState(env, "live:unprotected-positions")) || [];
+      const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+      const bridgeHealth = (await getState(env, "bridge:health")) || null;
+      const ownership = (await getState(env, "bridge:ownership")) || null;
+      const now = Date.now();
+      const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+      const policy = readLivePolicy(env);
+      const gate = evaluateGoNoGo({
+        supervisorState: ops.state,
+        reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
+        snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
+        watchdogHealthy: !ops.stale?.length,
+        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
+        executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
+        unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
+        unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
+        dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
+        policy,
+      });
+      if (!gate.go || policy.liveExecutionEnabled !== true || policy.autonomousEnabled === true) {
+        return Response.json({ ok: false, status: "MANUAL_LIVE_BLOCKED", gate, manualMode: true }, { status: 409 });
+      }
+      const body = await request.json().catch(() => ({}));
+      const result = await manualBuyAndProtect(env, body);
+      if (result?.status === "EXECUTION_STATUS_UNKNOWN" || result?.status === "OCO_STATUS_UNKNOWN") {
+        const rows = Array.isArray(unknown) ? unknown : [];
+        rows.push({ signalId: String(body.signal_id || ""), status: result.status, at: Date.now() });
+        await putState(env, "live:unknown-orders", rows.slice(-20));
+      }
+      return Response.json({ ...result, manualMode: true, autonomousExecution: false }, { status: result?.ok ? 200 : 409 });
+    }
     if (url.pathname === "/go-no-go") {
       const ops = await computeState(env);
       const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
@@ -209,7 +247,7 @@ export default {
         unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
         unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
         dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
-        policy: LIVE_POLICY,
+        policy: readLivePolicy(env),
       });
       return Response.json({
         ok: true,
