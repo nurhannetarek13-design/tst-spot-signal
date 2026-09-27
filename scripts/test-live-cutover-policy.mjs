@@ -14,8 +14,10 @@ const healthy = {
 };
 
 let gate=evaluateGoNoGo(healthy);
-assert.equal(gate.go,false);
-assert.deepEqual(gate.failed.slice(0,2),["LIVE_EXECUTION_ENABLED","AUTONOMOUS_ENABLED"]);
+assert.equal(gate.go,true);
+assert.equal(gate.activationAllowed,true);
+assert.equal(gate.activationAllowed,false);
+assert.deepEqual(gate.activationFailed,["LIVE_EXECUTION_ENABLED","AUTONOMOUS_ENABLED"]);
 
 gate=evaluateGoNoGo({...healthy,policy:{...LIVE_POLICY,liveExecutionEnabled:true,autonomousEnabled:true}});
 assert.equal(gate.go,true);
