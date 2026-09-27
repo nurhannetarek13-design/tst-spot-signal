@@ -47,8 +47,11 @@ jobs:
             r.get('go') is True,
             r.get('status') == 'GO',
             r.get('activationAllowed') is False,
-            'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
+            'LIVE_EXECUTION_ENABLED' not in r.get('activationFailed', []),
             'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
+            r.get('e2eArmed') is True,
+            r.get('manualE2EComplete') is False,
+            r.get('manualExecutionAllowed') is True,
             r.get('bridgeFresh') is True,
             r.get('executorOwnershipOk') is True,
             r.get('offsiteSnapshotFresh') is True,
@@ -63,7 +66,7 @@ jobs:
             r.get('checks',{}).get('NO_UNKNOWN_ORDERS') is True,
             r.get('checks',{}).get('NO_UNPROTECTED_POSITIONS') is True,
             r.get('checks',{}).get('DAILY_RISK_AVAILABLE') is True,
-            r.get('liveTrading') is False,
+            r.get('liveTrading') is True,
             r.get('autonomousExecution') is False,
             r.get('noSecretValuesExposed') is True,
           ]
@@ -73,7 +76,7 @@ jobs:
             sleep 3
           done
           test "$ok" = 1
-          echo "OPERATIONAL_GO_V2_READY_LIVE_POLICY_DISABLED"
+          echo "OPERATIONAL_GO_V2_MANUAL_LIVE_E2E_ARMED"
 
       - name: Verify legacy Vercel signer is revoked
         shell: bash
