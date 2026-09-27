@@ -373,6 +373,9 @@ async function executeConfirmedBuy(env, s) {
       autoBuy: false,
       userConfirmed: true,
       executionRoute: "MAKE_V2",
+      buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
+      ocoOrderListId: Number(result?.oco?.body?.oco_order_list_id || 0) || null,
+      clientIds: result?.clientIds || null,
     };
   }
 
@@ -392,11 +395,24 @@ async function executeConfirmedBuy(env, s) {
       autoBuy: false,
       userConfirmed: true,
       executionRoute: "MAKE_V2",
+      buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
+      emergencyOrderId: Number(result?.oco?.body?.emergency_order_id || 0) || null,
+      clientIds: result?.clientIds || null,
     };
   }
 
   const status = String(result?.status || "MAKE_V2_EXECUTION_FAILED");
   if (result?.reconciliationRequired === true) {
+    const currentUnknown = await getState(env, "live:unknown-orders");
+    const rows = Array.isArray(currentUnknown) ? currentUnknown : [];
+    rows.push({
+      signalId: String(s.id || ""),
+      symbol,
+      status,
+      route: "MAKE_V2",
+      at: Date.now(),
+    });
+    await putState(env, "live:unknown-orders", rows.slice(-20), 30 * 24 * 60 * 60);
     throw new Error(`${status}:RECONCILIATION_REQUIRED:NO_RESEND`);
   }
   throw new Error(status);
@@ -528,6 +544,20 @@ async function handleTelegramWebhook(request, env) {
       return new Response("ok");
     }
 
+    const liveEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
+    if (!liveEnabled) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Manual live execution is not armed yet — no order sent", show_alert: true });
+      return new Response("ok");
+    }
+    const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
+    const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
+    const priorE2E = await getState(env, "cutover:e2e:result");
+    const e2eComplete = priorE2E?.ok === true && priorE2E?.manual === true;
+    if (!e2eComplete && (!e2eArmed || autonomousEnabled)) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "First live E2E is not armed for manual confirmation — no order sent", show_alert: true });
+      return new Response("ok");
+    }
+
     const claimed = await claimState(env, `execution-lock:${id}`, { claimedAt: Date.now(), symbol: p.symbol }, SIGNAL_TTL_SEC);
     if (!claimed) {
       await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Already confirmed — duplicate blocked", show_alert: true });
@@ -537,6 +567,23 @@ async function handleTelegramWebhook(request, env) {
     await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Executing confirmed Spot BUY…" });
     try {
       const r = await executeConfirmedBuy(env, p);
+      const priorE2E = await getState(env, "cutover:e2e:result");
+      if (!(priorE2E?.ok === true && priorE2E?.manual === true) && String(env.E2E_ARMED || "").toLowerCase() === "true") {
+        await putState(env, "cutover:e2e:result", {
+          ok: r.ocoPlaced === true,
+          manual: true,
+          automaticExecution: false,
+          at: Date.now(),
+          status: r.status,
+          symbol: p.symbol,
+          quoteUSDT: r.quoteUSDT,
+          buyOrderId: r.buyOrderId || null,
+          ocoOrderListId: r.ocoOrderListId || null,
+          emergencyOrderId: r.emergencyOrderId || null,
+          clientIds: r.clientIds || null,
+          executionRoute: r.executionRoute || "MAKE_V2",
+        }, 30 * 24 * 60 * 60);
+      }
       await putState(env, `execution-result:${id}`, {
         ok: true,
         at: Date.now(),
@@ -557,8 +604,24 @@ async function handleTelegramWebhook(request, env) {
         text: resultText,
       });
     } catch (e) {
-      await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), error: String(e?.message || e) }, 86400);
-      await tg(env, "sendMessage", { chat_id: String(env.TELEGRAM_CHAT_ID), text: `❌ BUY failed: ${String(e?.message || e).slice(0, 250)}` });
+      const error = String(e?.message || e);
+      await putState(env, `execution-result:${id}`, { ok: false, at: Date.now(), error }, 86400);
+      if (String(env.E2E_ARMED || "").toLowerCase() === "true") {
+        const priorE2E = await getState(env, "cutover:e2e:result");
+        if (!(priorE2E?.ok === true && priorE2E?.manual === true)) {
+          await putState(env, "cutover:e2e:result", {
+            ok: false,
+            manual: true,
+            automaticExecution: false,
+            at: Date.now(),
+            status: "MANUAL_E2E_FAILED",
+            symbol: p.symbol,
+            error: error.slice(0, 180),
+            executionRoute: "MAKE_V2",
+          }, 30 * 24 * 60 * 60);
+        }
+      }
+      await tg(env, "sendMessage", { chat_id: String(env.TELEGRAM_CHAT_ID), text: `❌ BUY failed: ${error.slice(0, 250)}` });
     }
     return new Response("ok");
   }
