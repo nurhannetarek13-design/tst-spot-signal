@@ -1,5 +1,6 @@
 import { signBridgeEnvelope } from "./bridge-auth.js";
 import { readLivePolicy } from "./live-cutover-policy.js";
+import { normalizeSpotProtection } from "./binance-spot-filters.js";
 
 const BUY_URL = "https://hook.eu1.make.com/soxizns5lax7zpfm84ve0mzblbw2h63h";
 const OCO_URL = "https://hook.eu1.make.com/uwcpj6oq39e1ddsau2zk07g3q78vlovs";
@@ -49,17 +50,26 @@ export async function manualBuyAndProtect(env, input) {
   const qty = Number(buy.body.executed_qty || 0);
   if (!(qty > 0)) return { ok: false, status: "BUY_FILL_QTY_MISSING", reconciliationRequired: true, mayResend: false };
 
-  const stopLimit = Number((Number(common.stop_loss_price) * 0.998).toPrecision(12));
+  const rawStopLimit = Number((Number(common.stop_loss_price) * 0.998).toPrecision(12));
+  const normalized = await normalizeSpotProtection(
+    common.symbol,
+    qty,
+    common.take_profit_price,
+    common.stop_loss_price,
+    rawStopLimit,
+  );
   const oco = await postSigned(env, OCO_URL, {
     ...common,
     action: "OCO",
     quote_amount_usdt: 0,
-    quantity: qty,
-    stop_limit_price: stopLimit,
+    quantity: normalized.quantity,
+    take_profit_price: normalized.takeProfit,
+    stop_loss_price: normalized.stopLoss,
+    stop_limit_price: normalized.stopLimit,
   });
   if (oco.unknown) return { ok: false, status: "OCO_STATUS_UNKNOWN", reconciliationRequired: true, mayResend: false, buy };
   if (!oco.transportOk || !["OCO_PLACED","PROTECTION_FAILED_EMERGENCY_CLOSED"].includes(String(oco.body?.status || ""))) {
     return { ok: false, status: oco.body?.status || "OCO_REJECTED", buy, oco };
   }
-  return { ok: oco.body?.status === "OCO_PLACED", status: oco.body?.status, buy, oco, executedQty: qty };
+  return { ok: oco.body?.status === "OCO_PLACED", status: oco.body?.status, buy, oco, executedQty: qty, protectedQty: normalized.quantity, filters: { stepSize: normalized.stepSize, tickSize: normalized.tickSize, minNotional: normalized.minNotional } };
 }
