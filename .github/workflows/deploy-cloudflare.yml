@@ -13,6 +13,8 @@ on:
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
       - "src/ops-supervisor.js"
+      - "src/bridge-auth.js"
+      - "src/live-cutover-policy.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -44,30 +46,24 @@ jobs:
           node --check src/buy-gateway-auth-wrapper.js
           node --check src/ops-supervisor.js
           node --check src/ops-state-machine.js
+          node --check src/bridge-auth.js
+          node --check src/live-cutover-policy.js
           node scripts/test-ops-recovery.mjs
+          node scripts/test-live-cutover-policy.mjs
           node --check api/binance-signed-relay.mjs
           grep -q '"main": "src/ops-supervisor.js"' wrangler.jsonc
           grep -q 'autonomousExecution: false' src/ops-supervisor.js
           grep -q 'deadManMonitoring: true' src/ops-supervisor.js
           grep -q 'recoveryStateMachine: true' src/ops-supervisor.js
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
-          grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
-          grep -q 'binanceCredentialOwner: "VERCEL_ONLY"' src/buy-gateway-stable.js
-          grep -q 'cloudflareBinanceCredentialsRequired: false' src/buy-gateway-stable.js
-          grep -q 'async function executionPriceGate' src/buy-gateway-stable.js
-          grep -q 'STALE_PRICE_CHASE' src/buy-gateway-stable.js
-          grep -q 'EXECUTION_SPREAD_TOO_WIDE' src/buy-gateway-stable.js
-          grep -q 'PROTECTION_LEVEL_CALC_FAILED' src/buy-gateway-stable.js
-          grep -q 'sendPromptForActive' src/buy-gateway-stable.js
-          grep -q 'await scan(env,false)' src/edge-worker.js
-          grep -q 'x-fast-ecdsa' src/buy-gateway-auth-wrapper.js
-          grep -q 'VERCEL_BINANCE_CREDENTIALS_MISSING' api/binance-signed-relay.mjs
-          grep -q 'HMAC_SHA256' api/binance-signed-relay.mjs
-          grep -q 'RSA_SHA256' api/binance-signed-relay.mjs
-          grep -q 'ED25519' api/binance-signed-relay.mjs
-          grep -q 'MAX_BUY_QUOTE_USDT = 10' api/binance-signed-relay.mjs
-          grep -q 'OPERATION_NOT_ALLOWED' api/binance-signed-relay.mjs
-          grep -q 'WRITE_TRANSPORT_STATUS_UNKNOWN' api/binance-signed-relay.mjs
+          grep -q 'CLOUDFLARE_HMAC_MAKE' src/buy-gateway-stable.js
+          grep -q 'LEGACY_VERCEL_SIGNER_REVOKED' api/binance-signed-relay.mjs
+          grep -q 'oldVercelFallback: false' src/buy-gateway-stable.js
+          grep -q 'liveExecutionEnabled: false' src/live-cutover-policy.js
+          grep -q 'autonomousEnabled: false' src/live-cutover-policy.js
+          grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
+          grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
+          grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
           grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
           grep -q 'TELEGRAM_WEBHOOK_OK' src/buy-gateway-stable.js
@@ -102,8 +98,8 @@ jobs:
           checks=[
             r.get('ok') is True,
             r.get('credentialMode') == 'LIVE',
-            r.get('executionRoute') == 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT',
-            r.get('binanceCredentialOwner') == 'VERCEL_ONLY',
+            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+            r.get('binanceCredentialOwner') == 'MAKE_CONNECTION',
             r.get('cloudflareBinanceCredentialsRequired') is False,
             r.get('telegramConfigured') is True,
             r.get('atomicConfirmClaim') is True,
@@ -136,6 +132,10 @@ jobs:
           assert r.get('railwayDependency') is False
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
+          assert r.get('autonomousExecution') is False
+          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          assert r.get('oldVercelFallback') is False
+          assert r.get('blocker') == 'LIVE_POLICY_DISABLED'
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           if not r.get('executionReady'):
@@ -179,6 +179,43 @@ jobs:
           assert r.get('liveTrading') is False
           assert r.get('autonomousExecution') is False
           assert r.get('noSecretValuesExposed') is True
+          PY
+
+      - name: Verify HMAC bridge auth and replay protection
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 -X POST             -H 'content-type: application/json'             --data '{"signal_id":"deploycheck","symbol":"BTCUSDT"}'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/bridge-auth-selftest?nonce=$(date +%s%N)"             -o /tmp/bridge.json
+          cat /tmp/bridge.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/bridge.json'))
+          assert r.get('ok') is True
+          assert r.get('first') == 'BRIDGE_AUTH_OK'
+          assert r.get('replay') == 'REPLAY_BLOCKED'
+          assert r.get('oldVercelFallback') is False
+          PY
+
+      - name: Verify production Go No-Go stays fail-closed
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?nonce=$(date +%s%N)"             -o /tmp/gate.json
+          cat /tmp/gate.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/gate.json'))
+          assert r.get('ok') is True
+          assert r.get('go') is True
+          assert r.get('activationAllowed') is False
+          assert 'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', [])
+          assert 'AUTONOMOUS_ENABLED' in r.get('activationFailed', [])
+          assert r.get('bridgeFresh') is True
+          assert r.get('executorOwnershipOk') is True
+          assert r.get('offsiteSnapshotFresh') is True
+          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           PY
 
       - name: Verify scanner cannot auto-buy

@@ -1,5 +1,8 @@
 import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
+import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
+import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
+import { manualBuyAndProtect } from "./make-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -103,16 +106,160 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await verifyBridgeEnvelope(env, body);
+      if (result.ok === true) {
+        await putState(env, "bridge:last-verified", { at: Date.now(), route: "CLOUDFLARE_HMAC_MAKE" });
+      }
+      return Response.json(result, { status: result.ok ? 200 : 401, headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/bridge-auth-selftest" && request.method === "POST") {
+      const input = await request.json().catch(() => ({}));
+      const signed = await signBridgeEnvelope(env, {
+        signal_id: String(input.signal_id || "selftest"),
+        action: "DRY_AUTH_TEST",
+        symbol: String(input.symbol || "BTCUSDT"),
+        quote_amount_usdt: 0,
+        take_profit_price: 0,
+        stop_loss_price: 0,
+        confirmed: false,
+        dry_run: true,
+      });
+      const first = await verifyBridgeEnvelope(env, signed);
+      const replay = await verifyBridgeEnvelope(env, signed);
+      const passed = first.ok === true && replay.status === "REPLAY_BLOCKED";
+      if (passed) {
+        await putState(env, "bridge:health", { ok: true, at: Date.now(), route: "CLOUDFLARE_HMAC_MAKE" });
+        await putState(env, "bridge:ownership", { owner: "MAKE_EXECUTOR_V2", at: Date.now(), exclusive: true });
+      }
+      return Response.json({
+        ok: passed,
+        first: first.status,
+        replay: replay.status,
+        oldVercelFallback: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/bridge-sign-dry-handshake" && request.method === "POST") {
+      const signed = await signBridgeEnvelope(env, {
+        signal_id: "prodhandshake",
+        action: "DRY_AUTH_TEST",
+        symbol: "BTCUSDT",
+        quote_amount_usdt: 0,
+        take_profit_price: 0,
+        stop_loss_price: 0,
+        stop_limit_price: 0,
+        quantity: 0,
+        order_list_id: 0,
+        confirmed: false,
+        dry_run: true,
+      });
+      return Response.json({
+        ok: true,
+        envelope: signed,
+        financialAction: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/bridge-auth-status") {
+      return Response.json({
+        ok: true,
+        route: "CLOUDFLARE_HMAC_MAKE",
+        hmac: "HMAC_SHA256",
+        timestamp: true,
+        nonceReplayProtection: true,
+        secretVersion: "v2",
+        oldVercelFallback: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
     if (url.pathname === "/ops-heartbeat" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const requested = Array.isArray(body.components) ? body.components : [body.component || "binance-readonly"];
-      const allowed = requested.map(String).filter((x) => ["binance-readonly", "reconciler", "protection"].includes(x));
+      const allowed = requested.map(String).filter((x) => ["binance-readonly", "reconciler", "protection", "offsite-backup"].includes(x));
       await heartbeat(env, allowed.length ? allowed : ["binance-readonly"], { source: String(body.source || "MAKE").slice(0, 80) });
       return Response.json({ ok: true, status: "HEARTBEAT_OK", liveTrading: false });
     }
     if (url.pathname === "/ops-reconciliation-report" && request.method === "POST") {
       const row = await recordReconciliation(env, await request.json().catch(() => ({})));
       return Response.json({ ok: true, status: "RECONCILIATION_RECORDED", reconciliation: row, liveTrading: false });
+    }
+    if (url.pathname === "/manual-live-e2e" && request.method === "POST") {
+      const ops = await computeState(env);
+      const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
+      const heartbeats = (await getState(env, "ops:heartbeats")) || {};
+      const unknown = (await getState(env, "live:unknown-orders")) || [];
+      const unprotected = (await getState(env, "live:unprotected-positions")) || [];
+      const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+      const bridgeHealth = (await getState(env, "bridge:health")) || null;
+      const ownership = (await getState(env, "bridge:ownership")) || null;
+      const now = Date.now();
+      const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+      const policy = readLivePolicy(env);
+      const gate = evaluateGoNoGo({
+        supervisorState: ops.state,
+        reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
+        snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
+        watchdogHealthy: !ops.stale?.length,
+        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
+        executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
+        unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
+        unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
+        dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
+        policy,
+      });
+      if (!gate.go || policy.liveExecutionEnabled !== true || policy.autonomousEnabled === true) {
+        return Response.json({ ok: false, status: "MANUAL_LIVE_BLOCKED", gate, manualMode: true }, { status: 409 });
+      }
+      const body = await request.json().catch(() => ({}));
+      const result = await manualBuyAndProtect(env, body);
+      if (result?.status === "EXECUTION_STATUS_UNKNOWN" || result?.status === "OCO_STATUS_UNKNOWN") {
+        const rows = Array.isArray(unknown) ? unknown : [];
+        rows.push({ signalId: String(body.signal_id || ""), status: result.status, at: Date.now() });
+        await putState(env, "live:unknown-orders", rows.slice(-20));
+      }
+      return Response.json({ ...result, manualMode: true, autonomousExecution: false }, { status: result?.ok ? 200 : 409 });
+    }
+    if (url.pathname === "/go-no-go") {
+      const ops = await computeState(env);
+      const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
+      const heartbeats = (await getState(env, "ops:heartbeats")) || {};
+      const unknown = (await getState(env, "live:unknown-orders")) || [];
+      const unprotected = (await getState(env, "live:unprotected-positions")) || [];
+      const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+      const bridgeHealth = (await getState(env, "bridge:health")) || null;
+      const ownership = (await getState(env, "bridge:ownership")) || null;
+      const now = Date.now();
+      const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+      const bridgeFresh = bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
+      const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
+      const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
+      const gate = evaluateGoNoGo({
+        supervisorState: ops.state,
+        reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
+        snapshotFresh,
+        watchdogHealthy: !ops.stale?.length,
+        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: bridgeFresh,
+        executorOwnershipOk: ownershipFresh,
+        unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
+        unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
+        dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
+        policy: readLivePolicy(env),
+      });
+      return Response.json({
+        ok: true,
+        ...gate,
+        executionRoute: "CLOUDFLARE_HMAC_MAKE",
+        bridgeFresh,
+        executorOwnershipOk: ownershipFresh,
+        offsiteSnapshotFresh: snapshotFresh,
+        liveTrading: false,
+        autonomousExecution: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/ops-status") {
       const ops = await computeState(env);

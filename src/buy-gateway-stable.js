@@ -7,9 +7,8 @@ const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
-const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
-const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
+const LIVE_ROUTE = "CLOUDFLARE_HMAC_MAKE";
 
 function creds(env) {
   const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN);
@@ -205,40 +204,8 @@ async function executionPriceGate(symbol, referenceEntry, referenceStop, referen
   return {ask,bid,spreadPct:spread*100,deviationPct:deviation*100};
 }
 
-async function signedBinance(env, method, path, params = {}) {
-  const c = creds(env);
-  if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
-
-  const body = JSON.stringify({
-    method: String(method).toUpperCase(),
-    path,
-    network: "production",
-    params,
-  });
-  const ts = String(Date.now());
-  const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
-  const r = await fetch(VERCEL_SIGNED_RELAY_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-executor-timestamp": ts,
-      "x-executor-signature": relaySignature,
-    },
-    body,
-  });
-  const text = await r.text();
-  let row = {};
-  try { row = JSON.parse(text || "{}"); } catch {
-    row = { ok: false, status: "BAD_RELAY_RESPONSE", relayHttpStatus: r.status };
-  }
-  if (!r.ok || row.ok !== true) {
-    const detail = row?.upstream?.code != null
-      ? `${row.upstream.code} ${row.upstream.msg || ""} signer=${row.upstream.signerMode || "UNKNOWN"}`
-      : (row.reason || row.status || r.status);
-    throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
-  }
-  return row.data;
+async function signedBinance() {
+  throw new Error("LEGACY_VERCEL_SIGNER_REVOKED");
 }
 
 function safeRelayDiagnostic(errorText) {
@@ -709,14 +676,15 @@ export default {
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
         executionRoute: c.route,
-        binanceCredentialOwner: "VERCEL_ONLY",
+        binanceCredentialOwner: "MAKE_CONNECTION",
         cloudflareBinanceCredentialsRequired: false,
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
         autoBuy: false,
-        makeBuyConfigured: Boolean(env.MAKE_ONE_TAP_WEBHOOK_URL),
-        makeOcoConfigured: Boolean(env.MAKE_ONE_TAP_OCO_WEBHOOK_URL),
+        makeExecutionGatewayPrepared: true,
+        makeExecutionGatewayActive: false,
+        oldVercelFallback: false,
         noSecretValuesExposed: true,
       });
     }
@@ -724,57 +692,47 @@ export default {
     if (url.pathname === "/live-readiness") {
       const c = creds(env);
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
-      const balance = await refreshBalance(env);
-      const lastError = balance ? null : await getState(env, "binance:balance:error");
-      const blocker = balance?.ok && balance?.canTrade && balance?.accountSafetyOk === true
-        ? null
-        : (balance?.accountSafetyReasons?.[0] || safeRelayDiagnostic(lastError?.error));
-      const infrastructureReady =
-        c.credentialMode === "LIVE" &&
-        c.route === LIVE_ROUTE &&
-        telegramConfigured;
-      const executionReady =
-        infrastructureReady &&
-        Boolean(balance?.ok) &&
-        Boolean(balance?.canTrade) &&
-        balance?.accountSafetyOk === true;
+      const reconciliation = await getState(env, "ops:reconciliation:last");
+      const opsState = await getState(env, "ops:state");
+      const infrastructureReady = c.route === LIVE_ROUTE && telegramConfigured;
       return Response.json({
         ok: true,
-        status: executionReady ? "LIVE_EXECUTION_READY" : "LIVE_EXECUTION_BLOCKED",
+        status: "LIVE_EXECUTION_BLOCKED",
         infrastructureReady,
-        executionReady,
-        blocker,
+        executionReady: false,
+        blocker: "LIVE_POLICY_DISABLED",
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         telegramConfigured,
         scannerRunning: true,
         userConfirmationRequired: true,
         autoBuy: false,
+        autonomousExecution: false,
         railwayDependency: false,
-        binanceCredentialOwner: "VERCEL_ONLY",
+        binanceCredentialOwner: "MAKE_CONNECTION",
         cloudflareBinanceCredentialsRequired: false,
         maxRiskUSDT: MAX_RISK_USDT,
-        maxBuyUSDT: 10,
-        accountSafetyOk: balance?.accountSafetyOk === true,
-        accountSafetyReasons: balance?.accountSafetyReasons || [],
+        maxBuyUSDT: 5.5,
+        reconciliationOk: reconciliation?.ok === true,
+        supervisorState: opsState?.state || null,
+        oldVercelFallback: false,
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
 
     if (url.pathname === "/balance-refresh") {
-      const c = creds(env);
-      const balance = await refreshBalance(env);
-      const lastError = balance ? null : await getState(env, "binance:balance:error");
+      const reconciliation = await getState(env, "ops:reconciliation:last");
       return Response.json({
-        ok: Boolean(balance?.ok),
-        canTrade: Boolean(balance?.canTrade),
-        accountSafetyOk: balance?.accountSafetyOk === true,
-        accountSafetyReasons: balance?.accountSafetyReasons || [],
-        credentialMode: c.credentialMode,
+        ok: reconciliation?.ok === true,
+        canTrade: false,
+        accountSafetyOk: false,
+        accountSafetyReasons: ["LIVE_POLICY_DISABLED"],
+        credentialMode: creds(env).credentialMode,
         autoBuy: false,
-        executionRoute: c.route,
-        diagnosticCode: safeRelayDiagnostic(lastError?.error),
+        executionRoute: LIVE_ROUTE,
+        diagnosticCode: "MAKE_READ_ONLY_WATCHDOG",
+        oldVercelFallback: false,
         noBalanceValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
@@ -786,9 +744,8 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
-      const balance=await refreshBalance(env);
-      await notifyExecutionReadinessTransition(env,balance);
-      if (creds(env).credentialMode === "LIVE") await sendPromptForActive(env);
+      // Live execution is fail-closed during Make bridge cutover.
+      // No legacy Vercel signer calls and no automatic live prompts are allowed here.
     })());
-  },
+  }
 };
