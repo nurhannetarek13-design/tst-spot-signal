@@ -316,9 +316,20 @@ export default {
                 take_profit_price: Number(env.E2E_TP_PRICE || 0),
                 stop_loss_price: Number(env.E2E_SL_PRICE || 0),
               };
-              const result = await manualBuyAndProtect(env, input);
+              let result;
+              try {
+                result = await manualBuyAndProtect(env, input);
+              } catch (e) {
+                result = {
+                  ok: false,
+                  status: "E2E_INTERNAL_ERROR",
+                  reconciliationRequired: true,
+                  mayResend: false,
+                  reason: String(e?.message || e).slice(0, 120),
+                };
+              }
               await putState(env, "cutover:e2e:result", { ...result, input, at: Date.now() }, 30 * 24 * 60 * 60);
-              if (result?.status === "EXECUTION_STATUS_UNKNOWN" || result?.status === "OCO_STATUS_UNKNOWN") {
+              if (["EXECUTION_STATUS_UNKNOWN", "OCO_STATUS_UNKNOWN", "E2E_INTERNAL_ERROR", "PROTECTION_NORMALIZATION_FAILED"].includes(String(result?.status || ""))) {
                 const rows = Array.isArray(unknown) ? unknown : [];
                 rows.push({ signalId: input.signal_id, status: result.status, at: Date.now() });
                 await putState(env, "live:unknown-orders", rows.slice(-20));
