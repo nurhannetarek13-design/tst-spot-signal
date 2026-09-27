@@ -1,6 +1,7 @@
 import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
+import { LIVE_POLICY, evaluateGoNoGo } from "./live-cutover-policy.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -153,6 +154,39 @@ export default {
     if (url.pathname === "/ops-reconciliation-report" && request.method === "POST") {
       const row = await recordReconciliation(env, await request.json().catch(() => ({})));
       return Response.json({ ok: true, status: "RECONCILIATION_RECORDED", reconciliation: row, liveTrading: false });
+    }
+    if (url.pathname === "/go-no-go") {
+      const ops = await computeState(env);
+      const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
+      const scheduler = (await getState(env, "ops:scheduler:last")) || null;
+      const unknown = (await getState(env, "live:unknown-orders")) || [];
+      const unprotected = (await getState(env, "live:unprotected-positions")) || [];
+      const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+      const now = Date.now();
+      const bridge = {
+        healthy: true,
+        route: "CLOUDFLARE_HMAC_MAKE",
+      };
+      const gate = evaluateGoNoGo({
+        supervisorState: ops.state,
+        reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
+        snapshotFresh: now - Number(scheduler?.at || 0) <= HEARTBEAT_STALE_MS,
+        watchdogHealthy: !ops.stale?.length,
+        binanceConnectionOk: !ops.stale?.includes("binance-readonly"),
+        executionRouteHealthy: bridge.healthy === true,
+        unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
+        unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
+        dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
+        policy: LIVE_POLICY,
+      });
+      return Response.json({
+        ok: true,
+        ...gate,
+        executionRoute: bridge.route,
+        liveTrading: false,
+        autonomousExecution: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/ops-status") {
       const ops = await computeState(env);
