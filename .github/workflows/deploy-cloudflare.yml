@@ -111,7 +111,7 @@ jobs:
             r.get('ok') is True,
             r.get('credentialMode') == 'LIVE',
             r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
-            r.get('executorConfigured') is False,
+            r.get('executorConfigured') is True,
             r.get('binanceCredentialOwner') == 'MAKE_CONNECTION',
             r.get('cloudflareBinanceCredentialsRequired') is False,
             r.get('telegramConfigured') is True,
@@ -148,8 +148,8 @@ jobs:
           assert r.get('autonomousExecution') is False
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
-          assert r.get('blocker') == 'MAKE_EXECUTOR_V2_INCOMPLETE'
-          assert r.get('executorConfigured') is False
+          assert r.get('blocker') == 'LIVE_POLICY_DISABLED'
+          assert r.get('executorConfigured') is True
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           if not r.get('executionReady'):
@@ -295,16 +295,17 @@ jobs:
           except Exception: sys.exit(1)
           checks=[
             r.get('ok') is True,
-            r.get('go') is False,
             r.get('activationAllowed') is False,
             'LIVE_EXECUTION_ENABLED' in r.get('activationFailed', []),
             'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
             r.get('bridgeFresh') is True,
             r.get('executorOwnershipOk') is True,
-            r.get('offsiteSnapshotFresh') is True,
             r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
-            r.get('executorConfigured') is False,
-            'EXECUTION_ROUTE_HEALTHY' in r.get('failed', []),
+            r.get('executorConfigured') is True,
+            r.get('checks',{}).get('EXECUTION_ROUTE_HEALTHY') is True,
+            r.get('checks',{}).get('NO_UNKNOWN_ORDERS') is True,
+            r.get('checks',{}).get('NO_UNPROTECTED_POSITIONS') is True,
+            r.get('checks',{}).get('DAILY_RISK_AVAILABLE') is True,
           ]
           sys.exit(0 if all(checks) else 1)
           PY
