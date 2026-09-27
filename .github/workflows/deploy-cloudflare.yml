@@ -214,6 +214,9 @@ jobs:
           assert r.get('financialAction') is False
           assert r.get('liveExecutionEnabled') is False
           assert r.get('autonomousEnabled') is False
+          assert r.get('buyVerified') is True
+          assert r.get('ocoVerified') is True
+          assert r.get('healthRefreshed') is True
           assert r.get('buy',{}).get('routeId') == 'BUY_V2'
           assert r.get('oco',{}).get('routeId') == 'OCO_V2'
           assert r.get('buy',{}).get('first',{}).get('transportOk') is True

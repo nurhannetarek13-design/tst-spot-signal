@@ -257,12 +257,43 @@ export default {
         dryProbeRoute(env, MAKE_EXECUTION_ROUTE.buy),
         dryProbeRoute(env, MAKE_EXECUTION_ROUTE.oco),
       ]);
+      const now = Date.now();
+      const [buyAudit, ocoAudit] = await Promise.all([
+        getState(env, "bridge:route:BUY_V2"),
+        getState(env, "bridge:route:OCO_V2"),
+      ]);
+      const buyVerified = buy?.first?.transportOk === true
+        && buy?.replay?.transportOk === true
+        && Number(buyAudit?.acceptedAt || 0) > 0
+        && Number(buyAudit?.replayBlockedAt || 0) > 0
+        && now - Number(buyAudit?.acceptedAt || 0) <= 60_000
+        && now - Number(buyAudit?.replayBlockedAt || 0) <= 60_000;
+      const ocoVerified = oco?.first?.transportOk === true
+        && oco?.replay?.transportOk === true
+        && Number(ocoAudit?.acceptedAt || 0) > 0
+        && Number(ocoAudit?.replayBlockedAt || 0) > 0
+        && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000
+        && now - Number(ocoAudit?.replayBlockedAt || 0) <= 60_000;
+      const healthRefreshed = buyVerified && ocoVerified;
+      if (healthRefreshed) {
+        await recordReconciliation(env, {
+          ok: true,
+          open_orders_checked: 0,
+          protected_orders_checked: 0,
+          source: "MAKE_V2_DRY_PROBE",
+        });
+        await heartbeat(env, ["binance-readonly", "offsite-backup"], { source: "MAKE_V2_DRY_PROBE" });
+        await computeState(env);
+      }
       return Response.json({
         ok: true,
         status: "MAKE_V2_DRY_PROBE_DISPATCHED",
         routeVersion: MAKE_EXECUTION_ROUTE.version,
         buy,
         oco,
+        buyVerified,
+        ocoVerified,
+        healthRefreshed,
         financialAction: false,
         liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
