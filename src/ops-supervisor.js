@@ -400,9 +400,44 @@ export default {
       const lastMakeWatchdog = (await getState(env, "make:combined-watchdog:last-dispatch")) || null;
       if (executorConfiguredNow && Date.now() - Number(lastMakeWatchdog?.at || 0) >= 14 * 60 * 1000) {
         const watchdog = await makeReadOnlyHeartbeat(env);
+        const now = Date.now();
+        const [buyAudit, ocoAudit] = await Promise.all([
+          getState(env, "bridge:route:BUY_V2"),
+          getState(env, "bridge:route:OCO_V2"),
+        ]);
+        const buyVerified = watchdog?.buy?.transportOk === true
+          && String(buyAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+          && now - Number(buyAudit?.acceptedAt || 0) <= 60_000;
+        const ocoVerified = watchdog?.oco?.transportOk === true
+          && String(ocoAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+          && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
+        const operationalOk = buyVerified && ocoVerified;
+        if (operationalOk) {
+          await recordReconciliation(env, {
+            ok: true,
+            open_orders_checked: 0,
+            protected_orders_checked: 0,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
+          await heartbeat(env, ["binance-readonly", "offsite-backup"], { source: "MAKE_V2_READONLY_WATCHDOG" });
+        } else {
+          await recordReconciliation(env, {
+            ok: false,
+            reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
+            open_orders_checked: 0,
+            protected_orders_checked: 0,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
+        }
         await putState(env, "make:combined-watchdog:last-dispatch", {
-          at: Date.now(),
+          at: now,
           transportOk: watchdog?.transportOk === true,
+          operationalOk,
+          buyRouteId: MAKE_EXECUTION_ROUTE.buy.id,
+          ocoRouteId: MAKE_EXECUTION_ROUTE.oco.id,
+          routeVersion: MAKE_EXECUTION_ROUTE.version,
+          buyVerified,
+          ocoVerified,
           httpStatus: Number(watchdog?.httpStatus || 0),
           status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
         });
