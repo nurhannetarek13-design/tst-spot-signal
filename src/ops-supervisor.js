@@ -46,7 +46,7 @@ async function computeState(env) {
   const previous = (await getState(env, "ops:state")) || { state: "WARMING_UP", since: now };
   const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
   const scheduler = (await getState(env, "ops:scheduler:last")) || null;
-  const critical = ["scanner", "market-data", "strategy", "risk", "watchdog", "binance-readonly"];
+  const critical = ["scanner", "market-data", "strategy", "risk", "watchdog", "binance-readonly", "reconciler", "protection"];
   const stale = critical.filter((c) => !hbAt(hb, c) || now - hbAt(hb, c) > HEARTBEAT_STALE_MS);
 
   let state = "HEALTHY";
