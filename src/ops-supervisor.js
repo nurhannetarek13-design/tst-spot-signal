@@ -201,6 +201,17 @@ export default {
         noSecretValuesExposed: true,
       }, { status: 404, headers: { "cache-control": "no-store" } });
     }
+    if (url.pathname === "/cutover-e2e-status") {
+      const result = await getState(env, "cutover:e2e:result");
+      return Response.json({
+        ok: true,
+        armed: String(env.E2E_ARMED || "").toLowerCase() === "true",
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+        result: result || null,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
     if (url.pathname === "/go-no-go") {
       const ops = await computeState(env);
       const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
