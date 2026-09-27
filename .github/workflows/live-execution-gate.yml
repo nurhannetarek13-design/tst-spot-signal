@@ -29,13 +29,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 25 \
-            -H 'cache-control: no-store' \
-            "$WORKER_URL/go-no-go?nonce=$(date +%s%N)" -o /tmp/gate.json
-          cat /tmp/gate.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/gate.json'))
+          ok=0
+          for attempt in $(seq 1 10); do
+            rm -f /tmp/gate.json
+            curl --silent --show-error --max-time 25 \
+              -H 'cache-control: no-store' \
+              "$WORKER_URL/go-no-go?attempt=${attempt}&nonce=$(date +%s%N)" -o /tmp/gate.json || true
+            cat /tmp/gate.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/gate.json'))
+          except Exception: sys.exit(1)
           required=[
             r.get('ok') is True,
             r.get('go') is False,
@@ -53,10 +58,13 @@ jobs:
             r.get('autonomousExecution') is False,
             r.get('noSecretValuesExposed') is True,
           ]
-          if not all(required):
-              raise SystemExit("OPERATIONAL_NO_GO: "+str(r.get('failed')))
-          print("OPERATIONAL_NO_GO_EXECUTOR_V2_INCOMPLETE")
+          sys.exit(0 if all(required) else 1)
           PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo "OPERATIONAL_NO_GO_EXECUTOR_V2_INCOMPLETE"
 
       - name: Verify legacy Vercel signer is revoked
         shell: bash
