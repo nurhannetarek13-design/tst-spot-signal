@@ -684,7 +684,7 @@ export default {
         oneTapConfirm: true,
         autoBuy: false,
         makeExecutionGatewayPrepared: true,
-        makeExecutionGatewayActive: false,
+        makeExecutionGatewayActive: executorConfigured,
         executorConfigured,
         oldVercelFallback: false,
         noSecretValuesExposed: true,
