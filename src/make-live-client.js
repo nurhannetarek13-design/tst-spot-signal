@@ -2,8 +2,8 @@ import { signBridgeEnvelope } from "./bridge-auth.js";
 import { readLivePolicy } from "./live-cutover-policy.js";
 import { normalizeSpotProtection } from "./binance-spot-filters.js";
 
-const BUY_URL = "https://hook.eu1.make.com/r9cqpv68bbj2zb01jitfmzk8iqb2zh16";
-const OCO_URL = "https://hook.eu1.make.com/yn7vndobsf378u5hbec7jfnuam25ulcj";
+const BUY_URL = "https://hook.eu1.make.com/soxizns5lax7zpfm84ve0mzblbw2h63h";
+const OCO_URL = "https://hook.eu1.make.com/uwcpj6oq39e1ddsau2zk07g3q78vlovs";
 
 function clientIds(signalId) {
   const base = String(signalId || "sig").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "sig";
