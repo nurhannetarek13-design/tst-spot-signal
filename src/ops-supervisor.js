@@ -1,5 +1,6 @@
 import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
+import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -103,6 +104,45 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await verifyBridgeEnvelope(env, body);
+      return Response.json(result, { status: result.ok ? 200 : 401, headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/bridge-auth-selftest" && request.method === "POST") {
+      const input = await request.json().catch(() => ({}));
+      const signed = await signBridgeEnvelope(env, {
+        signal_id: String(input.signal_id || "selftest"),
+        action: "DRY_AUTH_TEST",
+        symbol: String(input.symbol || "BTCUSDT"),
+        quote_amount_usdt: 0,
+        take_profit_price: 0,
+        stop_loss_price: 0,
+        confirmed: false,
+        dry_run: true,
+      });
+      const first = await verifyBridgeEnvelope(env, signed);
+      const replay = await verifyBridgeEnvelope(env, signed);
+      return Response.json({
+        ok: first.ok === true && replay.status === "REPLAY_BLOCKED",
+        first: first.status,
+        replay: replay.status,
+        oldVercelFallback: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/bridge-auth-status") {
+      return Response.json({
+        ok: true,
+        route: "CLOUDFLARE_HMAC_MAKE",
+        hmac: "HMAC_SHA256",
+        timestamp: true,
+        nonceReplayProtection: true,
+        secretVersion: "v2",
+        oldVercelFallback: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
     if (url.pathname === "/ops-heartbeat" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const requested = Array.isArray(body.components) ? body.components : [body.component || "binance-readonly"];
