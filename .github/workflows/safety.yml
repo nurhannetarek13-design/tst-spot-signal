@@ -25,6 +25,8 @@ jobs:
       - run: node --check server.mjs
       - run: node --check src/index.js
       - run: node --check src/edge-worker.js
+      - run: node --check src/buy-gateway-stable.js
+      - run: node scripts/test-make-v2-manual-route.mjs
       - run: node --check scripts/forward-paper-public-edges.mjs
       - run: npm run check:render
 
