@@ -141,7 +141,8 @@ jobs:
           assert r.get('autonomousExecution') is False
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
-          assert r.get('blocker') == 'LIVE_POLICY_DISABLED'
+          assert r.get('blocker') == 'MAKE_EXECUTOR_V2_INCOMPLETE'
+          assert r.get('executorConfigured') is False
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           if not r.get('executionReady'):
