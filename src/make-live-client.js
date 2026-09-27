@@ -4,6 +4,15 @@ import { readLivePolicy } from "./live-cutover-policy.js";
 const BUY_URL = "https://hook.eu1.make.com/soxizns5lax7zpfm84ve0mzblbw2h63h";
 const OCO_URL = "https://hook.eu1.make.com/uwcpj6oq39e1ddsau2zk07g3q78vlovs";
 
+function clientIds(signalId) {
+  const base = String(signalId || "sig").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "sig";
+  return {
+    list_client_order_id: `TSTL${base}`.slice(0, 32),
+    stop_client_order_id: `TSTS${base}`.slice(0, 32),
+    limit_client_order_id: `TSTT${base}`.slice(0, 32),
+  };
+}
+
 async function postSigned(env, url, payload, timeoutMs = 20000) {
   const signed = await signBridgeEnvelope(env, payload);
   const controller = new AbortController();
@@ -50,16 +59,18 @@ export async function manualBuyAndProtect(env, input) {
   if (!(qty > 0)) return { ok: false, status: "BUY_FILL_QTY_MISSING", reconciliationRequired: true, mayResend: false };
 
   const stopLimit = Number((Number(common.stop_loss_price) * 0.998).toPrecision(12));
+  const ids = clientIds(common.signal_id);
   const oco = await postSigned(env, OCO_URL, {
     ...common,
+    ...ids,
     action: "OCO",
     quote_amount_usdt: 0,
     quantity: qty,
     stop_limit_price: stopLimit,
   });
-  if (oco.unknown) return { ok: false, status: "OCO_STATUS_UNKNOWN", reconciliationRequired: true, mayResend: false, buy };
+  if (oco.unknown) return { ok: false, status: "OCO_STATUS_UNKNOWN", reconciliationRequired: true, mayResend: false, buy, clientIds: ids };
   if (!oco.transportOk || !["OCO_PLACED","PROTECTION_FAILED_EMERGENCY_CLOSED"].includes(String(oco.body?.status || ""))) {
-    return { ok: false, status: oco.body?.status || "OCO_REJECTED", buy, oco };
+    return { ok: false, status: oco.body?.status || "OCO_REJECTED", buy, oco, clientIds: ids };
   }
-  return { ok: oco.body?.status === "OCO_PLACED", status: oco.body?.status, buy, oco, executedQty: qty };
+  return { ok: oco.body?.status === "OCO_PLACED", status: oco.body?.status, buy, oco, executedQty: qty, clientIds: ids };
 }
