@@ -50,6 +50,14 @@ jobs:
           node --check src/bridge-auth.js
           node --check src/live-cutover-policy.js
           node --check src/make-live-client.js
+          grep -q 'id: "BUY_V2"' src/make-live-client.js
+          grep -q 'id: "OCO_V2"' src/make-live-client.js
+          grep -q 'r9cqpv68bbj2zb01jitfmzk8iqb2zh16' src/make-live-client.js
+          grep -q 'yn7vndobsf378u5hbec7jfnuam25ulcj' src/make-live-client.js
+          if grep -Eq 'soxizns5lax7zpfm84ve0mzblbw2h63h|uwcpj6oq39e1ddsau2zk07g3q78vlovs' src/make-live-client.js; then
+            echo "Legacy Make execution webhook still present in active execution client"
+            exit 1
+          fi
           node scripts/test-ops-recovery.mjs
           node scripts/test-live-cutover-policy.mjs
           node scripts/test-binance-spot-filters.mjs
@@ -186,6 +194,71 @@ jobs:
           assert r.get('autonomousExecution') is False
           assert r.get('noSecretValuesExposed') is True
           PY
+
+      - name: Verify Make V2 production binding without financial action
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 35 -X POST \
+            -H 'content-type: application/json' \
+            --data '{}' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/make-v2-dry-probe?nonce=$(date +%s%N)" \
+            -o /tmp/v2-probe.json
+          cat /tmp/v2-probe.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/v2-probe.json'))
+          assert r.get('ok') is True
+          assert r.get('status') == 'MAKE_V2_DRY_PROBE_DISPATCHED'
+          assert r.get('routeVersion') == 'v2'
+          assert r.get('financialAction') is False
+          assert r.get('liveExecutionEnabled') is False
+          assert r.get('autonomousEnabled') is False
+          assert r.get('buy',{}).get('routeId') == 'BUY_V2'
+          assert r.get('oco',{}).get('routeId') == 'OCO_V2'
+          assert r.get('buy',{}).get('first',{}).get('transportOk') is True
+          assert r.get('buy',{}).get('replay',{}).get('transportOk') is True
+          assert r.get('oco',{}).get('first',{}).get('transportOk') is True
+          assert r.get('oco',{}).get('replay',{}).get('transportOk') is True
+          PY
+
+          ok=0
+          for attempt in $(seq 1 15); do
+            curl --fail --silent --show-error --max-time 20 \
+              -H 'cache-control: no-store' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/make-v2-route-status?attempt=$attempt&nonce=$(date +%s%N)" \
+              -o /tmp/v2-routes.json
+            cat /tmp/v2-routes.json
+            echo
+            if python - <<'PY'
+          import json,sys,time
+          r=json.load(open('/tmp/v2-routes.json'))
+          now=int(time.time()*1000)
+          buy=r.get('buy') or {}
+          oco=r.get('oco') or {}
+          checks=[
+            r.get('ok') is True,
+            r.get('routeVersion') == 'v2',
+            r.get('buyRouteId') == 'BUY_V2',
+            r.get('ocoRouteId') == 'OCO_V2',
+            r.get('legacyRoutesConfigured') is False,
+            buy.get('lastStatus') == 'REPLAY_BLOCKED',
+            oco.get('lastStatus') == 'REPLAY_BLOCKED',
+            int(buy.get('acceptedAt') or 0) > 0,
+            int(oco.get('acceptedAt') or 0) > 0,
+            int(buy.get('replayBlockedAt') or 0) > 0,
+            int(oco.get('replayBlockedAt') or 0) > 0,
+            now-int(buy.get('acceptedAt') or 0) < 300000,
+            now-int(oco.get('acceptedAt') or 0) < 300000,
+            now-int(buy.get('replayBlockedAt') or 0) < 300000,
+            now-int(oco.get('replayBlockedAt') or 0) < 300000,
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
 
       - name: Verify HMAC bridge auth and replay protection
         if: always()

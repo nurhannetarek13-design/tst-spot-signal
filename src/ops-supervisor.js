@@ -2,7 +2,7 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
-import { manualBuyAndProtect, makeReadOnlyHeartbeat } from "./make-live-client.js";
+import { manualBuyAndProtect, makeReadOnlyHeartbeat, MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -91,6 +91,81 @@ async function recordReconciliation(env, body) {
   await heartbeat(env, ["reconciler", "protection"], { source: row.source });
   return row;
 }
+function bridgeRouteId(body = {}) {
+  const action = String(body?.action || "").toUpperCase();
+  if (action === "BUY") return MAKE_EXECUTION_ROUTE.buy.id;
+  if (action === "OCO") return MAKE_EXECUTION_ROUTE.oco.id;
+  return "NON_FINANCIAL";
+}
+
+async function recordBridgeRouteAudit(env, routeId, status) {
+  if (!["BUY_V2", "OCO_V2"].includes(String(routeId))) return;
+  const key = `bridge:route:${routeId}`;
+  const current = (await getState(env, key)) || {
+    routeId,
+    routeVersion: MAKE_EXECUTION_ROUTE.version,
+    acceptedAt: 0,
+    replayBlockedAt: 0,
+  };
+  const now = Date.now();
+  const next = {
+    routeId,
+    routeVersion: MAKE_EXECUTION_ROUTE.version,
+    acceptedAt: status === "BRIDGE_AUTH_OK" ? now : Number(current.acceptedAt || 0),
+    replayBlockedAt: status === "REPLAY_BLOCKED" ? now : Number(current.replayBlockedAt || 0),
+    lastStatus: String(status || "UNKNOWN").slice(0, 80),
+    updatedAt: now,
+  };
+  await putState(env, key, next);
+}
+
+async function dispatchSignedEnvelope(url, envelope, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(envelope),
+      signal: controller.signal,
+    });
+    return { transportOk: true, httpStatus: r.status };
+  } catch (e) {
+    return {
+      transportOk: false,
+      httpStatus: 0,
+      reason: String(e?.message || e).slice(0, 100),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function dryProbeRoute(env, route) {
+  const common = {
+    symbol: "BTCUSDT",
+    quote_amount_usdt: 0,
+    take_profit_price: 0,
+    stop_loss_price: 0,
+    stop_limit_price: 0,
+    quantity: 0,
+    order_list_id: 0,
+    list_client_order_id: "",
+    stop_client_order_id: "",
+    limit_client_order_id: "",
+    confirmed: false,
+    dry_run: true,
+  };
+  const envelope = await signBridgeEnvelope(env, {
+    ...common,
+    signal_id: `dryprobe${String(route.id).toLowerCase()}${Date.now()}`,
+    action: route.id === "BUY_V2" ? "BUY" : "OCO",
+  });
+  const first = await dispatchSignedEnvelope(route.url, envelope);
+  const replay = await dispatchSignedEnvelope(route.url, envelope);
+  return { routeId: route.id, first, replay };
+}
+
 async function snapshot(env) {
   const [ops, hb, rec, scheduler] = await Promise.all([
     computeState(env),
@@ -117,8 +192,15 @@ export default {
     if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const result = await verifyBridgeEnvelope(env, body);
+      const routeId = bridgeRouteId(body);
+      await recordBridgeRouteAudit(env, routeId, result.status);
       if (result.ok === true) {
-        await putState(env, "bridge:last-verified", { at: Date.now(), route: "CLOUDFLARE_HMAC_MAKE" });
+        await putState(env, "bridge:last-verified", {
+          at: Date.now(),
+          route: "CLOUDFLARE_HMAC_MAKE",
+          routeId,
+          routeVersion: MAKE_EXECUTION_ROUTE.version,
+        });
       }
       return Response.json(result, { status: result.ok ? 200 : 401, headers: { "cache-control": "no-store" } });
     }
@@ -167,6 +249,39 @@ export default {
         ok: true,
         envelope: signed,
         financialAction: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/make-v2-dry-probe" && request.method === "POST") {
+      const [buy, oco] = await Promise.all([
+        dryProbeRoute(env, MAKE_EXECUTION_ROUTE.buy),
+        dryProbeRoute(env, MAKE_EXECUTION_ROUTE.oco),
+      ]);
+      return Response.json({
+        ok: true,
+        status: "MAKE_V2_DRY_PROBE_DISPATCHED",
+        routeVersion: MAKE_EXECUTION_ROUTE.version,
+        buy,
+        oco,
+        financialAction: false,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/make-v2-route-status") {
+      const [buy, oco] = await Promise.all([
+        getState(env, "bridge:route:BUY_V2"),
+        getState(env, "bridge:route:OCO_V2"),
+      ]);
+      return Response.json({
+        ok: true,
+        routeVersion: MAKE_EXECUTION_ROUTE.version,
+        buyRouteId: MAKE_EXECUTION_ROUTE.buy.id,
+        ocoRouteId: MAKE_EXECUTION_ROUTE.oco.id,
+        buy: buy || null,
+        oco: oco || null,
+        legacyRoutesConfigured: false,
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
@@ -285,9 +400,44 @@ export default {
       const lastMakeWatchdog = (await getState(env, "make:combined-watchdog:last-dispatch")) || null;
       if (executorConfiguredNow && Date.now() - Number(lastMakeWatchdog?.at || 0) >= 14 * 60 * 1000) {
         const watchdog = await makeReadOnlyHeartbeat(env);
+        const now = Date.now();
+        const [buyAudit, ocoAudit] = await Promise.all([
+          getState(env, "bridge:route:BUY_V2"),
+          getState(env, "bridge:route:OCO_V2"),
+        ]);
+        const buyVerified = watchdog?.buy?.transportOk === true
+          && String(buyAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+          && now - Number(buyAudit?.acceptedAt || 0) <= 60_000;
+        const ocoVerified = watchdog?.oco?.transportOk === true
+          && String(ocoAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+          && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
+        const operationalOk = buyVerified && ocoVerified;
+        if (operationalOk) {
+          await recordReconciliation(env, {
+            ok: true,
+            open_orders_checked: 0,
+            protected_orders_checked: 0,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
+          await heartbeat(env, ["binance-readonly", "offsite-backup"], { source: "MAKE_V2_READONLY_WATCHDOG" });
+        } else {
+          await recordReconciliation(env, {
+            ok: false,
+            reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
+            open_orders_checked: 0,
+            protected_orders_checked: 0,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
+        }
         await putState(env, "make:combined-watchdog:last-dispatch", {
-          at: Date.now(),
+          at: now,
           transportOk: watchdog?.transportOk === true,
+          operationalOk,
+          buyRouteId: MAKE_EXECUTION_ROUTE.buy.id,
+          ocoRouteId: MAKE_EXECUTION_ROUTE.oco.id,
+          routeVersion: MAKE_EXECUTION_ROUTE.version,
+          buyVerified,
+          ocoVerified,
           httpStatus: Number(watchdog?.httpStatus || 0),
           status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
         });
