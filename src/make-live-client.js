@@ -51,13 +51,25 @@ export async function manualBuyAndProtect(env, input) {
   if (!(qty > 0)) return { ok: false, status: "BUY_FILL_QTY_MISSING", reconciliationRequired: true, mayResend: false };
 
   const rawStopLimit = Number((Number(common.stop_loss_price) * 0.998).toPrecision(12));
-  const normalized = await normalizeSpotProtection(
-    common.symbol,
-    qty,
-    common.take_profit_price,
-    common.stop_loss_price,
-    rawStopLimit,
-  );
+  let normalized;
+  try {
+    normalized = await normalizeSpotProtection(
+      common.symbol,
+      qty,
+      common.take_profit_price,
+      common.stop_loss_price,
+      rawStopLimit,
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      status: "PROTECTION_NORMALIZATION_FAILED",
+      reconciliationRequired: true,
+      mayResend: false,
+      buy,
+      reason: String(e?.message || e).slice(0, 120),
+    };
+  }
   const oco = await postSigned(env, OCO_URL, {
     ...common,
     action: "OCO",
