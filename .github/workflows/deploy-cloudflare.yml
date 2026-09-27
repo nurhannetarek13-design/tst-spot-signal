@@ -12,6 +12,7 @@ on:
       - "api/binance-signed-relay.mjs"
       - "src/buy-gateway-time-monitor.js"
       - "src/buy-gateway-auth-wrapper.js"
+      - "src/production-autonomy.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -41,8 +42,12 @@ jobs:
           node --check src/buy-gateway-stable.js
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
+          node --check src/production-autonomy.js
           node --check api/binance-signed-relay.mjs
-          grep -q '"main": "src/buy-gateway-auth-wrapper.js"' wrangler.jsonc
+          grep -q '"main": "src/production-autonomy.js"' wrangler.jsonc
+          grep -q 'MAX_LIVE_BUY_USDT = 5.50' src/production-autonomy.js
+          grep -q 'SINGLE_MAKE_EXECUTOR_PULL_LEASE' src/production-autonomy.js
+          grep -q 'PROTECTION_ONLY' src/production-autonomy.js
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
           grep -q 'CLOUDFLARE_SIGNED_VERCEL_TRANSPORT' src/buy-gateway-stable.js
           grep -q 'binanceCredentialOwner: "VERCEL_ONLY"' src/buy-gateway-stable.js
@@ -149,6 +154,27 @@ jobs:
           assert r.get('status') == 'TELEGRAM_WEBHOOK_OK'
           assert r.get('urlMatches') is True
           assert r.get('callbackQueryAllowed') is True
+          PY
+
+      - name: Verify 24/7 operations runtime
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/ops-status?nonce=$(date +%s%N)" \
+            -o /tmp/ops.json
+          cat /tmp/ops.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/ops.json'))
+          assert r.get('ok') is True
+          assert r.get('liveAutonomous') is True
+          assert r.get('maxLiveBuyUSDT') == 5.5
+          assert r.get('maxLiveRiskUSDT') == 0.2
+          assert r.get('splitBrainPolicy') == 'SINGLE_MAKE_EXECUTOR_PULL_LEASE'
+          assert r.get('noSecretValuesExposed') is True
           PY
 
       - name: Verify scanner cannot auto-buy
