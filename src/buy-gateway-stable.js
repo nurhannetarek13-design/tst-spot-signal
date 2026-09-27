@@ -671,6 +671,7 @@ export default {
 
     if (url.pathname === "/runtime-check") {
       const c = creds(env);
+      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
       return Response.json({
         ok: true,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
