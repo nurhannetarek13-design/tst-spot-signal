@@ -108,6 +108,9 @@ export default {
     if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const result = await verifyBridgeEnvelope(env, body);
+      if (result.ok === true) {
+        await putState(env, "bridge:last-verified", { at: Date.now(), route: "CLOUDFLARE_HMAC_MAKE" });
+      }
       return Response.json(result, { status: result.ok ? 200 : 401, headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/bridge-auth-selftest" && request.method === "POST") {
@@ -124,8 +127,13 @@ export default {
       });
       const first = await verifyBridgeEnvelope(env, signed);
       const replay = await verifyBridgeEnvelope(env, signed);
+      const passed = first.ok === true && replay.status === "REPLAY_BLOCKED";
+      if (passed) {
+        await putState(env, "bridge:health", { ok: true, at: Date.now(), route: "CLOUDFLARE_HMAC_MAKE" });
+        await putState(env, "bridge:ownership", { owner: "MAKE_EXECUTOR_V2", at: Date.now(), exclusive: true });
+      }
       return Response.json({
-        ok: first.ok === true && replay.status === "REPLAY_BLOCKED",
+        ok: passed,
         first: first.status,
         replay: replay.status,
         oldVercelFallback: false,
@@ -147,7 +155,7 @@ export default {
     if (url.pathname === "/ops-heartbeat" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const requested = Array.isArray(body.components) ? body.components : [body.component || "binance-readonly"];
-      const allowed = requested.map(String).filter((x) => ["binance-readonly", "reconciler", "protection"].includes(x));
+      const allowed = requested.map(String).filter((x) => ["binance-readonly", "reconciler", "protection", "offsite-backup"].includes(x));
       await heartbeat(env, allowed.length ? allowed : ["binance-readonly"], { source: String(body.source || "MAKE").slice(0, 80) });
       return Response.json({ ok: true, status: "HEARTBEAT_OK", liveTrading: false });
     }
@@ -158,22 +166,25 @@ export default {
     if (url.pathname === "/go-no-go") {
       const ops = await computeState(env);
       const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
-      const scheduler = (await getState(env, "ops:scheduler:last")) || null;
+      const heartbeats = (await getState(env, "ops:heartbeats")) || {};
       const unknown = (await getState(env, "live:unknown-orders")) || [];
       const unprotected = (await getState(env, "live:unprotected-positions")) || [];
       const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+      const bridgeHealth = (await getState(env, "bridge:health")) || null;
+      const ownership = (await getState(env, "bridge:ownership")) || null;
       const now = Date.now();
-      const bridge = {
-        healthy: true,
-        route: "CLOUDFLARE_HMAC_MAKE",
-      };
+      const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+      const bridgeFresh = bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
+      const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
+      const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
       const gate = evaluateGoNoGo({
         supervisorState: ops.state,
         reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
-        snapshotFresh: now - Number(scheduler?.at || 0) <= HEARTBEAT_STALE_MS,
+        snapshotFresh,
         watchdogHealthy: !ops.stale?.length,
-        binanceConnectionOk: !ops.stale?.includes("binance-readonly"),
-        executionRouteHealthy: bridge.healthy === true,
+        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: bridgeFresh,
+        executorOwnershipOk: ownershipFresh,
         unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
         unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
         dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
@@ -182,7 +193,10 @@ export default {
       return Response.json({
         ok: true,
         ...gate,
-        executionRoute: bridge.route,
+        executionRoute: "CLOUDFLARE_HMAC_MAKE",
+        bridgeFresh,
+        executorOwnershipOk: ownershipFresh,
+        offsiteSnapshotFresh: snapshotFresh,
         liveTrading: false,
         autonomousExecution: false,
         noSecretValuesExposed: true,
