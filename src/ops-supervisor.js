@@ -25,6 +25,14 @@ async function putState(env, key, value, ttl = STATE_TTL_SEC) {
     body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
   });
 }
+async function claimState(env, key, value, ttl = STATE_TTL_SEC) {
+  const r = await stub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
+  });
+  return r.ok;
+}
 async function tg(env, text) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -185,42 +193,13 @@ export default {
       const row = await recordReconciliation(env, await request.json().catch(() => ({})));
       return Response.json({ ok: true, status: "RECONCILIATION_RECORDED", reconciliation: row, liveTrading: false });
     }
-    if (url.pathname === "/manual-live-e2e" && request.method === "POST") {
-      const ops = await computeState(env);
-      const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
-      const heartbeats = (await getState(env, "ops:heartbeats")) || {};
-      const unknown = (await getState(env, "live:unknown-orders")) || [];
-      const unprotected = (await getState(env, "live:unprotected-positions")) || [];
-      const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
-      const bridgeHealth = (await getState(env, "bridge:health")) || null;
-      const ownership = (await getState(env, "bridge:ownership")) || null;
-      const now = Date.now();
-      const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
-      const policy = readLivePolicy(env);
-      const gate = evaluateGoNoGo({
-        supervisorState: ops.state,
-        reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
-        snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
-        watchdogHealthy: !ops.stale?.length,
-        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-        executionRouteHealthy: bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
-        executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
-        unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
-        unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
-        dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
-        policy,
-      });
-      if (!gate.go || policy.liveExecutionEnabled !== true || policy.autonomousEnabled === true) {
-        return Response.json({ ok: false, status: "MANUAL_LIVE_BLOCKED", gate, manualMode: true }, { status: 409 });
-      }
-      const body = await request.json().catch(() => ({}));
-      const result = await manualBuyAndProtect(env, body);
-      if (result?.status === "EXECUTION_STATUS_UNKNOWN" || result?.status === "OCO_STATUS_UNKNOWN") {
-        const rows = Array.isArray(unknown) ? unknown : [];
-        rows.push({ signalId: String(body.signal_id || ""), status: result.status, at: Date.now() });
-        await putState(env, "live:unknown-orders", rows.slice(-20));
-      }
-      return Response.json({ ...result, manualMode: true, autonomousExecution: false }, { status: result?.ok ? 200 : 409 });
+    if (url.pathname === "/manual-live-e2e") {
+      return Response.json({
+        ok: false,
+        status: "PUBLIC_MANUAL_LIVE_ENDPOINT_DISABLED",
+        internalOneShotOnly: true,
+        noSecretValuesExposed: true,
+      }, { status: 404, headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/go-no-go") {
       const ops = await computeState(env);
@@ -288,6 +267,56 @@ export default {
       await putState(env, "ops:scheduler:last", { at: Date.now(), source: "CLOUDFLARE_CRON" });
       const next = await computeState(env);
       await alertTransition(env, next);
+
+      const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
+      const policy = readLivePolicy(env);
+      if (e2eArmed && policy.liveExecutionEnabled === true && policy.autonomousEnabled !== true) {
+        const existing = await getState(env, "cutover:e2e:result");
+        if (!existing) {
+          const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
+          const heartbeats = (await getState(env, "ops:heartbeats")) || {};
+          const unknown = (await getState(env, "live:unknown-orders")) || [];
+          const unprotected = (await getState(env, "live:unprotected-positions")) || [];
+          const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
+          const bridgeHealth = (await getState(env, "bridge:health")) || null;
+          const ownership = (await getState(env, "bridge:ownership")) || null;
+          const now = Date.now();
+          const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
+          const gate = evaluateGoNoGo({
+            supervisorState: next.state,
+            reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
+            snapshotFresh: hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS,
+            watchdogHealthy: !next.stale?.length,
+            binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+            executionRouteHealthy: bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS,
+            executorOwnershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS,
+            unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
+            unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
+            dailyLossUSDT: -Math.abs(Number(daily.realizedLossUSDT || 0)),
+            policy,
+          });
+          if (gate.go) {
+            const claimed = await claimState(env, "cutover:e2e:once", { at: now }, 7 * 24 * 60 * 60);
+            if (claimed) {
+              const input = {
+                signal_id: "CUTOVER_E2E_20260928",
+                symbol: String(env.E2E_SYMBOL || "BTCUSDT"),
+                quote_amount_usdt: Math.min(5.5, Math.max(5, Number(env.E2E_QUOTE_USDT || 5))),
+                take_profit_price: Number(env.E2E_TP_PRICE || 0),
+                stop_loss_price: Number(env.E2E_SL_PRICE || 0),
+              };
+              const result = await manualBuyAndProtect(env, input);
+              await putState(env, "cutover:e2e:result", { ...result, input, at: Date.now() }, 30 * 24 * 60 * 60);
+              if (result?.status === "EXECUTION_STATUS_UNKNOWN" || result?.status === "OCO_STATUS_UNKNOWN") {
+                const rows = Array.isArray(unknown) ? unknown : [];
+                rows.push({ signalId: input.signal_id, status: result.status, at: Date.now() });
+                await putState(env, "live:unknown-orders", rows.slice(-20));
+              }
+              await tg(env, `🧪 LIVE CUTOVER E2E\nStatus: ${result?.status || "UNKNOWN"}\nSymbol: ${input.symbol}\nAmount: ${input.quote_amount_usdt} USDT\nAutonomous: OFF`);
+            }
+          }
+        }
+      }
     })());
   },
 };
