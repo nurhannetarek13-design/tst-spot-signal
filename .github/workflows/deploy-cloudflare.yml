@@ -43,6 +43,8 @@ jobs:
           node --check src/buy-gateway-time-monitor.js
           node --check src/buy-gateway-auth-wrapper.js
           node --check src/ops-supervisor.js
+          node --check src/ops-state-machine.js
+          node scripts/test-ops-recovery.mjs
           node --check api/binance-signed-relay.mjs
           grep -q '"main": "src/ops-supervisor.js"' wrangler.jsonc
           grep -q 'autonomousExecution: false' src/ops-supervisor.js
