@@ -7,9 +7,8 @@ const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
-const VERCEL_SIGNED_RELAY_URL = "https://tst-spot-signal.vercel.app/api/binance-signed-relay";
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
-const LIVE_ROUTE = "CLOUDFLARE_SIGNED_VERCEL_TRANSPORT";
+const LIVE_ROUTE = "CLOUDFLARE_HMAC_MAKE";
 
 function creds(env) {
   const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN);
@@ -205,40 +204,8 @@ async function executionPriceGate(symbol, referenceEntry, referenceStop, referen
   return {ask,bid,spreadPct:spread*100,deviationPct:deviation*100};
 }
 
-async function signedBinance(env, method, path, params = {}) {
-  const c = creds(env);
-  if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("RELAY_SECRET_UNAVAILABLE");
-
-  const body = JSON.stringify({
-    method: String(method).toUpperCase(),
-    path,
-    network: "production",
-    params,
-  });
-  const ts = String(Date.now());
-  const relaySignature = await hmacHex(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
-  const r = await fetch(VERCEL_SIGNED_RELAY_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-executor-timestamp": ts,
-      "x-executor-signature": relaySignature,
-    },
-    body,
-  });
-  const text = await r.text();
-  let row = {};
-  try { row = JSON.parse(text || "{}"); } catch {
-    row = { ok: false, status: "BAD_RELAY_RESPONSE", relayHttpStatus: r.status };
-  }
-  if (!r.ok || row.ok !== true) {
-    const detail = row?.upstream?.code != null
-      ? `${row.upstream.code} ${row.upstream.msg || ""} signer=${row.upstream.signerMode || "UNKNOWN"}`
-      : (row.reason || row.status || r.status);
-    throw new Error(`BINANCE_RELAY_ERROR: ${detail}`);
-  }
-  return row.data;
+async function signedBinance() {
+  throw new Error("LEGACY_VERCEL_SIGNER_REVOKED");
 }
 
 function safeRelayDiagnostic(errorText) {
@@ -786,9 +753,8 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
-      const balance=await refreshBalance(env);
-      await notifyExecutionReadinessTransition(env,balance);
-      if (creds(env).credentialMode === "LIVE") await sendPromptForActive(env);
+      // Live execution is fail-closed during Make bridge cutover.
+      // No legacy Vercel signer calls and no automatic live prompts are allowed here.
     })());
-  },
+  }
 };
