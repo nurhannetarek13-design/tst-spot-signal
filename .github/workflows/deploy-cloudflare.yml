@@ -52,6 +52,7 @@ jobs:
           node --check src/make-live-client.js
           node scripts/test-ops-recovery.mjs
           node scripts/test-live-cutover-policy.mjs
+          node scripts/test-binance-spot-filters.mjs
           node --check api/binance-signed-relay.mjs
           grep -q '"main": "src/ops-supervisor.js"' wrangler.jsonc
           grep -q 'autonomousExecution: false' src/ops-supervisor.js
