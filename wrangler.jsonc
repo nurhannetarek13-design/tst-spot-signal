@@ -9,6 +9,14 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "LIVE_EXECUTION_ENABLED": "false",
+    "AUTONOMOUS_ENABLED": "false",
+    "E2E_ARMED": "false",
+    "MAX_ORDER_USDT": "5.5",
+    "MAX_OPEN_POSITIONS": "1",
+    "DAILY_LOSS_CAP_USDT": "0.5"
+  },
   "durable_objects": {
     "bindings": [
       { "name": "STATE_COORDINATOR", "class_name": "SignalState" }
