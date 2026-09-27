@@ -140,6 +140,27 @@ export default {
         noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
+    if (url.pathname === "/bridge-sign-dry-handshake" && request.method === "POST") {
+      const signed = await signBridgeEnvelope(env, {
+        signal_id: "prodhandshake",
+        action: "DRY_AUTH_TEST",
+        symbol: "BTCUSDT",
+        quote_amount_usdt: 0,
+        take_profit_price: 0,
+        stop_loss_price: 0,
+        stop_limit_price: 0,
+        quantity: 0,
+        order_list_id: 0,
+        confirmed: false,
+        dry_run: true,
+      });
+      return Response.json({
+        ok: true,
+        envelope: signed,
+        financialAction: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
     if (url.pathname === "/bridge-auth-status") {
       return Response.json({
         ok: true,
