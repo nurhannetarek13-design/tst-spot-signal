@@ -684,6 +684,7 @@ export default {
         autoBuy: false,
         makeExecutionGatewayPrepared: true,
         makeExecutionGatewayActive: false,
+        executorConfigured,
         oldVercelFallback: false,
         noSecretValuesExposed: true,
       });
@@ -694,13 +695,15 @@ export default {
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
       const reconciliation = await getState(env, "ops:reconciliation:last");
       const opsState = await getState(env, "ops:state");
+      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
       const infrastructureReady = c.route === LIVE_ROUTE && telegramConfigured;
+      const blocker = executorConfigured ? "LIVE_POLICY_DISABLED" : "MAKE_EXECUTOR_V2_INCOMPLETE";
       return Response.json({
         ok: true,
         status: "LIVE_EXECUTION_BLOCKED",
         infrastructureReady,
         executionReady: false,
-        blocker: "LIVE_POLICY_DISABLED",
+        blocker,
         credentialMode: c.credentialMode,
         executionRoute: c.route,
         telegramConfigured,
@@ -723,11 +726,12 @@ export default {
 
     if (url.pathname === "/balance-refresh") {
       const reconciliation = await getState(env, "ops:reconciliation:last");
+      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
       return Response.json({
         ok: reconciliation?.ok === true,
         canTrade: false,
         accountSafetyOk: false,
-        accountSafetyReasons: ["LIVE_POLICY_DISABLED"],
+        accountSafetyReasons: [executorConfigured ? "LIVE_POLICY_DISABLED" : "MAKE_EXECUTOR_V2_INCOMPLETE"],
         credentialMode: creds(env).credentialMode,
         autoBuy: false,
         executionRoute: LIVE_ROUTE,
