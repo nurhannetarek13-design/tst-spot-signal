@@ -460,9 +460,25 @@ async function refreshBalance(env) {
   }
 }
 
-async function requireFreshMakeV2ExecutionRoute(env) {
+async function requireFreshExecutionRoute(env) {
+  if (executionProvider(env) === "SUPABASE_V2") {
+    const heartbeat = await executionReadOnlyHeartbeat(env);
+    if (heartbeat?.transportOk !== true) {
+      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
+    }
+    if (heartbeat?.body?.canTrade !== true || heartbeat?.body?.financialAction !== false) {
+      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_NOT_VERIFIED");
+    }
+    return {
+      ok: true,
+      provider: "SUPABASE_V2",
+      routeVersion: String(heartbeat?.body?.routeVersion || "supabase-v2"),
+      checkedAt: Date.now(),
+    };
+  }
+
   const startedAt = Date.now();
-  const watchdog = await makeReadOnlyHeartbeat(env);
+  const watchdog = await executionReadOnlyHeartbeat(env);
   if (watchdog?.transportOk !== true) {
     throw new Error("MAKE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
   }
@@ -479,6 +495,7 @@ async function requireFreshMakeV2ExecutionRoute(env) {
   }
   return {
     ok:true,
+    provider:"MAKE_V2",
     buyAcceptedAt:Number(buyAudit.acceptedAt || 0),
     ocoAcceptedAt:Number(ocoAudit.acceptedAt || 0),
     routeVersion:String(buyAudit.routeVersion || ocoAudit.routeVersion || "v2"),
@@ -495,7 +512,7 @@ async function executeConfirmedBuy(env, s) {
   if (!operational.ok) {
     throw new Error("EXECUTION_OPERATIONAL_GATE_FAILED");
   }
-  await requireFreshMakeV2ExecutionRoute(env);
+  await requireFreshExecutionRoute(env);
 
   const symbol = String(s.symbol || "").toUpperCase();
   if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) throw new Error("BAD_SYMBOL");
