@@ -804,13 +804,24 @@ export default {
         let operationalOk = false;
         let buyVerified = false;
         let ocoVerified = false;
+        let reconciliation = null;
 
         if (providerNow === "SUPABASE_V2") {
+          reconciliation = await executionReadOnlyReconcile(env);
           operationalOk = watchdog?.transportOk === true
             && watchdog?.body?.canTrade === true
-            && watchdog?.body?.financialAction === false;
+            && watchdog?.body?.financialAction === false
+            && reconciliation?.ok === true;
           buyVerified = operationalOk;
           ocoVerified = operationalOk;
+
+          await recordReconciliation(env, {
+            ok: reconciliation?.ok === true,
+            reason: reconciliation?.ok === true ? null : String(reconciliation?.status || "SUPABASE_RECONCILIATION_FAILED"),
+            open_orders_checked: Number(reconciliation?.openOrdersChecked || 0),
+            protected_orders_checked: Number(reconciliation?.protectedOrderLists || 0),
+            source: "SUPABASE_V2_READONLY_RECONCILIATION",
+          });
         } else {
           const [buyAudit, ocoAudit] = await Promise.all([
             getState(env, "bridge:route:BUY_V2"),
@@ -823,42 +834,35 @@ export default {
             && String(ocoAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
             && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
           operationalOk = buyVerified && ocoVerified;
+
+          if (!operationalOk) {
+            await recordReconciliation(env, {
+              ok: false,
+              reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
+              open_orders_checked: 0,
+              protected_orders_checked: 0,
+              source: "MAKE_V2_READONLY_WATCHDOG",
+            });
+          }
         }
 
         if (operationalOk) {
-          const source = providerNow === "SUPABASE_V2"
-            ? "SUPABASE_V2_READONLY_WATCHDOG"
-            : "MAKE_V2_READONLY_WATCHDOG";
           await putState(env, "bridge:health", {
             ok: true,
             at: now,
             route: executionRoute(env),
             routeVersion: routeVersion(env),
-            source,
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
           });
           await putState(env, "bridge:ownership", {
             owner: executionOwner(env),
             at: now,
             exclusive: true,
             routeVersion: routeVersion(env),
-            source,
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
           });
-          await recordReconciliation(env, {
-            ok: true,
-            open_orders_checked: 0,
-            protected_orders_checked: 0,
-            source,
-          });
-          await heartbeat(env, ["binance-readonly", "offsite-backup"], { source });
-          const refreshed = await computeState(env);
-          await alertTransition(env, refreshed);
-        } else if (providerNow !== "SUPABASE_V2") {
-          await recordReconciliation(env, {
-            ok: false,
-            reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
-            open_orders_checked: 0,
-            protected_orders_checked: 0,
-            source: "MAKE_V2_READONLY_WATCHDOG",
+          await heartbeat(env, ["binance-readonly", "offsite-backup"], {
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG"
           });
         }
 
@@ -873,6 +877,10 @@ export default {
           routeVersion: routeVersion(env),
           buyVerified,
           ocoVerified,
+          reconciliationOk: providerNow === "SUPABASE_V2" ? reconciliation?.ok === true : null,
+          openOrdersChecked: providerNow === "SUPABASE_V2" ? Number(reconciliation?.openOrdersChecked || 0) : null,
+          protectedOrderLists: providerNow === "SUPABASE_V2" ? Number(reconciliation?.protectedOrderLists || 0) : null,
+          orphanBotOrders: providerNow === "SUPABASE_V2" ? Number(reconciliation?.orphanBotOrders || 0) : null,
           httpStatus: Number(watchdog?.httpStatus || 0),
           status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
         });
