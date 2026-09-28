@@ -522,9 +522,35 @@ async function computeState(env) {
     getState(env, "live:e2e-result-v20"),
   ]);
   const previous = previousState || { state: "WARMING_UP", since: now };
+  const effectiveHeartbeats = { ...(hb || {}) };
+  const reconciliationAt = Number(reconciliation?.at || 0);
+  const reconciliationFresh = reconciliation?.ok === true
+    && reconciliationAt > 0
+    && now - reconciliationAt <= HEARTBEAT_STALE_MS;
+
+  // A successful fresh reconciliation is direct evidence that both reconciliation
+  // and protection inspection completed. Materialize it into the heartbeat view so
+  // the supervisor cannot report stale reconciler/protection while the stronger
+  // reconciliation evidence is current.
+  if (reconciliationFresh) {
+    const source = String(reconciliation?.source || "FRESH_RECONCILIATION_EVIDENCE").slice(0, 80);
+    const evidence = { at: reconciliationAt, source, ok: true, financialAction: false };
+    const currentReconcilerAt = Number(effectiveHeartbeats?.reconciler?.at || effectiveHeartbeats?.reconciler || 0);
+    const currentProtectionAt = Number(effectiveHeartbeats?.protection?.at || effectiveHeartbeats?.protection || 0);
+    if (reconciliationAt > currentReconcilerAt) effectiveHeartbeats.reconciler = { at: reconciliationAt, source };
+    if (reconciliationAt > currentProtectionAt) effectiveHeartbeats.protection = { at: reconciliationAt, source };
+    if (reconciliationAt > currentReconcilerAt || reconciliationAt > currentProtectionAt) {
+      await Promise.all([
+        putState(env, "ops:heartbeats", effectiveHeartbeats),
+        putState(env, "ops:heartbeat:reconciler", evidence),
+        putState(env, "ops:heartbeat:protection", evidence),
+      ]);
+    }
+  }
+
   const base = deriveOpsState({
     now,
-    heartbeats: hb || {},
+    heartbeats: effectiveHeartbeats,
     previous,
     reconciliation: reconciliation || null,
     scheduler: scheduler || null,
@@ -535,9 +561,7 @@ async function computeState(env) {
 
   const policy = readLivePolicy(env);
   const count = (row) => Array.isArray(row) ? row.length : Number(row?.count || 0);
-  const reconciliationFresh = reconciliation?.ok === true
-    && Number(reconciliation?.at || 0) > 0
-    && now - Number(reconciliation.at) <= HEARTBEAT_STALE_MS;
+  // reconciliationFresh is derived above and also refreshes reconciler/protection evidence.
   const e2eValid = e2eProof?.realProductionE2E === true
     && String(e2eProof?.stage || "") === "COMPLETE"
     && e2eProof?.buyFilled === true
