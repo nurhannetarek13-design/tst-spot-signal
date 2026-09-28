@@ -14,6 +14,9 @@ on:
       - "src/bridge-auth.js"
       - "src/live-cutover-policy.js"
       - "src/make-live-client.js"
+      - "src/live-execution-router.js"
+      - "src/supabase-live-client.js"
+      - "src/binance-spot-filters.js"
       - "wrangler.jsonc"
 
 permissions:
@@ -60,23 +63,23 @@ jobs:
           print("WS_BINANCE_CODE=",r.get('binanceCode'))
           PY
 
-      - name: Verify immutable Vercel relay read-only access
+      - name: Report legacy Vercel relay status without requiring it
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           curl --silent --show-error --max-time 20 \
             "$WORKER_URL/vercel-immutable-relay-preflight?nonce=$(date +%s%N)" \
-            -o /tmp/immutable.json
-          cat /tmp/immutable.json
+            -o /tmp/immutable.json || true
+          cat /tmp/immutable.json 2>/dev/null || true
           python - <<'PY'
           import json
-          r=json.load(open('/tmp/immutable.json'))
-          assert r.get('ok') is True
-          assert r.get('canTrade') is True
-          assert r.get('status') in {'SIGNED_BINANCE_RELAY_OK','BINANCE_RELAY_OK','BINANCE_READONLY_RELAY_OK'}
-          assert r.get('financialAction') is False
-          assert r.get('noBalanceValuesExposed') is True
-          assert r.get('noSecretValuesExposed') is True
+          try: r=json.load(open('/tmp/immutable.json'))
+          except Exception: r={}
+          if r:
+            assert r.get('financialAction') is False
+            assert r.get('noSecretValuesExposed') is True
+          print("legacyVercelOk=",r.get('ok'),"status=",r.get('status'))
           PY
 
       - name: Verify direct Cloudflare Binance read-only access
@@ -105,13 +108,19 @@ jobs:
           import json
           r=json.load(open('/tmp/runtime.json'))
           assert r.get('ok') is True
-          assert r.get('credentialMode') == 'LIVE'
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          provider=r.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
+          assert provider in {'MAKE_V2','SUPABASE_V2'}
+          assert r.get('executionRoute') == expected_route
           assert r.get('telegramConfigured') is True
           assert r.get('atomicConfirmClaim') is True
           assert r.get('fastSignalIngest') is True
           assert r.get('oneTapConfirm') is True
           assert r.get('autoBuy') is False
+          assert r.get('oldVercelFallback') is False
           assert r.get('noSecretValuesExposed') is True
           PY
 
@@ -127,21 +136,24 @@ jobs:
           import json
           r=json.load(open('/tmp/readiness.json'))
           assert r.get('ok') is True
-          assert r.get('infrastructureReady') is True
+          provider=r.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
+          assert provider in {'MAKE_V2','SUPABASE_V2'}
+          assert r.get('executionRoute') == expected_route
           assert r.get('railwayDependency') is False
-          assert r.get('binanceCredentialOwner') == 'MAKE_CONNECTION'
-          assert r.get('cloudflareBinanceCredentialsRequired') is False
           assert r.get('telegramConfigured') is True
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
+          assert r.get('liveExecutionEnabled') is False
+          assert r.get('e2eArmed') is False
           assert r.get('autonomousExecution') is False
-          assert r.get('liveExecutionEnabled') is True
-          assert r.get('e2eArmed') is True
           assert r.get('manualOnly') is True
-          assert r.get('executionReady') is True
-          assert r.get('status') == 'MANUAL_LIVE_E2E_ARMED'
-          assert r.get('blocker') is None
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          assert r.get('executionReady') is False
+          assert r.get('status') == 'LIVE_EXECUTION_BLOCKED'
+          assert r.get('blocker') in {'EXECUTOR_INCOMPLETE','OPERATIONAL_GO_REQUIRED','LIVE_POLICY_DISABLED'}
           assert r.get('oldVercelFallback') is False
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
@@ -171,14 +183,20 @@ jobs:
           assert b.get('replay') == 'REPLAY_BLOCKED'
           assert b.get('oldVercelFallback') is False
           assert g.get('ok') is True
-          assert g.get('go') is True
+          provider=g.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
+          assert provider in {'MAKE_V2','SUPABASE_V2'}
+          assert g.get('executionRoute') == expected_route
+          assert g.get('go') is False
           assert g.get('activationAllowed') is False
-          assert 'LIVE_EXECUTION_ENABLED' not in g.get('activationFailed', [])
-          assert 'AUTONOMOUS_ENABLED' in g.get('activationFailed', [])
-          assert g.get('e2eArmed') is True
+          assert g.get('e2eArmed') is False
           assert g.get('manualE2EComplete') is False
-          assert g.get('manualExecutionAllowed') is True
-          assert g.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          assert g.get('manualExecutionAllowed') is False
+          assert g.get('liveTrading') is False
+          assert g.get('autonomousExecution') is False
           PY
 
       - name: Verify Telegram webhook ownership

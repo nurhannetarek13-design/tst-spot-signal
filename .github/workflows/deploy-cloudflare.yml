@@ -16,6 +16,9 @@ on:
       - "src/bridge-auth.js"
       - "src/live-cutover-policy.js"
       - "src/make-live-client.js"
+      - "src/live-execution-router.js"
+      - "src/supabase-live-client.js"
+      - "src/binance-spot-filters.js"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-cloudflare.yml"
 
@@ -50,6 +53,8 @@ jobs:
           node --check src/bridge-auth.js
           node --check src/live-cutover-policy.js
           node --check src/make-live-client.js
+          node --check src/live-execution-router.js
+          node --check src/supabase-live-client.js
           grep -q 'id: "BUY_V2"' src/make-live-client.js
           grep -q 'id: "OCO_V2"' src/make-live-client.js
           grep -q 'r9cqpv68bbj2zb01jitfmzk8iqb2zh16' src/make-live-client.js
@@ -69,7 +74,9 @@ jobs:
           grep -q 'deadManMonitoring: true' src/ops-supervisor.js
           grep -q 'recoveryStateMachine: true' src/ops-supervisor.js
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
-          grep -q 'CLOUDFLARE_HMAC_MAKE' src/buy-gateway-stable.js
+          grep -q 'executionRoute(env)' src/buy-gateway-stable.js
+          grep -q 'executionProvider(env)' src/buy-gateway-stable.js
+          grep -q 'SUPABASE_V2' src/live-execution-router.js
           grep -q 'LEGACY_VERCEL_SIGNER_REVOKED' api/binance-signed-relay.mjs
           grep -q 'oldVercelFallback: false' src/buy-gateway-stable.js
           grep -q 'liveExecutionEnabled: false' src/live-cutover-policy.js
@@ -82,7 +89,9 @@ jobs:
           grep -q '"E2E_ARMED": "false"' wrangler.jsonc
           grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
           node scripts/test-make-v2-manual-route.mjs
-          grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
+          grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/supabase-live-client.js
+          grep -q 'OCO_SUBMISSION_UNKNOWN' src/supabase-live-client.js
+          grep -q 'mayResend: false' src/supabase-live-client.js
           grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
           grep -q 'TELEGRAM_WEBHOOK_OK' src/buy-gateway-stable.js
           if grep -Eq 'withdraw|fapi|leverage|margin' api/binance-signed-relay.mjs; then
@@ -113,18 +122,22 @@ jobs:
           import json,sys
           try: r=json.load(open('/tmp/runtime.json'))
           except Exception: sys.exit(1)
+          provider=r.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
           checks=[
             r.get('ok') is True,
-            r.get('credentialMode') == 'LIVE',
-            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
-            r.get('executorConfigured') is False,
-            r.get('binanceCredentialOwner') == 'MAKE_CONNECTION',
-            r.get('cloudflareBinanceCredentialsRequired') is False,
+            provider in {'MAKE_V2','SUPABASE_V2'},
+            r.get('executionRoute') == expected_route,
+            isinstance(r.get('executorConfigured'), bool),
             r.get('telegramConfigured') is True,
             r.get('atomicConfirmClaim') is True,
             r.get('fastSignalIngest') is True,
             r.get('oneTapConfirm') is True,
             r.get('autoBuy') is False,
+            r.get('oldVercelFallback') is False,
             r.get('noSecretValuesExposed') is True,
           ]
           sys.exit(0 if all(checks) else 1)
@@ -147,21 +160,24 @@ jobs:
           import json
           r=json.load(open('/tmp/readiness.json'))
           assert r.get('ok') is True
-          assert r.get('infrastructureReady') is False
+          provider=r.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
+          assert provider in {'MAKE_V2','SUPABASE_V2'}
+          assert r.get('executionRoute') == expected_route
           assert r.get('railwayDependency') is False
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
-          assert r.get('autonomousExecution') is False
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
           assert r.get('status') == 'LIVE_EXECUTION_BLOCKED'
           assert r.get('executionReady') is False
-          assert r.get('blocker') == 'MAKE_EXECUTOR_V2_INCOMPLETE'
-          assert r.get('executorConfigured') is False
           assert r.get('liveExecutionEnabled') is False
           assert r.get('e2eArmed') is False
           assert r.get('autonomousExecution') is False
           assert r.get('manualOnly') is True
+          assert r.get('blocker') in {'EXECUTOR_INCOMPLETE','OPERATIONAL_GO_REQUIRED','LIVE_POLICY_DISABLED'}
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           PY
@@ -205,14 +221,17 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
-      - name: Verify Make V2 remains fail-closed while external Make is paused
+      - name: Verify execution providers remain fail-closed before cutover
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
+          grep -q '"LIVE_EXECUTION_ENABLED": "false"' wrangler.jsonc
+          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"E2E_ARMED": "false"' wrangler.jsonc
+          grep -q 'const WRITES_ENABLED = false' supabase/functions/tst-binance-relay/index.ts
           grep -q 'id: "BUY_V2"' src/make-live-client.js
           grep -q 'id: "OCO_V2"' src/make-live-client.js
-          echo "MAKE_V2_FAIL_CLOSED_EXTERNAL_PAUSE"
+          echo "EXECUTION_PROVIDERS_FAIL_CLOSED"
 
       - name: Verify HMAC bridge auth and replay protection
         if: always()
@@ -245,15 +264,19 @@ jobs:
           r=json.load(open('/tmp/gate.json'))
           checks=r.get('checks',{})
           assert r.get('ok') is True
+          provider=r.get('executionProvider')
+          expected_route={
+            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
+            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
+          }.get(provider)
+          assert provider in {'MAKE_V2','SUPABASE_V2'}
+          assert r.get('executionRoute') == expected_route
           assert r.get('go') is False
           assert r.get('activationAllowed') is False
           assert r.get('status') == 'NO_GO'
-          assert r.get('executorConfigured') is False
           assert r.get('e2eArmed') is False
           assert r.get('manualE2EComplete') is False
           assert r.get('manualExecutionAllowed') is False
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
-          assert checks.get('EXECUTION_ROUTE_HEALTHY') is False
           assert checks.get('NO_UNKNOWN_ORDERS') is True
           assert checks.get('NO_UNPROTECTED_POSITIONS') is True
           assert r.get('liveTrading') is False
