@@ -110,7 +110,16 @@ function json(status:number, payload:unknown){
 Deno.serve(async (req:Request) => {
   if(req.method === "GET"){
     const requestUrl = new URL(req.url);
-    if(["public","time"].includes(requestUrl.searchParams.get("probe") || "")){
+    const probe=String(requestUrl.searchParams.get("probe") || "");
+    const region=Deno.env.get("SB_REGION") || null;
+    const baseMeta={
+      region,
+      financialAction:false,
+      financialWritesEnabled:WRITES_ENABLED,
+      noBinanceSecretStored:true,
+    };
+
+    if(["public","time"].includes(probe)){
       try{
         const upstream = await fetch(`${BASE}/api/v3/time`, {
           method:"GET",
@@ -124,30 +133,61 @@ Deno.serve(async (req:Request) => {
           upstreamHttpStatus:upstream.status,
           binanceCode:data?.code ?? null,
           serverTime:Number(data?.serverTime || 0) || null,
-          region:Deno.env.get("SB_REGION") || null,
-          financialAction:false,
-          financialWritesEnabled:WRITES_ENABLED,
-          noBinanceSecretStored:true,
+          ...baseMeta,
         });
       }catch(error){
         return json(200,{
           ok:false,
           status:"BINANCE_PUBLIC_CONNECTIVITY_ERROR",
           reason:String(error?.name || "FetchError"),
-          region:Deno.env.get("SB_REGION") || null,
-          financialAction:false,
-          financialWritesEnabled:WRITES_ENABLED,
-          noBinanceSecretStored:true,
+          ...baseMeta,
         });
       }
     }
+
+    if(["exchangeInfo","bookTicker"].includes(probe)){
+      const symbol=String(requestUrl.searchParams.get("symbol") || "").toUpperCase();
+      if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol)){
+        return json(400,{ok:false,status:"BAD_PUBLIC_SYMBOL",...baseMeta});
+      }
+      const endpoint=probe==="exchangeInfo"
+        ? `/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`
+        : `/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`;
+      try{
+        const upstream=await fetch(`${BASE}${endpoint}`,{
+          method:"GET",
+          headers:{"accept":"application/json","cache-control":"no-store"},
+          signal:AbortSignal.timeout(10_000),
+        });
+        const data=await upstream.json().catch(()=>({}));
+        const ok=upstream.ok && !(typeof data?.code==="number" && data.code<0);
+        return json(ok?200:(upstream.status||502),{
+          ok,
+          status:ok?"BINANCE_PUBLIC_DATA_OK":"BINANCE_PUBLIC_DATA_REJECTED",
+          upstreamHttpStatus:upstream.status,
+          binanceCode:data?.code ?? null,
+          data:ok?data:undefined,
+          endpoint:probe,
+          symbol,
+          ...baseMeta,
+        });
+      }catch(error){
+        return json(503,{
+          ok:false,
+          status:"BINANCE_PUBLIC_DATA_ERROR",
+          reason:String(error?.name || "FetchError"),
+          endpoint:probe,
+          symbol,
+          ...baseMeta,
+        });
+      }
+    }
+
     return json(200,{
       ok:true,
       status:"SUPABASE_BINANCE_RELAY_READY",
-      financialWritesEnabled:WRITES_ENABLED,
       authMode:"BINANCE_SIGNED_CAPABILITY",
-      region:Deno.env.get("SB_REGION") || null,
-      noBinanceSecretStored:true,
+      ...baseMeta,
     });
   }
 
