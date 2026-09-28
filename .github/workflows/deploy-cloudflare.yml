@@ -76,7 +76,8 @@ jobs:
           node scripts/test-make-v2-manual-route.mjs
           node --check api/binance-signed-relay.mjs
           grep -q '"main": "src/ops-supervisor.js"' wrangler.jsonc
-          grep -q 'autonomousExecution: false' src/ops-supervisor.js
+          grep -q 'manualApprovalOnly' src/ops-supervisor.js
+          grep -q 'policy.autonomousEnabled === true' src/ops-supervisor.js
           grep -q 'deadManMonitoring: true' src/ops-supervisor.js
           grep -q 'recoveryStateMachine: true' src/ops-supervisor.js
           grep -q 'from "./buy-gateway-stable.js"' src/buy-gateway-time-monitor.js
