@@ -56,45 +56,75 @@ async function cloudflareDirectBinanceReadOnlyPreflight(env) {
   if (!c.key || !c.secret) {
     return { ok: false, status: "CLOUDFLARE_BINANCE_CREDENTIALS_MISSING", financialAction: false };
   }
-  const qs = new URLSearchParams({
-    omitZeroBalances: "true",
-    recvWindow: "5000",
-    timestamp: String(Date.now()),
-  }).toString();
-  const signature = await hmacHexRaw(c.secret, qs);
-  try {
-    const r = await fetch(`https://api.binance.com/api/v3/account?${qs}&signature=${signature}`, {
-      method: "GET",
-      headers: {
-        "X-MBX-APIKEY": c.key,
-        "accept": "application/json",
-        "cache-control": "no-store",
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    const row = await r.json().catch(() => ({}));
-    return {
-      ok: r.ok && !(Number(row?.code) < 0),
-      status: r.ok ? "CLOUDFLARE_DIRECT_BINANCE_READONLY_OK" : "CLOUDFLARE_DIRECT_BINANCE_READONLY_FAILED",
-      httpStatus: r.status,
-      binanceCode: row?.code ?? null,
-      canTrade: row?.canTrade === true,
-      accountType: row?.accountType || null,
-      financialAction: false,
-      noBalanceValuesExposed: true,
-      noSecretValuesExposed: true,
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      status: "CLOUDFLARE_DIRECT_BINANCE_UNREACHABLE",
-      reason: String(e?.message || e).slice(0, 100),
-      financialAction: false,
-      noSecretValuesExposed: true,
-    };
+  const bases = [
+    "https://api-gcp.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+    "https://api.binance.com",
+  ];
+  const attempts = [];
+  for (const base of bases) {
+    const qs = new URLSearchParams({
+      omitZeroBalances: "true",
+      recvWindow: "5000",
+      timestamp: String(Date.now()),
+    }).toString();
+    const signature = await hmacHexRaw(c.secret, qs);
+    try {
+      const r = await fetch(`${base}/api/v3/account?${qs}&signature=${signature}`, {
+        method: "GET",
+        headers: {
+          "X-MBX-APIKEY": c.key,
+          "accept": "application/json",
+          "cache-control": "no-store",
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const row = await r.json().catch(() => ({}));
+      attempts.push({
+        host: new URL(base).host,
+        httpStatus: r.status,
+        binanceCode: row?.code ?? null,
+      });
+      if (r.ok && !(Number(row?.code) < 0)) {
+        return {
+          ok: true,
+          status: "CLOUDFLARE_DIRECT_BINANCE_READONLY_OK",
+          httpStatus: r.status,
+          binanceCode: row?.code ?? null,
+          canTrade: row?.canTrade === true,
+          accountType: row?.accountType || null,
+          workingBaseHost: new URL(base).host,
+          attempts,
+          financialAction: false,
+          noBalanceValuesExposed: true,
+          noSecretValuesExposed: true,
+        };
+      }
+      // A signed Binance application error proves reachability; no point
+      // spraying alternate hosts for invalid credentials/permissions.
+      if (Number(row?.code) < 0) break;
+    } catch (e) {
+      attempts.push({
+        host: new URL(base).host,
+        httpStatus: null,
+        binanceCode: null,
+        reason: String(e?.name || "FETCH_ERROR"),
+      });
+    }
   }
+  return {
+    ok: false,
+    status: "CLOUDFLARE_DIRECT_BINANCE_READONLY_FAILED",
+    canTrade: false,
+    attempts,
+    financialAction: false,
+    noBalanceValuesExposed: true,
+    noSecretValuesExposed: true,
+  };
 }
-
 async function vercelImmutableRelayReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
