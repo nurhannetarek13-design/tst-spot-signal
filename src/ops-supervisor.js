@@ -1119,11 +1119,21 @@ export default {
         let reconciliation = null;
 
         if (providerNow === "SUPABASE_V2") {
-          reconciliation = await executionReadOnlyReconcile(env);
-          operationalOk = watchdog?.transportOk === true
+          const binanceReadonlyOk = watchdog?.transportOk === true
             && watchdog?.body?.canTrade === true
-            && watchdog?.body?.financialAction === false
-            && reconciliation?.ok === true;
+            && watchdog?.body?.financialAction === false;
+
+          // Record the Binance read-only heartbeat immediately from the successful
+          // account read. Do not let reconciliation or auxiliary state writes
+          // suppress this critical health signal.
+          if (binanceReadonlyOk) {
+            await heartbeat(env, ["binance-readonly"], {
+              source: "SUPABASE_V2_READONLY_WATCHDOG",
+            });
+          }
+
+          reconciliation = await executionReadOnlyReconcile(env);
+          operationalOk = binanceReadonlyOk && reconciliation?.ok === true;
           buyVerified = operationalOk;
           ocoVerified = operationalOk;
 
@@ -1134,11 +1144,13 @@ export default {
             protected_orders_checked: Number(reconciliation?.protectedOrderLists || 0),
             source: "SUPABASE_V2_READONLY_RECONCILIATION",
           });
+
+          // This bookkeeping is useful but must never block supervisor recovery.
           await putState(env, "live:unprotected-positions",
             Number(reconciliation?.orphanBotOrders || 0) > 0
               ? [{ source:"SUPABASE_V2", count:Number(reconciliation.orphanBotOrders || 0), at:now }]
               : []
-          );
+          ).catch(() => {});
         } else {
           const [buyAudit, ocoAudit] = await Promise.all([
             getState(env, "bridge:route:BUY_V2"),
