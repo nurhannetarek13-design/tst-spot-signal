@@ -507,63 +507,144 @@ export function supabaseExecutionConfigured(env = {}) {
     && String(env.SUPABASE_EXECUTOR_READY || "").toLowerCase() === "true";
 }
 
+function botClientId(value) {
+  return /^TST[A-Z][A-Za-z0-9_-]*$/.test(String(value || ""));
+}
+
+function recognizedBotClientId(value) {
+  return /^(TSTB|TSTQ|TSTO|TSTC|TSTT|TSTS|TSTU|TSTV|TSTX|TSTW)[A-Za-z0-9_-]*$/.test(String(value || ""));
+}
+
+function freeBalance(accountData, asset) {
+  const balances = Array.isArray(accountData?.balances) ? accountData.balances : [];
+  const row = balances.find((x) => String(x?.asset || "") === String(asset || ""));
+  const free = Number(row?.free || 0);
+  return Number.isFinite(free) && free >= 0 ? free : 0;
+}
+
 export async function supabaseReadOnlyReconcile(env) {
-  const [account, openOrders] = await Promise.all([
+  const [account, openOrders, openLists, restrictions, accountStatus] = await Promise.all([
     relay(env, "GET", "/api/v3/account", { omitZeroBalances: "true" }, 15000),
     relay(env, "GET", "/api/v3/openOrders", {}, 15000),
+    relay(env, "GET", "/api/v3/openOrderList", {}, 15000),
+    relay(env, "GET", "/sapi/v1/account/apiRestrictions", {}, 15000),
+    relay(env, "GET", "/sapi/v1/account/status", {}, 15000),
   ]);
 
-  if (!account.ok || !openOrders.ok) {
+  const allReadsOk = [account, openOrders, openLists, restrictions, accountStatus].every((r) => r?.ok === true);
+  if (!allReadsOk) {
     return {
       ok: false,
       status: "SUPABASE_RECONCILIATION_READ_FAILED",
       accountOk: account.ok === true,
       openOrdersOk: openOrders.ok === true,
+      openOrderListsOk: openLists.ok === true,
+      apiRestrictionsOk: restrictions.ok === true,
+      accountStatusOk: accountStatus.ok === true,
       canTrade: account.data?.canTrade === true,
+      noUnknownOrders: false,
+      noUnprotectedPositions: false,
       openOrdersChecked: 0,
       botOpenOrders: 0,
       protectedOrderLists: 0,
-      orphanBotOrders: 0,
+      unknownBotOrders: 0,
+      unprotectedBotOrders: 0,
       financialAction: false,
+      diagnostics: {
+        account: account.diagnostics || null,
+        openOrders: openOrders.diagnostics || null,
+        openOrderLists: openLists.diagnostics || null,
+        restrictions: restrictions.diagnostics || null,
+        accountStatus: accountStatus.diagnostics || null,
+      },
     };
   }
 
   const rows = Array.isArray(openOrders.data) ? openOrders.data : [];
-  const botRows = rows.filter((row) => /^TST[A-Z]/.test(String(row?.clientOrderId || "")));
-  const ocoRows = botRows.filter((row) => Number(row?.orderListId ?? -1) >= 0);
-  const listGroups = new Map();
-  for (const row of ocoRows) {
-    const id = String(row.orderListId);
-    const current = listGroups.get(id) || [];
-    current.push(row);
-    listGroups.set(id, current);
-  }
-  const protectedOrderLists = [...listGroups.values()].filter((items) => {
-    const ids = items.map((x) => String(x?.clientOrderId || ""));
-    return ids.some((id) => id.startsWith("TSTT")) && ids.some((id) => id.startsWith("TSTS"));
-  }).length;
-  const orphanBotOrders = botRows.filter((row) => {
-    const id = String(row?.clientOrderId || "");
-    if (id.startsWith("TSTT") || id.startsWith("TSTS")) {
-      const group = listGroups.get(String(row?.orderListId ?? -1)) || [];
-      const ids = group.map((x) => String(x?.clientOrderId || ""));
-      return !(ids.some((x) => x.startsWith("TSTT")) && ids.some((x) => x.startsWith("TSTS")));
+  const lists = Array.isArray(openLists.data) ? openLists.data : [];
+  const botRows = rows.filter((row) => botClientId(row?.clientOrderId));
+  const botLists = lists.filter((row) => botClientId(row?.listClientOrderId));
+  const listByOrderListId = new Map(botLists.map((row) => [String(row?.orderListId), row]));
+
+  let protectedOrderLists = 0;
+  const validProtectedListIds = new Set();
+  for (const list of botLists) {
+    const listId = String(list?.orderListId);
+    const childIds = Array.isArray(list?.orders)
+      ? list.orders.map((x) => String(x?.clientOrderId || ""))
+      : rows.filter((x) => String(x?.orderListId) === listId).map((x) => String(x?.clientOrderId || ""));
+    const hasTp = childIds.some((id) => id.startsWith("TSTT") || id.startsWith("TSTU"));
+    const hasStop = childIds.some((id) => id.startsWith("TSTS") || id.startsWith("TSTV"));
+    if (hasTp && hasStop && /^(TSTO|TSTC)/.test(String(list?.listClientOrderId || ""))) {
+      protectedOrderLists++;
+      validProtectedListIds.add(listId);
     }
-    return true;
-  }).length;
+  }
+
+  const unknownRows = botRows.filter((row) => !recognizedBotClientId(row?.clientOrderId));
+  const unprotectedRows = botRows.filter((row) => {
+    const id = String(row?.clientOrderId || "");
+    if (id.startsWith("TSTT") || id.startsWith("TSTS") || id.startsWith("TSTU") || id.startsWith("TSTV")) {
+      return !validProtectedListIds.has(String(row?.orderListId));
+    }
+    // A bot-owned entry/emergency market order must never remain open.
+    return id.startsWith("TSTB") || id.startsWith("TSTQ") || id.startsWith("TSTX") || id.startsWith("TSTW");
+  });
+  const unknownLists = botLists.filter((row) => !/^(TSTO|TSTC)/.test(String(row?.listClientOrderId || "")));
+
+  const permission = restrictions.data || {};
+  const readingAllowed = permission.enableReading === true;
+  const spotTradingPermission = permission.enableSpotAndMarginTrading === true;
+  const prohibitedPermissionEnabled =
+    permission.enableWithdrawals === true ||
+    permission.enableFutures === true ||
+    permission.enableMargin === true;
+
+  const statusValue = String(accountStatus.data?.data ?? accountStatus.data ?? "").toLowerCase();
+  const accountNormal = !statusValue || statusValue === "normal";
+  const noUnknownOrders = unknownRows.length === 0 && unknownLists.length === 0;
+  const noUnprotectedPositions = unprotectedRows.length === 0;
+  const permissionSafe = readingAllowed && !prohibitedPermissionEnabled;
+  const canTrade = account.data?.canTrade === true;
+  const ok = canTrade && accountNormal && permissionSafe && noUnknownOrders && noUnprotectedPositions;
+
+  const assets = Array.isArray(account.data?.balances)
+    ? account.data.balances
+        .filter((x) => Number(x?.free || 0) > 0 || Number(x?.locked || 0) > 0)
+        .map((x) => String(x?.asset || ""))
+        .filter(Boolean)
+        .slice(0, 100)
+    : [];
 
   return {
-    ok: account.data?.canTrade === true && orphanBotOrders === 0,
-    status: account.data?.canTrade === true && orphanBotOrders === 0
-      ? "SUPABASE_RECONCILIATION_OK"
-      : "SUPABASE_RECONCILIATION_FAILED",
-    canTrade: account.data?.canTrade === true,
+    ok,
+    status: ok ? "SUPABASE_RECONCILIATION_OK" : "SUPABASE_RECONCILIATION_FAILED",
+    canTrade,
+    accountNormal,
     accountType: account.data?.accountType || null,
+    readingAllowed,
+    spotTradingPermission,
+    prohibitedPermissionEnabled,
+    noUnknownOrders,
+    noUnprotectedPositions,
     openOrdersChecked: rows.length,
+    openOrderListsChecked: lists.length,
     botOpenOrders: botRows.length,
+    botOpenOrderLists: botLists.length,
     protectedOrderLists,
-    orphanBotOrders,
+    unknownBotOrders: unknownRows.length + unknownLists.length,
+    unprotectedBotOrders: unprotectedRows.length,
+    nonZeroBalanceAssetCount: assets.length,
+    nonZeroBalanceAssets: assets,
+    quoteBalanceAvailable: freeBalance(account.data, "USDT") > 0,
     financialAction: false,
+    diagnostics: {
+      account: account.diagnostics || null,
+      openOrders: openOrders.diagnostics || null,
+      openOrderLists: openLists.diagnostics || null,
+      restrictions: restrictions.diagnostics || null,
+      accountStatus: accountStatus.diagnostics || null,
+    },
   };
 }
 
