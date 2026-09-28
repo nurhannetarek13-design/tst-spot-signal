@@ -17,6 +17,15 @@ let gate=evaluateGoNoGo(healthy);
 assert.equal(gate.go,true);
 assert.equal(gate.activationAllowed,false);
 assert.deepEqual(gate.activationFailed,["LIVE_EXECUTION_ENABLED","AUTONOMOUS_ENABLED"]);
+assert.equal(gate.checks.EMERGENCY_KILL_SWITCH_CLEAR,true);
+
+const killed=evaluateGoNoGo({...healthy,policy:{...LIVE_POLICY,emergencyKillSwitch:true}});
+assert.equal(killed.go,false);
+assert.ok(killed.failed.includes("EMERGENCY_KILL_SWITCH_CLEAR"));
+
+const riskBlocked=evaluateGoNoGo({...healthy,dailyLossUSDT:-0.5});
+assert.equal(riskBlocked.go,false);
+assert.ok(riskBlocked.failed.includes("DAILY_RISK_AVAILABLE"));
 
 assert.deepEqual(protectionDecision({buyStatus:"REJECTED",executedQty:0,ocoAccepted:false}),{action:"NO_POSITION",protectedQty:0});
 assert.deepEqual(protectionDecision({buyStatus:"PARTIALLY_FILLED",executedQty:0.123,ocoAccepted:true}),{action:"PROTECTED",protectedQty:0.123});
