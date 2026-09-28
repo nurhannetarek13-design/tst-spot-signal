@@ -1047,6 +1047,43 @@ export async function supabaseIntentIdempotencySelftest(env) {
   };
 }
 
+export async function supabaseApiKeyOnlyProbe(env) {
+  const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  const pair=binanceCredentials(env);
+  if(!url || !pair.apiKey || !pair.ed25519PrivateKey){
+    return {ok:false,status:"API_KEY_PROBE_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
+  }
+  const method="GET";
+  const path="/api/v3/historicalTrades";
+  const query="symbol=BTCUSDT&limit=1";
+  const auth=await buildRelayAuth(pair,method,path,query);
+  const r=await fetch(url,{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "cache-control":"no-store",
+      "x-region":relayRegion(env),
+    },
+    body:JSON.stringify({
+      method,path,apiKey:pair.apiKey,query,
+      relayTimestamp:auth.relayTimestamp,
+      relayNonce:auth.relayNonce,
+      relaySignature:auth.relaySignature,
+    }),
+    signal:AbortSignal.timeout(15_000),
+  });
+  const data=await r.json().catch(()=>({}));
+  return {
+    ok:r.ok && data?.ok===true,
+    status:String(data?.status || ("HTTP_"+r.status)),
+    httpStatus:r.status,
+    binanceCode:data?.binanceCode ?? null,
+    apiKeyOnlyProbe:true,
+    financialAction:false,
+    noSecretValuesExposed:true,
+  };
+}
+
 export async function supabaseSigningModeProbe(env) {
   const base=binanceCredentials(env);
   const modes=["HMAC","ED25519"];
