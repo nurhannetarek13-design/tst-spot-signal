@@ -20,7 +20,7 @@
     "SUPABASE_BINANCE_REGION": "eu-west-1",
     "EMERGENCY_KILL_SWITCH": "false",
     "SUPABASE_BINANCE_RELAY_URL": "https://irinttijrhicxofsdplo.supabase.co/functions/v1/tst-binance-relay",
-    "MAX_ORDER_USDT": "5.5",
+    "MAX_ORDER_USDT": "25",
     "MAX_OPEN_POSITIONS": "1",
     "DAILY_LOSS_CAP_USDT": "0.5"
   },
