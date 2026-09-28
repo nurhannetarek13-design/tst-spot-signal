@@ -125,6 +125,25 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Supabase manual-live runtime flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            "https://irinttijrhicxofsdplo.supabase.co/functions/v1/tst-binance-relay?nonce=$(date +%s%N)" \
+            -o /tmp/supabase-flags.json
+          cat /tmp/supabase-flags.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/supabase-flags.json'))
+          assert r.get('ok') is True
+          assert r.get('financialWritesEnabled') is True
+          assert r.get('e2eTestMode') is False
+          assert r.get('autonomousEnabled') is False
+          assert r.get('financialAction') is False
+          assert r.get('privateKeyExposed') is False
+          PY
+
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
