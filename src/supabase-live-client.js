@@ -105,12 +105,14 @@ async function claimStateKey(env, key, value, ttlMs = 90 * 24 * 60 * 60 * 1000) 
   return r.ok;
 }
 
-async function updateActiveIntentIndex(env, intentId, state) {
+async function updateActiveIntentIndex(env, intentId, state, row = {}) {
   const key="live:active-intents";
   const current=await getStateKey(env,key);
   const rows=Array.isArray(current)?current.filter(Boolean):[];
   const filtered=rows.filter((x)=>String(x?.intentId||"")!==String(intentId));
-  if (["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED"].includes(String(state))) {
+  const activeState=["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED"].includes(String(state))
+    || (String(state)==="FAILED_SAFE" && row?.unprotectedPosition===true);
+  if (activeState) {
     filtered.push({intentId:String(intentId),state:String(state),updatedAt:Date.now()});
   }
   await putStateKey(env,key,filtered.slice(-20));
@@ -139,7 +141,7 @@ async function writeTradeState(env, intentId, state, patch = {}) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ value: row, expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000 }),
   });
-  await updateActiveIntentIndex(env,intentId,state);
+  await updateActiveIntentIndex(env,intentId,state,row);
   return row;
 }
 
@@ -933,7 +935,7 @@ export async function supabaseReconcileTradeByIntent(env, intentId) {
   const state=await readTradeState(env,intentId);
   if(!state) return {ok:false,status:"TRADE_INTENT_NOT_FOUND",intentId,financialAction:false};
   if(state.state==="EXITED") return {ok:true,status:"TRADE_ALREADY_EXITED",intentId,state,financialAction:false};
-  if(!["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED"].includes(String(state.state||""))){
+  if(!["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED","FAILED_SAFE"].includes(String(state.state||""))){
     return {ok:true,status:"TRADE_NOT_ACTIVE",intentId,state,financialAction:false};
   }
 
@@ -970,6 +972,21 @@ export async function supabaseReconcileTradeByIntent(env, intentId) {
   const baseRow=balances.find((x)=>String(x?.asset||"")===baseAsset);
   const baseTotal=Number(baseRow?.free||0)+Number(baseRow?.locked||0);
   const trackedQty=Number(state.protectedQty||state.executedQty||0);
+
+  if(state.state==="FAILED_SAFE" && state.unprotectedPosition===true){
+    if(trackedQty>0 && baseTotal < trackedQty*0.2){
+      await writeTradeState(env,intentId,"EXITED",{
+        exitReason:"EXTERNAL_POSITION_CHANGE",
+        exitedAt:Date.now(),
+        exitOrderId:null,
+        realizedPnlUSDT:null,
+        reconciliationOutcome:"EXTERNAL_EXIT_DETECTED_AFTER_FAIL_SAFE",
+      });
+      logExecution("EXTERNAL_POSITION_CHANGE",{intentId,symbol,state:"EXITED",reconciliationOutcome:"EXTERNAL_EXIT_DETECTED_AFTER_FAIL_SAFE"});
+      return {ok:true,status:"EXTERNAL_EXIT_DETECTED",intentId,symbol,exitReason:"EXTERNAL_POSITION_CHANGE",financialAction:false};
+    }
+    return {ok:false,status:"PROTECTION_LOST_POSITION_MAY_REMAIN",intentId,symbol,unprotectedPosition:true,reconciliationRequired:true,financialAction:false};
+  }
 
   if(!exitOrder){
     const listDone=list.found && ["ALL_DONE","REJECT"].includes(String(list.list?.listOrderStatus||""));
