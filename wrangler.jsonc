@@ -15,7 +15,7 @@
     "E2E_ARMED": "false",
     "MAKE_EXECUTOR_V2_READY": "false",
     "EXECUTION_PROVIDER": "SUPABASE_V2",
-    "SUPABASE_EXECUTOR_READY": "false",
+    "SUPABASE_EXECUTOR_READY": "true",
     "SUPABASE_BINANCE_REGION": "eu-west-1",
     "EMERGENCY_KILL_SWITCH": "false",
     "SUPABASE_BINANCE_RELAY_URL": "https://irinttijrhicxofsdplo.supabase.co/functions/v1/tst-binance-relay",
