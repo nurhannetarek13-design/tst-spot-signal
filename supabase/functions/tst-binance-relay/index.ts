@@ -22,11 +22,43 @@ function json(status:number, payload:unknown){
 
 Deno.serve(async (req:Request) => {
   if(req.method === "GET"){
+    const requestUrl = new URL(req.url);
+    if(requestUrl.searchParams.get("probe") === "public"){
+      try{
+        const upstream = await fetch(`${BASE}/api/v3/time`, {
+          method:"GET",
+          headers:{"accept":"application/json","cache-control":"no-store"},
+          signal:AbortSignal.timeout(10_000),
+        });
+        const data = await upstream.json().catch(()=>({}));
+        return json(200,{
+          ok:upstream.ok,
+          status:upstream.ok?"BINANCE_PUBLIC_CONNECTIVITY_OK":"BINANCE_PUBLIC_CONNECTIVITY_BLOCKED",
+          upstreamHttpStatus:upstream.status,
+          binanceCode:data?.code ?? null,
+          region:Deno.env.get("SB_REGION") || null,
+          financialAction:false,
+          financialWritesEnabled:WRITES_ENABLED,
+          noBinanceSecretStored:true,
+        });
+      }catch(error){
+        return json(200,{
+          ok:false,
+          status:"BINANCE_PUBLIC_CONNECTIVITY_ERROR",
+          reason:String(error?.name || "FetchError"),
+          region:Deno.env.get("SB_REGION") || null,
+          financialAction:false,
+          financialWritesEnabled:WRITES_ENABLED,
+          noBinanceSecretStored:true,
+        });
+      }
+    }
     return json(200,{
       ok:true,
       status:"SUPABASE_BINANCE_RELAY_READY",
       financialWritesEnabled:WRITES_ENABLED,
       authMode:"BINANCE_SIGNED_CAPABILITY",
+      region:Deno.env.get("SB_REGION") || null,
       noBinanceSecretStored:true,
     });
   }
