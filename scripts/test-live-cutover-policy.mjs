@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { LIVE_POLICY, evaluateGoNoGo, resolveUnknownExecution, protectionDecision, accountingParity } from "../src/live-cutover-policy.js";
+import { LIVE_POLICY, readLivePolicy, evaluateGoNoGo, resolveUnknownExecution, protectionDecision, accountingParity } from "../src/live-cutover-policy.js";
 
 const healthy = {
   supervisorState:"HEALTHY",
