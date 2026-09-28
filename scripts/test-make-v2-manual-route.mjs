@@ -54,6 +54,9 @@ assert.doesNotMatch(ops, /await manualBuyAndProtect\(env, input\)/);
 assert.match(ops, /manualOnly: true/);
 assert.match(ops, /automaticExecution: false/);
 assert.match(ops, /manualExecutionAllowed:/);
+assert.match(ops, /source: "MAKE_V2_READONLY_WATCHDOG"/);
+assert.match(ops, /putState\(env, "bridge:health"/);
+assert.match(ops, /putState\(env, "bridge:ownership"/);
 
 const confirmStart = src.indexOf('if (action === "CONFIRM")');
 const confirmEnd = src.indexOf('\n  return new Response("ok");', confirmStart);
