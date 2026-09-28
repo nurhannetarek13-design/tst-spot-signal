@@ -113,3 +113,5 @@ export async function executionPublicMarketData(env, path) {
   }
   return supabasePublicMarketData(env, path);
 }
+
+// Supabase Vault signer active; Cloudflare forwards authenticated unsigned intents only.
