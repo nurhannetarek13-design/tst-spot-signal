@@ -882,21 +882,23 @@ export default {
 
     if (url.pathname === "/runtime-check") {
       const c = creds(env);
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
+      const provider = executionProvider(env);
       return Response.json({
         ok: true,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
+        executionProvider: provider,
         executionRoute: c.route,
-        binanceCredentialOwner: "MAKE_CONNECTION",
-        cloudflareBinanceCredentialsRequired: false,
+        binanceCredentialOwner: provider === "SUPABASE_V2" ? "CLOUDFLARE_SECRET" : "MAKE_CONNECTION",
+        cloudflareBinanceCredentialsRequired: provider === "SUPABASE_V2",
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
         autoBuy: false,
-        makeExecutionGatewayPrepared: true,
-        makeExecutionGatewayActive: executorConfigured,
-        executorConfigured,
+        executionGatewayPrepared: true,
+        executionGatewayActive: configured,
+        executorConfigured: configured,
         oldVercelFallback: false,
         noSecretValuesExposed: true,
       });
@@ -904,21 +906,24 @@ export default {
 
     if (url.pathname === "/live-readiness") {
       const c = creds(env);
+      const provider = executionProvider(env);
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
       const reconciliation = await getState(env, "ops:reconciliation:last");
       const opsState = await getState(env, "ops:state");
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
       const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
       const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
-      const infrastructureReady = c.route === LIVE_ROUTE
+      const operational = await executionOperational(env);
+      const infrastructureReady = c.route === executionRoute(env)
         && telegramConfigured
-        && executorConfigured
+        && configured
+        && operational.ok === true
         && reconciliation?.ok === true
         && opsState?.state === "HEALTHY";
       const executionReady = infrastructureReady && liveExecutionEnabled && e2eArmed && !autonomousEnabled;
-      const blocker = !executorConfigured
-        ? "MAKE_EXECUTOR_V2_INCOMPLETE"
+      const blocker = !configured
+        ? "EXECUTOR_INCOMPLETE"
         : !infrastructureReady
           ? "OPERATIONAL_GO_REQUIRED"
           : !liveExecutionEnabled
@@ -935,6 +940,7 @@ export default {
         executionReady,
         blocker,
         credentialMode: c.credentialMode,
+        executionProvider: provider,
         executionRoute: c.route,
         telegramConfigured,
         scannerRunning: true,
@@ -945,13 +951,14 @@ export default {
         autonomousExecution: autonomousEnabled,
         manualOnly: true,
         railwayDependency: false,
-        binanceCredentialOwner: "MAKE_CONNECTION",
-        cloudflareBinanceCredentialsRequired: false,
+        binanceCredentialOwner: provider === "SUPABASE_V2" ? "CLOUDFLARE_SECRET" : "MAKE_CONNECTION",
+        cloudflareBinanceCredentialsRequired: provider === "SUPABASE_V2",
         maxRiskUSDT: MAX_RISK_USDT,
         maxBuyUSDT: 5.5,
         reconciliationOk: reconciliation?.ok === true,
         supervisorState: opsState?.state || null,
-        executorConfigured,
+        executorConfigured: configured,
+        operational,
         oldVercelFallback: false,
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
@@ -960,18 +967,26 @@ export default {
 
     if (url.pathname === "/balance-refresh") {
       const reconciliation = await getState(env, "ops:reconciliation:last");
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
+      const provider = executionProvider(env);
+      const heartbeat = await executionReadOnlyHeartbeat(env);
+      const canTrade = heartbeat?.body?.canTrade === true;
+      const heartbeatOk = heartbeat?.transportOk === true;
       return Response.json({
-        ok: reconciliation?.ok === true,
-        canTrade: false,
-        accountSafetyOk: false,
-        accountSafetyReasons: [executorConfigured ? "LIVE_POLICY_DISABLED" : "MAKE_EXECUTOR_V2_INCOMPLETE"],
+        ok: heartbeatOk && reconciliation?.ok === true,
+        canTrade,
+        accountSafetyOk: heartbeatOk && canTrade,
+        accountSafetyReasons: heartbeatOk && canTrade
+          ? []
+          : [configured ? "EXECUTION_READONLY_PREFLIGHT_FAILED" : "EXECUTOR_INCOMPLETE"],
         credentialMode: creds(env).credentialMode,
         autoBuy: false,
-        executionRoute: LIVE_ROUTE,
-        diagnosticCode: "MAKE_READ_ONLY_WATCHDOG",
+        executionProvider: provider,
+        executionRoute: executionRoute(env),
+        diagnosticCode: provider === "SUPABASE_V2" ? "SUPABASE_READ_ONLY_WATCHDOG" : "MAKE_READ_ONLY_WATCHDOG",
         oldVercelFallback: false,
         noBalanceValuesExposed: true,
+        noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
 
