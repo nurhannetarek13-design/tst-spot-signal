@@ -61,6 +61,88 @@ function cloudflareBinanceCreds(env) {
   return { key: String(key || "").trim(), secret: String(secret || "").trim() };
 }
 
+function cloudflareBinanceCredentialPairs(env) {
+  const keys = [
+    ["BINANCE_API_KEY", env.BINANCE_API_KEY],
+    ["BINANCE_KEY", env.BINANCE_KEY],
+    ["BINANCE_APIKEY", env.BINANCE_APIKEY],
+  ].filter(([,v]) => String(v || "").trim());
+  const secrets = [
+    ["BINANCE_API_SECRET", env.BINANCE_API_SECRET],
+    ["BINANCE_SECRET", env.BINANCE_SECRET],
+    ["BINANCE_SECRET_KEY", env.BINANCE_SECRET_KEY],
+  ].filter(([,v]) => String(v || "").trim());
+  const out = [];
+  for (const [keyAlias,key] of keys) {
+    for (const [secretAlias,secret] of secrets) {
+      out.push({ keyAlias, secretAlias, key:String(key).trim(), secret:String(secret).trim() });
+    }
+  }
+  return out;
+}
+
+async function cloudflareBinanceCredentialPairPreflight(env) {
+  const pairs = cloudflareBinanceCredentialPairs(env);
+  const attempts = [];
+  for (const pair of pairs) {
+    const qs = new URLSearchParams({
+      omitZeroBalances: "true",
+      recvWindow: "5000",
+      timestamp: String(Date.now()),
+    }).toString();
+    const signature = await hmacHexRaw(pair.secret, qs);
+    try {
+      const r = await fetch("https://api-gcp.binance.com/api/v3/account?" + qs + "&signature=" + signature, {
+        method: "GET",
+        headers: {
+          "X-MBX-APIKEY": pair.key,
+          "accept": "application/json",
+          "cache-control": "no-store",
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      const row = await r.json().catch(() => ({}));
+      const ok = r.ok && !(Number(row?.code) < 0);
+      attempts.push({
+        keyAlias: pair.keyAlias,
+        secretAlias: pair.secretAlias,
+        ok,
+        httpStatus: r.status,
+        binanceCode: row?.code ?? null,
+      });
+      if (ok) {
+        return {
+          ok: true,
+          status: "BINANCE_CREDENTIAL_PAIR_OK",
+          selectedKeyAlias: pair.keyAlias,
+          selectedSecretAlias: pair.secretAlias,
+          canTrade: row?.canTrade === true,
+          accountType: row?.accountType || null,
+          attempts,
+          financialAction: false,
+          noBalanceValuesExposed: true,
+          noSecretValuesExposed: true,
+        };
+      }
+    } catch (e) {
+      attempts.push({
+        keyAlias: pair.keyAlias,
+        secretAlias: pair.secretAlias,
+        ok: false,
+        transportError: String(e?.name || "Error"),
+      });
+    }
+  }
+  return {
+    ok: false,
+    status: "NO_VALID_BINANCE_CREDENTIAL_PAIR",
+    attempts,
+    financialAction: false,
+    noBalanceValuesExposed: true,
+    noSecretValuesExposed: true,
+  };
+}
+
 async function cloudflareBinanceWsAccountPreflight(env) {
   const creds = cloudflareBinanceCreds(env);
   if (!creds.key || !creds.secret) {
@@ -607,6 +689,13 @@ export default {
         liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
       }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+    if (url.pathname === "/cloudflare-binance-pair-preflight") {
+      const result = await cloudflareBinanceCredentialPairPreflight(env);
+      return Response.json(result, {
         status: result.ok ? 200 : 503,
         headers: { "cache-control": "no-store" },
       });
