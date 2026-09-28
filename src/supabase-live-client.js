@@ -790,6 +790,8 @@ export async function supabaseReadOnlyReconcile(env) {
     protectedOrderLists,
     unknownBotOrders: unknownRows.length + unknownLists.length,
     unprotectedBotOrders: unprotectedRows.length,
+    botOpenSymbols:[...new Set(botRows.map((row)=>String(row?.symbol || "")).filter(Boolean))],
+    unprotectedSymbols:[...new Set(unprotectedRows.map((row)=>String(row?.symbol || "")).filter(Boolean))],
     nonZeroBalanceAssetCount: assets.length,
     nonZeroBalanceAssets: assets,
     quoteBalanceAvailable: freeBalance(account.data, "USDT") > 0,
