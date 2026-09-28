@@ -1,0 +1,3 @@
+Non-financial Railway redeploy marker.
+Purpose: restart existing fail-closed reconciliation/read-only runtime before any execution-route migration.
+No trading flags or order logic changed.
