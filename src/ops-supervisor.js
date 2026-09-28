@@ -125,6 +125,62 @@ async function cloudflareDirectBinanceReadOnlyPreflight(env) {
     noSecretValuesExposed: true,
   };
 }
+async function supabaseRelayReadOnlyPreflight(env) {
+  const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  const creds = cloudflareBinanceCreds(env);
+  if (!relayUrl || !creds.key || !creds.secret) {
+    return {
+      ok: false,
+      status: "SUPABASE_RELAY_NOT_CONFIGURED",
+      financialAction: false,
+      noSecretValuesExposed: true,
+    };
+  }
+
+  const qs = new URLSearchParams({
+    omitZeroBalances: "true",
+    recvWindow: "5000",
+    timestamp: String(Date.now()),
+  }).toString();
+  const signature = await hmacHexRaw(creds.secret, qs);
+  const body = {
+    method: "GET",
+    path: "/api/v3/account",
+    apiKey: creds.key,
+    query: `${qs}&signature=${signature}`,
+  };
+
+  try {
+    const r = await fetch(relayUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const row = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK",
+      status: row?.status || `HTTP_${r.status}`,
+      httpStatus: r.status,
+      canTrade: row?.data?.canTrade === true,
+      accountType: row?.data?.accountType || null,
+      financialAction: false,
+      noBalanceValuesExposed: true,
+      noSecretValuesExposed: true,
+      relay: "SUPABASE_EDGE_FUNCTION",
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "SUPABASE_RELAY_UNREACHABLE",
+      reason: String(e?.name || "FetchError"),
+      financialAction: false,
+      noSecretValuesExposed: true,
+      relay: "SUPABASE_EDGE_FUNCTION",
+    };
+  }
+}
+
 async function vercelImmutableRelayReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
@@ -390,6 +446,17 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/supabase-relay-preflight") {
+      const result = await supabaseRelayReadOnlyPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/vercel-immutable-relay-preflight") {
       const result = await vercelImmutableRelayReadOnlyPreflight(env);
       return Response.json({
