@@ -747,10 +747,8 @@ async function placeOco(env, { intentId, signalId, symbol, quantity, takeProfit,
 }
 
 export function supabaseExecutionConfigured(env = {}) {
-  const pair = binanceCredentials(env);
   return relayConfigured(env)
-    && signingCredentialsReady(pair)
-    && Boolean(pair.ed25519PrivateKey)
+    && Boolean(relayAuthPrivateKey(env))
     && String(env.SUPABASE_EXECUTOR_READY || "").toLowerCase() === "true";
 }
 
