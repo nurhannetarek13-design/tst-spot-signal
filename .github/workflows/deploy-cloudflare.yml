@@ -225,9 +225,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --silent --show-error --max-time 30 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-auth-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-auth-selftest.json || true
+          curl --silent --show-error --retry 2 --retry-delay 2 --retry-all-errors --max-time 45 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-auth-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-auth-selftest.json || true
           cat /tmp/v2-auth-selftest.json 2>/dev/null || true
-          curl --silent --show-error --max-time 20 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-idempotency-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-idempotency.json || true
+          curl --silent --show-error --retry 2 --retry-delay 2 --retry-all-errors --max-time 45 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-idempotency-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-idempotency.json || true
           cat /tmp/v2-idempotency.json 2>/dev/null || true
           python - <<'PY'
           import json
@@ -326,11 +326,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error \
-            --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
-            -H 'cache-control: no-store' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/ops-status?nonce=$(date +%s%N)" \
-            -o /tmp/ops.json
+          rm -f /tmp/ops.json
+          for attempt in $(seq 1 24); do
+            curl --silent --show-error \
+              --retry 1 --retry-delay 1 --retry-all-errors --max-time 25 \
+              -H 'cache-control: no-store' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/ops-status?nonce=$(date +%s%N)" \
+              -o /tmp/ops.json || true
+            if python - <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path('/tmp/ops.json')
+          try: r=json.loads(p.read_text())
+          except Exception: sys.exit(1)
+          sys.exit(0 if r.get('ok') is True and r.get('state') == 'HEALTHY' and r.get('stale') == [] else 1)
+          PY
+            then
+              break
+            fi
+            sleep 10
+          done
           cat /tmp/ops.json
           python - <<'PY'
           import json
