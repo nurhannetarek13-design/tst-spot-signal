@@ -250,13 +250,15 @@ jobs:
           assert r.get('telegramConfigured') is True
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
-          assert r.get('liveExecutionEnabled') is False
+          assert r.get('liveExecutionEnabled') is True
           assert r.get('e2eArmed') is False
           assert r.get('autonomousExecution') is False
           assert r.get('manualOnly') is True
+          # /live-readiness is the legacy manual-E2E readiness view. Production
+          # Limited Live is active, but no new E2E is armed or required.
           assert r.get('executionReady') is False
           assert r.get('status') == 'LIVE_EXECUTION_BLOCKED'
-          assert r.get('blocker') in {'EXECUTOR_INCOMPLETE','OPERATIONAL_GO_REQUIRED','LIVE_POLICY_DISABLED'}
+          assert r.get('blocker') == 'MANUAL_E2E_NOT_ARMED'
           assert r.get('oldVercelFallback') is False
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
