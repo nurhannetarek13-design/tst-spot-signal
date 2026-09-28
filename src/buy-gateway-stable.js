@@ -1410,9 +1410,12 @@ export default {
       const fresh=(row,maxMs=20*60*1000)=>Number(row?.at||0)>0 && now-Number(row.at)<=maxMs;
       const count=(row)=>Array.isArray(row)?row.length:Number(row?.count||0);
       const aggregate=(name)=>aggregateHeartbeats?.[name]||null;
-      const binanceRow=binanceHeartbeat||aggregate("binance-readonly");
-      const reconcilerRow=reconcilerHeartbeat||aggregate("reconciler");
-      const protectionRow=protectionHeartbeat||aggregate("protection");
+      const newest=(...rows)=>rows
+        .filter(Boolean)
+        .sort((a,b)=>Number(b?.at||0)-Number(a?.at||0))[0]||null;
+      const binanceRow=newest(binanceHeartbeat,aggregate("binance-readonly"));
+      const reconcilerRow=newest(reconcilerHeartbeat,aggregate("reconciler"));
+      const protectionRow=newest(protectionHeartbeat,aggregate("protection"));
       const v20Valid=validRealE2EV20(e2eProof);
       return Response.json({
         ok:true,
