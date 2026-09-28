@@ -1,5 +1,12 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
-import { manualBuyAndProtect, makeReadOnlyHeartbeat } from "./make-live-client.js";
+import {
+  manualBuyAndProtect,
+  executionReadOnlyHeartbeat,
+  executionProvider,
+  executionRoute,
+  executorConfigured,
+  executionOwner,
+} from "./live-execution-router.js";
 export { SignalState };
 
 const SIGNAL_TTL_SEC = 10 * 60;
@@ -9,14 +16,16 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
-const LIVE_ROUTE = "CLOUDFLARE_HMAC_MAKE";
 
 function creds(env) {
-  const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN);
+  const route = executionRoute(env);
+  const configured = executorConfigured(env);
+  const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN) && configured;
   return {
     network: relayReady ? "production" : "none",
     credentialMode: relayReady ? "LIVE" : "MISSING",
-    route: relayReady ? LIVE_ROUTE : "VERCEL_RELAY_AUTH_MISSING",
+    route: relayReady ? route : "EXECUTION_ROUTE_NOT_READY",
+    provider: executionProvider(env),
   };
 }
 
@@ -70,7 +79,7 @@ function riskCappedQuote(entry, stop, requested = 5.5) {
   return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
 }
 
-async function makeV2Operational(env) {
+async function executionOperational(env) {
   const now = Date.now();
   const [ops, reconciliation, bridge, ownership] = await Promise.all([
     getState(env, "ops:state"),
@@ -79,22 +88,47 @@ async function makeV2Operational(env) {
     getState(env, "bridge:ownership"),
   ]);
   const fresh = (at, maxMs = 20 * 60 * 1000) => Number(at || 0) > 0 && now - Number(at || 0) <= maxMs;
-  const ready = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+  const ready = executorConfigured(env);
+  const provider = executionProvider(env);
+
+  if (provider === "SUPABASE_V2") {
+    const heartbeat = await executionReadOnlyHeartbeat(env);
+    const transportOk = heartbeat?.transportOk === true
+      && heartbeat?.body?.canTrade === true
+      && heartbeat?.body?.financialAction === false;
+    const ok = ready
+      && ops?.state === "HEALTHY"
+      && reconciliation?.ok === true
+      && fresh(reconciliation?.at)
+      && transportOk;
+    return {
+      ok,
+      provider,
+      state: String(ops?.state || "UNKNOWN"),
+      reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
+      bridgeOk: transportOk,
+      ownershipOk: transportOk,
+      executorConfigured: ready,
+      heartbeat,
+    };
+  }
+
   const ok = ready
     && ops?.state === "HEALTHY"
     && reconciliation?.ok === true
     && fresh(reconciliation?.at)
     && bridge?.ok === true
     && fresh(bridge?.at)
-    && ownership?.owner === "MAKE_EXECUTOR_V2"
+    && ownership?.owner === executionOwner(env)
     && ownership?.exclusive === true
     && fresh(ownership?.at);
   return {
     ok,
+    provider,
     state: String(ops?.state || "UNKNOWN"),
     reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
     bridgeOk: bridge?.ok === true && fresh(bridge?.at),
-    ownershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && fresh(ownership?.at),
+    ownershipOk: ownership?.owner === executionOwner(env) && ownership?.exclusive === true && fresh(ownership?.at),
     executorConfigured: ready,
   };
 }
@@ -114,8 +148,8 @@ async function prepareManualE2EPrompt(env) {
     return { ok:true, status:"MANUAL_E2E_PROMPT_ALREADY_SENT", id:recent.id };
   }
 
-  const health = await makeV2Operational(env);
-  if (!health.ok) return { ok:false, status:"MAKE_V2_OPERATIONAL_GATE_FAILED", health };
+  const health = await executionOperational(env);
+  if (!health.ok) return { ok:false, status:"EXECUTION_OPERATIONAL_GATE_FAILED", health };
 
   const claimed = await claimState(env, "cutover:e2e:prompt-lock", { at:Date.now() }, 60);
   if (!claimed) return { ok:true, status:"MANUAL_E2E_PROMPT_LOCKED" };
@@ -162,7 +196,7 @@ async function prepareManualE2EPrompt(env) {
     sentAt:now,
     quoteUSDT:rec,
     automaticExecution:false,
-    executionRoute:"MAKE_V2",
+    executionRoute:executionProvider(env),
   }, SIGNAL_TTL_SEC);
   return { ok:true, status:"MANUAL_E2E_PROMPT_SENT", id, symbol, quoteUSDT:rec };
 }
@@ -196,9 +230,9 @@ async function handleFastSignalIngest(request, env) {
   if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
   if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
 
-  const health = await makeV2Operational(env);
+  const health = await executionOperational(env);
   if (!health.ok) {
-    return Response.json({ok:false,status:"MAKE_V2_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
+    return Response.json({ok:false,status:"EXECUTION_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
   }
   const rec=riskCappedQuote(entry,stop,requested);
   if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
@@ -426,9 +460,25 @@ async function refreshBalance(env) {
   }
 }
 
-async function requireFreshMakeV2ExecutionRoute(env) {
+async function requireFreshExecutionRoute(env) {
+  if (executionProvider(env) === "SUPABASE_V2") {
+    const heartbeat = await executionReadOnlyHeartbeat(env);
+    if (heartbeat?.transportOk !== true) {
+      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
+    }
+    if (heartbeat?.body?.canTrade !== true || heartbeat?.body?.financialAction !== false) {
+      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_NOT_VERIFIED");
+    }
+    return {
+      ok: true,
+      provider: "SUPABASE_V2",
+      routeVersion: String(heartbeat?.body?.routeVersion || "supabase-v2"),
+      checkedAt: Date.now(),
+    };
+  }
+
   const startedAt = Date.now();
-  const watchdog = await makeReadOnlyHeartbeat(env);
+  const watchdog = await executionReadOnlyHeartbeat(env);
   if (watchdog?.transportOk !== true) {
     throw new Error("MAKE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
   }
@@ -445,6 +495,7 @@ async function requireFreshMakeV2ExecutionRoute(env) {
   }
   return {
     ok:true,
+    provider:"MAKE_V2",
     buyAcceptedAt:Number(buyAudit.acceptedAt || 0),
     ocoAcceptedAt:Number(ocoAudit.acceptedAt || 0),
     routeVersion:String(buyAudit.routeVersion || ocoAudit.routeVersion || "v2"),
@@ -454,14 +505,14 @@ async function requireFreshMakeV2ExecutionRoute(env) {
 async function executeConfirmedBuy(env, s) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
-  if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
-    throw new Error("MAKE_EXECUTOR_V2_NOT_READY");
+  if (!executorConfigured(env)) {
+    throw new Error("EXECUTOR_NOT_READY");
   }
-  const operational = await makeV2Operational(env);
+  const operational = await executionOperational(env);
   if (!operational.ok) {
-    throw new Error("MAKE_V2_OPERATIONAL_GATE_FAILED");
+    throw new Error("EXECUTION_OPERATIONAL_GATE_FAILED");
   }
-  await requireFreshMakeV2ExecutionRoute(env);
+  await requireFreshExecutionRoute(env);
 
   const symbol = String(s.symbol || "").toUpperCase();
   if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) throw new Error("BAD_SYMBOL");
@@ -508,7 +559,7 @@ async function executeConfirmedBuy(env, s) {
       emergencyClosed: false,
       autoBuy: false,
       userConfirmed: true,
-      executionRoute: "MAKE_V2",
+      executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       ocoOrderListId: Number(result?.oco?.body?.oco_order_list_id || 0) || null,
       clientIds: result?.clientIds || null,
@@ -530,14 +581,14 @@ async function executeConfirmedBuy(env, s) {
       emergencyClosed: true,
       autoBuy: false,
       userConfirmed: true,
-      executionRoute: "MAKE_V2",
+      executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       emergencyOrderId: Number(result?.oco?.body?.emergency_order_id || 0) || null,
       clientIds: result?.clientIds || null,
     };
   }
 
-  const status = String(result?.status || "MAKE_V2_EXECUTION_FAILED");
+  const status = String(result?.status || "EXECUTION_FAILED");
   if (result?.reconciliationRequired === true) {
     const currentUnknown = await getState(env, "live:unknown-orders");
     const rows = Array.isArray(currentUnknown) ? currentUnknown : [];
@@ -545,7 +596,7 @@ async function executeConfirmedBuy(env, s) {
       signalId: String(s.id || ""),
       symbol,
       status,
-      route: "MAKE_V2",
+      route: executionProvider(env),
       at: Date.now(),
     });
     await putState(env, "live:unknown-orders", rows.slice(-20), 30 * 24 * 60 * 60);
@@ -560,7 +611,7 @@ async function sendPromptForActive(env) {
   if (c.credentialMode !== "LIVE") return;
 
   const active = (await getState(env, "paper:active")) || [];
-  const health = await makeV2Operational(env);
+  const health = await executionOperational(env);
   if (!health.ok) return;
   for (const p of active) {
     const id = compactId(p);
@@ -643,8 +694,8 @@ async function handleTelegramWebhook(request, env) {
 
   const s = await getState(env, `live-signal:${id}`);
   if (action === "PREP" && s) {
-    if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
-      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Make V2 executor is not ready — no trade prepared", show_alert: true });
+    if (!executorConfigured(env)) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Execution provider is not ready — no trade prepared", show_alert: true });
       return new Response("ok");
     }
     const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
@@ -714,7 +765,7 @@ async function handleTelegramWebhook(request, env) {
           ocoOrderListId: r.ocoOrderListId || null,
           emergencyOrderId: r.emergencyOrderId || null,
           clientIds: r.clientIds || null,
-          executionRoute: r.executionRoute || "MAKE_V2",
+          executionRoute: r.executionRoute || executionProvider(env),
         }, 30 * 24 * 60 * 60);
       }
       await putState(env, `execution-result:${id}`, {
@@ -750,7 +801,7 @@ async function handleTelegramWebhook(request, env) {
             status: "MANUAL_E2E_FAILED",
             symbol: p.symbol,
             error: error.slice(0, 180),
-            executionRoute: "MAKE_V2",
+            executionRoute: executionProvider(env),
           }, 30 * 24 * 60 * 60);
         }
       }
@@ -768,7 +819,7 @@ async function notifyExecutionReadinessTransition(env, balance) {
   const lastError=balance ? null : await getState(env,"binance:balance:error");
   const ready=Boolean(
     c.credentialMode==="LIVE" &&
-    c.route===LIVE_ROUTE &&
+    c.route===executionRoute(env) &&
     balance?.ok &&
     balance?.canTrade &&
     balance?.accountSafetyOk === true
@@ -831,21 +882,23 @@ export default {
 
     if (url.pathname === "/runtime-check") {
       const c = creds(env);
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
+      const provider = executionProvider(env);
       return Response.json({
         ok: true,
         telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         credentialMode: c.credentialMode,
+        executionProvider: provider,
         executionRoute: c.route,
-        binanceCredentialOwner: "MAKE_CONNECTION",
-        cloudflareBinanceCredentialsRequired: false,
+        binanceCredentialOwner: provider === "SUPABASE_V2" ? "CLOUDFLARE_SECRET" : "MAKE_CONNECTION",
+        cloudflareBinanceCredentialsRequired: provider === "SUPABASE_V2",
         atomicConfirmClaim: true,
         fastSignalIngest: true,
         oneTapConfirm: true,
         autoBuy: false,
-        makeExecutionGatewayPrepared: true,
-        makeExecutionGatewayActive: executorConfigured,
-        executorConfigured,
+        executionGatewayPrepared: true,
+        executionGatewayActive: configured,
+        executorConfigured: configured,
         oldVercelFallback: false,
         noSecretValuesExposed: true,
       });
@@ -853,21 +906,24 @@ export default {
 
     if (url.pathname === "/live-readiness") {
       const c = creds(env);
+      const provider = executionProvider(env);
       const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
       const reconciliation = await getState(env, "ops:reconciliation:last");
       const opsState = await getState(env, "ops:state");
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
       const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
       const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
-      const infrastructureReady = c.route === LIVE_ROUTE
+      const operational = await executionOperational(env);
+      const infrastructureReady = c.route === executionRoute(env)
         && telegramConfigured
-        && executorConfigured
+        && configured
+        && operational.ok === true
         && reconciliation?.ok === true
         && opsState?.state === "HEALTHY";
       const executionReady = infrastructureReady && liveExecutionEnabled && e2eArmed && !autonomousEnabled;
-      const blocker = !executorConfigured
-        ? "MAKE_EXECUTOR_V2_INCOMPLETE"
+      const blocker = !configured
+        ? "EXECUTOR_INCOMPLETE"
         : !infrastructureReady
           ? "OPERATIONAL_GO_REQUIRED"
           : !liveExecutionEnabled
@@ -884,6 +940,7 @@ export default {
         executionReady,
         blocker,
         credentialMode: c.credentialMode,
+        executionProvider: provider,
         executionRoute: c.route,
         telegramConfigured,
         scannerRunning: true,
@@ -894,13 +951,14 @@ export default {
         autonomousExecution: autonomousEnabled,
         manualOnly: true,
         railwayDependency: false,
-        binanceCredentialOwner: "MAKE_CONNECTION",
-        cloudflareBinanceCredentialsRequired: false,
+        binanceCredentialOwner: provider === "SUPABASE_V2" ? "CLOUDFLARE_SECRET" : "MAKE_CONNECTION",
+        cloudflareBinanceCredentialsRequired: provider === "SUPABASE_V2",
         maxRiskUSDT: MAX_RISK_USDT,
         maxBuyUSDT: 5.5,
         reconciliationOk: reconciliation?.ok === true,
         supervisorState: opsState?.state || null,
-        executorConfigured,
+        executorConfigured: configured,
+        operational,
         oldVercelFallback: false,
         noBalanceValuesExposed: true,
         noSecretValuesExposed: true,
@@ -909,18 +967,26 @@ export default {
 
     if (url.pathname === "/balance-refresh") {
       const reconciliation = await getState(env, "ops:reconciliation:last");
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+      const configured = executorConfigured(env);
+      const provider = executionProvider(env);
+      const heartbeat = await executionReadOnlyHeartbeat(env);
+      const canTrade = heartbeat?.body?.canTrade === true;
+      const heartbeatOk = heartbeat?.transportOk === true;
       return Response.json({
-        ok: reconciliation?.ok === true,
-        canTrade: false,
-        accountSafetyOk: false,
-        accountSafetyReasons: [executorConfigured ? "LIVE_POLICY_DISABLED" : "MAKE_EXECUTOR_V2_INCOMPLETE"],
+        ok: heartbeatOk && reconciliation?.ok === true,
+        canTrade,
+        accountSafetyOk: heartbeatOk && canTrade,
+        accountSafetyReasons: heartbeatOk && canTrade
+          ? []
+          : [configured ? "EXECUTION_READONLY_PREFLIGHT_FAILED" : "EXECUTOR_INCOMPLETE"],
         credentialMode: creds(env).credentialMode,
         autoBuy: false,
-        executionRoute: LIVE_ROUTE,
-        diagnosticCode: "MAKE_READ_ONLY_WATCHDOG",
+        executionProvider: provider,
+        executionRoute: executionRoute(env),
+        diagnosticCode: provider === "SUPABASE_V2" ? "SUPABASE_READ_ONLY_WATCHDOG" : "MAKE_READ_ONLY_WATCHDOG",
         oldVercelFallback: false,
         noBalanceValuesExposed: true,
+        noSecretValuesExposed: true,
       }, { headers: { "cache-control": "no-store" } });
     }
 

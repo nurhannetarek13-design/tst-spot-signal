@@ -1,9 +1,14 @@
 import { parseAndValidateCapability, sanitizeResponse } from "./relay-core.mjs";
 
 const BASE = (Deno.env.get("BINANCE_PRIVATE_BASE_URL") || "https://api.binance.com").replace(/\/$/, "");
-const WRITES_ENABLED = ["1","true","yes","on"].includes(
-  String(Deno.env.get("FINANCIAL_WRITES_ENABLED") || "").toLowerCase()
-);
+// First deployment is deliberately read-only. Promotion to writes is a code-reviewed change.
+const WRITES_ENABLED = false;
+const ALLOWED_API_KEY_SHA256 = "e2886a72492d6a72057c7ec1590c23d94ddc4c84abfca4beeebb8b7a22205832";
+
+async function sha256Hex(value:string){
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(value||"")));
+  return [...new Uint8Array(digest)].map((b)=>b.toString(16).padStart(2,"0")).join("");
+}
 
 function json(status:number, payload:unknown){
   return new Response(JSON.stringify(payload), {
@@ -42,6 +47,15 @@ Deno.serve(async (req:Request) => {
       ok:false,
       status:String(error?.message || "CAPABILITY_REJECTED"),
       financialAction:false,
+    });
+  }
+
+  if(await sha256Hex(cap.apiKey)!==ALLOWED_API_KEY_SHA256){
+    return json(403,{
+      ok:false,
+      status:"API_KEY_NOT_ALLOWED",
+      financialAction:false,
+      noBinanceSecretStored:true,
     });
   }
 
