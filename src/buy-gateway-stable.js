@@ -29,13 +29,19 @@ const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.
 
 function creds(env) {
   const route = executionRoute(env);
+  const provider = executionProvider(env);
   const configured = executorConfigured(env);
   const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN) && configured;
+  const credentialMode = relayReady
+    ? "LIVE"
+    : provider === "SUPABASE_V2"
+      ? "SUPABASE_VAULT_ED25519_STAGED"
+      : "DISABLED";
   return {
     network: relayReady ? "production" : "none",
-    credentialMode: relayReady ? "LIVE" : "MISSING",
+    credentialMode,
     route,
-    provider: executionProvider(env),
+    provider,
   };
 }
 
