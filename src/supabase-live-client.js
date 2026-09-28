@@ -960,30 +960,108 @@ export async function supabaseDryRunExecution(env, input) {
 export async function manualBuyAndProtectViaSupabase(env, input) {
   const policy = readLivePolicy(env);
   if (policy.liveExecutionEnabled !== true) {
-    return { ok: false, status: "LIVE_EXECUTION_DISABLED", noOrderSent: true };
+    return { ok:false, status:"LIVE_EXECUTION_DISABLED", noOrderSent:true };
   }
   if (!supabaseExecutionConfigured(env)) {
-    return { ok: false, status: "SUPABASE_EXECUTOR_NOT_READY", noOrderSent: true };
+    return { ok:false, status:"SUPABASE_EXECUTOR_NOT_READY", noOrderSent:true };
   }
 
   const quote = Math.min(Number(input.quote_amount_usdt || 0), Number(policy.maxOrderUSDT));
-  if (!(quote >= 5 && quote <= 5.5)) return { ok: false, status: "ORDER_SIZE_BLOCKED", noOrderSent: true };
+  if (!(quote >= 5 && quote <= 5.5)) return { ok:false, status:"ORDER_SIZE_BLOCKED", noOrderSent:true };
 
   const signalId = String(input.signal_id || "");
   const symbol = String(input.symbol || "").toUpperCase();
   const target = Number(input.take_profit_price || 0);
   const stop = Number(input.stop_loss_price || 0);
+  const entry = Number(input.entry_price || 0);
   if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol) || !(target > stop && stop > 0)) {
-    return { ok: false, status: "INVALID_EXECUTION_INPUT", noOrderSent: true };
+    return { ok:false, status:"INVALID_EXECUTION_INPUT", noOrderSent:true };
   }
 
-  const buy = await placeBuy(env, { signalId, symbol, quoteUSDT: quote });
-  if (!buy.ok) return buy;
+  const intentId = deterministicIntentId(signalId, symbol);
+  const claimed = await claimIntent(env, intentId, { signalId, symbol });
+  if (!claimed) {
+    const existing = await readTradeState(env, intentId);
+    if (existing?.state === "EXITED") {
+      return { ok:false, status:"TRADE_INTENT_ALREADY_EXITED", noOrderSent:true, intentId };
+    }
+    if (existing?.state === "FAILED_SAFE" && existing?.emergencyClosed !== true) {
+      return { ok:false, status:"TRADE_INTENT_FAILED_SAFE_LOCKED", noOrderSent:true, intentId };
+    }
+  }
+  await writeTradeState(env, intentId, "APPROVED", {
+    signalId,
+    symbol,
+    quoteUSDT:quote,
+    target,
+    stop,
+  });
+
+  const reconciliation = await supabaseReadOnlyReconcile(env);
+  if (!reconciliation.ok || !reconciliation.noUnknownOrders || !reconciliation.noUnprotectedPositions) {
+    await writeTradeState(env, intentId, "FAILED_SAFE", {
+      reason:"PRE_ENTRY_RECONCILIATION_BLOCKED",
+      reconciliationStatus:reconciliation.status,
+    });
+    return {
+      ok:false,
+      status:"PRE_ENTRY_RECONCILIATION_BLOCKED",
+      reconciliationRequired:true,
+      mayResend:false,
+      intentId,
+      reconciliation,
+    };
+  }
+  if (reconciliation.spotTradingPermission !== true) {
+    await writeTradeState(env, intentId, "FAILED_SAFE", { reason:"SPOT_API_PERMISSION_REQUIRED" });
+    return { ok:false, status:"SPOT_API_PERMISSION_REQUIRED", noOrderSent:true, intentId };
+  }
+
+  const preTrade = await preTradeMarketBuy(env, {
+    symbol,
+    quoteUSDT:quote,
+    referencePrice:entry > 0 ? entry : null,
+  });
+  if (!preTrade.ok) {
+    await writeTradeState(env, intentId, "FAILED_SAFE", { reason:preTrade.status });
+    return { ok:false, status:preTrade.status, noOrderSent:true, intentId };
+  }
+
+  const buy = await placeBuy(env, {
+    intentId,
+    signalId,
+    symbol,
+    quoteUSDT:quote,
+    quoteOrderQty:preTrade.validation.quoteOrderQty,
+  });
+  if (!buy.ok) {
+    if (buy.noPosition === true || buy.noOrderSent === true) {
+      await writeTradeState(env, intentId, "FAILED_SAFE", { reason:buy.status, noPosition:true });
+    }
+    return { ...buy, intentId, preTrade:preTrade.validation };
+  }
 
   const summary = buySummary(buy.order, symbol);
   if (!(summary.netQty > 0 && summary.quoteSpent > 0)) {
-    return { ok: false, status: "BUY_FILL_QTY_MISSING", reconciliationRequired: true, mayResend: false, buy };
+    await writeTradeState(env, intentId, "FAILED_SAFE", { reason:"BUY_FILL_QTY_MISSING" });
+    return {
+      ok:false,
+      status:"BUY_FILL_QTY_MISSING",
+      reconciliationRequired:true,
+      mayResend:false,
+      buy,
+      intentId,
+    };
   }
+
+  await writeTradeState(env, intentId, buy.partial ? "PARTIALLY_FILLED" : "FILLED", {
+    buyOrderId:buy.order?.orderId ?? null,
+    executedQty:summary.netQty,
+    grossExecutedQty:summary.grossQty,
+    quoteSpent:summary.quoteSpent,
+    weightedPrice:summary.weightedPrice,
+    partialFill:buy.partial === true,
+  });
 
   let normalized;
   try {
@@ -995,110 +1073,147 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
       Number((stop * 0.998).toPrecision(12)),
     );
   } catch (error) {
+    await writeTradeState(env, intentId, "PROTECTION_PENDING", {
+      reason:"PROTECTION_NORMALIZATION_FAILED",
+      executedQty:summary.netQty,
+    });
     return {
-      ok: false,
-      status: "PROTECTION_NORMALIZATION_FAILED",
-      reconciliationRequired: true,
-      mayResend: false,
+      ok:false,
+      status:"PROTECTION_NORMALIZATION_FAILED",
+      reconciliationRequired:true,
+      unprotectedPosition:true,
+      mayResend:false,
       buy,
-      reason: String(error?.message || error).slice(0, 120),
+      intentId,
+      reason:String(error?.message || error).slice(0,120),
     };
   }
 
   const oco = await placeOco(env, {
+    intentId,
     signalId,
     symbol,
-    quantity: normalized.quantity,
-    takeProfit: normalized.takeProfit,
-    stopLoss: normalized.stopLoss,
-    stopLimit: normalized.stopLimit,
+    quantity:normalized.quantity,
+    takeProfit:normalized.takeProfit,
+    stopLoss:normalized.stopLoss,
+    stopLimit:normalized.stopLimit,
   });
 
   if (oco.ok) {
     return {
-      ok: true,
-      status: "OCO_PLACED",
-      buy: { body: {
-        status: "BUY_FILLED",
-        order_id: buy.order?.orderId ?? null,
-        executed_qty: summary.netQty,
-        gross_executed_qty: summary.grossQty,
-        quote_spent: summary.quoteSpent,
-        weighted_price: summary.weightedPrice,
-        commissions: summary.commissions,
+      ok:true,
+      status:"OCO_PLACED",
+      intentId,
+      partialFill:buy.partial === true,
+      buy:{ body:{
+        status:buy.partial ? "BUY_PARTIAL_FINAL" : "BUY_FILLED",
+        order_id:buy.order?.orderId ?? null,
+        executed_qty:summary.netQty,
+        gross_executed_qty:summary.grossQty,
+        quote_spent:summary.quoteSpent,
+        weighted_price:summary.weightedPrice,
+        commissions:summary.commissions,
       }},
-      oco: { body: {
-        status: "OCO_PLACED",
-        oco_order_list_id: oco.orderList?.orderListId ?? null,
+      oco:{ body:{
+        status:"OCO_PLACED",
+        oco_order_list_id:oco.orderList?.orderListId ?? null,
       }},
-      executedQty: summary.netQty,
-      protectedQty: normalized.quantity,
-      clientIds: oco.ids,
-      filters: {
-        stepSize: normalized.stepSize,
-        tickSize: normalized.tickSize,
-        minNotional: normalized.minNotional,
+      executedQty:summary.netQty,
+      protectedQty:normalized.quantity,
+      clientIds:oco.ids,
+      filters:{
+        stepSize:normalized.stepSize,
+        tickSize:normalized.tickSize,
+        minNotional:normalized.minNotional,
       },
+      preTrade:preTrade.validation,
     };
   }
 
   if (oco.status === "OCO_SUBMISSION_UNKNOWN" || oco.status === "OCO_PRECHECK_UNKNOWN") {
+    await writeTradeState(env, intentId, "PROTECTION_PENDING", {
+      reason:oco.status,
+      executedQty:summary.netQty,
+      protectionUnknown:true,
+    });
     return {
-      ok: false,
-      status: oco.status,
-      reconciliationRequired: true,
-      mayResend: false,
+      ok:false,
+      status:oco.status,
+      reconciliationRequired:true,
+      unprotectedPosition:true,
+      mayResend:false,
       buy,
       oco,
-      clientIds: oco.ids,
+      intentId,
+      clientIds:oco.ids,
     };
   }
 
   const safeToClose = oco.definiteReject === true || oco.reconciliationConfirmedAbsent === true;
   if (!safeToClose) {
+    await writeTradeState(env, intentId, "PROTECTION_PENDING", {
+      reason:oco.status || "OCO_RECONCILIATION_REQUIRED",
+      executedQty:summary.netQty,
+    });
     return {
-      ok: false,
-      status: oco.status || "OCO_RECONCILIATION_REQUIRED",
-      reconciliationRequired: true,
-      mayResend: false,
+      ok:false,
+      status:oco.status || "OCO_RECONCILIATION_REQUIRED",
+      reconciliationRequired:true,
+      unprotectedPosition:true,
+      mayResend:false,
       buy,
       oco,
-      clientIds: oco.ids,
+      intentId,
+      clientIds:oco.ids,
     };
   }
 
-  const closed = await emergencyClose(env, { signalId, symbol, quantity: normalized.quantity });
+  const closed = await emergencyClose(env, {
+    intentId,
+    signalId,
+    symbol,
+    quantity:normalized.quantity,
+  });
   if (!closed.ok) {
+    await writeTradeState(env, intentId, "FAILED_SAFE", {
+      reason:closed.status || "UNPROTECTED_POSITION",
+      executedQty:summary.netQty,
+      emergencyClosed:false,
+    });
     return {
-      ok: false,
-      status: closed.status || "UNPROTECTED_POSITION",
-      reconciliationRequired: true,
-      mayResend: false,
+      ok:false,
+      status:closed.status || "UNPROTECTED_POSITION",
+      reconciliationRequired:true,
+      unprotectedPosition:true,
+      mayResend:false,
       buy,
       oco,
-      emergency: closed,
-      clientIds: oco.ids,
+      emergency:closed,
+      intentId,
+      clientIds:oco.ids,
     };
   }
 
   return {
-    ok: true,
-    status: "PROTECTION_FAILED_EMERGENCY_CLOSED",
-    buy: { body: {
-      status: "BUY_FILLED",
-      order_id: buy.order?.orderId ?? null,
-      executed_qty: summary.netQty,
-      gross_executed_qty: summary.grossQty,
-      quote_spent: summary.quoteSpent,
-      weighted_price: summary.weightedPrice,
-      commissions: summary.commissions,
+    ok:true,
+    status:"PROTECTION_FAILED_EMERGENCY_CLOSED",
+    intentId,
+    buy:{ body:{
+      status:buy.partial ? "BUY_PARTIAL_FINAL" : "BUY_FILLED",
+      order_id:buy.order?.orderId ?? null,
+      executed_qty:summary.netQty,
+      gross_executed_qty:summary.grossQty,
+      quote_spent:summary.quoteSpent,
+      weighted_price:summary.weightedPrice,
+      commissions:summary.commissions,
     }},
-    oco: { body: {
-      status: "PROTECTION_FAILED_EMERGENCY_CLOSED",
-      emergency_order_id: closed.emergencyOrder?.orderId ?? null,
+    oco:{ body:{
+      status:"PROTECTION_FAILED_EMERGENCY_CLOSED",
+      emergency_order_id:closed.emergencyOrder?.orderId ?? null,
     }},
-    executedQty: summary.netQty,
-    protectedQty: 0,
-    clientIds: oco.ids,
+    executedQty:summary.netQty,
+    protectedQty:0,
+    clientIds:oco.ids,
+    preTrade:preTrade.validation,
   };
 }
