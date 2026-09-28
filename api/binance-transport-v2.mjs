@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+// Preview redeploy probe: read-only transport only; financial writes remain disabled.
 const BINANCE_BASES = [
   "https://api.binance.com",
   "https://api-gcp.binance.com",
