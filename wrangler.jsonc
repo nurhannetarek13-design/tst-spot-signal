@@ -10,10 +10,10 @@
     "enabled": true
   },
   "vars": {
-    "LIVE_EXECUTION_ENABLED": "true",
+    "LIVE_EXECUTION_ENABLED": "false",
     "AUTONOMOUS_ENABLED": "false",
-    "E2E_ARMED": "true",
-    "MAKE_EXECUTOR_V2_READY": "true",
+    "E2E_ARMED": "false",
+    "MAKE_EXECUTOR_V2_READY": "false",
     "MAX_ORDER_USDT": "5.5",
     "MAX_OPEN_POSITIONS": "1",
     "DAILY_LOSS_CAP_USDT": "0.5"
