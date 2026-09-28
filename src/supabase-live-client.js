@@ -251,9 +251,10 @@ function isDefiniteReject(body = {}, httpStatus = 0) {
   return status >= 400 && status < 500;
 }
 
-async function relay(env, method, path, params = {}, timeoutMs = 15000) {
+async function relay(env, method, path, params = {}, timeoutMs = 15000, signingModeOverride = null) {
   const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
   const pair = binanceCredentials(env);
+  if (signingModeOverride) pair.signingMode = String(signingModeOverride).toUpperCase() === "ED25519" ? "ED25519" : "HMAC";
   if (!url) return { ok: false, status: "SUPABASE_RELAY_NOT_CONFIGURED", noRequestSent: true };
   if (!signingCredentialsReady(pair)) return { ok: false, status: "BINANCE_CREDENTIALS_MISSING", noRequestSent: true };
   if (!pair.ed25519PrivateKey) return { ok: false, status: "SUPABASE_RELAY_AUTH_KEY_MISSING", noRequestSent: true };
@@ -948,6 +949,39 @@ export async function supabaseRelayReplaySelftest(env) {
     status:passed?"SUPABASE_RELAY_REPLAY_PROTECTION_OK":"SUPABASE_RELAY_REPLAY_PROTECTION_FAILED",
     first,
     replay,
+    financialAction:false,
+    noSecretValuesExposed:true,
+  };
+}
+
+export async function supabaseSigningModeProbe(env) {
+  const base=binanceCredentials(env);
+  const modes=["HMAC","ED25519"];
+  const results=[];
+  for(const mode of modes){
+    const candidate={...base,signingMode:mode};
+    const credentialPresent=mode==="HMAC" ? Boolean(candidate.hmacSecret) : Boolean(candidate.ed25519PrivateKey);
+    if(!candidate.apiKey || !credentialPresent){
+      results.push({mode,ok:false,status:"SIGNING_CREDENTIAL_MISSING",httpStatus:null,binanceCode:null});
+      continue;
+    }
+    const r=await relay(env,"GET","/api/v3/account",{omitZeroBalances:"true"},15000,mode);
+    results.push({
+      mode,
+      ok:r.ok===true,
+      status:r.status||null,
+      httpStatus:Number(r.httpStatus||0)||null,
+      binanceCode:r.body?.binanceCode ?? r.diagnostics?.binanceCode ?? null,
+      diagnostics:r.diagnostics||null,
+    });
+    if(r.ok===true) break;
+  }
+  const winner=results.find((x)=>x.ok===true)||null;
+  return {
+    ok:Boolean(winner),
+    status:winner?"BINANCE_SIGNING_MODE_PROVEN":"NO_VALID_BINANCE_SIGNING_MODE",
+    signingMode:winner?.mode||null,
+    results,
     financialAction:false,
     noSecretValuesExposed:true,
   };
