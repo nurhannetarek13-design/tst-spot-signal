@@ -77,9 +77,10 @@ jobs:
           grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
-          grep -q '"LIVE_EXECUTION_ENABLED": "true"' wrangler.jsonc
+          grep -q '"LIVE_EXECUTION_ENABLED": "false"' wrangler.jsonc
           grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
-          grep -q '"E2E_ARMED": "true"' wrangler.jsonc
+          grep -q '"E2E_ARMED": "false"' wrangler.jsonc
+          grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
           node scripts/test-make-v2-manual-route.mjs
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/buy-gateway-stable.js
           grep -q 'EXPECTED_TELEGRAM_WEBHOOK_URL' src/buy-gateway-stable.js
@@ -153,12 +154,12 @@ jobs:
           assert r.get('autonomousExecution') is False
           assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
           assert r.get('oldVercelFallback') is False
-          assert r.get('status') == 'MANUAL_LIVE_E2E_ARMED'
-          assert r.get('executionReady') is True
-          assert r.get('blocker') is None
-          assert r.get('executorConfigured') is True
-          assert r.get('liveExecutionEnabled') is True
-          assert r.get('e2eArmed') is True
+          assert r.get('status') == 'LIVE_EXECUTION_BLOCKED'
+          assert r.get('executionReady') is False
+          assert r.get('blocker') == 'MAKE_EXECUTOR_V2_INCOMPLETE'
+          assert r.get('executorConfigured') is False
+          assert r.get('liveExecutionEnabled') is False
+          assert r.get('e2eArmed') is False
           assert r.get('autonomousExecution') is False
           assert r.get('manualOnly') is True
           assert r.get('noBalanceValuesExposed') is True
@@ -204,73 +205,14 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
-      - name: Verify Make V2 production binding without financial action
+      - name: Verify Make V2 remains fail-closed while external Make is paused
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 35 -X POST \
-            -H 'content-type: application/json' \
-            --data '{}' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/make-v2-dry-probe?nonce=$(date +%s%N)" \
-            -o /tmp/v2-probe.json
-          cat /tmp/v2-probe.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/v2-probe.json'))
-          assert r.get('ok') is True
-          assert r.get('status') == 'MAKE_V2_DRY_PROBE_DISPATCHED'
-          assert r.get('routeVersion') == 'v2'
-          assert r.get('financialAction') is False
-          assert r.get('liveExecutionEnabled') is True
-          assert r.get('autonomousEnabled') is False
-          assert r.get('buyVerified') is True
-          assert r.get('ocoVerified') is True
-          assert r.get('healthRefreshed') is True
-          assert r.get('buy',{}).get('routeId') == 'BUY_V2'
-          assert r.get('oco',{}).get('routeId') == 'OCO_V2'
-          assert r.get('buy',{}).get('first',{}).get('transportOk') is True
-          assert r.get('buy',{}).get('replay',{}).get('transportOk') is True
-          assert r.get('oco',{}).get('first',{}).get('transportOk') is True
-          assert r.get('oco',{}).get('replay',{}).get('transportOk') is True
-          PY
-
-          ok=0
-          for attempt in $(seq 1 15); do
-            curl --fail --silent --show-error --max-time 20 \
-              -H 'cache-control: no-store' \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/make-v2-route-status?attempt=$attempt&nonce=$(date +%s%N)" \
-              -o /tmp/v2-routes.json
-            cat /tmp/v2-routes.json
-            echo
-            if python - <<'PY'
-          import json,sys,time
-          r=json.load(open('/tmp/v2-routes.json'))
-          now=int(time.time()*1000)
-          buy=r.get('buy') or {}
-          oco=r.get('oco') or {}
-          checks=[
-            r.get('ok') is True,
-            r.get('routeVersion') == 'v2',
-            r.get('buyRouteId') == 'BUY_V2',
-            r.get('ocoRouteId') == 'OCO_V2',
-            r.get('legacyRoutesConfigured') is False,
-            buy.get('lastStatus') == 'REPLAY_BLOCKED',
-            oco.get('lastStatus') == 'REPLAY_BLOCKED',
-            int(buy.get('acceptedAt') or 0) > 0,
-            int(oco.get('acceptedAt') or 0) > 0,
-            int(buy.get('replayBlockedAt') or 0) > 0,
-            int(oco.get('replayBlockedAt') or 0) > 0,
-            now-int(buy.get('acceptedAt') or 0) < 300000,
-            now-int(oco.get('acceptedAt') or 0) < 300000,
-            now-int(buy.get('replayBlockedAt') or 0) < 300000,
-            now-int(oco.get('replayBlockedAt') or 0) < 300000,
-          ]
-          sys.exit(0 if all(checks) else 1)
-          PY
-            then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = 1
+          grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
+          grep -q 'id: "BUY_V2"' src/make-live-client.js
+          grep -q 'id: "OCO_V2"' src/make-live-client.js
+          echo "MAKE_V2_FAIL_CLOSED_EXTERNAL_PAUSE"
 
       - name: Verify HMAC bridge auth and replay protection
         if: always()
@@ -293,42 +235,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ok=0
-          for attempt in $(seq 1 10); do
-            rm -f /tmp/gate.json
-            curl --silent --show-error --max-time 20 \
-              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?attempt=${attempt}&nonce=$(date +%s%N)" \
-              -o /tmp/gate.json || true
-            cat /tmp/gate.json 2>/dev/null || true
-            echo
-            if python - <<'PY'
-          import json,sys
-          try: r=json.load(open('/tmp/gate.json'))
-          except Exception: sys.exit(1)
-          checks=[
-            r.get('ok') is True,
-            r.get('go') is True,
-            r.get('activationAllowed') is False,
-            'LIVE_EXECUTION_ENABLED' not in r.get('activationFailed', []),
-            'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
-            r.get('e2eArmed') is True,
-            r.get('manualE2EComplete') is False,
-            r.get('manualExecutionAllowed') is True,
-            r.get('bridgeFresh') is True,
-            r.get('executorOwnershipOk') is True,
-            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
-            r.get('executorConfigured') is True,
-            r.get('checks',{}).get('EXECUTION_ROUTE_HEALTHY') is True,
-            r.get('checks',{}).get('NO_UNKNOWN_ORDERS') is True,
-            r.get('checks',{}).get('NO_UNPROTECTED_POSITIONS') is True,
-            r.get('checks',{}).get('DAILY_RISK_AVAILABLE') is True,
-          ]
-          sys.exit(0 if all(checks) else 1)
+          curl --fail --silent --show-error --max-time 20 \
+            -H 'cache-control: no-store' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?nonce=$(date +%s%N)" \
+            -o /tmp/gate.json
+          cat /tmp/gate.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/gate.json'))
+          checks=r.get('checks',{})
+          assert r.get('ok') is True
+          assert r.get('go') is False
+          assert r.get('activationAllowed') is False
+          assert r.get('status') == 'NO_GO'
+          assert r.get('executorConfigured') is False
+          assert r.get('e2eArmed') is False
+          assert r.get('manualE2EComplete') is False
+          assert r.get('manualExecutionAllowed') is False
+          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
+          assert checks.get('EXECUTION_ROUTE_HEALTHY') is False
+          assert checks.get('NO_UNKNOWN_ORDERS') is True
+          assert checks.get('NO_UNPROTECTED_POSITIONS') is True
+          assert r.get('liveTrading') is False
+          assert r.get('autonomousExecution') is False
+          assert r.get('noSecretValuesExposed') is True
           PY
-            then ok=1; break; fi
-            sleep 3
-          done
-          test "$ok" = 1
 
       - name: Verify scanner cannot auto-buy
         if: always()
