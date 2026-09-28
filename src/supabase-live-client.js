@@ -201,6 +201,28 @@ function relayConfigured(env = {}) {
   return Boolean(String(env.SUPABASE_BINANCE_RELAY_URL || "").trim());
 }
 
+export async function triggerSupabaseRealE2E(env) {
+  const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  if(!url) return {ok:false,status:"SUPABASE_RELAY_NOT_CONFIGURED",noRequestSent:true};
+  if(!relayAuthPrivateKey(env)) return {ok:false,status:"SUPABASE_RELAY_AUTH_KEY_MISSING",noRequestSent:true};
+  const method="POST", path="/internal/e2e", query="";
+  const auth=await buildRelayAuth(env,method,path,query);
+  const r=await fetch(url,{
+    method:"POST",
+    headers:{"content-type":"application/json","cache-control":"no-store","x-region":relayRegion(env)},
+    body:JSON.stringify({
+      action:"RUN_ONE_REAL_E2E",
+      method,path,query,
+      relayTimestamp:auth.relayTimestamp,
+      relayNonce:auth.relayNonce,
+      relaySignature:auth.relaySignature,
+    }),
+    signal:AbortSignal.timeout(120000),
+  });
+  const body=await r.json().catch(()=>({}));
+  return {ok:r.ok&&body?.ok===true,httpStatus:r.status,status:String(body?.status||("HTTP_"+r.status)),body,financialAction:true};
+}
+
 export async function supabasePublicMarketData(env, path) {
   const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
   if (!relayUrl) throw new Error("SUPABASE_RELAY_NOT_CONFIGURED");
