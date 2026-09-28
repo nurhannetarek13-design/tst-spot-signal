@@ -43,6 +43,24 @@ jobs:
           assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
           PY
+      - name: Probe Binance credential alias pairing
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30             "$WORKER_URL/cloudflare-binance-pair-preflight?nonce=$(date +%s%N)"             -o /tmp/pair.json
+          cat /tmp/pair.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/pair.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("PAIR_OK=",r.get('ok'))
+          print("PAIR_STATUS=",r.get('status'))
+          print("SELECTED_KEY_ALIAS=",r.get('selectedKeyAlias'))
+          print("SELECTED_SECRET_ALIAS=",r.get('selectedSecretAlias'))
+          print("CAN_TRADE=",r.get('canTrade'))
+          PY
+
       - name: Probe Binance WebSocket API from Cloudflare
         if: always()
         shell: bash
