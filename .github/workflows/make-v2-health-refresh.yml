@@ -18,6 +18,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
+      - name: Refresh HMAC bridge ownership without financial action
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 -X POST \
+            -H 'content-type: application/json' \
+            --data '{"signal_id":"healthrefresh","symbol":"BTCUSDT"}' \
+            "$WORKER_URL/bridge-auth-selftest?nonce=$(date +%s%N)" \
+            -o /tmp/bridge.json
+          cat /tmp/bridge.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/bridge.json'))
+          assert r.get('ok') is True
+          assert r.get('first') == 'BRIDGE_AUTH_OK'
+          assert r.get('replay') == 'REPLAY_BLOCKED'
+          assert r.get('oldVercelFallback') is False
+          PY
+
       - name: Refresh signed Make V2 health without financial action
         shell: bash
         run: |
