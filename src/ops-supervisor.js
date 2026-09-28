@@ -392,6 +392,8 @@ async function supabaseRelayReadOnlyPreflight(env) {
         status: row?.status || `HTTP_${r.status}`,
         httpStatus: r.status,
         upstreamHttpStatus: Number(row?.upstreamHttpStatus || 0),
+        binanceCode: row?.binanceCode ?? null,
+        message: String(row?.message || "").slice(0, 120) || null,
         canTrade: row?.data?.canTrade === true,
         accountType: row?.data?.accountType || null,
       };
