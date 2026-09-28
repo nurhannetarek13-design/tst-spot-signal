@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { signEd25519Base64 } from "../src/supabase-live-client.js";
+import { signEd25519Base64 } from "../src/binance-signing.js";
 
 function toPem(arrayBuffer) {
   const b64 = Buffer.from(arrayBuffer).toString("base64");
