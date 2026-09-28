@@ -26,16 +26,18 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 35 -X POST \
             -H 'cache-control: no-store' \
-            "$WORKER_URL/supabase-relay-replay-selftest?nonce=$(date +%s%N)" \
+            "$WORKER_URL/supabase-v2-auth-selftest?nonce=$(date +%s%N)" \
             -o /tmp/replay.json
           cat /tmp/replay.json
           python - <<'PY'
           import json
           r=json.load(open('/tmp/replay.json'))
           assert r.get('ok') is True
-          assert r.get('status') == 'SUPABASE_RELAY_REPLAY_PROTECTION_OK'
+          assert r.get('status') == 'SUPABASE_RELAY_AUTH_SELFTEST_PASS'
           assert r.get('financialAction') is False
           assert r.get('replay',{}).get('status') == 'RELAY_REPLAY_BLOCKED'
           assert r.get('replay',{}).get('httpStatus') == 401
+          assert r.get('stale',{}).get('status') == 'RELAY_AUTH_STALE'
+          assert r.get('stale',{}).get('httpStatus') == 401
           assert r.get('noSecretValuesExposed') is True
           PY
