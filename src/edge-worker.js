@@ -18,8 +18,8 @@ const CFG = {
   maxOpenPaper: 1,
   duplicateHours: 6,
   maxHoldHours: 36,
-  scanPerRun: 8,
-  focusUniverseSize: 80,
+  scanPerRun: 24,
+  focusUniverseSize: 9999,
   focusMinVolume: 20_000_000,
   focusMaxVolume: 150_000_000,
   focusMaxPrice: 3.0,
@@ -58,7 +58,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"THESIS_SETUP_SHADOW_V1",decisionEngine:"SETUP_THESIS_CONFIRMATION",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["LIQUIDITY_SWEEP_FVG","STOP_HUNT_STRUCTURE_SHIFT","BREAKOUT_RETEST_CONTINUATION","COMPRESSION_EXPANSION"],decisionFlow:["MARKET_CONTEXT","STRUCTURAL_SETUP","THESIS","CONFIRMATION_VETO","INVALIDATION","STRUCTURE_TARGETS","NET_RR","CALIBRATION"],engines:["THESIS_SETUP_ENGINE","CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"THESIS_SETUP_SHADOW_V1",decisionEngine:"SETUP_THESIS_CONFIRMATION",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"ALL_SAFE_BINANCE_SPOT_USDT_ROTATING_DEEP_SCAN",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["LIQUIDITY_SWEEP_FVG","STOP_HUNT_STRUCTURE_SHIFT","BREAKOUT_RETEST_CONTINUATION","COMPRESSION_EXPANSION"],decisionFlow:["MARKET_CONTEXT","STRUCTURAL_SETUP","THESIS","CONFIRMATION_VETO","INVALIDATION","STRUCTURE_TARGETS","NET_RR","CALIBRATION"],engines:["THESIS_SETUP_ENGINE","CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -125,16 +125,17 @@ async function scan(env,sendAlert){
     const bigPool=summaries.filter(x=>x.volume>=CFG.big.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const smallPool=summaries.filter(x=>!MAJORS.has(x.base)&&x.volume>=CFG.small.minVolume&&x.volume<=CFG.small.maxVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const newPool=summaries.filter(x=>x.isNewListing&&!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.newListing.minVolume).sort((a,b)=>opportunityRank(b)-opportunityRank(a));
-    const allPool=summaries.slice().sort((a,b)=>opportunityRank(b)-opportunityRank(a));
-    const focusPool=allPool.filter(x=>!MAJORS.has(x.base)&&x.ask<=CFG.focusMaxPrice&&x.volume>=CFG.focusMinVolume&&x.volume<=CFG.focusMaxVolume).slice(0,CFG.focusUniverseSize);
+    const allPool=summaries
+      .filter(x=>x.spreadPct<=CFG.newListing.maxSpreadPct)
+      .sort((a,b)=>opportunityRank(b)-opportunityRank(a));
     const crashPool=summaries
       .filter(x=>x.volume>=CFG.big.minVolume&&x.change<=-4&&x.spreadPct<=CFG.small.maxSpreadPct)
       .sort((a,b)=>a.change-b.change)
       .slice(0,3);
-    const rotated=await rotateSelection(env,focusPool,newPool);
+    const rotated=await rotateSelection(env,allPool,newPool);
     const selected=[...crashPool,...rotated]
       .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
-      .slice(0,Math.max(CFG.scanPerRun,10));
+      .slice(0,Math.max(CFG.scanPerRun,24));
     const calibration=calibrationBySetup(await getState(env,"paper:ledger")||[]);
     const analyses=[];
     for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime,calibration))));
@@ -157,7 +158,7 @@ async function scan(env,sendAlert){
       thesisQuality:Number(best.thesisQuality||0),
       createdAt:Date.now(),
       signalBar:best.signalBar,
-      recommendedUSDT:Math.min(5.5,Number(best.notional||5.5)),
+      recommendedUSDT:null,
       source:"CLOUDFLARE_DECISION_ENGINE",
       liveEligible:true,
     };
@@ -191,8 +192,8 @@ function summarize(t,info,book){
 function allowedBase(base){ if(!base||EXCLUDED.has(base)) return false; if(/(UP|DOWN|BULL|BEAR)$/.test(base)) return false; if(base.endsWith("B")&&!SAFE_B_SUFFIX.has(base)) return false; return true; }
 function opportunityRank(x){ const vol=Math.log10(Math.max(1,x.volume)); const momentum=Math.max(-5,Math.min(5,x.change)); return vol*2+momentum-x.spreadPct*20; }
 
-async function rotateSelection(env,focusPool,newPool){
-  const state=await getState(env,"scan:rotation")||{focus:0,new:0}; const result=[];
+async function rotateSelection(env,allPool,newPool){
+  const state=await getState(env,"scan:rotation")||{all:0,new:0}; const result=[];
   const addFrom=(pool,cursor,count)=>{
     if(!pool.length||count<=0) return {cursor:0,added:0};
     let added=0;
@@ -202,14 +203,20 @@ async function rotateSelection(env,focusPool,newPool){
     }
     return {cursor:(cursor+Math.max(1,count))%pool.length,added};
   };
-  const newSlots=Math.min(CFG.newListingSlotsPerRun,newPool.length,CFG.scanPerRun);
+  const newSlots=Math.min(CFG.newListingSlotsPerRun,newPool.length,Math.max(2,Math.floor(CFG.scanPerRun/6)));
   const n=addFrom(newPool,Number(state.new||0),newSlots);
   const remaining=Math.max(0,CFG.scanPerRun-result.length);
-  const f=addFrom(focusPool,Number(state.focus||0),remaining);
+  const a=addFrom(allPool,Number(state.all||0),remaining);
   if(result.length<CFG.scanPerRun){
-    addFrom(newPool,n.cursor,CFG.scanPerRun-result.length);
+    addFrom(allPool,a.cursor,CFG.scanPerRun-result.length);
   }
-  await putState(env,"scan:rotation",{focus:f.cursor,new:n.cursor,updatedAt:Date.now()},7*24*3600);
+  await putState(env,"scan:rotation",{
+    all:a.cursor,
+    new:n.cursor,
+    eligibleUniverseSize:allPool.length,
+    scannedThisRun:result.length,
+    updatedAt:Date.now()
+  },7*24*3600);
   return result.slice(0,CFG.scanPerRun);
 }
 
