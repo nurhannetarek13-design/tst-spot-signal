@@ -31,7 +31,9 @@ export function parseAndValidateCapability(body, { nowMs = Date.now(), writesEna
   const signature = String(q.get("signature") || "");
   const timestamp = Number(q.get("timestamp"));
   const recvWindow = Number(q.get("recvWindow") || 5000);
-  if (!/^[a-f0-9]{64}$/i.test(signature)) throw new Error("BAD_BINANCE_SIGNATURE_SHAPE");
+  const hmacShape = /^[a-f0-9]{64}$/i.test(signature);
+  const ed25519Shape = /^[A-Za-z0-9+/]{86}==$/.test(signature);
+  if (!(hmacShape || ed25519Shape)) throw new Error("BAD_BINANCE_SIGNATURE_SHAPE");
   if (!Number.isFinite(timestamp) || Math.abs(nowMs - timestamp) > 10_000) throw new Error("STALE_CAPABILITY");
   if (!Number.isFinite(recvWindow) || recvWindow < 1 || recvWindow > 5000) throw new Error("BAD_RECV_WINDOW");
 
