@@ -324,11 +324,11 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000) {
       signal: controller.signal,
     });
     const body = await r.json().catch(() => ({}));
-    const diagnostics = safeSigningDiagnostics({
+    const diagnostics = {
       ...diagnosticBase,
-      httpStatus: r.status,
-      binanceCode: body?.binanceCode ?? null,
-    });
+      httpStatus:r.status,
+      binanceCode:body?.binanceCode == null ? null : Number(body.binanceCode),
+    };
     return {
       ok: r.ok && body?.ok === true,
       httpStatus: r.status,
