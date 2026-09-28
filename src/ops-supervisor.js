@@ -758,7 +758,16 @@ export default {
     if (url.pathname === "/infra-credential-presence") {
       const rawApiKey = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
       const apiKeyPresent = Boolean(rawApiKey);
-      const apiSecretPresent = Boolean(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY);
+      const rawSecret = String(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "").trim();
+      const apiSecretPresent = Boolean(rawSecret);
+      const secretKind = !rawSecret
+        ? "MISSING"
+        : (/^-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(rawSecret)
+            ? "PEM_PRIVATE_KEY"
+            : (/^[A-Za-z0-9_+\/=.-]+$/.test(rawSecret) && rawSecret.length >= 24 && rawSecret.length <= 256
+                ? "HMAC_SECRET_CANDIDATE"
+                : "UNKNOWN_SECRET_SHAPE"));
+      const secretLengthBucket = !rawSecret ? "0" : (rawSecret.length < 32 ? "LT32" : (rawSecret.length <= 96 ? "32_96" : "GT96"));
       let apiKeyFingerprint = null;
       if (rawApiKey) {
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawApiKey));
@@ -769,6 +778,8 @@ export default {
         cloudflareBinanceApiKeyPresent: apiKeyPresent,
         cloudflareBinanceApiKeyFingerprint: apiKeyFingerprint,
         cloudflareBinanceSecretPresent: apiSecretPresent,
+        cloudflareBinanceSecretKind: secretKind,
+        cloudflareBinanceSecretLengthBucket: secretLengthBucket,
         cloudflareBinanceCredentialsComplete: apiKeyPresent && apiSecretPresent,
         telegramRelaySecretPresent: Boolean(env.TELEGRAM_BOT_TOKEN),
         liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
