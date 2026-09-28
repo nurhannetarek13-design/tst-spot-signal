@@ -951,6 +951,66 @@ async function notifyExecutionReadinessTransition(env, balance) {
 }
 
 
+async function productionV2DryRunSelftest(env) {
+  const policy=readLivePolicy(env);
+  if(policy.liveExecutionEnabled===true || policy.autonomousEnabled===true){
+    return {ok:false,status:"DRYRUN_REQUIRES_LIVE_OFF",financialAction:false};
+  }
+  if(executionProvider(env)!=="SUPABASE_V2"){
+    return {ok:false,status:"DRYRUN_REQUIRES_SUPABASE_V2",financialAction:false};
+  }
+  if(!env.TELEGRAM_BOT_TOKEN){
+    return {ok:false,status:"TELEGRAM_SIGNING_SECRET_MISSING",financialAction:false};
+  }
+  const lock=await claimState(env,"production-v2-dryrun-lock",{at:Date.now()},60);
+  if(!lock) return {ok:false,status:"DRYRUN_THROTTLED",financialAction:false};
+
+  const symbol="SOLUSDT";
+  const book=await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  const ask=Number(book?.askPrice||0),bid=Number(book?.bidPrice||0);
+  if(!(ask>0&&bid>0&&ask>=bid)) return {ok:false,status:"DRYRUN_BOOK_UNAVAILABLE",financialAction:false};
+  const stop=Number((ask*0.992).toPrecision(12));
+  const target=Number((ask*1.01).toPrecision(12));
+  const body={
+    id:`PROD-DRY-${Date.now()}`,
+    symbol,
+    entry:ask,
+    stop,
+    target,
+    stakeUSDT:5.5,
+    score:100,
+    strategy:"PRODUCTION_V2_DRYRUN",
+    dryRun:true,
+  };
+  const raw=JSON.stringify(body);
+  const ts=String(Date.now());
+  const signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${raw}`);
+  const req=new Request("https://internal/fast-signal-ingest",{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-fast-timestamp":ts,
+      "x-fast-signature":signature,
+    },
+    body:raw,
+  });
+  const response=await handleFastSignalIngest(req,env);
+  const result=await response.json().catch(()=>({}));
+  return {
+    ...result,
+    selftest:true,
+    path:[
+      "SIGNAL_HMAC",
+      "FAST_SIGNAL_INGEST",
+      "RISK_SIZING",
+      "SUPABASE_V2",
+      "BINANCE_SIGNED_AUTH",
+      "BINANCE_ORDER_TEST",
+    ],
+    financialAction:false,
+  };
+}
+
 async function notifyOnce(env, key, text, ttl = 30 * 24 * 60 * 60) {
   const claimed=await claimState(env,"notify:"+key,{at:Date.now()},ttl);
   if(!claimed) return false;
@@ -1052,6 +1112,16 @@ export default {
           noSecretValuesExposed:true,
         }, { status:502, headers:{ "cache-control":"no-store" } });
       }
+    }
+
+    if (url.pathname === "/production-v2-dry-run" && request.method === "POST") {
+      const result=await productionV2DryRunSelftest(env).catch((error)=>({
+        ok:false,
+        status:"PRODUCTION_V2_DRYRUN_ERROR",
+        reason:String(error?.message||error).slice(0,160),
+        financialAction:false,
+      }));
+      return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
     }
 
     if (url.pathname === "/runtime-check") {
