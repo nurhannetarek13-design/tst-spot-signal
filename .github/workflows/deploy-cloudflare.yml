@@ -281,8 +281,14 @@ jobs:
           except Exception: sys.exit(1)
           checks=[
             r.get('ok') is True,
+            r.get('mode') == 'THESIS_SETUP_SHADOW_V1',
+            r.get('decisionEngine') == 'SETUP_THESIS_CONFIRMATION',
             r.get('liveTrading') is False,
             r.get('executorAllowed') is False,
+            r.get('decisionFlow') == [
+              'MARKET_CONTEXT','STRUCTURAL_SETUP','THESIS','CONFIRMATION_VETO',
+              'INVALIDATION','STRUCTURE_TARGETS','NET_RR','CALIBRATION'
+            ],
           ]
           sys.exit(0 if all(checks) else 1)
           PY

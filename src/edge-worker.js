@@ -1,3 +1,5 @@
+import { detectThesisSetup, higherTimeframeContext, calibrationBySetup, buildThesisDecision } from "./thesis-engine.js";
+
 const API_BASES = [
   "https://www.binance.com",
   "https://api-gcp.binance.com",
@@ -55,7 +57,7 @@ export default {
       const daily = await getDaily(env);
       const active = await getState(env,"paper:active") || [];
       const evidence = await getEvidence(env);
-      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"FREE_FUSION_SHADOW",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["TREND_BREAKOUT","MEAN_REVERSION","VOLATILITY_MOMENTUM","NEW_LISTING_MOMENTUM","LIQUIDITY_CRASH_EXHAUSTION","STOP_HUNT_REVERSAL"],engines:["CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
+      const validators = await getFusionValidators(env,false); return json({ ok:true,mode:"THESIS_SETUP_SHADOW_V1",decisionEngine:"SETUP_THESIS_CONFIRMATION",liveTrading:false,executorAllowed:false,cadence:"EVERY_MINUTE",scannerUniverse:"LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS",focusUniverseSize:CFG.focusUniverseSize,focusMinVolume24hUSDT:CFG.focusMinVolume,focusMaxPriceUSDT:CFG.focusMaxPrice,focusMaxVolume24hUSDT:CFG.focusMaxVolume,majorsAsMarketFilterOnly:true,newListingPriority:true,strategies:["LIQUIDITY_SWEEP_FVG","STOP_HUNT_STRUCTURE_SHIFT","BREAKOUT_RETEST_CONTINUATION","COMPRESSION_EXPANSION"],decisionFlow:["MARKET_CONTEXT","STRUCTURAL_SETUP","THESIS","CONFIRMATION_VETO","INVALIDATION","STRUCTURE_TARGETS","NET_RR","CALIBRATION"],engines:["THESIS_SETUP_ENGINE","CLOUDFLARE_ORDERBOOK_ENGINE","MICROSTRUCTURE_COMPOSITE","PUBLIC_EDGE_LAB","UNIFIED_CANDIDATE_GATE","DERIVATIVES_PRESSURE_CLOUDFLARE","VECTORBT_CANDIDATE_VALIDATOR","FREQTRADE_VALIDATOR","JESSE_VALIDATOR","NAUTILUS_EXECUTION_VALIDATOR","FORWARD_PAPER_VALIDATOR"],openPaperPositions:active.length,dailyRealizedPnlUSDT:round(daily.realizedPnlUSDT||0,4),evidence:publicEvidence(evidence),validators });
     }
     if (url.pathname === "/paper-status") return paperStatus(env);
     if (url.pathname === "/fusion-status") {
@@ -132,16 +134,17 @@ async function scan(env,sendAlert){
     const selected=[...crashPool,...rotated]
       .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
       .slice(0,Math.max(CFG.scanPerRun,10));
+    const calibration=calibrationBySetup(await getState(env,"paper:ledger")||[]);
     const analyses=[];
-    for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime))));
-    const valid=analyses.filter(x=>x.valid).sort((a,b)=>b.score-a.score||b.edge-a.edge);
+    for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime,calibration))));
+    const valid=analyses.filter(x=>x.valid).sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)||(b.netRR||0)-(a.netRR||0)||b.edge-a.edge);
     const best=valid[0]||null;
-    if(!best) return {ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,score:x.score||0,status:x.status})),liveTrading:false};
+    if(!best) return {ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,setup:x.setup,thesisQuality:x.thesisQuality||0,confidence:x.confidence||null,status:x.status,rejectionReasons:x.rejectionReasons||[]})),liveTrading:false};
     const derivatives=await derivativesPressure(best.symbol).catch(error=>({status:"UNAVAILABLE",error:String(error?.message||error)}));
 
     const dedupeKey=`signal:${best.symbol}:${best.strategy}:${best.signalBar}`;
     if(await getState(env,dedupeKey)) return {ok:true,status:"DUPLICATE_SUPPRESSED",symbol:best.symbol,liveTrading:false};
-    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,quantity:best.quantity,notional:best.notional,score:best.score,derivatives,openedAt:Date.now(),signalBar:best.signalBar};
+    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,target1:best.target1,target2:best.target2,quantity:best.quantity,notional:best.notional,score:best.score,thesisQuality:best.thesisQuality,thesis:best.thesis,confidence:best.confidence,derivatives,openedAt:Date.now(),signalBar:best.signalBar};
     await putState(env,dedupeKey,{createdAt:Date.now()},CFG.duplicateHours*3600);
     await putState(env,"paper:active",[position],CFG.maxHoldHours*3600+7200);
 
@@ -193,16 +196,20 @@ async function rotateSelection(env,focusPool,newPool){
   return result.slice(0,CFG.scanPerRun);
 }
 
-async function analyze(summary,symbolInfo,marketRegime){
+async function analyze(summary,symbolInfo,marketRegime,calibration={}){
   const lane=summary.isNewListing?"NEW_LISTING":(MAJORS.has(summary.base)||summary.volume>CFG.small.maxVolume?"LARGE_CAP":"SMALL_CAP");
   const cfg=lane==="NEW_LISTING"?CFG.newListing:(lane==="LARGE_CAP"?CFG.big:CFG.small);
   try{
     const [raw15,raw1h,raw4h,depth]=await Promise.all([
-      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=160`),binance(`/api/v3/klines?symbol=${summary.symbol}&interval=1h&limit=140`),binance(`/api/v3/klines?symbol=${summary.symbol}&interval=4h&limit=120`),binance(`/api/v3/depth?symbol=${summary.symbol}&limit=100`)
+      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=15m&limit=160`),
+      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=1h&limit=140`),
+      binance(`/api/v3/klines?symbol=${summary.symbol}&interval=4h&limit=120`),
+      binance(`/api/v3/depth?symbol=${summary.symbol}&limit=100`)
     ]);
     const c15=closed(raw15.map(candle)),h1=closed(raw1h.map(candle)),h4=closed(raw4h.map(candle));
     const minOk=lane==="NEW_LISTING"?(c15.length>=48&&h1.length>=12&&h4.length>=3):(c15.length>=100&&h1.length>=100&&h4.length>=80);
     if(!minOk) return {symbol:summary.symbol,lane,valid:false,status:"HISTORY",listingAgeDays:summary.listingAgeDays};
+
     const closes15=c15.map(x=>x.close),closes1=h1.map(x=>x.close),closes4=h4.map(x=>x.close);
     const e20_15=ema(closes15,20),e50_15=ema(closes15,50),e20_1=ema(closes1,20),e50_1=ema(closes1,50),e20_4=ema(closes4,20),e50_4=ema(closes4,50);
     const atr=atr14(c15),atrPct=atr/closes15.at(-1)*100,last=c15.at(-1);
@@ -215,30 +222,120 @@ async function analyze(summary,symbolInfo,marketRegime){
       0.20*depthStats.l5Imbalance+
       0.20*Math.max(-1,Math.min(1,depthStats.micropriceOffsetBps/2))+
       0.30*tradeFlowImbalance;
-    const trendStrength=Math.abs(e20_1-e50_1)/e50_1*100;
-    const symbolRegime = lane==="NEW_LISTING"?"NEW_LISTING":classifySymbolRegime({trendStrength,atrPct,relVol,rsi,e20_1,e50_1,e20_4,e50_4,lastClose:closes15.at(-1),e20_15,e50_15});
-    const candidate = chooseStrategy(symbolRegime,c15,{e20_15,e50_15,e20_1,e50_1,e20_4,e50_4,atr,relVol,taker,rsi,summary,cfg,marketRegime});
-    if(!candidate) return {symbol:summary.symbol,lane,valid:false,status:"NO_SETUP",strategy:null,regime:symbolRegime};
 
-    const entry=summary.ask; const stopRaw=candidate.stop; const stop=roundPrice(stopRaw,entry); const riskUnit=entry-stop; const stopPct=riskUnit>0?riskUnit/entry*100:999;
-    const filters=symbolInfo.filters||[],lot=filters.find(f=>f.filterType==="LOT_SIZE"),notionalFilter=filters.find(f=>f.filterType==="NOTIONAL"||f.filterType==="MIN_NOTIONAL");
+    const trendStrength=Math.abs(e20_1-e50_1)/Math.max(e50_1,1e-12)*100;
+    const symbolRegime=lane==="NEW_LISTING"?"NEW_LISTING":classifySymbolRegime({trendStrength,atrPct,relVol,rsi,e20_1,e50_1,e20_4,e50_4,lastClose:closes15.at(-1),e20_15,e50_15});
+    const setup=detectThesisSetup(c15);
+    if(!setup) return {symbol:summary.symbol,lane,valid:false,status:"NO_STRUCTURAL_SETUP",strategy:null,regime:symbolRegime};
+
+    const htf=higherTimeframeContext(c15,h1,h4);
+    const entry=Number(summary.ask);
+    const stop=roundPrice(Number(setup.stop),entry);
+    const riskUnit=entry-stop;
+    const stopPct=riskUnit>0?riskUnit/entry*100:999;
+
+    const filters=symbolInfo.filters||[];
+    const lot=filters.find(f=>f.filterType==="LOT_SIZE");
+    const notionalFilter=filters.find(f=>f.filterType==="NOTIONAL"||f.filterType==="MIN_NOTIONAL");
     const step=Number(lot?.stepSize||"0.00000001"),minNotional=Number(notionalFilter?.minNotional||5);
-    const qty=floorStep(Math.min(cfg.maxPosition/entry,riskUnit>0?cfg.maxRisk/riskUnit:0),step),notional=qty*entry,stopNotional=qty*stop;
+    const qty=floorStep(Math.min(cfg.maxPosition/entry,riskUnit>0?cfg.maxRisk/riskUnit:0),step);
+    const notional=qty*entry,stopNotional=qty*stop;
     const feeRisk=qty*riskUnit+notional*CFG.fee+stopNotional*CFG.fee;
-    const target=roundPrice(entry+candidate.rewardR*riskUnit,entry),targetNotional=qty*target,rewardNet=qty*(target-entry)-notional*CFG.fee-targetNotional*CFG.fee,rr=feeRisk>0?rewardNet/feeRisk:0;
-    const baseScore=candidate.score;
-    const liquidityScore=(summary.spreadPct<=cfg.maxSpreadPct?4:0)+(depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth?4:0)+(depthStats.bidAskRatio>=cfg.minDepthRatio?4:0);
-    const flowScore=(relVol>=candidate.minRelVol?5:0)+(taker>=candidate.minTaker?5:0);
-    const microScore=microComposite>=0.25?6:microComposite>=0.10?3:0;
-    const score=Math.min(100,baseScore+liquidityScore+flowScore+microScore);
-    const reversalStrategy=candidate.strategy==="STOP_HUNT_REVERSAL"||candidate.strategy==="LIQUIDITY_CRASH_EXHAUSTION";
-    const microOk=candidate.strategy==="MEAN_REVERSION"?microComposite>=-0.05:(reversalStrategy?microComposite>=0.12:microComposite>=0.08);
-    const regimeOk=marketRegime.state!=="RISK_OFF"||reversalStrategy;
-    const rrFloor=reversalStrategy?1.8:1.6;
-    const scoreFloor=reversalStrategy?Math.max(cfg.minScore,93):cfg.minScore;
-    const hard=regimeOk&&summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=cfg.minDepthRatio&&relVol>=candidate.minRelVol&&taker>=candidate.minTaker&&microOk&&stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&targetNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8&&rr>=rrFloor&&score>=scoreFloor;
-    return {symbol:summary.symbol,lane,valid:hard,status:hard?"READY":"WAIT",strategy:candidate.strategy,regime:symbolRegime,setup:candidate.setup,signalBar:candidate.signalBar,score,entry,stop,target,quantity:qty,notional:round(notional,4),riskUSDT:round(feeRisk,4),netRR:round(rr,2),edge:round(relVol*taker*depthStats.bidAskRatio*Math.max(0.1,1+microComposite),3),metrics:{relVol:round(relVol,2),taker:round(taker,3),rsi:round(rsi,1),atrPct:round(atrPct,2),spreadPct:round(summary.spreadPct,4),depthRatio:round(depthStats.bidAskRatio,2),l1Imbalance:round(depthStats.l1Imbalance,3),l5Imbalance:round(depthStats.l5Imbalance,3),micropriceOffsetBps:round(depthStats.micropriceOffsetBps,3),microComposite:round(microComposite,3)}};
-  }catch(error){ return {symbol:summary.symbol,lane,valid:false,status:"DATA_ERROR",error:String(error?.message||error)}; }
+
+    const reversal=setup.strategy==="STOP_HUNT_STRUCTURE_SHIFT"||setup.strategy==="LIQUIDITY_SWEEP_FVG";
+    const confirmations={
+      liquidity:summary.spreadPct<=cfg.maxSpreadPct&&depthStats.bid>=cfg.minDepth&&depthStats.ask>=cfg.minDepth&&depthStats.bidAskRatio>=Math.min(cfg.minDepthRatio,1.08),
+      flow:relVol>=Math.max(1.0,cfg.minRelVol*0.90)&&taker>=Math.max(0.52,cfg.minTaker-0.02),
+      microstructure:microComposite>=(reversal?0.08:0.10),
+      executionQuality:stopPct>0&&stopPct<=cfg.maxStopPct&&notional>=minNotional*1.01&&stopNotional>=minNotional*1.01&&feeRisk<=cfg.maxRisk+1e-8,
+      relVolStrong:relVol>=cfg.minRelVol,
+      takerStrong:taker>=cfg.minTaker,
+      depthStrong:depthStats.bidAskRatio>=cfg.minDepthRatio,
+      microStrong:microComposite>=0.25,
+    };
+
+    const thesis=buildThesisDecision({
+      setup,
+      candles:c15,
+      entry,
+      htf,
+      marketRegime:marketRegime.state,
+      confirmations,
+      calibration,
+      minNetRR:0,
+    });
+    if(!thesis) return {symbol:summary.symbol,lane,valid:false,status:"THESIS_BUILD_FAILED",strategy:setup.strategy,setup:setup.setup,regime:symbolRegime};
+
+    const target1=roundPrice(Number(thesis.targets.tp1),entry);
+    const target2=roundPrice(Number(thesis.targets.tp2),entry);
+    const target1Notional=qty*target1,target2Notional=qty*target2;
+    const rewardNet1=qty*(target1-entry)-notional*CFG.fee-target1Notional*CFG.fee;
+    const rewardNet2=qty*(target2-entry)-notional*CFG.fee-target2Notional*CFG.fee;
+    const netRR1=feeRisk>0?rewardNet1/feeRisk:0;
+    const netRR2=feeRisk>0?rewardNet2/feeRisk:0;
+    const rrFloor=reversal?1.8:2.0;
+
+    thesis.confirmations.required.rr=netRR2>=rrFloor;
+    thesis.targets.tp1=target1;
+    thesis.targets.tp2=target2;
+    thesis.targets.netRR1=round(netRR1,2);
+    thesis.targets.netRR2=round(netRR2,2);
+    thesis.passed=Object.values(thesis.confirmations.required).every(Boolean);
+    thesis.decision=thesis.passed?"READY":"WAIT";
+
+    const rejectionReasons=Object.entries(thesis.confirmations.required).filter(([,ok])=>!ok).map(([name])=>name);
+    const hard=thesis.passed;
+    const hist=thesis.calibration||{};
+    const confidence={
+      status:hist.status||"LOW_SAMPLE",
+      sampleSize:Number(hist.sampleSize||0),
+      historicalWinRate:hist.historicalWinRate==null?null:round(Number(hist.historicalWinRate)*100,1),
+      calibratedWinProbability:hist.calibratedWinProbability==null?null:round(Number(hist.calibratedWinProbability)*100,1),
+      thesisQuality:thesis.thesisQuality,
+      note:hist.calibratedWinProbability==null?"No probability shown until >=30 same-setup paper trades":"Bayesian win probability from same-setup paper history",
+    };
+
+    return {
+      symbol:summary.symbol,
+      lane,
+      valid:hard,
+      status:hard?"READY":"WAIT",
+      strategy:setup.strategy,
+      regime:symbolRegime,
+      setup:setup.setup,
+      signalBar:setup.signalBar,
+      score:thesis.thesisQuality,
+      thesisQuality:thesis.thesisQuality,
+      thesis,
+      confidence,
+      rejectionReasons,
+      entry,
+      stop,
+      target:target2,
+      target1,
+      target2,
+      quantity:qty,
+      notional:round(notional,4),
+      riskUSDT:round(feeRisk,4),
+      netRR:round(netRR2,2),
+      netRR1:round(netRR1,2),
+      edge:round(relVol*taker*depthStats.bidAskRatio*Math.max(0.1,1+microComposite),3),
+      metrics:{
+        relVol:round(relVol,2),
+        taker:round(taker,3),
+        rsi:round(rsi,1),
+        atrPct:round(atrPct,2),
+        spreadPct:round(summary.spreadPct,4),
+        depthRatio:round(depthStats.bidAskRatio,2),
+        l1Imbalance:round(depthStats.l1Imbalance,3),
+        l5Imbalance:round(depthStats.l5Imbalance,3),
+        micropriceOffsetBps:round(depthStats.micropriceOffsetBps,3),
+        microComposite:round(microComposite,3),
+      },
+    };
+  }catch(error){
+    return {symbol:summary.symbol,lane,valid:false,status:"DATA_ERROR",error:String(error?.message||error)};
+  }
 }
 
 function classifySymbolRegime(x){
