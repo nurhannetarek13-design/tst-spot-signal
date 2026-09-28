@@ -116,6 +116,24 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
+      - name: Verify Supabase Binance relay read-only access
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 25 \
+            "$WORKER_URL/supabase-relay-preflight?nonce=$(date +%s%N)" \
+            -o /tmp/supabase-relay.json
+          cat /tmp/supabase-relay.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/supabase-relay.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("SUPABASE_RELAY_OK=",r.get('ok'))
+          print("SUPABASE_RELAY_STATUS=",r.get('status'))
+          print("SUPABASE_CAN_TRADE=",r.get('canTrade'))
+          PY
+
       - name: Verify Railway-free live runtime
         shell: bash
         run: |
