@@ -17,7 +17,9 @@ assert.doesNotMatch(execute, /signedBinance\(/);
 assert.match(execute, /executorConfigured\(env\)/);
 assert.match(execute, /executionOperational\(env(?:,[^)]*)?\)/);
 assert.match(execute, /requireFreshExecutionRoute\(env\)/);
-assert.match(execute, /Math\.min\(requested, 5\.5\)/);
+assert.match(execute, /dynamicQuote\(/);
+assert.match(execute, /refreshBalance\(env\)/);
+assert.match(execute, /policy\.maxOrderUSDT/);
 assert.match(execute, /executionProvider\(env\)/);
 
 const freshPreflightStart = src.indexOf("async function requireFreshExecutionRoute(env)");
