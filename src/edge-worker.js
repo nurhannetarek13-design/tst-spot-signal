@@ -1,4 +1,5 @@
 import { detectThesisSetup, higherTimeframeContext, calibrationBySetup, buildThesisDecision } from "./thesis-engine.js";
+import { supabaseStateGet, supabaseStatePut } from "./supabase-state-client.js";
 
 const API_BASES = [
   "https://www.binance.com",
@@ -629,5 +630,5 @@ async function getFusionValidators(env,force=false){
 }
 
 async function binance(path){let last;for(const base of API_BASES){try{const r=await fetch(base+path,{headers:{Accept:"application/json","User-Agent":"tst-edge-worker/2.0"},signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error(`${r.status}`);return await r.json();}catch(e){last=e;}}throw last||new Error("Binance unavailable");}
-function stateStub(env){const id=env.STATE_COORDINATOR.idFromName("global");return env.STATE_COORDINATOR.get(id);} async function getState(env,key){const r=await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);return r.ok?await r.json():null;} async function putState(env,key,value,ttlSeconds){const row={value,expiresAt:Date.now()+ttlSeconds*1000};await stateStub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(row)});} function dailyKey(){return `paper:daily:${new Date().toISOString().slice(0,10)}`;} async function getDaily(env){return await getState(env,dailyKey())||{realizedPnlUSDT:0,trades:0,wins:0};}
+async function getState(env,key){return await supabaseStateGet(env,key);} async function putState(env,key,value,ttlSeconds){return await supabaseStatePut(env,key,value,Number(ttlSeconds)*1000);} function dailyKey(){return `paper:daily:${new Date().toISOString().slice(0,10)}`;} async function getDaily(env){return await getState(env,dailyKey())||{realizedPnlUSDT:0,trades:0,wins:0};}
 async function telegram(env,text,replyMarkup=null){if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return false;const body={chat_id:String(env.TELEGRAM_CHAT_ID),text,disable_web_page_preview:true};if(replyMarkup)body.reply_markup=replyMarkup;const r=await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});return r.ok;}
