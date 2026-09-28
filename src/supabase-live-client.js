@@ -1,11 +1,7 @@
 import { readLivePolicy } from "./live-cutover-policy.js";
 import { normalizeSpotProtection, validateSpotMarketBuy, floorToFilterStep } from "./binance-spot-filters.js";
 import {
-  binanceCredentials,
-  signingCredentialsReady,
-  buildSignedBinanceQuery,
-  computeServerTimeOffset,
-  safeSigningDiagnostics,
+  serializeBinanceValue,
   signRelayEnvelope,
 } from "./binance-signing.js";
 
