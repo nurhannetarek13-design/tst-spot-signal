@@ -1,0 +1,103 @@
+name: Make V2 Health Refresh
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/make-v2-health-refresh.yml"
+
+permissions:
+  contents: read
+
+env:
+  WORKER_URL: https://tst-spot-signal.nurhanne-tarek13.workers.dev
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Refresh signed Make V2 health without financial action
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 35 -X POST             -H 'content-type: application/json'             --data '{}'             "$WORKER_URL/make-v2-dry-probe?nonce=$(date +%s%N)"             -o /tmp/probe.json
+          cat /tmp/probe.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/probe.json'))
+          assert r.get('ok') is True
+          assert r.get('status') == 'MAKE_V2_DRY_PROBE_DISPATCHED'
+          assert r.get('routeVersion') == 'v2'
+          assert r.get('financialAction') is False
+          assert r.get('buyVerified') is True
+          assert r.get('ocoVerified') is True
+          assert r.get('healthRefreshed') is True
+          assert r.get('liveExecutionEnabled') is True
+          assert r.get('autonomousEnabled') is False
+          PY
+
+      - name: Wait for natural supervisor recovery and verify operational GO
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 100); do
+            curl --silent --show-error --max-time 20               -H 'cache-control: no-store'               "$WORKER_URL/go-no-go?attempt=$attempt&nonce=$(date +%s%N)"               -o /tmp/gate.json || true
+            cat /tmp/gate.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try: r=json.load(open('/tmp/gate.json'))
+          except Exception: sys.exit(1)
+          checks = r.get('checks', {})
+          required = [
+            r.get('ok') is True,
+            r.get('go') is True,
+            r.get('status') == 'GO',
+            r.get('failed') == [],
+            r.get('e2eArmed') is True,
+            r.get('manualE2EComplete') is False,
+            r.get('manualExecutionAllowed') is True,
+            r.get('bridgeFresh') is True,
+            r.get('executorOwnershipOk') is True,
+            r.get('offsiteSnapshotFresh') is True,
+            r.get('executorConfigured') is True,
+            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+            checks.get('SUPERVISOR_HEALTHY') is True,
+            checks.get('RECONCILIATION_OK') is True,
+            checks.get('SNAPSHOT_FRESH') is True,
+            checks.get('WATCHDOG_HEALTHY') is True,
+            checks.get('BINANCE_CONNECTION_OK') is True,
+            checks.get('EXECUTION_ROUTE_HEALTHY') is True,
+            checks.get('NO_UNKNOWN_ORDERS') is True,
+            checks.get('NO_UNPROTECTED_POSITIONS') is True,
+            checks.get('DAILY_RISK_AVAILABLE') is True,
+            r.get('liveTrading') is True,
+            r.get('autonomousExecution') is False,
+          ]
+          sys.exit(0 if all(required) else 1)
+          PY
+            then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
+
+      - name: Confirm E2E remains manual-only and incomplete
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20             "$WORKER_URL/cutover-e2e-status?nonce=$(date +%s%N)"             -o /tmp/e2e.json
+          cat /tmp/e2e.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/e2e.json'))
+          assert r.get('ok') is True
+          assert r.get('armed') is True
+          assert r.get('liveExecutionEnabled') is True
+          assert r.get('autonomousEnabled') is False
+          assert r.get('manualOnly') is True
+          assert r.get('automaticExecution') is False
+          assert r.get('completed') is False
+          PY
