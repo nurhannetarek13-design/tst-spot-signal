@@ -340,91 +340,32 @@ async function cloudflareDirectBinanceReadOnlyPreflight(env) {
   };
 }
 async function supabaseRelayReadOnlyPreflight(env) {
-  const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  const creds = cloudflareBinanceCreds(env);
-  if (!relayUrl || !creds.key || !creds.secret) {
-    return {
-      ok: false,
-      status: "SUPABASE_RELAY_NOT_CONFIGURED",
-      financialAction: false,
-      noSecretValuesExposed: true,
-    };
-  }
-
-  const regions = [
-    "eu-west-1",
-    "eu-central-1",
-    "us-east-1",
-    "us-west-2",
-    "ap-southeast-1",
-    "ap-northeast-1",
-  ];
-
-  const attempts = await Promise.all(regions.map(async (region) => {
-    const qs = new URLSearchParams({
-      omitZeroBalances: "true",
-      recvWindow: "5000",
-      timestamp: String(Date.now()),
-    }).toString();
-    const signature = await hmacHexRaw(creds.secret, qs);
-    const body = {
-      method: "GET",
-      path: "/api/v3/account",
-      apiKey: creds.key,
-      query: `${qs}&signature=${signature}`,
-    };
-
-    try {
-      const r = await fetch(relayUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-region": region,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const row = await r.json().catch(() => ({}));
-      return {
-        region,
-        edgeRegion: r.headers.get("x-sb-edge-region") || null,
-        ok: r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK",
-        status: row?.status || `HTTP_${r.status}`,
-        httpStatus: r.status,
-        upstreamHttpStatus: Number(row?.upstreamHttpStatus || 0),
-        binanceCode: row?.binanceCode ?? null,
-        message: String(row?.message || "").slice(0, 120) || null,
-        canTrade: row?.data?.canTrade === true,
-        accountType: row?.data?.accountType || null,
-      };
-    } catch (e) {
-      return {
-        region,
-        edgeRegion: null,
-        ok: false,
-        status: "SUPABASE_RELAY_UNREACHABLE",
-        reason: String(e?.name || "FetchError"),
-        httpStatus: 0,
-        upstreamHttpStatus: 0,
-        canTrade: false,
-        accountType: null,
-      };
-    }
-  }));
-
-  const working = attempts.find((x) => x.ok === true) || null;
+  const heartbeat = await executionReadOnlyHeartbeat(env);
+  const reconciliation = await executionReadOnlyReconcile(env);
+  const ok = heartbeat?.transportOk === true
+    && heartbeat?.body?.canTrade === true
+    && heartbeat?.body?.financialAction === false
+    && reconciliation?.ok === true
+    && reconciliation?.noUnknownOrders === true
+    && reconciliation?.noUnprotectedPositions === true;
   return {
-    ok: Boolean(working),
-    status: working ? "SUPABASE_REGIONAL_RELAY_OK" : "SUPABASE_REGIONAL_RELAY_BLOCKED",
-    selectedRegion: working?.region || null,
-    selectedEdgeRegion: working?.edgeRegion || null,
-    canTrade: working?.canTrade === true,
-    accountType: working?.accountType || null,
-    attempts,
-    financialAction: false,
-    noBalanceValuesExposed: true,
-    noSecretValuesExposed: true,
-    relay: "SUPABASE_EDGE_FUNCTION",
+    ok,
+    status: ok ? "SUPABASE_V2_READONLY_OK" : "SUPABASE_V2_READONLY_BLOCKED",
+    canTrade: heartbeat?.body?.canTrade === true,
+    accountType: heartbeat?.body?.accountType || reconciliation?.accountType || null,
+    noUnknownOrders: reconciliation?.noUnknownOrders === true,
+    noUnprotectedPositions: reconciliation?.noUnprotectedPositions === true,
+    protectedOrderLists:Number(reconciliation?.protectedOrderLists || 0),
+    openOrdersChecked:Number(reconciliation?.openOrdersChecked || 0),
+    executionProvider:executionProvider(env),
+    executionRoute:executionRoute(env),
+    heartbeatStatus:String(heartbeat?.body?.status || ""),
+    reconciliationStatus:String(reconciliation?.status || ""),
+    diagnostics:heartbeat?.raw?.diagnostics || reconciliation?.diagnostics?.account || null,
+    financialAction:false,
+    noBalanceValuesExposed:true,
+    noSecretValuesExposed:true,
+    relay:"SUPABASE_V2_EXECUTION_CLIENT",
   };
 }
 
