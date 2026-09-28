@@ -1,6 +1,7 @@
 export const LIVE_POLICY = Object.freeze({
   liveExecutionEnabled: false,
   autonomousEnabled: false,
+  manualApprovalOnly: true,
   maxOrderUSDT: 25,
   maxOpenPositions: 1,
   dailyLossCapUSDT: 0.5,
@@ -10,6 +11,7 @@ export const LIVE_POLICY = Object.freeze({
 export function readLivePolicy(env = {}) {
   const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
   const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
+  const manualApprovalOnly = String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase() === "true";
   const requestedOrder = Number(env.MAX_ORDER_USDT ?? 25);
   const requestedPositions = Number(env.MAX_OPEN_POSITIONS ?? 1);
   const requestedDailyLoss = Number(env.DAILY_LOSS_CAP_USDT ?? 0.5);
@@ -17,6 +19,7 @@ export function readLivePolicy(env = {}) {
   return Object.freeze({
     liveExecutionEnabled,
     autonomousEnabled,
+    manualApprovalOnly,
     maxOrderUSDT: Number.isFinite(requestedOrder) && requestedOrder > 0 ? Math.min(25, requestedOrder) : 25,
     maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(0, Math.floor(requestedPositions))) : 1,
     dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) && requestedDailyLoss > 0 ? Math.min(0.5, requestedDailyLoss) : 0.5,
@@ -52,7 +55,9 @@ export function evaluateGoNoGo({
   };
   const activationChecks = {
     LIVE_EXECUTION_ENABLED: policy.liveExecutionEnabled === true,
-    AUTONOMOUS_ENABLED: policy.autonomousEnabled === true,
+    APPROVAL_MODE_VALID: policy.manualApprovalOnly === true
+      ? policy.autonomousEnabled !== true
+      : policy.autonomousEnabled === true,
   };
   const failedOperational = Object.entries(operationalChecks).filter(([, ok]) => !ok).map(([name]) => name);
   const failedActivation = Object.entries(activationChecks).filter(([, ok]) => !ok).map(([name]) => name);
@@ -71,6 +76,7 @@ export function evaluateGoNoGo({
       maxOrderUSDT: Number(policy.maxOrderUSDT),
       maxOpenPositions: Number(policy.maxOpenPositions),
       dailyLossCapUSDT: Number(policy.dailyLossCapUSDT),
+      manualApprovalOnly: policy.manualApprovalOnly === true,
     },
   };
 }
