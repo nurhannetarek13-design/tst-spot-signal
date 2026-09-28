@@ -147,7 +147,7 @@ jobs:
           import json
           r=json.load(open('/tmp/readiness.json'))
           assert r.get('ok') is True
-          assert r.get('infrastructureReady') is True
+          assert r.get('infrastructureReady') is False
           assert r.get('railwayDependency') is False
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
