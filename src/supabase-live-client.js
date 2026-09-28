@@ -19,7 +19,16 @@ function clientIds(signalId) {
 function creds(env = {}) {
   const key = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
   const secret = String(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "").trim();
-  return { key, secret };
+  const privateKeyPem = String(env.BINANCE_ED25519_PRIVATE_KEY || "").trim();
+  const requestedMode = String(env.BINANCE_SIGNING_MODE || "HMAC").trim().toUpperCase();
+  const mode = requestedMode === "ED25519" ? "ED25519" : "HMAC";
+  return { key, secret, privateKeyPem, mode };
+}
+
+function signingCredentialsReady(pair = {}) {
+  if (!pair.key) return false;
+  if (pair.mode === "ED25519") return Boolean(pair.privateKeyPem);
+  return Boolean(pair.secret);
 }
 
 async function hmacHex(secret, text) {
@@ -34,7 +43,38 @@ async function hmacHex(secret, text) {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function signedQuery(secret, params = {}) {
+function pkcs8PemBytes(pem) {
+  const compact = String(pem || "")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  if (!compact) throw new Error("ED25519_PRIVATE_KEY_EMPTY");
+  const raw = atob(compact);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function bytesToBase64(bytes) {
+  let raw = "";
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) raw += String.fromCharCode(arr[i]);
+  return btoa(raw);
+}
+
+export async function signEd25519Base64(privateKeyPem, text) {
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pkcs8PemBytes(privateKeyPem),
+    { name: "Ed25519" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(text));
+  return bytesToBase64(sig);
+}
+
+async function signedQuery(pair, params = {}) {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") continue;
@@ -43,7 +83,10 @@ async function signedQuery(secret, params = {}) {
   q.set("recvWindow", "5000");
   q.set("timestamp", String(Date.now()));
   const unsigned = q.toString();
-  q.set("signature", await hmacHex(secret, unsigned));
+  const signature = pair.mode === "ED25519"
+    ? await signEd25519Base64(pair.privateKeyPem, unsigned)
+    : await hmacHex(pair.secret, unsigned);
+  q.set("signature", signature);
   return q.toString();
 }
 
@@ -73,9 +116,9 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000) {
   const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
   const pair = creds(env);
   if (!url) return { ok: false, status: "SUPABASE_RELAY_NOT_CONFIGURED", noRequestSent: true };
-  if (!pair.key || !pair.secret) return { ok: false, status: "BINANCE_CREDENTIALS_MISSING", noRequestSent: true };
+  if (!signingCredentialsReady(pair)) return { ok: false, status: "BINANCE_CREDENTIALS_MISSING", noRequestSent: true };
 
-  const query = await signedQuery(pair.secret, params);
+  const query = await signedQuery(pair, params);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -331,7 +374,7 @@ async function placeOco(env, { signalId, symbol, quantity, takeProfit, stopLoss,
 export function supabaseExecutionConfigured(env = {}) {
   const pair = creds(env);
   return relayConfigured(env)
-    && Boolean(pair.key && pair.secret)
+    && signingCredentialsReady(pair)
     && String(env.SUPABASE_EXECUTOR_READY || "").toLowerCase() === "true";
 }
 
