@@ -497,20 +497,80 @@ async function heartbeat(env, components, meta = {}) {
 }
 async function computeState(env) {
   const now = Date.now();
-  const hb = (await getState(env, "ops:heartbeats")) || {};
-  const previous = (await getState(env, "ops:state")) || { state: "WARMING_UP", since: now };
-  const reconciliation = (await getState(env, "ops:reconciliation:last")) || null;
-  const scheduler = (await getState(env, "ops:scheduler:last")) || null;
-  const next = deriveOpsState({
-    now,
-    heartbeats: hb,
-    previous,
+  const [
+    hb,
+    previousState,
     reconciliation,
     scheduler,
+    unknownState,
+    unprotectedState,
+    adminPause,
+    daily,
+    activeIntents,
+    e2eProof,
+  ] = await Promise.all([
+    getState(env, "ops:heartbeats"),
+    getState(env, "ops:state"),
+    getState(env, "ops:reconciliation:last"),
+    getState(env, "ops:scheduler:last"),
+    getState(env, "live:unknown-orders"),
+    getState(env, "live:unprotected-positions"),
+    getState(env, "live:admin-pause"),
+    getState(env, "risk:daily-live"),
+    getState(env, "live:active-intents"),
+    getState(env, "live:e2e-result-v20"),
+  ]);
+  const previous = previousState || { state: "WARMING_UP", since: now };
+  const base = deriveOpsState({
+    now,
+    heartbeats: hb || {},
+    previous,
+    reconciliation: reconciliation || null,
+    scheduler: scheduler || null,
     heartbeatStaleMs: HEARTBEAT_STALE_MS,
     recoveryHoldMs: RECOVERY_HOLD_MS,
     warmupMs: WARMUP_MS,
   });
+
+  const policy = readLivePolicy(env);
+  const count = (row) => Array.isArray(row) ? row.length : Number(row?.count || 0);
+  const reconciliationFresh = reconciliation?.ok === true
+    && Number(reconciliation?.at || 0) > 0
+    && now - Number(reconciliation.at) <= HEARTBEAT_STALE_MS;
+  const e2eValid = e2eProof?.realProductionE2E === true
+    && String(e2eProof?.stage || "") === "COMPLETE"
+    && e2eProof?.buyFilled === true
+    && e2eProof?.protectionActive === true
+    && e2eProof?.restartRecovery === true
+    && e2eProof?.exitFilled === true
+    && e2eProof?.databaseBinanceReconciliation === true
+    && e2eProof?.noUnknownOrders === true
+    && e2eProof?.noUnprotectedPositions === true
+    && Array.isArray(e2eProof?.orphanOrders)
+    && e2eProof.orphanOrders.length === 0;
+  const realizedLoss = Math.abs(Number(daily?.realizedLossUSDT || 0));
+  const dailyRiskAvailable = realizedLoss < Math.abs(Number(policy.dailyLossCapUSDT || 0));
+  const noActiveIntent = count(activeIntents) === 0;
+
+  const newEntriesAllowed = base.state === "HEALTHY"
+    && executorConfigured(env)
+    && reconciliationFresh
+    && count(unknownState) === 0
+    && count(unprotectedState) === 0
+    && adminPause?.paused !== true
+    && policy.emergencyKillSwitch !== true
+    && dailyRiskAvailable
+    && noActiveIntent
+    && e2eValid
+    && policy.liveExecutionEnabled === true
+    && policy.autonomousEnabled === true;
+
+  const next = {
+    ...base,
+    newEntriesAllowed,
+    liveTrading: policy.liveExecutionEnabled === true,
+    autonomousExecution: policy.liveExecutionEnabled === true && policy.autonomousEnabled === true,
+  };
   await putState(env, "ops:state", next);
   return next;
 }
@@ -522,7 +582,9 @@ async function alertTransition(env, next) {
   if (["DEGRADED", "PROTECTION_ONLY"].includes(next.state)) {
     await tg(env, `🚨 24/7 OPS — ${next.state}\nReason: ${next.reason || "UNKNOWN"}\nNew live entries remain disabled.`);
   } else if (next.state === "HEALTHY" && last && ["DEGRADED", "PROTECTION_ONLY"].includes(last.state)) {
-    await tg(env, "✅ 24/7 OPS RECOVERED\nHealth, reconciliation and warmup recovered. Live entries are still disabled.");
+    await tg(env, next.newEntriesAllowed
+      ? "✅ 24/7 OPS RECOVERED\nHealth, reconciliation and warmup recovered. Limited live entries are allowed by current gates."
+      : "✅ 24/7 OPS RECOVERED\nHealth, reconciliation and warmup recovered. New entries remain blocked by current activation/risk gates.");
   }
 }
 async function recordReconciliation(env, body) {
