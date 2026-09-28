@@ -552,6 +552,10 @@ async function computeState(env) {
   const dailyRiskAvailable = realizedLoss < Math.abs(Number(policy.dailyLossCapUSDT || 0));
   const noActiveIntent = count(activeIntents) === 0;
 
+  const manualApprovalOnly = String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase() === "true";
+  const activationModeAllowed = policy.liveExecutionEnabled === true
+    && (manualApprovalOnly ? policy.autonomousEnabled !== true : policy.autonomousEnabled === true);
+
   const newEntriesAllowed = base.state === "HEALTHY"
     && executorConfigured(env)
     && reconciliationFresh
@@ -562,14 +566,16 @@ async function computeState(env) {
     && dailyRiskAvailable
     && noActiveIntent
     && e2eValid
-    && policy.liveExecutionEnabled === true
-    && policy.autonomousEnabled === true;
+    && activationModeAllowed;
 
   const next = {
     ...base,
     newEntriesAllowed,
     liveTrading: policy.liveExecutionEnabled === true,
-    autonomousExecution: policy.liveExecutionEnabled === true && policy.autonomousEnabled === true,
+    autonomousExecution: policy.liveExecutionEnabled === true
+      && policy.autonomousEnabled === true
+      && !manualApprovalOnly,
+    manualApprovalOnly,
   };
   await putState(env, "ops:state", next);
   return next;
