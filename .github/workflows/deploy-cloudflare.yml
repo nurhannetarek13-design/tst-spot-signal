@@ -100,10 +100,14 @@ jobs:
           grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
-          grep -q '"LIVE_EXECUTION_ENABLED": "false"' wrangler.jsonc
-          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"SUPABASE_EXECUTOR_READY": "true"' wrangler.jsonc
           grep -q '"E2E_ARMED": "false"' wrangler.jsonc
           grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
+          grep -q '"EXECUTION_PROVIDER": "SUPABASE_V2"' wrangler.jsonc
+          if grep -q '"AUTONOMOUS_ENABLED": "true"' wrangler.jsonc && ! grep -q '"LIVE_EXECUTION_ENABLED": "true"' wrangler.jsonc; then
+            echo "AUTONOMOUS_ENABLED=true requires LIVE_EXECUTION_ENABLED=true"
+            exit 1
+          fi
           node scripts/test-make-v2-manual-route.mjs
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/supabase-live-client.js
           grep -q 'OCO_SUBMISSION_UNKNOWN' src/supabase-live-client.js
@@ -172,24 +176,23 @@ jobs:
             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/live-readiness?nonce=$(date +%s%N)" \
             -o /tmp/readiness.json
           cat /tmp/readiness.json
+          EXPECTED_LIVE=$(sed -n 's/.*"LIVE_EXECUTION_ENABLED": "\(true\|false\)".*/\1/p' wrangler.jsonc | head -1)
+          EXPECTED_AUTO=$(sed -n 's/.*"AUTONOMOUS_ENABLED": "\(true\|false\)".*/\1/p' wrangler.jsonc | head -1)
+          export EXPECTED_LIVE EXPECTED_AUTO
           python - <<'PY'
-          import json
+          import json, os
           r=json.load(open('/tmp/readiness.json'))
           assert r.get('ok') is True
-          provider=r.get('executionProvider')
-          assert provider == 'SUPABASE_V2'
+          assert r.get('executionProvider') == 'SUPABASE_V2'
           assert r.get('executionRoute') == 'CLOUDFLARE_SIGNED_SUPABASE_BINANCE'
           assert r.get('railwayDependency') is False
-          assert r.get('userConfirmationRequired') is True
-          assert r.get('autoBuy') is False
           assert r.get('oldVercelFallback') is False
-          assert r.get('status') == 'LIVE_EXECUTION_BLOCKED'
-          assert r.get('executionReady') is False
-          assert r.get('liveExecutionEnabled') is False
           assert r.get('e2eArmed') is False
-          assert r.get('autonomousExecution') is False
-          assert r.get('manualOnly') is True
-          assert r.get('blocker') in {'EXECUTOR_INCOMPLETE','OPERATIONAL_GO_REQUIRED','LIVE_POLICY_DISABLED'}
+          assert r.get('liveExecutionEnabled') is (os.environ['EXPECTED_LIVE'] == 'true')
+          assert r.get('autonomousExecution') is (os.environ['EXPECTED_AUTO'] == 'true')
+          # This endpoint is the legacy manual-E2E readiness view. With E2E_ARMED=false
+          # it must never report a manual test as execution-ready, even in Limited Live.
+          assert r.get('executionReady') is False
           assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           PY
@@ -310,22 +313,28 @@ jobs:
           assert r.get('deadManMonitoring') is True
           assert r.get('recoveryStateMachine') is True
           assert r.get('alertEscalation') is True
-          assert r.get('liveTrading') is False
-          assert r.get('autonomousExecution') is False
+          assert isinstance(r.get('liveTrading'), bool)
+          assert isinstance(r.get('autonomousExecution'), bool)
           assert r.get('noSecretValuesExposed') is True
           PY
 
-      - name: Verify execution providers remain fail-closed before cutover
+      - name: Verify execution provider safety configuration
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '"LIVE_EXECUTION_ENABLED": "false"' wrangler.jsonc
-          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"SUPABASE_EXECUTOR_READY": "true"' wrangler.jsonc
+          grep -q '"EXECUTION_PROVIDER": "SUPABASE_V2"' wrangler.jsonc
           grep -q '"E2E_ARMED": "false"' wrangler.jsonc
+          grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
+          # Source default stays fail-closed; production write permission is a runtime secret.
           grep -q 'const WRITES_ENABLED = false' supabase/functions/tst-binance-relay/index.ts
           grep -q 'id: "BUY_V2"' src/make-live-client.js
           grep -q 'id: "OCO_V2"' src/make-live-client.js
-          echo "EXECUTION_PROVIDERS_FAIL_CLOSED"
+          if grep -q '"AUTONOMOUS_ENABLED": "true"' wrangler.jsonc && ! grep -q '"LIVE_EXECUTION_ENABLED": "true"' wrangler.jsonc; then
+            echo "Invalid activation: autonomous requires live execution"
+            exit 1
+          fi
+          echo "EXECUTION_PROVIDER_SAFETY_CONFIG_OK"
 
       - name: Verify legacy Make bridge is hard-disabled under Supabase V2
         if: always()
@@ -391,8 +400,12 @@ jobs:
           assert tg.get('resumeRequiresNoUnknownOrders') is True
           assert tg.get('resumeRequiresNoUnprotectedPositions') is True
           assert tg.get('resumeRequiresValidE2EV20') is True
-          assert policy.get('liveExecutionEnabled') is False
-          assert policy.get('autonomousEnabled') is False
+          import pathlib, re
+          cfg=pathlib.Path('wrangler.jsonc').read_text()
+          expected_live=re.search(r'"LIVE_EXECUTION_ENABLED"\s*:\s*"(true|false)"',cfg).group(1)=='true'
+          expected_auto=re.search(r'"AUTONOMOUS_ENABLED"\s*:\s*"(true|false)"',cfg).group(1)=='true'
+          assert policy.get('liveExecutionEnabled') is expected_live
+          assert policy.get('autonomousEnabled') is expected_auto
           assert policy.get('e2eArmed') is False
           PY
 
