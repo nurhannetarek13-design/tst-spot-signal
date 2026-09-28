@@ -262,7 +262,8 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000, signingM
   let timing;
   let signed;
   try {
-    timing = await getBinanceServerTime(env);
+    // Signed requests use a fresh Binance time sample. Reliability matters more than saving one public GET.
+    timing = await getBinanceServerTime(env,{force:true});
     const timestampMs = Date.now() + Number(timing.offsetMs || 0);
     signed = await buildSignedBinanceQuery(pair, params, { timestampMs, recvWindow: 5000 });
   } catch (error) {
