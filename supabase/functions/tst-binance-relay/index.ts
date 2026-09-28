@@ -111,6 +111,7 @@ function decodeStatePayload(value:string){
 }
 
 async function handleRuntimeState(body:any){
+  try{
   const q=new URLSearchParams(String(body?.query||""));
   const op=String(q.get("op")||"").toLowerCase();
   const key=String(q.get("key")||"");
@@ -175,6 +176,15 @@ async function handleRuntimeState(body:any){
   }
 
   return json(400,{ok:false,status:"STATE_BAD_OPERATION",financialAction:false});
+  }catch(error){
+    return json(503,{
+      ok:false,
+      status:"STATE_BACKEND_ERROR",
+      reason:String(error?.message||error).slice(0,200),
+      financialAction:false,
+    });
+  }
+
 }
 
 async function vaultSignerReady(){
