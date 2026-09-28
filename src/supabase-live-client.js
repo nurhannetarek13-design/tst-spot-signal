@@ -273,7 +273,25 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000) {
     };
   }
 
-  const auth = await buildRelayAuth(pair, method, path, signed.query);
+  let auth;
+  try {
+    auth = await buildRelayAuth(pair, method, path, signed.query);
+  } catch (error) {
+    return {
+      ok:false,
+      status:"SUPABASE_RELAY_AUTH_PREP_FAILED",
+      reason:String(error?.message || error).slice(0,160),
+      noRequestSent:true,
+      diagnostics:safeSigningDiagnostics({
+        endpoint:path,
+        method,
+        unsignedPayload:signed.unsignedPayload,
+        timestampMs:signed.timestampMs,
+        serverTimeMs:Number(timing.serverTimeMs || 0),
+        signingMode:signed.signingMode,
+      }),
+    };
+  }
   const diagnosticBase = safeSigningDiagnostics({
     endpoint: path,
     method,
@@ -887,6 +905,8 @@ export async function supabaseReadOnlyHeartbeat(env) {
       canTrade: r.data?.canTrade === true,
       accountType: r.data?.accountType || null,
       financialAction: false,
+      reason:r.reason || null,
+      diagnostics:r.diagnostics || null,
     },
     raw: r,
   };
