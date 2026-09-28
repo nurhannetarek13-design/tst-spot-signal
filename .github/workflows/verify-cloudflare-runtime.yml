@@ -40,6 +40,26 @@ jobs:
           assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
           PY
+      - name: Probe Binance WebSocket API from Cloudflare
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 25 \
+            "$WORKER_URL/cloudflare-binance-ws-preflight?nonce=$(date +%s%N)" \
+            -o /tmp/ws.json
+          cat /tmp/ws.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/ws.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("WS_OK=",r.get('ok'))
+          print("WS_STATUS=",r.get('status'))
+          print("WS_CAN_TRADE=",r.get('canTrade'))
+          print("WS_BINANCE_CODE=",r.get('binanceCode'))
+          PY
+
       - name: Verify immutable Vercel relay read-only access
         shell: bash
         run: |
