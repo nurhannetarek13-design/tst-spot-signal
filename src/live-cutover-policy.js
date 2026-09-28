@@ -1,7 +1,7 @@
 export const LIVE_POLICY = Object.freeze({
   liveExecutionEnabled: false,
   autonomousEnabled: false,
-  maxOrderUSDT: 5.5,
+  maxOrderUSDT: 25,
   maxOpenPositions: 1,
   dailyLossCapUSDT: 0.5,
   emergencyKillSwitch: false,
@@ -10,14 +10,14 @@ export const LIVE_POLICY = Object.freeze({
 export function readLivePolicy(env = {}) {
   const liveExecutionEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
   const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
-  const requestedOrder = Number(env.MAX_ORDER_USDT ?? 5.5);
+  const requestedOrder = Number(env.MAX_ORDER_USDT ?? 25);
   const requestedPositions = Number(env.MAX_OPEN_POSITIONS ?? 1);
   const requestedDailyLoss = Number(env.DAILY_LOSS_CAP_USDT ?? 0.5);
   const emergencyKillSwitch = String(env.EMERGENCY_KILL_SWITCH || "").toLowerCase() === "true";
   return Object.freeze({
     liveExecutionEnabled,
     autonomousEnabled,
-    maxOrderUSDT: Number.isFinite(requestedOrder) && requestedOrder > 0 ? Math.min(5.5, requestedOrder) : 5.5,
+    maxOrderUSDT: Number.isFinite(requestedOrder) && requestedOrder > 0 ? Math.min(25, requestedOrder) : 25,
     maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(0, Math.floor(requestedPositions))) : 1,
     dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) && requestedDailyLoss > 0 ? Math.min(0.5, requestedDailyLoss) : 0.5,
     emergencyKillSwitch,
