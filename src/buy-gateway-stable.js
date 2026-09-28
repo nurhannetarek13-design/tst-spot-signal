@@ -24,7 +24,7 @@ function creds(env) {
   return {
     network: relayReady ? "production" : "none",
     credentialMode: relayReady ? "LIVE" : "MISSING",
-    route: relayReady ? route : "EXECUTION_ROUTE_NOT_READY",
+    route,
     provider: executionProvider(env),
   };
 }
