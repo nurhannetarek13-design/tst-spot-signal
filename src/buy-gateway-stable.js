@@ -1,5 +1,12 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
-import { manualBuyAndProtect, makeReadOnlyHeartbeat } from "./make-live-client.js";
+import {
+  manualBuyAndProtect,
+  executionReadOnlyHeartbeat,
+  executionProvider,
+  executionRoute,
+  executorConfigured,
+  executionOwner,
+} from "./live-execution-router.js";
 export { SignalState };
 
 const SIGNAL_TTL_SEC = 10 * 60;
@@ -9,14 +16,16 @@ const MIN_ORDER_USDT = 5;
 const MAX_BALANCE_FRACTION = 0.80;
 const MAX_RISK_USDT = 0.20;
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
-const LIVE_ROUTE = "CLOUDFLARE_HMAC_MAKE";
 
 function creds(env) {
-  const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN);
+  const route = executionRoute(env);
+  const configured = executorConfigured(env);
+  const relayReady = Boolean(env.TELEGRAM_BOT_TOKEN) && configured;
   return {
     network: relayReady ? "production" : "none",
     credentialMode: relayReady ? "LIVE" : "MISSING",
-    route: relayReady ? LIVE_ROUTE : "VERCEL_RELAY_AUTH_MISSING",
+    route: relayReady ? route : "EXECUTION_ROUTE_NOT_READY",
+    provider: executionProvider(env),
   };
 }
 
