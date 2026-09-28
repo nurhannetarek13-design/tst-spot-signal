@@ -95,6 +95,62 @@ async function cloudflareDirectBinanceReadOnlyPreflight(env) {
   }
 }
 
+async function vercelImmutableRelayReadOnlyPreflight(env) {
+  const c = cloudflareBinanceCreds(env);
+  if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
+    return { ok: false, status: "IMMUTABLE_RELAY_CREDENTIALS_MISSING", financialAction: false };
+  }
+  const qs = new URLSearchParams({
+    omitZeroBalances: "true",
+    recvWindow: "5000",
+    timestamp: String(Date.now()),
+  }).toString();
+  const binanceSignature = await hmacHexRaw(c.secret, qs);
+  const body = JSON.stringify({
+    method: "GET",
+    path: "/api/v3/account",
+    apiKey: c.key,
+    network: "production",
+    query: `${qs}&signature=${binanceSignature}`,
+  });
+  const ts = String(Date.now());
+  const relaySignature = await hmacHexRaw(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+  try {
+    const r = await fetch(
+      "https://tst-spot-signal-3vq1z6iic-nurhannetarek13-3290s-projects.vercel.app/api/binance-signed-relay",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-executor-timestamp": ts,
+          "x-executor-signature": relaySignature,
+        },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    const row = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && row?.ok === true,
+      status: row?.status || `HTTP_${r.status}`,
+      httpStatus: r.status,
+      canTrade: row?.data?.canTrade === true,
+      accountType: row?.data?.accountType || null,
+      financialAction: false,
+      noBalanceValuesExposed: true,
+      noSecretValuesExposed: true,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "IMMUTABLE_VERCEL_RELAY_UNREACHABLE",
+      reason: String(e?.message || e).slice(0, 100),
+      financialAction: false,
+      noSecretValuesExposed: true,
+    };
+  }
+}
+
 async function vercelTransportV2ReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
@@ -304,6 +360,17 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/vercel-immutable-relay-preflight") {
+      const result = await vercelImmutableRelayReadOnlyPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/cloudflare-binance-direct-preflight") {
       const result = await cloudflareDirectBinanceReadOnlyPreflight(env);
       return Response.json({
