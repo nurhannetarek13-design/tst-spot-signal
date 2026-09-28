@@ -13,6 +13,8 @@ import {
   routeVersion,
   executionRouteIds,
   executionSigningModeProbe,
+  executionRelayAuthSelftest,
+  executionIntentIdempotencySelftest,
 } from "./live-execution-router.js";
 import { supabaseRelayReplaySelftest } from "./supabase-live-client.js";
 export { SignalState };
@@ -642,6 +644,22 @@ export default {
         status:result.ok?200:503,
         headers:{"cache-control":"no-store"},
       });
+    }
+    if (url.pathname === "/supabase-v2-auth-selftest" && request.method === "POST") {
+      const result=await executionRelayAuthSelftest(env).catch((error)=>({
+        ok:false,status:"SUPABASE_V2_AUTH_SELFTEST_ERROR",
+        reason:String(error?.message||error).slice(0,160),
+        financialAction:false,noSecretValuesExposed:true,
+      }));
+      return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
+    }
+    if (url.pathname === "/supabase-v2-idempotency-selftest" && request.method === "POST") {
+      const result=await executionIntentIdempotencySelftest(env).catch((error)=>({
+        ok:false,status:"SUPABASE_V2_IDEMPOTENCY_SELFTEST_ERROR",
+        reason:String(error?.message||error).slice(0,160),
+        financialAction:false,noSecretValuesExposed:true,
+      }));
+      return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
     }
     if (url.pathname === "/binance-signing-mode-probe") {
       const result = await executionSigningModeProbe(env).catch((error)=>({
