@@ -535,44 +535,21 @@ async function refreshBalance(env) {
 }
 
 async function requireFreshExecutionRoute(env) {
-  if (executionProvider(env) === "SUPABASE_V2") {
-    const heartbeat = await executionReadOnlyHeartbeat(env);
-    if (heartbeat?.transportOk !== true) {
-      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
-    }
-    if (heartbeat?.body?.canTrade !== true || heartbeat?.body?.financialAction !== false) {
-      throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_NOT_VERIFIED");
-    }
-    return {
-      ok: true,
-      provider: "SUPABASE_V2",
-      routeVersion: String(heartbeat?.body?.routeVersion || "supabase-v2"),
-      checkedAt: Date.now(),
-    };
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    throw new Error("LEGACY_FINANCIAL_ROUTE_DISABLED");
   }
-
-  const startedAt = Date.now();
-  const watchdog = await executionReadOnlyHeartbeat(env);
-  if (watchdog?.transportOk !== true) {
-    throw new Error("MAKE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
+  const heartbeat = await executionReadOnlyHeartbeat(env);
+  if (heartbeat?.transportOk !== true) {
+    throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
   }
-  const [buyAudit, ocoAudit] = await Promise.all([
-    getState(env, "bridge:route:BUY_V2"),
-    getState(env, "bridge:route:OCO_V2"),
-  ]);
-  const freshAccepted = (row) =>
-    row?.lastStatus === "BRIDGE_AUTH_OK"
-    && Number(row?.acceptedAt || 0) >= startedAt - 1000
-    && Date.now() - Number(row?.acceptedAt || 0) <= 30_000;
-  if (!freshAccepted(buyAudit) || !freshAccepted(ocoAudit)) {
-    throw new Error("MAKE_V2_FRESH_PREFLIGHT_NOT_EXECUTED");
+  if (heartbeat?.body?.canTrade !== true || heartbeat?.body?.financialAction !== false) {
+    throw new Error("SUPABASE_V2_FRESH_PREFLIGHT_NOT_VERIFIED");
   }
   return {
     ok:true,
-    provider:"MAKE_V2",
-    buyAcceptedAt:Number(buyAudit.acceptedAt || 0),
-    ocoAcceptedAt:Number(ocoAudit.acceptedAt || 0),
-    routeVersion:String(buyAudit.routeVersion || ocoAudit.routeVersion || "v2"),
+    provider:"SUPABASE_V2",
+    routeVersion:String(heartbeat?.body?.routeVersion || "supabase-v2"),
+    checkedAt:Date.now(),
   };
 }
 
