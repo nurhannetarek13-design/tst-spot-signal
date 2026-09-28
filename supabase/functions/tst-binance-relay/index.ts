@@ -1,9 +1,8 @@
 import { parseAndValidateCapability, sanitizeResponse } from "./relay-core.mjs";
 
 const BASE = (Deno.env.get("BINANCE_PRIVATE_BASE_URL") || "https://api.binance.com").replace(/\/$/, "");
-const WRITES_ENABLED = ["1","true","yes","on"].includes(
-  String(Deno.env.get("FINANCIAL_WRITES_ENABLED") || "").toLowerCase()
-);
+// First deployment is deliberately read-only. Promotion to writes is a code-reviewed change.
+const WRITES_ENABLED = false;
 
 function json(status:number, payload:unknown){
   return new Response(JSON.stringify(payload), {
