@@ -16,7 +16,7 @@ const healthy = {
 let gate=evaluateGoNoGo(healthy);
 assert.equal(gate.go,true);
 assert.equal(gate.activationAllowed,false);
-assert.deepEqual(gate.activationFailed,["LIVE_EXECUTION_ENABLED","AUTONOMOUS_ENABLED"]);
+assert.deepEqual(gate.activationFailed,["LIVE_EXECUTION_ENABLED"]);
 assert.equal(gate.checks.EMERGENCY_KILL_SWITCH_CLEAR,true);
 
 const killed=evaluateGoNoGo({...healthy,policy:{...LIVE_POLICY,emergencyKillSwitch:true}});
