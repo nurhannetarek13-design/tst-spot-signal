@@ -26,10 +26,10 @@ assert.ok(freshPreflightStart >= 0 && freshPreflightEnd > freshPreflightStart, "
 const freshPreflight = src.slice(freshPreflightStart, freshPreflightEnd);
 assert.match(freshPreflight, /executionReadOnlyHeartbeat\(env\)/);
 assert.match(freshPreflight, /SUPABASE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED/);
-assert.match(freshPreflight, /bridge:route:BUY_V2/);
-assert.match(freshPreflight, /bridge:route:OCO_V2/);
-assert.match(freshPreflight, /BRIDGE_AUTH_OK/);
-assert.match(freshPreflight, /MAKE_V2_FRESH_PREFLIGHT_NOT_EXECUTED/);
+assert.match(freshPreflight, /LEGACY_FINANCIAL_ROUTE_DISABLED/);
+assert.doesNotMatch(freshPreflight, /bridge:route:BUY_V2/);
+assert.doesNotMatch(freshPreflight, /bridge:route:OCO_V2/);
+assert.doesNotMatch(freshPreflight, /MAKE_V2/);
 
 const prepStart = src.indexOf('if (action === "PREP" && s)');
 const prepEnd = src.indexOf('\n  if (action === "CANCEL")', prepStart);
@@ -83,7 +83,8 @@ assert.match(ops, /executorConfigured\(env\)/);
 
 const router = readFileSync(new URL("../src/live-execution-router.js", import.meta.url), "utf8");
 assert.match(router, /SUPABASE_V2/);
-assert.match(router, /MAKE_V2/);
+assert.doesNotMatch(router, /MAKE_V2/);
+assert.match(router, /FINANCIAL_EXECUTION_DISABLED/);
 assert.match(router, /manualBuyAndProtectViaSupabase/);
 assert.doesNotMatch(router, /makeManualBuyAndProtect/);
 assert.match(router, /LEGACY_FINANCIAL_ROUTE_DISABLED/);
