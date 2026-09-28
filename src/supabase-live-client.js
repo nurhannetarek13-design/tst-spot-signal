@@ -171,8 +171,6 @@ async function claimIntent(env, intentId, patch = {}) {
 }
 
 
-let serverTimeCache = { offsetMs: 0, serverTimeMs: 0, checkedAt: 0, roundTripMs: 0 };
-
 function relayRegion(env = {}) {
   return String(env.SUPABASE_BINANCE_REGION || "eu-west-1").trim() || "eu-west-1";
 }
@@ -185,53 +183,40 @@ function randomNonce() {
   return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function getBinanceServerTime(env, { force = false } = {}) {
-  const now = Date.now();
-  if (!force && serverTimeCache.checkedAt && now - serverTimeCache.checkedAt < 30_000) {
-    return { ...serverTimeCache, cached: true };
-  }
-  const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  if (!url) throw new Error("SUPABASE_RELAY_NOT_CONFIGURED");
-  const before = Date.now();
-  const r = await fetch(url + "?probe=time&nonce=" + encodeURIComponent(randomNonce()), {
-    method: "GET",
-    headers: { "cache-control": "no-store", "x-region": relayRegion(env) },
-    signal: AbortSignal.timeout(10_000),
-  });
-  const after = Date.now();
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok || body?.ok !== true || !Number.isFinite(Number(body?.serverTime))) {
-    throw new Error("BINANCE_SERVER_TIME_UNAVAILABLE:" + String(body?.status || ("HTTP_" + r.status)));
-  }
-  const timing = computeServerTimeOffset({
-    localBeforeMs: before,
-    localAfterMs: after,
-    serverTimeMs: Number(body.serverTime),
-  });
-  serverTimeCache = {
-    ...timing,
-    serverTimeMs: Number(body.serverTime),
-    checkedAt: after,
-  };
-  return { ...serverTimeCache, cached: false };
+function relayAuthPrivateKey(env = {}) {
+  return String(env.BINANCE_ED25519_PRIVATE_KEY || "").trim();
 }
 
-async function buildRelayAuth(pair, method, path, query) {
-  if (!pair.ed25519PrivateKey) throw new Error("SUPABASE_RELAY_AUTH_KEY_MISSING");
-  const relayTimestamp = Date.now();
-  const relayNonce = randomNonce();
-  const signed = await signRelayEnvelope(pair.ed25519PrivateKey, {
+function canonicalRelayQuery(params = {}) {
+  const q = new URLSearchParams();
+  for (const [key,value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === "") continue;
+    if (["signature","timestamp","recvWindow"].includes(String(key))) {
+      throw new Error("CALLER_SECURITY_PARAM_BLOCKED");
+    }
+    q.append(String(key), serializeBinanceValue(value));
+  }
+  q.sort();
+  return q.toString();
+}
+
+async function buildRelayAuth(env, method, path, query) {
+  const privateKey=relayAuthPrivateKey(env);
+  if (!privateKey) throw new Error("SUPABASE_RELAY_AUTH_KEY_MISSING");
+  const relayTimestamp=Date.now();
+  const relayNonce=randomNonce();
+  const signed=await signRelayEnvelope(privateKey,{
     relayTimestamp,
     relayNonce,
     method,
     path,
-    apiKey: pair.apiKey,
+    apiKey:"",
     query,
   });
   return {
     relayTimestamp,
     relayNonce,
-    relaySignature: signed.relaySignature,
+    relaySignature:signed.relaySignature,
   };
 }
 
