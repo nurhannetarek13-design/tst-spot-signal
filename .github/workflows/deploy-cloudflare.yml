@@ -101,6 +101,8 @@ jobs:
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
           grep -q '"SUPABASE_EXECUTOR_READY": "true"' wrangler.jsonc
+          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"MANUAL_APPROVAL_ONLY": "true"' wrangler.jsonc
           grep -q '"E2E_ARMED": "false"' wrangler.jsonc
           grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
           grep -q '"EXECUTION_PROVIDER": "SUPABASE_V2"' wrangler.jsonc
@@ -324,6 +326,8 @@ jobs:
           set -euo pipefail
           grep -q '"SUPABASE_EXECUTOR_READY": "true"' wrangler.jsonc
           grep -q '"EXECUTION_PROVIDER": "SUPABASE_V2"' wrangler.jsonc
+          grep -q '"AUTONOMOUS_ENABLED": "false"' wrangler.jsonc
+          grep -q '"MANUAL_APPROVAL_ONLY": "true"' wrangler.jsonc
           grep -q '"E2E_ARMED": "false"' wrangler.jsonc
           grep -q '"MAKE_EXECUTOR_V2_READY": "false"' wrangler.jsonc
           # Source default stays fail-closed; production write permission is a runtime secret.
@@ -391,6 +395,8 @@ jobs:
           assert r.get('realE2EV20Recognized') is True
           assert r.get('autonomousPathRecognizesV20') is True
           assert r.get('autonomousProofKey') == 'live:e2e-result-v20'
+          assert r.get('manualApprovalOnly') is True
+          assert r.get('automaticBuyBlocked') is True
           assert tg.get('pauseImplemented') is True
           assert tg.get('resumeImplemented') is True
           assert tg.get('pauseEnforcedByExecutionGate') is True
@@ -405,7 +411,8 @@ jobs:
           expected_live=re.search(r'"LIVE_EXECUTION_ENABLED"\s*:\s*"(true|false)"',cfg).group(1)=='true'
           expected_auto=re.search(r'"AUTONOMOUS_ENABLED"\s*:\s*"(true|false)"',cfg).group(1)=='true'
           assert policy.get('liveExecutionEnabled') is expected_live
-          assert policy.get('autonomousEnabled') is expected_auto
+          assert expected_auto is False
+          assert policy.get('autonomousEnabled') is False
           assert policy.get('e2eArmed') is False
           PY
 
