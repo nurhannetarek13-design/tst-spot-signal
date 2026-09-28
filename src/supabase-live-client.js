@@ -9,9 +9,28 @@ import {
   signRelayEnvelope,
 } from "./binance-signing.js";
 
+function stableHash(value) {
+  const input = String(value || "");
+  let a = 0x811c9dc5, b = 0x9e3779b9;
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    a ^= code;
+    a = Math.imul(a, 0x01000193) >>> 0;
+    b ^= (code + i) >>> 0;
+    b = Math.imul(b, 0x85ebca6b) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
 function cleanId(value, prefix, max = 32) {
-  const base = String(value || "sig").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "sig";
-  return (prefix + base).slice(0, max);
+  const raw = String(value || "sig");
+  const base = raw.replace(/[^A-Za-z0-9]/g, "").slice(0, 10) || "sig";
+  return (prefix + base + stableHash(raw)).slice(0, max);
+}
+
+export function deterministicIntentId(signalId, symbol = "") {
+  const raw = String(signalId || "") + "|" + String(symbol || "").toUpperCase();
+  return "TSTI" + stableHash(raw);
 }
 
 function clientIds(signalId) {
@@ -22,6 +41,69 @@ function clientIds(signalId) {
     stop: cleanId(signalId, "TSTS"),
     emergency: cleanId(signalId, "TSTX"),
   };
+}
+
+const TRADE_STATES = new Set([
+  "SIGNAL_CREATED",
+  "APPROVED",
+  "ENTRY_SUBMITTING",
+  "ENTRY_ACCEPTED",
+  "PARTIALLY_FILLED",
+  "FILLED",
+  "PROTECTION_PENDING",
+  "PROTECTED",
+  "EXITED",
+  "FAILED_SAFE",
+]);
+
+function stateStub(env) {
+  const id = env.STATE_COORDINATOR.idFromName("global");
+  return env.STATE_COORDINATOR.get(id);
+}
+
+async function readTradeState(env, intentId) {
+  const r = await stateStub(env).fetch("https://state/get?key=" + encodeURIComponent("trade-intent:" + intentId));
+  return r.ok ? await r.json() : null;
+}
+
+async function writeTradeState(env, intentId, state, patch = {}) {
+  if (!TRADE_STATES.has(state)) throw new Error("BAD_TRADE_STATE");
+  const previous = await readTradeState(env, intentId);
+  if (previous?.state === "EXITED" && state !== "EXITED") throw new Error("TRADE_ALREADY_EXITED");
+  if (previous?.state === "FAILED_SAFE" && !["FAILED_SAFE","EXITED"].includes(state)) throw new Error("TRADE_FAILED_SAFE_LOCKED");
+  const row = {
+    ...(previous || {}),
+    ...patch,
+    intentId,
+    state,
+    updatedAt: Date.now(),
+    createdAt: Number(previous?.createdAt || patch?.createdAt || Date.now()),
+  };
+  await stateStub(env).fetch("https://state/put?key=" + encodeURIComponent("trade-intent:" + intentId), {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value: row, expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000 }),
+  });
+  return row;
+}
+
+async function claimIntent(env, intentId, patch = {}) {
+  const row = {
+    value: {
+      intentId,
+      state: "SIGNAL_CREATED",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ...patch,
+    },
+    expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,
+  };
+  const r = await stateStub(env).fetch("https://state/claim?key=" + encodeURIComponent("trade-intent:" + intentId), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(row),
+  });
+  return r.ok;
 }
 
 
