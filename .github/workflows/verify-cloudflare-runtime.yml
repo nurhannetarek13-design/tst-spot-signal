@@ -265,3 +265,5 @@ jobs:
           assert r.get('liveTrading') is False
           assert r.get('executorAllowed') is False
           PY
+
+# diagnostic retrigger 2026-09-28 supabase cutover preflight
