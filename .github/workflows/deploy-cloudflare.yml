@@ -4,6 +4,7 @@ name: Deploy Cloudflare Live Runtime
 # production sync trigger: 2026-09-28 supabase-only market path
 # production sync trigger: 2026-09-28 Supabase Vault signing cutover
 # Supabase V2 is the only permitted production financial provider.
+# Supabase Vault signer cutover trigger: 2026-09-28
 
 on:
   workflow_dispatch:
