@@ -43,6 +43,28 @@ function clientIds(signalId) {
   };
 }
 
+function logExecution(event, fields = {}) {
+  const safe = {
+    at:Date.now(),
+    event:String(event || ""),
+    intentId:fields.intentId || null,
+    symbol:fields.symbol || null,
+    state:fields.state || null,
+    binanceOrderId:fields.binanceOrderId ?? null,
+    orderListId:fields.orderListId ?? null,
+    latencyMs:fields.latencyMs ?? null,
+    binanceCode:fields.binanceCode ?? null,
+    reconciliationOutcome:fields.reconciliationOutcome || null,
+    noSecretValuesExposed:true,
+  };
+  console.log(JSON.stringify(safe));
+}
+
+async function emitExecutionEvent(eventSink, event) {
+  if (typeof eventSink !== "function") return;
+  try { await eventSink(event); } catch {}
+}
+
 const TRADE_STATES = new Set([
   "SIGNAL_CREATED",
   "APPROVED",
@@ -413,7 +435,7 @@ async function preTradeMarketBuy(env, { symbol, quoteUSDT, referencePrice = null
   }
 }
 
-async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrderQty }) {
+async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrderQty, eventSink = null }) {
   const ids = clientIds(signalId);
   const existing = await queryOrder(env, symbol, ids.buy);
   if (existing.found) {
@@ -442,6 +464,8 @@ async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrder
     quoteUSDT:Number(quoteUSDT),
   });
 
+  await emitExecutionEvent(eventSink, { type:"BUY_SUBMITTED", intentId, symbol, quoteUSDT:Number(quoteUSDT) });
+  logExecution("BUY_SUBMITTED",{intentId,symbol,state:"ENTRY_SUBMITTING"});
   const placed = await relay(env, "POST", "/api/v3/order", {
     symbol,
     side:"BUY",
@@ -468,6 +492,9 @@ async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrder
         executedQty:Number(settled.order?.executedQty || 0),
         exchangeEntryStatus:String(settled.order?.status || ""),
       });
+      const evt={type:settled.partial?"BUY_PARTIAL_FILL":"BUY_FILLED",intentId,symbol,orderId:settled.order?.orderId??placed.data?.orderId??null,executedQty:Number(settled.order?.executedQty||0)};
+      await emitExecutionEvent(eventSink,evt);
+      logExecution(evt.type,{intentId,symbol,state:settled.partial?"PARTIALLY_FILLED":"FILLED",binanceOrderId:evt.orderId,latencyMs:Number(placed.latencyMs||0)});
       return { ...settled, ids };
     }
     return { ...settled, ids };
@@ -509,8 +536,10 @@ async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrder
   };
 }
 
-async function emergencyClose(env, { intentId, signalId, symbol, quantity }) {
+async function emergencyClose(env, { intentId, signalId, symbol, quantity, eventSink = null }) {
   const ids = clientIds(signalId);
+  await emitExecutionEvent(eventSink,{type:"PROTECTION_FAILURE_CRITICAL",intentId,symbol,action:"EMERGENCY_CLOSE"});
+  logExecution("PROTECTION_FAILURE_CRITICAL",{intentId,symbol,state:"FAILED_SAFE"});
   const existing = await queryOrder(env, symbol, ids.emergency);
   if (existing.found) {
     const state = String(existing.order?.status || "");
@@ -553,6 +582,8 @@ async function emergencyClose(env, { intentId, signalId, symbol, quantity }) {
       emergencyOrderId:sent.data?.orderId ?? null,
       executedQty:Number(sent.data?.executedQty || 0),
     });
+    await emitExecutionEvent(eventSink,{type:"EMERGENCY_CLOSE_FILLED",intentId,symbol,orderId:sent.data?.orderId??null});
+    logExecution("EMERGENCY_CLOSE_FILLED",{intentId,symbol,state:"FAILED_SAFE",binanceOrderId:sent.data?.orderId??null});
     return { ok: true, status: "PROTECTION_FAILED_EMERGENCY_CLOSED", emergencyOrder: sent.data };
   }
 
@@ -576,7 +607,7 @@ async function emergencyClose(env, { intentId, signalId, symbol, quantity }) {
   };
 }
 
-async function placeOco(env, { intentId, signalId, symbol, quantity, takeProfit, stopLoss, stopLimit }) {
+async function placeOco(env, { intentId, signalId, symbol, quantity, takeProfit, stopLoss, stopLimit, eventSink = null }) {
   const ids = clientIds(signalId);
   await writeTradeState(env, intentId, "PROTECTION_PENDING", {
     symbol,
@@ -619,6 +650,8 @@ async function placeOco(env, { intentId, signalId, symbol, quantity, takeProfit,
       orderListId:sent.data?.orderListId ?? null,
       protectionLatencyMs:Number(sent.latencyMs || 0),
     });
+    await emitExecutionEvent(eventSink,{type:"PROTECTION_INSTALLED",intentId,symbol,orderListId:sent.data?.orderListId??null,quantity:String(quantity),takeProfit:String(takeProfit),stopLoss:String(stopLoss)});
+    logExecution("PROTECTION_INSTALLED",{intentId,symbol,state:"PROTECTED",orderListId:sent.data?.orderListId??null,latencyMs:Number(sent.latencyMs||0)});
     return { ok: true, status: "OCO_PLACED", orderList: sent.data, ids };
   }
 
@@ -961,6 +994,7 @@ export async function supabaseDryRunExecution(env, input) {
 
 export async function manualBuyAndProtectViaSupabase(env, input) {
   const policy = readLivePolicy(env);
+  const eventSink = typeof input?.onEvent === "function" ? input.onEvent : null;
   if (policy.liveExecutionEnabled !== true) {
     return { ok:false, status:"LIVE_EXECUTION_DISABLED", noOrderSent:true };
   }
@@ -1035,6 +1069,7 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
     symbol,
     quoteUSDT:quote,
     quoteOrderQty:preTrade.validation.quoteOrderQty,
+    eventSink,
   });
   if (!buy.ok) {
     if (buy.noPosition === true || buy.noOrderSent === true) {
@@ -1099,6 +1134,7 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
     takeProfit:normalized.takeProfit,
     stopLoss:normalized.stopLoss,
     stopLimit:normalized.stopLimit,
+    eventSink,
   });
 
   if (oco.ok) {
@@ -1175,6 +1211,7 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
     signalId,
     symbol,
     quantity:normalized.quantity,
+    eventSink,
   });
   if (!closed.ok) {
     await writeTradeState(env, intentId, "FAILED_SAFE", {
