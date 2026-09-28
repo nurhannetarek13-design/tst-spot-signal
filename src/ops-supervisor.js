@@ -13,6 +13,7 @@ import {
   routeVersion,
   executionRouteIds,
   executionSigningModeProbe,
+  executionApiKeyOnlyProbe,
   executionRelayAuthSelftest,
   executionIntentIdempotencySelftest,
 } from "./live-execution-router.js";
@@ -659,6 +660,14 @@ export default {
       }
       const result=await executionIntentIdempotencySelftest(env).catch((error)=>({
         ok:false,status:"SUPABASE_V2_IDEMPOTENCY_SELFTEST_ERROR",
+        reason:String(error?.message||error).slice(0,160),
+        financialAction:false,noSecretValuesExposed:true,
+      }));
+      return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
+    }
+    if (url.pathname === "/binance-api-key-only-probe") {
+      const result=await executionApiKeyOnlyProbe(env).catch((error)=>({
+        ok:false,status:"BINANCE_API_KEY_ONLY_PROBE_ERROR",
         reason:String(error?.message||error).slice(0,160),
         financialAction:false,noSecretValuesExposed:true,
       }));
