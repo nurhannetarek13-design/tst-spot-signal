@@ -896,63 +896,7 @@ export async function supabaseReadOnlyReconcile(env) {
 }
 
 export async function supabaseRelayReplaySelftest(env) {
-  const url=String(env.SUPABASE_BINANCE_RELAY_URL||"").trim();
-  const pair=binanceCredentials(env);
-  if(!url||!signingCredentialsReady(pair)||!pair.ed25519PrivateKey){
-    return {ok:false,status:"SUPABASE_RELAY_SELFTEST_NOT_CONFIGURED",financialAction:false};
-  }
-  let timing,signed,auth;
-  try{
-    timing=await getBinanceServerTime(env,{force:true});
-    signed=await buildSignedBinanceQuery(pair,{omitZeroBalances:"true"},{timestampMs:Date.now()+Number(timing.offsetMs||0),recvWindow:5000});
-    auth=await buildRelayAuth(pair,"GET","/api/v3/account",signed.query);
-  }catch(error){
-    return {ok:false,status:"SUPABASE_RELAY_SELFTEST_PREP_FAILED",reason:String(error?.message||error).slice(0,160),financialAction:false};
-  }
-  const payload=JSON.stringify({
-    method:"GET",
-    path:"/api/v3/account",
-    apiKey:pair.apiKey,
-    query:signed.query,
-    relayTimestamp:auth.relayTimestamp,
-    relayNonce:auth.relayNonce,
-    relaySignature:auth.relaySignature,
-  });
-  const call=async()=>{
-    try{
-      const r=await fetch(url,{
-        method:"POST",
-        headers:{"content-type":"application/json","cache-control":"no-store","x-region":relayRegion(env)},
-        body:payload,
-        signal:AbortSignal.timeout(15_000),
-      });
-      const row=await r.json().catch(()=>({}));
-      return {
-        httpStatus:r.status,
-        ok:row?.ok===true,
-        status:String(row?.status||("HTTP_"+r.status)),
-        binanceCode:row?.binanceCode??null,
-        financialAction:row?.financialAction===true,
-      };
-    }catch(error){
-      return {httpStatus:0,ok:false,status:"TRANSPORT_ERROR",reason:String(error?.name||"FetchError"),financialAction:false};
-    }
-  };
-  const first=await call();
-  const replay=await call();
-  const passed=first.status!=="RELAY_REPLAY_BLOCKED"
-    && replay.status==="RELAY_REPLAY_BLOCKED"
-    && replay.httpStatus===401
-    && first.financialAction!==true
-    && replay.financialAction!==true;
-  return {
-    ok:passed,
-    status:passed?"SUPABASE_RELAY_REPLAY_PROTECTION_OK":"SUPABASE_RELAY_REPLAY_PROTECTION_FAILED",
-    first,
-    replay,
-    financialAction:false,
-    noSecretValuesExposed:true,
-  };
+  return supabaseRelayAuthSelftest(env);
 }
 
 export async function supabaseRelayAuthSelftest(env) {
