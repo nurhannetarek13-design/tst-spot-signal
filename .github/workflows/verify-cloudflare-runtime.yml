@@ -2,22 +2,9 @@ name: Verify Cloudflare Runtime Only
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-cloudflare-runtime.yml"
-      - "src/buy-gateway-stable.js"
-      - "api/binance-signed-relay.mjs"
-      - "src/buy-gateway-time-monitor.js"
-      - "src/buy-gateway-auth-wrapper.js"
-      - "src/ops-supervisor.js"
-      - "src/bridge-auth.js"
-      - "src/live-cutover-policy.js"
-      - "src/make-live-client.js"
-      - "src/live-execution-router.js"
-      - "src/supabase-live-client.js"
-      - "src/binance-spot-filters.js"
-      - "wrangler.jsonc"
+  workflow_run:
+    workflows: ["Deploy Cloudflare Live Runtime"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -27,6 +14,7 @@ env:
 
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
