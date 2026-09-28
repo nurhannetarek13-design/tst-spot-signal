@@ -100,7 +100,7 @@ function validateWrite(path, method, q) {
 
     if (side === "BUY") {
       const quote = finitePositive(q.get("quoteOrderQty"), "BAD_QUOTE");
-      if (quote < 5 || quote > 5.5) throw new Error("QUOTE_CAP_BLOCKED");
+      if (quote < 5 || quote > 25) throw new Error("QUOTE_CAP_BLOCKED");
       if (q.get("quantity")) throw new Error("BUY_QUANTITY_BLOCKED");
     } else {
       finitePositive(q.get("quantity"), "BAD_SELL_QTY");
