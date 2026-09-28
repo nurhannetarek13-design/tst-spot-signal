@@ -933,10 +933,13 @@ async function handleTelegramWebhook(request, env) {
     }
     const autonomousEnabled = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
     const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
-    const priorE2E = await getState(env, "cutover:e2e:result");
-    const e2eComplete = priorE2E?.ok === true && priorE2E?.manual === true;
+    const [legacyE2E, realE2EV20] = await Promise.all([
+      getState(env, "cutover:e2e:result"),
+      getState(env, "live:e2e-result-v20"),
+    ]);
+    const e2eComplete = (legacyE2E?.ok === true && legacyE2E?.manual === true) || validRealE2EV20(realE2EV20);
     if (!e2eComplete && (!e2eArmed || autonomousEnabled)) {
-      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "First live E2E is not armed for manual confirmation — no order sent", show_alert: true });
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Verified production E2E is required before manual confirmation — no order sent", show_alert: true });
       return new Response("ok");
     }
 
@@ -1155,7 +1158,64 @@ async function reconcileActiveLiveTrades(env) {
   return result;
 }
 
+async function offerLatestCandidateForManualApproval(env) {
+  const policy=readLivePolicy(env);
+  if(policy.liveExecutionEnabled!==true) return {ok:false,status:"LIVE_EXECUTION_DISABLED"};
+  if(String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase()!=="true") {
+    return {ok:false,status:"MANUAL_APPROVAL_MODE_DISABLED"};
+  }
+  if(!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return {ok:false,status:"TELEGRAM_NOT_CONFIGURED"};
+
+  const candidate=await getState(env,"live:candidate:latest");
+  if(!candidate?.id) return {ok:false,status:"NO_MANUAL_CANDIDATE"};
+  if(Date.now()-Number(candidate.createdAt||0)>MAX_SIGNAL_AGE_MS) return {ok:false,status:"STALE_MANUAL_CANDIDATE"};
+
+  const claimed=await claimState(
+    env,
+    `manual-approval-prompt-lock:${candidate.id}`,
+    {at:Date.now(),symbol:candidate.symbol},
+    SIGNAL_TTL_SEC
+  );
+  if(!claimed) return {ok:false,status:"MANUAL_PROMPT_DUPLICATE_BLOCKED"};
+
+  const raw=JSON.stringify({
+    id:String(candidate.id),
+    symbol:String(candidate.symbol||""),
+    entry:Number(candidate.entry),
+    stop:Number(candidate.stop),
+    target:Number(candidate.target),
+    stakeUSDT:Number(candidate.recommendedUSDT||5.5),
+    score:Number(candidate.score||0),
+    strategy:String(candidate.strategy||""),
+  });
+  const ts=String(Date.now());
+  const signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${raw}`);
+  const req=new Request("https://internal/fast-signal-ingest",{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-fast-timestamp":ts,
+      "x-fast-signature":signature,
+    },
+    body:raw,
+  });
+  const response=await handleFastSignalIngest(req,env);
+  const row=await response.json().catch(()=>({}));
+  await putState(env,`manual-approval-offer:${candidate.id}`,{
+    at:Date.now(),
+    ok:response.ok && row?.ok===true,
+    status:String(row?.status||"UNKNOWN"),
+    symbol:String(candidate.symbol||""),
+    financialAction:false,
+    userConfirmationRequired:true,
+  },SIGNAL_TTL_SEC);
+  return {ok:response.ok && row?.ok===true,status:row?.status||"UNKNOWN",row};
+}
+
 async function processAutonomousCandidate(env) {
+  if(String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase()==="true") {
+    return {ok:false,status:"AUTONOMOUS_BLOCKED_MANUAL_APPROVAL_ONLY"};
+  }
   const policy=readLivePolicy(env);
   if(policy.autonomousEnabled!==true) return {ok:false,status:"AUTONOMOUS_DISABLED"};
   if(policy.liveExecutionEnabled!==true) return {ok:false,status:"LIVE_EXECUTION_DISABLED"};
@@ -1333,6 +1393,8 @@ export default {
         realE2EV20Recognized:v20Valid,
         autonomousPathRecognizesV20:true,
         autonomousProofKey:"live:e2e-result-v20",
+        manualApprovalOnly:String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase()==="true",
+        automaticBuyBlocked:String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase()==="true",
         telegramControls:{
           pauseImplemented:true,
           resumeImplemented:true,
@@ -1477,10 +1539,14 @@ export default {
     ctx.waitUntil((async () => {
       if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
       await reconcileActiveLiveTrades(env).catch(() => {});
-      if (readLivePolicy(env).autonomousEnabled === true) {
+      const policy=readLivePolicy(env);
+      const manualOnly=String(env.MANUAL_APPROVAL_ONLY ?? "true").toLowerCase()==="true";
+      if (manualOnly) {
+        // Production mode: scanner proposes, Telegram user confirms, no automatic BUY.
+        await offerLatestCandidateForManualApproval(env).catch(() => {});
+      } else if (policy.autonomousEnabled === true) {
         await processAutonomousCandidate(env).catch(() => {});
       } else {
-        // First production E2E remains manually confirmed while autonomous mode is OFF.
         await prepareManualE2EPrompt(env).catch(() => {});
       }
     })());
