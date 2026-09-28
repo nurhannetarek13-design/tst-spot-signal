@@ -695,12 +695,30 @@ export default {
       const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
       const bridgeHealth = (await getState(env, "bridge:health")) || null;
       const ownership = (await getState(env, "bridge:ownership")) || null;
+      const provider = executionProvider(env);
+      const configured = executorConfigured(env);
+      const route = executionRoute(env);
       const now = Date.now();
       const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
-      const bridgeFresh = bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
-      const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
       const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+
+      let routeHealthy = false;
+      let ownershipFresh = false;
+      let readonlyHeartbeat = null;
+      if (provider === "SUPABASE_V2") {
+        readonlyHeartbeat = await executionReadOnlyHeartbeat(env);
+        routeHealthy = readonlyHeartbeat?.transportOk === true
+          && readonlyHeartbeat?.body?.canTrade === true
+          && readonlyHeartbeat?.body?.financialAction === false;
+        ownershipFresh = routeHealthy && configured;
+      } else {
+        routeHealthy = bridgeHealth?.ok === true
+          && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
+        ownershipFresh = ownership?.owner === executionOwner(env)
+          && ownership?.exclusive === true
+          && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
+      }
+
       const e2eResult = (await getState(env, "cutover:e2e:result")) || null;
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
       const manualE2EComplete = e2eResult?.ok === true && e2eResult?.manual === true;
@@ -709,8 +727,10 @@ export default {
         reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
         snapshotFresh,
         watchdogHealthy: !ops.stale?.length,
-        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-        executionRouteHealthy: bridgeFresh && executorConfigured,
+        binanceConnectionOk: provider === "SUPABASE_V2"
+          ? routeHealthy
+          : hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: routeHealthy && configured,
         executorOwnershipOk: ownershipFresh,
         unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
         unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
@@ -720,13 +740,20 @@ export default {
       return Response.json({
         ok: true,
         ...gate,
-        executionRoute: "CLOUDFLARE_HMAC_MAKE",
-        bridgeFresh,
+        executionProvider: provider,
+        executionRoute: route,
+        routeVersion: routeVersion(env),
+        bridgeFresh: routeHealthy,
         executorOwnershipOk: ownershipFresh,
         offsiteSnapshotFresh: snapshotFresh,
-        executorConfigured,
+        executorConfigured: configured,
         e2eArmed,
         manualE2EComplete,
+        readonlyHeartbeat: provider === "SUPABASE_V2" ? {
+          transportOk: readonlyHeartbeat?.transportOk === true,
+          canTrade: readonlyHeartbeat?.body?.canTrade === true,
+          financialAction: false,
+        } : null,
         manualExecutionAllowed: gate.go
           && readLivePolicy(env).liveExecutionEnabled === true
           && readLivePolicy(env).autonomousEnabled !== true
