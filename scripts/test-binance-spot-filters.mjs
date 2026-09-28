@@ -31,10 +31,10 @@ globalThis.fetch = async (url) => ({
 });
 
 const x = await normalizeSpotProtection("BTCUSDT", 0.00006549, 84750.987, 83850.123, 83682.422);
-assert.equal(x.quantity, 0.00006);
-assert.equal(x.takeProfit, 84750.98);
-assert.equal(x.stopLoss, 83850.12);
-assert.equal(x.stopLimit, 83682.42);
+assert.equal(x.quantity, "0.00006");
+assert.equal(x.takeProfit, "84750.98");
+assert.equal(x.stopLoss, "83850.12");
+assert.equal(x.stopLimit, "83682.42");
 assert.equal(x.minNotional, 5);
 
 await assert.rejects(
