@@ -82,7 +82,7 @@ function riskCappedQuote(entry, stop, requested = 5.5) {
   return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
 }
 
-async function executionOperational(env, symbol = null) {
+async function executionOperationalUnsafe(env, symbol = null) {
   const now = Date.now();
   const [ops, reconciliationState, bridge, ownership, daily, unknownState, unprotectedState] = await Promise.all([
     getState(env, "ops:state"),
@@ -186,6 +186,25 @@ async function executionOperational(env, symbol = null) {
     ownershipOk:ownership?.owner === executionOwner(env) && ownership?.exclusive === true && fresh(ownership?.at),
     executorConfigured:ready,
   };
+}
+
+async function executionOperational(env, symbol = null) {
+  try {
+    return await executionOperationalUnsafe(env, symbol);
+  } catch (error) {
+    return {
+      ok:false,
+      provider:executionProvider(env),
+      state:"UNKNOWN",
+      blocker:"EXECUTION_OPERATIONAL_EXCEPTION",
+      reason:String(error?.message || error).slice(0,180),
+      executorConfigured:executorConfigured(env),
+      reconciliationOk:false,
+      bridgeOk:false,
+      ownershipOk:false,
+      noSecretValuesExposed:true,
+    };
+  }
 }
 
 async function prepareManualE2EPrompt(env) {
