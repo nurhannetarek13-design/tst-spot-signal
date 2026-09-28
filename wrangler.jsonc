@@ -10,7 +10,7 @@
     "enabled": true
   },
   "vars": {
-    "LIVE_EXECUTION_ENABLED": "false",
+    "LIVE_EXECUTION_ENABLED": "true",
     "AUTONOMOUS_ENABLED": "false",
     "MANUAL_APPROVAL_ONLY": "true",
     "E2E_ARMED": "false",
