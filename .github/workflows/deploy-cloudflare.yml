@@ -184,6 +184,32 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
+      - name: Probe Binance signing mode safely
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 35             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/binance-signing-mode-probe?nonce=$(date +%s%N)"             -o /tmp/signing-mode.json || true
+          cat /tmp/signing-mode.json 2>/dev/null || true
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('/tmp/signing-mode.json')
+          if not p.exists() or not p.read_text().strip():
+              print("BINANCE_SIGNING_PROBE=NO_RESPONSE")
+              raise SystemExit(0)
+          try: r=json.loads(p.read_text())
+          except Exception:
+              print("BINANCE_SIGNING_PROBE=NON_JSON")
+              raise SystemExit(0)
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("BINANCE_SIGNING_PROBE_OK=",r.get('ok'))
+          print("BINANCE_SIGNING_PROBE_STATUS=",r.get('status'))
+          print("BINANCE_SIGNING_MODE=",r.get('signingMode'))
+          for x in r.get('results',[]):
+              print("MODE_RESULT",x.get('mode'),x.get('ok'),x.get('httpStatus'),x.get('binanceCode'),x.get('status'))
+          PY
+
       - name: Report production Supabase V2 dry run
         if: always()
         shell: bash
