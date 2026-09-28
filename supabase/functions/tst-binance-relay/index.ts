@@ -100,6 +100,83 @@ async function verifyRelayAuth(body:any){
   if(!(await claimRelayNonce(relayNonce,Date.now()+RELAY_NONCE_TTL_MS))) throw new Error("RELAY_REPLAY_BLOCKED");
 }
 
+
+function decodeStatePayload(value:string){
+  const raw=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+  const padded=raw+"=".repeat((4-(raw.length%4))%4);
+  const binary=atob(padded);
+  const bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function handleRuntimeState(body:any){
+  const q=new URLSearchParams(String(body?.query||""));
+  const op=String(q.get("op")||"").toLowerCase();
+  const key=String(q.get("key")||"");
+  if(!/^[A-Za-z0-9:_|.\/-]{1,300}$/.test(key)){
+    return json(400,{ok:false,status:"STATE_BAD_KEY",financialAction:false});
+  }
+  const sql=db();
+
+  if(op==="get"){
+    const rows=await sql`
+      select value
+      from private.tst_runtime_state
+      where key=${key}
+        and (expires_at is null or expires_at > now())
+      limit 1
+    `;
+    return json(200,{ok:true,status:"STATE_GET_OK",found:rows.length>0,value:rows[0]?.value??null,financialAction:false});
+  }
+
+  if(op==="put" || op==="claim"){
+    const expiresAt=Number(q.get("expiresAt")||0);
+    const valueHash=String(q.get("valueHash")||"");
+    const statePayload=String(body?.statePayload||"");
+    if(!Number.isFinite(expiresAt)||expiresAt<=Date.now()||!/^[a-f0-9]{64}$/.test(valueHash)||!statePayload){
+      return json(400,{ok:false,status:"STATE_BAD_WRITE_INPUT",financialAction:false});
+    }
+    if((await sha256Hex(statePayload))!==valueHash){
+      return json(401,{ok:false,status:"STATE_VALUE_HASH_MISMATCH",financialAction:false});
+    }
+    let value:any;
+    try{
+      value=JSON.parse(decodeStatePayload(statePayload));
+    }catch{
+      return json(400,{ok:false,status:"STATE_BAD_PAYLOAD",financialAction:false});
+    }
+
+    if(op==="put"){
+      await sql`
+        insert into private.tst_runtime_state(key,value,expires_at,updated_at)
+        values(${key},${sql.json(value)},to_timestamp(${expiresAt}/1000.0),now())
+        on conflict(key) do update
+        set value=excluded.value,expires_at=excluded.expires_at,updated_at=now()
+      `;
+      return json(200,{ok:true,status:"STATE_PUT_OK",financialAction:false});
+    }
+
+    const rows=await sql`
+      insert into private.tst_runtime_state(key,value,expires_at,updated_at)
+      values(${key},${sql.json(value)},to_timestamp(${expiresAt}/1000.0),now())
+      on conflict(key) do update
+      set value=excluded.value,expires_at=excluded.expires_at,updated_at=now()
+      where private.tst_runtime_state.expires_at is not null
+        and private.tst_runtime_state.expires_at <= now()
+      returning key
+    `;
+    return json(rows.length?200:409,{
+      ok:rows.length>0,
+      claimed:rows.length>0,
+      status:rows.length?"STATE_CLAIMED":"STATE_ALREADY_CLAIMED",
+      financialAction:false,
+    });
+  }
+
+  return json(400,{ok:false,status:"STATE_BAD_OPERATION",financialAction:false});
+}
+
 async function vaultSignerReady(){
   const sql=db();
   const rows=await sql`
@@ -234,6 +311,10 @@ Deno.serve(async(req:Request)=>{
   try{await verifyRelayAuth(body);}
   catch(error){
     return json(401,{ok:false,status:String(error?.message||"RELAY_AUTH_REJECTED"),financialAction:false,privateKeyLocation:"SUPABASE_VAULT",privateKeyExposed:false});
+  }
+
+  if(String(body?.method||"").toUpperCase()==="POST" && String(body?.path||"")==="/internal/state"){
+    return await handleRuntimeState(body);
   }
 
   let cap:any;
