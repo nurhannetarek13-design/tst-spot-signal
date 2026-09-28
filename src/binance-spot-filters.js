@@ -61,7 +61,12 @@ const EXCHANGE_INFO_BASES = [
   "https://api.binance.com",
 ];
 
-async function fetchPublic(path) {
+async function fetchPublic(path, publicFetcher = null) {
+  if (typeof publicFetcher === "function") {
+    const data = await publicFetcher(path);
+    if (!data || typeof data !== "object") throw new Error("BINANCE_PUBLIC_PROXY_BAD_RESPONSE");
+    return data;
+  }
   let last = null;
   for (const base of EXCHANGE_INFO_BASES) {
     try {
@@ -79,8 +84,8 @@ async function fetchPublic(path) {
   throw new Error("BINANCE_PUBLIC_UNAVAILABLE:" + String(last || "all-hosts-failed"));
 }
 
-async function fetchExchangeInfo(symbol) {
-  return fetchPublic("/api/v3/exchangeInfo?symbol=" + encodeURIComponent(symbol));
+async function fetchExchangeInfo(symbol, publicFetcher = null) {
+  return fetchPublic("/api/v3/exchangeInfo?symbol=" + encodeURIComponent(symbol), publicFetcher);
 }
 
 function filterMap(row) {
@@ -109,13 +114,13 @@ function activeMinNotional(filters) {
   return 0;
 }
 
-export async function validateSpotMarketBuy(symbol, quoteUSDT, availableQuoteBalance, { referencePrice = null } = {}) {
+export async function validateSpotMarketBuy(symbol, quoteUSDT, availableQuoteBalance, { referencePrice = null, publicFetcher = null } = {}) {
   const s = String(symbol || "").toUpperCase();
   if (!/^[A-Z0-9]{2,20}USDT$/.test(s)) throw new Error("BAD_SPOT_SYMBOL");
 
   const [j, book] = await Promise.all([
-    fetchExchangeInfo(s),
-    fetchPublic("/api/v3/ticker/bookTicker?symbol=" + encodeURIComponent(s)),
+    fetchExchangeInfo(s, publicFetcher),
+    fetchPublic("/api/v3/ticker/bookTicker?symbol=" + encodeURIComponent(s), publicFetcher),
   ]);
   const row = Array.isArray(j?.symbols) ? j.symbols[0] : null;
   if (!row) throw new Error("SYMBOL_INFO_MISSING");
@@ -193,9 +198,9 @@ export async function validateSpotMarketBuy(symbol, quoteUSDT, availableQuoteBal
   };
 }
 
-export async function normalizeSpotProtection(symbol, quantity, takeProfit, stopLoss, stopLimit) {
+export async function normalizeSpotProtection(symbol, quantity, takeProfit, stopLoss, stopLimit, { publicFetcher = null } = {}) {
   const s = String(symbol || "").toUpperCase();
-  const j = await fetchExchangeInfo(s);
+  const j = await fetchExchangeInfo(s, publicFetcher);
   const row = Array.isArray(j?.symbols) ? j.symbols[0] : null;
   if (!row || row.status !== "TRADING") throw new Error("SYMBOL_NOT_TRADING");
   if (row.isSpotTradingAllowed !== true) throw new Error("SPOT_TRADING_NOT_ALLOWED");
