@@ -1048,7 +1048,7 @@ export default {
       const route = executionRoute(env);
       const now = Date.now();
       const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
-      const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
+      let snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
 
       let routeHealthy = false;
       let ownershipFresh = false;
@@ -1065,6 +1065,13 @@ export default {
           && readonlyReconciliation?.ok === true
           && readonlyReconciliation?.financialAction === false;
         ownershipFresh = routeHealthy && configured;
+
+        if (routeHealthy) {
+          await heartbeat(env, ["offsite-backup"], {
+            source: "SUPABASE_V2_GO_NO_GO_READONLY",
+          });
+          snapshotFresh = true;
+        }
         await recordReconciliation(env, {
           ok: readonlyReconciliation?.ok === true,
           reason: readonlyReconciliation?.ok === true ? null : String(readonlyReconciliation?.status || "SUPABASE_RECONCILIATION_FAILED"),
