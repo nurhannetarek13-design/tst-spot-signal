@@ -233,6 +233,32 @@ function relayConfigured(env = {}) {
   return Boolean(String(env.SUPABASE_BINANCE_RELAY_URL || "").trim());
 }
 
+export async function supabasePublicMarketData(env, path) {
+  const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  if (!relayUrl) throw new Error("SUPABASE_RELAY_NOT_CONFIGURED");
+  const u = new URL("https://binance.local" + String(path || ""));
+  const symbol = String(u.searchParams.get("symbol") || "").toUpperCase();
+  if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol)) throw new Error("BAD_PUBLIC_SYMBOL");
+  let probe = null;
+  if (u.pathname === "/api/v3/exchangeInfo") probe = "exchangeInfo";
+  if (u.pathname === "/api/v3/ticker/bookTicker") probe = "bookTicker";
+  if (!probe) throw new Error("UNSUPPORTED_PUBLIC_MARKET_PATH");
+  const endpoint = new URL(relayUrl);
+  endpoint.searchParams.set("probe", probe);
+  endpoint.searchParams.set("symbol", symbol);
+  endpoint.searchParams.set("nonce", randomNonce());
+  const r = await fetch(endpoint.toString(), {
+    method:"GET",
+    headers:{"cache-control":"no-store","x-region":relayRegion(env)},
+    signal:AbortSignal.timeout(10_000),
+  });
+  const body = await r.json().catch(()=>({}));
+  if (!r.ok || body?.ok !== true || !body?.data) {
+    throw new Error("SUPABASE_PUBLIC_MARKET_FAILED:" + String(body?.status || ("HTTP_" + r.status)));
+  }
+  return body.data;
+}
+
 function isUnknownBinanceResponse(body = {}, httpStatus = 0) {
   const code = Number(body?.binanceCode);
   const status = Number(body?.upstreamHttpStatus || httpStatus || 0);
@@ -484,7 +510,10 @@ async function preTradeMarketBuy(env, { symbol, quoteUSDT, referencePrice = null
   }
   const availableUSDT = freeBalance(account.data, "USDT");
   try {
-    const validation = await validateSpotMarketBuy(symbol, quoteUSDT, availableUSDT, { referencePrice });
+    const validation = await validateSpotMarketBuy(symbol, quoteUSDT, availableUSDT, {
+      referencePrice,
+      publicFetcher:(path)=>supabasePublicMarketData(env,path),
+    });
     return { ok:true, validation };
   } catch (error) {
     return { ok:false, status:String(error?.message || error).slice(0,160) || "PRETRADE_FILTER_REJECTED" };
@@ -1363,6 +1392,7 @@ export async function supabaseDryRunExecution(env, input) {
   try {
     validation = await validateSpotMarketBuy(symbol, quote, availableUSDT, {
       referencePrice: entry > 0 ? entry : null,
+      publicFetcher:(path)=>supabasePublicMarketData(env,path),
     });
   } catch (error) {
     return {
@@ -1405,6 +1435,7 @@ export async function supabaseDryRunExecution(env, input) {
       target,
       stop,
       Number((stop * 0.998).toPrecision(12)),
+      { publicFetcher:(path)=>supabasePublicMarketData(env,path) },
     );
   } catch (error) {
     return {
@@ -1577,6 +1608,7 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
       target,
       stop,
       Number((stop * 0.998).toPrecision(12)),
+      { publicFetcher:(path)=>supabasePublicMarketData(env,path) },
     );
   } catch (error) {
     await writeTradeState(env, intentId, "PROTECTION_PENDING", {
