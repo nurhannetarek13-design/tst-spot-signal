@@ -210,6 +210,51 @@ Deno.serve(async (req:Request) => {
     });
   }
 
+  // Diagnostic only: prove the Binance API key itself is recognized, without any Binance signature.
+  // Relay authentication above is still mandatory; this exact endpoint is read-only and returns no trade data.
+  if(String(body?.method||"").toUpperCase()==="GET"
+    && String(body?.path||"")==="/api/v3/historicalTrades"
+    && String(body?.query||"")==="symbol=BTCUSDT&limit=1"){
+    const apiKey=String(body?.apiKey||"");
+    if(!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey)){
+      return json(403,{ok:false,status:"BAD_API_KEY_SHAPE",financialAction:false,noBinanceSecretStored:true});
+    }
+    try{
+      const upstream=await fetch(`${BASE}/api/v3/historicalTrades?symbol=BTCUSDT&limit=1`,{
+        method:"GET",
+        headers:{
+          "X-MBX-APIKEY":apiKey,
+          "accept":"application/json",
+          "cache-control":"no-store",
+        },
+        signal:AbortSignal.timeout(15_000),
+      });
+      const raw=await upstream.text();
+      let data:any={};
+      try{ data=raw?JSON.parse(raw):{}; }catch{ data={}; }
+      const ok=upstream.ok && !(typeof data?.code==="number" && data.code<0);
+      return json(ok?200:(upstream.status||502),{
+        ok,
+        status:ok?"BINANCE_API_KEY_ACCEPTED":"BINANCE_API_KEY_REJECTED",
+        upstreamHttpStatus:upstream.status,
+        binanceCode:data?.code ?? null,
+        message:ok?undefined:String(data?.msg||"upstream rejected").slice(0,180),
+        financialAction:false,
+        apiKeyOnlyProbe:true,
+        noBinanceSecretStored:true,
+      });
+    }catch(error){
+      return json(503,{
+        ok:false,
+        status:"BINANCE_API_KEY_PROBE_TRANSPORT_UNKNOWN",
+        reason:String(error?.name||"FetchError"),
+        financialAction:false,
+        apiKeyOnlyProbe:true,
+        noBinanceSecretStored:true,
+      });
+    }
+  }
+
   let cap;
   try{
     cap=parseAndValidateCapability(body,{writesEnabled:WRITES_ENABLED});
