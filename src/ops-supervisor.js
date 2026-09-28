@@ -528,7 +528,7 @@ async function alertTransition(env, next) {
 async function recordReconciliation(env, body) {
   const row = {
     ok: body?.ok === true,
-    reason: body?.ok === true ? null : String(body?.reason || "RECONCILIATION_FAILED").slice(0, 120),
+    reason: body?.ok === true ? null : String(body?.reason || body?.status || "RECONCILIATION_FAILED").slice(0, 120),
     openOrdersChecked: Number(body?.open_orders_checked || 0),
     protectedOrdersChecked: Number(body?.protected_orders_checked || 0),
     source: String(body?.source || "MAKE_BINANCE_READONLY").slice(0, 80),
@@ -631,6 +631,20 @@ async function snapshot(env) {
     autonomousExecution: false,
     noSecretValuesExposed: true,
   };
+}
+
+function legacyMakeDisabled(env) {
+  return executionProvider(env) !== "MAKE_V2";
+}
+function legacyMakeDisabledResponse() {
+  return Response.json({
+    ok:false,
+    status:"LEGACY_EXECUTION_DISABLED",
+    executionProvider:"SUPABASE_V2",
+    financialAction:false,
+    oldVercelFallback:false,
+    noSecretValuesExposed:true,
+  },{status:410,headers:{"cache-control":"no-store"}});
 }
 
 async function claimDiagnosticSlot(env, name, ttlSec = 30) {
@@ -768,6 +782,7 @@ export default {
       }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       const body = await request.json().catch(() => ({}));
       const result = await verifyBridgeEnvelope(env, body);
       const routeId = bridgeRouteId(body);
@@ -783,6 +798,7 @@ export default {
       return Response.json(result, { status: result.ok ? 200 : 401, headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/bridge-auth-selftest" && request.method === "POST") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       const input = await request.json().catch(() => ({}));
       const signed = await signBridgeEnvelope(env, {
         signal_id: String(input.signal_id || "selftest"),
@@ -810,6 +826,7 @@ export default {
       }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/bridge-sign-dry-handshake" && request.method === "POST") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       const signed = await signBridgeEnvelope(env, {
         signal_id: "prodhandshake",
         action: "DRY_AUTH_TEST",
@@ -831,6 +848,7 @@ export default {
       }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/make-v2-dry-probe" && request.method === "POST") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       const [buy, oco] = await Promise.all([
         dryProbeRoute(env, MAKE_EXECUTION_ROUTE.buy),
         dryProbeRoute(env, MAKE_EXECUTION_ROUTE.oco),
@@ -879,6 +897,7 @@ export default {
       }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/make-v2-route-status") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       const [buy, oco] = await Promise.all([
         getState(env, "bridge:route:BUY_V2"),
         getState(env, "bridge:route:OCO_V2"),
@@ -895,6 +914,7 @@ export default {
       }, { headers: { "cache-control": "no-store" } });
     }
     if (url.pathname === "/bridge-auth-status") {
+      if (legacyMakeDisabled(env)) return legacyMakeDisabledResponse();
       return Response.json({
         ok: true,
         route: "CLOUDFLARE_HMAC_MAKE",
@@ -977,22 +997,25 @@ export default {
           protected_orders_checked: Number(readonlyReconciliation?.protectedOrderLists || 0),
           source: "SUPABASE_V2_GO_NO_GO_READONLY",
         });
-        if (readonlyReconciliation?.ok === true) {
-          await putState(env, "live:unknown-orders",
-            Number(readonlyReconciliation?.unknownBotOrders || 0) > 0
-              ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unknownBotOrders || 0), at:Date.now() }]
-              : []
-          );
-          await putState(env, "live:unprotected-positions",
-            Number(readonlyReconciliation?.unprotectedBotOrders || 0) > 0
-              ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unprotectedBotOrders || 0), at:Date.now() }]
-              : []
-          );
-        } else {
-          const sentinel={source:"SUPABASE_V2",status:"RECONCILIATION_UNAVAILABLE",at:Date.now()};
-          await putState(env,"live:unknown-orders",[sentinel]);
-          await putState(env,"live:unprotected-positions",[sentinel]);
-        }
+        const unknownKnown = readonlyReconciliation?.noUnknownOrders === true
+          || Number(readonlyReconciliation?.unknownBotOrders || 0) > 0;
+        const protectionKnown = readonlyReconciliation?.noUnprotectedPositions === true
+          || Number(readonlyReconciliation?.unprotectedBotOrders || 0) > 0;
+
+        await putState(env, "live:unknown-orders",
+          unknownKnown
+            ? (Number(readonlyReconciliation?.unknownBotOrders || 0) > 0
+                ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unknownBotOrders || 0), at:Date.now() }]
+                : [])
+            : [{source:"SUPABASE_V2",status:"RECONCILIATION_UNAVAILABLE",at:Date.now()}]
+        );
+        await putState(env, "live:unprotected-positions",
+          protectionKnown
+            ? (Number(readonlyReconciliation?.unprotectedBotOrders || 0) > 0
+                ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unprotectedBotOrders || 0), at:Date.now() }]
+                : [])
+            : [{source:"SUPABASE_V2",status:"RECONCILIATION_UNAVAILABLE",at:Date.now()}]
+        );
       } else {
         routeHealthy = bridgeHealth?.ok === true
           && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
