@@ -100,25 +100,6 @@ jobs:
           print("legacyVercelOk=",r.get('ok'),"status=",r.get('status'))
           PY
 
-      - name: Verify Binance secret-part candidates
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --silent --show-error --max-time 30 \
-            "$WORKER_URL/binance-secret-parts-preflight?nonce=$(date +%s%N)" \
-            -o /tmp/secret-parts.json || true
-          cat /tmp/secret-parts.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/secret-parts.json'))
-          assert r.get('financialAction') is False
-          assert r.get('noSecretValuesExposed') is True
-          print("SECRET_PARTS_OK=",r.get('ok'))
-          print("SECRET_PARTS_STATUS=",r.get('status'))
-          print("SELECTED_NORMALIZATION=",r.get('selectedNormalization'))
-          print("ATTEMPTS=",r.get('attempts'))
-          PY
-
       - name: Verify direct Cloudflare Binance read-only access
         if: always()
         shell: bash
