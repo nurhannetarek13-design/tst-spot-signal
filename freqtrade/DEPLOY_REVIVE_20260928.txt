@@ -1,3 +1,4 @@
 Non-financial Railway redeploy marker.
 Purpose: restart existing fail-closed reconciliation/read-only runtime before any execution-route migration.
 No trading flags or order logic changed.
+Trigger revision: 2 after correcting Railway watchPatterns to **/*.
