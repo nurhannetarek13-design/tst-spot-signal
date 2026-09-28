@@ -536,6 +536,13 @@ async function recordReconciliation(env, body) {
   };
   await putState(env, "ops:reconciliation:last", row);
   await heartbeat(env, ["reconciler", "protection"], { source: row.source });
+  if (row.ok) {
+    const evidence = { at: row.at, source: row.source, ok: true, financialAction: false };
+    await Promise.all([
+      putState(env, "ops:heartbeat:reconciler", evidence),
+      putState(env, "ops:heartbeat:protection", evidence),
+    ]);
+  }
   return row;
 }
 function bridgeRouteId(body = {}) {
@@ -1127,9 +1134,16 @@ export default {
           // account read. Do not let reconciliation or auxiliary state writes
           // suppress this critical health signal.
           if (binanceReadonlyOk) {
-            await heartbeat(env, ["binance-readonly"], {
+            const evidence = {
+              at: Date.now(),
               source: "SUPABASE_V2_READONLY_WATCHDOG",
+              ok: true,
+              financialAction: false,
+            };
+            await heartbeat(env, ["binance-readonly"], {
+              source: evidence.source,
             });
+            await putState(env, "ops:heartbeat:binance-readonly", evidence);
           }
 
           reconciliation = await executionReadOnlyReconcile(env);
