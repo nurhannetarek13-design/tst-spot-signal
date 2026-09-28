@@ -43,7 +43,7 @@ assert.equal(buy.isWrite,true);
 
 assert.throws(()=>parseAndValidateCapability({
   method:"POST",path:"/api/v3/order",
-  query:q({symbol:"SOLUSDT",side:"BUY",type:"MARKET",quoteOrderQty:"5.51",newClientOrderId:"TSTB12345678"})
+  query:q({symbol:"SOLUSDT",side:"BUY",type:"MARKET",quoteOrderQty:"25.01",newClientOrderId:"TSTB12345678"})
 },{writesEnabled:true}),/QUOTE_CAP_BLOCKED/);
 
 assert.throws(()=>parseAndValidateCapability({
