@@ -1,0 +1,32 @@
+name: Verify Supabase Relay Health
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-supabase-relay-health.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify read-only Supabase relay
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20             -H 'cache-control: no-store'             "https://irinttijrhicxofsdplo.supabase.co/functions/v1/tst-binance-relay?nonce=$(date +%s%N)"             -o /tmp/relay.json
+          cat /tmp/relay.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/relay.json'))
+          assert r.get('ok') is True
+          assert r.get('status') == 'SUPABASE_BINANCE_RELAY_READY'
+          assert r.get('financialWritesEnabled') is False
+          assert r.get('authMode') == 'BINANCE_SIGNED_CAPABILITY'
+          assert r.get('noBinanceSecretStored') is True
+          print('SUPABASE_RELAY_READ_ONLY_HEALTH_OK')
+          PY
