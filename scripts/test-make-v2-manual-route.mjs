@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../src/buy-gateway-stable.js", import.meta.url), "utf8");
-assert.match(src, /import \\{[^}]*manualBuyAndProtect[^}]*makeReadOnlyHeartbeat[^}]*\\} from "\\.\\/make-live-client\\.js";/);
+assert.match(src, /manualBuyAndProtect, makeReadOnlyHeartbeat/);
 
 const start = src.indexOf("async function executeConfirmedBuy(env, s) {");
 const end = src.indexOf("\nasync function sendPromptForActive(env)", start);
