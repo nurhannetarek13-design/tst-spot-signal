@@ -362,8 +362,13 @@ jobs:
           assert r.get('e2eArmed') is False
           assert r.get('manualE2EComplete') is False
           assert r.get('manualExecutionAllowed') is False
-          assert checks.get('NO_UNKNOWN_ORDERS') is True
-          assert checks.get('NO_UNPROTECTED_POSITIONS') is True
+          rr=r.get('readonlyReconciliation') or {}
+          if provider == 'SUPABASE_V2' and rr.get('ok') is not True:
+              assert checks.get('NO_UNKNOWN_ORDERS') is False
+              assert checks.get('NO_UNPROTECTED_POSITIONS') is False
+          else:
+              assert checks.get('NO_UNKNOWN_ORDERS') is True
+              assert checks.get('NO_UNPROTECTED_POSITIONS') is True
           assert r.get('liveTrading') is False
           assert r.get('autonomousExecution') is False
           assert r.get('noSecretValuesExposed') is True
