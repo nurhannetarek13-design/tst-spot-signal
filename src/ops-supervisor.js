@@ -847,6 +847,11 @@ export default {
             protected_orders_checked: Number(reconciliation?.protectedOrderLists || 0),
             source: "SUPABASE_V2_READONLY_RECONCILIATION",
           });
+          await putState(env, "live:unprotected-positions",
+            Number(reconciliation?.orphanBotOrders || 0) > 0
+              ? [{ source:"SUPABASE_V2", count:Number(reconciliation.orphanBotOrders || 0), at:now }]
+              : []
+          );
         } else {
           const [buyAudit, ocoAudit] = await Promise.all([
             getState(env, "bridge:route:BUY_V2"),
