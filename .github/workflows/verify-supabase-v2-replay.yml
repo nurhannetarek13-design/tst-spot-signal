@@ -41,3 +41,19 @@ jobs:
           assert r.get('stale',{}).get('httpStatus') == 401
           assert r.get('noSecretValuesExposed') is True
           PY
+
+      - name: Prove Binance API key is recognized without signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 35             -H 'cache-control: no-store'             "$WORKER_URL/binance-api-key-only-probe?nonce=$(date +%s%N)"             -o /tmp/api-key.json || true
+          cat /tmp/api-key.json 2>/dev/null || true
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/api-key.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("BINANCE_API_KEY_ONLY_OK=",r.get('ok'))
+          print("BINANCE_API_KEY_ONLY_STATUS=",r.get('status'))
+          print("BINANCE_API_KEY_ONLY_CODE=",r.get('binanceCode'))
+          PY
