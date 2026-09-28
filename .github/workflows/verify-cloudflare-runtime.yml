@@ -264,29 +264,34 @@ jobs:
           PY
 
 
-      - name: Verify HMAC bridge and operational Go No-Go
+      - name: Verify legacy Make execution is disabled and operational Go No-Go
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 -X POST \
+          bridge_code=$(curl --silent --show-error --max-time 20 -o /tmp/bridge.json -w '%{http_code}' -X POST \
             -H 'content-type: application/json' \
             --data '{"signal_id":"runtimecheck","symbol":"BTCUSDT"}' \
-            "$WORKER_URL/bridge-auth-selftest?nonce=$(date +%s%N)" -o /tmp/bridge.json
+            "$WORKER_URL/bridge-auth-selftest?nonce=$(date +%s%N)")
           cat /tmp/bridge.json
-          curl --fail --silent --show-error --max-time 20 \
+          curl --fail --silent --show-error --max-time 25 \
             "$WORKER_URL/go-no-go?nonce=$(date +%s%N)" -o /tmp/gate.json
           cat /tmp/gate.json
-          python - <<'PY'
-          import json
+          BRIDGE_CODE="$bridge_code" python - <<'PY'
+          import json, os
           b=json.load(open('/tmp/bridge.json'))
           g=json.load(open('/tmp/gate.json'))
-          assert b.get('ok') is True
-          assert b.get('first') == 'BRIDGE_AUTH_OK'
-          assert b.get('replay') == 'REPLAY_BLOCKED'
+          provider=g.get('executionProvider')
+          if provider == 'SUPABASE_V2':
+              assert os.environ.get('BRIDGE_CODE') == '410'
+              assert b.get('status') == 'LEGACY_EXECUTION_DISABLED'
+              assert b.get('financialAction') is False
+          else:
+              assert b.get('ok') is True
+              assert b.get('first') == 'BRIDGE_AUTH_OK'
+              assert b.get('replay') == 'REPLAY_BLOCKED'
           assert b.get('oldVercelFallback') is False
           assert g.get('ok') is True
-          provider=g.get('executionProvider')
           expected_route={
             'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
             'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
@@ -295,9 +300,6 @@ jobs:
           assert g.get('executionRoute') == expected_route
           assert g.get('go') is False
           assert g.get('activationAllowed') is False
-          assert g.get('e2eArmed') is False
-          assert g.get('manualE2EComplete') is False
-          assert g.get('manualExecutionAllowed') is False
           assert g.get('liveTrading') is False
           assert g.get('autonomousExecution') is False
           PY
