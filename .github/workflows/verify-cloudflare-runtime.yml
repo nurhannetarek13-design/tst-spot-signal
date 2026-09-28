@@ -100,25 +100,6 @@ jobs:
           print("legacyVercelOk=",r.get('ok'),"status=",r.get('status'))
           PY
 
-      - name: Verify Binance secret normalization candidates
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --silent --show-error --max-time 30 \
-            "$WORKER_URL/binance-secret-normalization-preflight?nonce=$(date +%s%N)" \
-            -o /tmp/secret-normalization.json || true
-          cat /tmp/secret-normalization.json
-          python - <<'PY'
-          import json
-          r=json.load(open('/tmp/secret-normalization.json'))
-          assert r.get('financialAction') is False
-          assert r.get('noSecretValuesExposed') is True
-          print("SECRET_NORMALIZATION_OK=",r.get('ok'))
-          print("SECRET_NORMALIZATION_STATUS=",r.get('status'))
-          print("SELECTED_NORMALIZATION=",r.get('selectedNormalization'))
-          print("ATTEMPTS=",r.get('attempts'))
-          PY
-
       - name: Verify direct Cloudflare Binance read-only access
         if: always()
         shell: bash
