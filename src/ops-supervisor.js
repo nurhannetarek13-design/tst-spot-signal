@@ -456,6 +456,20 @@ export default {
           && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
         const operationalOk = buyVerified && ocoVerified;
         if (operationalOk) {
+          await putState(env, "bridge:health", {
+            ok: true,
+            at: now,
+            route: "CLOUDFLARE_HMAC_MAKE",
+            routeVersion: MAKE_EXECUTION_ROUTE.version,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
+          await putState(env, "bridge:ownership", {
+            owner: "MAKE_EXECUTOR_V2",
+            at: now,
+            exclusive: true,
+            routeVersion: MAKE_EXECUTION_ROUTE.version,
+            source: "MAKE_V2_READONLY_WATCHDOG",
+          });
           await recordReconciliation(env, {
             ok: true,
             open_orders_checked: 0,
