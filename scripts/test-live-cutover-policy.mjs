@@ -19,6 +19,20 @@ assert.equal(gate.activationAllowed,false);
 assert.deepEqual(gate.activationFailed,["LIVE_EXECUTION_ENABLED"]);
 assert.equal(gate.checks.EMERGENCY_KILL_SWITCH_CLEAR,true);
 
+const manualLive=evaluateGoNoGo({
+  ...healthy,
+  policy:{...LIVE_POLICY,liveExecutionEnabled:true,autonomousEnabled:false,manualApprovalOnly:true},
+});
+assert.equal(manualLive.activationAllowed,true);
+assert.equal(manualLive.activationFailed.length,0);
+
+const invalidAutoInManual=evaluateGoNoGo({
+  ...healthy,
+  policy:{...LIVE_POLICY,liveExecutionEnabled:true,autonomousEnabled:true,manualApprovalOnly:true},
+});
+assert.equal(invalidAutoInManual.activationAllowed,false);
+assert.ok(invalidAutoInManual.activationFailed.includes("APPROVAL_MODE_VALID"));
+
 const killed=evaluateGoNoGo({...healthy,policy:{...LIVE_POLICY,emergencyKillSwitch:true}});
 assert.equal(killed.go,false);
 assert.ok(killed.failed.includes("EMERGENCY_KILL_SWITCH_CLEAR"));
