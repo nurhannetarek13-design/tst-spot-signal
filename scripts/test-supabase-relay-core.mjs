@@ -41,6 +41,8 @@ const oco=parseAndValidateCapability({
   query:q({
     symbol:"SOLUSDT",side:"SELL",quantity:"0.04",
     listClientOrderId:"TSTO12345678",
+    aboveClientOrderId:"TSTT12345678",
+    belowClientOrderId:"TSTS12345678",
     aboveType:"LIMIT_MAKER",abovePrice:"120",
     belowType:"STOP_LOSS_LIMIT",belowStopPrice:"118",belowPrice:"117.8"
   })
@@ -52,6 +54,8 @@ assert.throws(()=>parseAndValidateCapability({
   query:q({
     symbol:"SOLUSDT",side:"SELL",quantity:"0.04",
     listClientOrderId:"BAD12345678",
+    aboveClientOrderId:"TSTT12345678",
+    belowClientOrderId:"TSTS12345678",
     aboveType:"LIMIT_MAKER",abovePrice:"120",
     belowType:"STOP_LOSS_LIMIT",belowStopPrice:"118",belowPrice:"117.8"
   })
