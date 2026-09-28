@@ -61,6 +61,128 @@ function cloudflareBinanceCreds(env) {
   return { key: String(key || "").trim(), secret: String(secret || "").trim() };
 }
 
+async function cloudflareBinanceWsAccountPreflight(env) {
+  const creds = cloudflareBinanceCreds(env);
+  if (!creds.key || !creds.secret) {
+    return { ok:false, status:"BINANCE_WS_CREDENTIALS_MISSING", financialAction:false };
+  }
+
+  const params = {
+    apiKey: creds.key,
+    recvWindow: 5000,
+    timestamp: Date.now(),
+  };
+  const payload = Object.entries(params)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([key,value]) => `${key}=${String(value)}`)
+    .join("&");
+  const signature = await hmacHexRaw(creds.secret, payload);
+  const requestId = crypto.randomUUID();
+  const request = {
+    id: requestId,
+    method: "account.status",
+    params: { ...params, signature },
+  };
+
+  return await new Promise((resolve) => {
+    let settled = false;
+    let opened = false;
+    let ws;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws?.close(1000, "done"); } catch {}
+      resolve(value);
+    };
+
+    try {
+      ws = new WebSocket("wss://ws-api.binance.com:443/ws-api/v3");
+    } catch (error) {
+      return resolve({
+        ok:false,
+        status:"BINANCE_WS_CONSTRUCTOR_FAILED",
+        reason:String(error?.message || error).slice(0,120),
+        financialAction:false,
+        noSecretValuesExposed:true,
+      });
+    }
+
+    const timer = setTimeout(() => finish({
+      ok:false,
+      status:"BINANCE_WS_TIMEOUT",
+      opened,
+      financialAction:false,
+      noSecretValuesExposed:true,
+    }), 12_000);
+
+    ws.addEventListener("open", () => {
+      opened = true;
+      try {
+        ws.send(JSON.stringify(request));
+      } catch (error) {
+        finish({
+          ok:false,
+          status:"BINANCE_WS_SEND_FAILED",
+          reason:String(error?.message || error).slice(0,120),
+          financialAction:false,
+          noSecretValuesExposed:true,
+        });
+      }
+    });
+
+    ws.addEventListener("message", (event) => {
+      try {
+        const message = JSON.parse(typeof event.data === "string" ? event.data : String(event.data));
+        if (String(message?.id || "") !== requestId) return;
+        const status = Number(message?.status || 0);
+        const result = message?.result || {};
+        finish({
+          ok: status >= 200 && status < 300,
+          status: status >= 200 && status < 300 ? "CLOUDFLARE_BINANCE_WS_READONLY_OK" : "CLOUDFLARE_BINANCE_WS_READONLY_FAILED",
+          wsStatus: status,
+          binanceCode: message?.error?.code ?? null,
+          canTrade: result?.canTrade === true,
+          accountType: result?.accountType || null,
+          permissions: Array.isArray(result?.permissions) ? result.permissions : [],
+          financialAction:false,
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        });
+      } catch (error) {
+        finish({
+          ok:false,
+          status:"BINANCE_WS_BAD_RESPONSE",
+          reason:String(error?.message || error).slice(0,120),
+          financialAction:false,
+          noSecretValuesExposed:true,
+        });
+      }
+    });
+
+    ws.addEventListener("error", () => finish({
+      ok:false,
+      status: opened ? "BINANCE_WS_TRANSPORT_ERROR" : "BINANCE_WS_CONNECT_ERROR",
+      opened,
+      financialAction:false,
+      noSecretValuesExposed:true,
+    }));
+
+    ws.addEventListener("close", (event) => {
+      if (settled) return;
+      finish({
+        ok:false,
+        status:"BINANCE_WS_CLOSED_BEFORE_RESPONSE",
+        opened,
+        closeCode:event?.code ?? null,
+        closeReason:String(event?.reason || "").slice(0,120),
+        financialAction:false,
+        noSecretValuesExposed:true,
+      });
+    });
+  });
+}
+
 async function cloudflareDirectBinanceReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret) {
@@ -478,6 +600,17 @@ export default {
         headers: { "cache-control": "no-store" },
       });
     }
+    if (url.pathname === "/cloudflare-binance-ws-preflight") {
+      const result = await cloudflareBinanceWsAccountPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/cloudflare-binance-direct-preflight") {
       const result = await cloudflareDirectBinanceReadOnlyPreflight(env);
       return Response.json({
@@ -501,11 +634,18 @@ export default {
       });
     }
     if (url.pathname === "/infra-credential-presence") {
-      const apiKeyPresent = Boolean(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY);
+      const rawApiKey = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
+      const apiKeyPresent = Boolean(rawApiKey);
       const apiSecretPresent = Boolean(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY);
+      let apiKeyFingerprint = null;
+      if (rawApiKey) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawApiKey));
+        apiKeyFingerprint = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
       return Response.json({
         ok: true,
         cloudflareBinanceApiKeyPresent: apiKeyPresent,
+        cloudflareBinanceApiKeyFingerprint: apiKeyFingerprint,
         cloudflareBinanceSecretPresent: apiSecretPresent,
         cloudflareBinanceCredentialsComplete: apiKeyPresent && apiSecretPresent,
         telegramRelaySecretPresent: Boolean(env.TELEGRAM_BOT_TOKEN),
