@@ -151,7 +151,8 @@ jobs:
           assert any(x.get("requestedRegion") in preferred for x in working), "No preferred non-US region can reach Binance"
           for x in results:
               if x.get("requestedRegion") in {"us-east-1","us-west-2"} and not x.get("ok"):
-                  assert x.get("upstreamHttpStatus") in {451,403}, x
+                  assert x.get("status") == "BINANCE_PUBLIC_CONNECTIVITY_ERROR", x
+                  assert x.get("upstreamHttpStatus") in {None,451,403}, x
           PY
 
       - name: Verify Supabase Binance relay read-only access
