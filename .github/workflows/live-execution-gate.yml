@@ -26,48 +26,49 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check production operational Go No-Go
+      - name: Check production manual-only Limited Live readiness
         shell: bash
         run: |
           set -euo pipefail
           ok=0
-          for attempt in $(seq 1 90); do
-            rm -f /tmp/gate.json
-            curl --silent --show-error --max-time 25 \
+          for attempt in $(seq 1 20); do
+            rm -f /tmp/proof.json
+            curl --silent --show-error --max-time 30 \
               -H 'cache-control: no-store' \
-              "$WORKER_URL/go-no-go?attempt=${attempt}&nonce=$(date +%s%N)" -o /tmp/gate.json || true
-            cat /tmp/gate.json 2>/dev/null || true
+              "$WORKER_URL/limited-live-readiness-proof?attempt=${attempt}&nonce=$(date +%s%N)" -o /tmp/proof.json || true
+            cat /tmp/proof.json 2>/dev/null || true
             echo
             if python - <<'PY'
           import json,sys
-          try: r=json.load(open('/tmp/gate.json'))
+          try: r=json.load(open('/tmp/proof.json'))
           except Exception: sys.exit(1)
+          hb=r.get('heartbeats') or {}
+          tg=r.get('telegramControls') or {}
+          policy=r.get('policy') or {}
           required=[
             r.get('ok') is True,
-            r.get('go') is True,
-            r.get('status') == 'GO',
-            r.get('activationAllowed') is False,
-            'LIVE_EXECUTION_ENABLED' not in r.get('activationFailed', []),
-            'AUTONOMOUS_ENABLED' in r.get('activationFailed', []),
-            r.get('e2eArmed') is True,
-            r.get('manualE2EComplete') is False,
-            r.get('manualExecutionAllowed') is True,
-            r.get('bridgeFresh') is True,
-            r.get('executorOwnershipOk') is True,
-            r.get('offsiteSnapshotFresh') is True,
-            r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+            r.get('status') == 'LIMITED_LIVE_READINESS_PROOF',
+            r.get('supervisorState') == 'HEALTHY',
+            r.get('stale') == [],
             r.get('executorConfigured') is True,
-            r.get('checks',{}).get('SUPERVISOR_HEALTHY') is True,
-            r.get('checks',{}).get('RECONCILIATION_OK') is True,
-            r.get('checks',{}).get('SNAPSHOT_FRESH') is True,
-            r.get('checks',{}).get('WATCHDOG_HEALTHY') is True,
-            r.get('checks',{}).get('BINANCE_CONNECTION_OK') is True,
-            r.get('checks',{}).get('EXECUTION_ROUTE_HEALTHY') is True,
-            r.get('checks',{}).get('NO_UNKNOWN_ORDERS') is True,
-            r.get('checks',{}).get('NO_UNPROTECTED_POSITIONS') is True,
-            r.get('checks',{}).get('DAILY_RISK_AVAILABLE') is True,
-            r.get('liveTrading') is True,
-            r.get('autonomousExecution') is False,
+            (hb.get('binanceReadonly') or {}).get('fresh') is True,
+            (hb.get('reconciler') or {}).get('fresh') is True,
+            (hb.get('protection') or {}).get('fresh') is True,
+            (r.get('reconciliation') or {}).get('ok') is True,
+            (r.get('reconciliation') or {}).get('fresh') is True,
+            r.get('noUnknownOrders') is True,
+            r.get('noUnprotectedPositions') is True,
+            r.get('activeIntents') == 0,
+            r.get('realE2EV20Recognized') is True,
+            r.get('manualApprovalOnly') is True,
+            r.get('automaticBuyBlocked') is True,
+            policy.get('liveExecutionEnabled') is True,
+            policy.get('autonomousEnabled') is False,
+            policy.get('e2eArmed') is False,
+            tg.get('pauseImplemented') is True,
+            tg.get('resumeImplemented') is True,
+            tg.get('pauseEnforcedByExecutionGate') is True,
+            r.get('financialAction') is False,
             r.get('noSecretValuesExposed') is True,
           ]
           sys.exit(0 if all(required) else 1)
@@ -76,7 +77,7 @@ jobs:
             sleep 3
           done
           test "$ok" = 1
-          echo "OPERATIONAL_GO_V2_MANUAL_LIVE_E2E_ARMED"
+          echo "MANUAL_LIMITED_LIVE_READY"
 
       - name: Verify legacy Vercel signer is revoked
         shell: bash
