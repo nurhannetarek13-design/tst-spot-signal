@@ -84,7 +84,11 @@ jobs:
           grep -q 'executionProvider(env)' src/buy-gateway-stable.js
           grep -q 'SUPABASE_V2' src/live-execution-router.js
           grep -q 'ED25519_SUPABASE_VAULT' supabase/functions/tst-binance-relay/index.ts
-          grep -q 'pgsodium.crypto_sign_detached' supabase/functions/tst-binance-relay/index.ts
+          grep -q 'tst_binance_ed25519_sign' supabase/functions/tst-binance-relay/index.ts
+          if grep -q 'postgres from "npm:postgres' supabase/functions/tst-binance-relay/index.ts; then
+            echo "Supabase relay must not open direct Postgres connections"
+            exit 1
+          fi
           if grep -Eq 'binanceCredentials\(|buildSignedBinanceQuery\(|getBinanceServerTime\(' src/supabase-live-client.js; then
             echo "Cloudflare Binance signing dependency returned"
             exit 1
@@ -323,19 +327,22 @@ jobs:
           grep -q 'id: "OCO_V2"' src/make-live-client.js
           echo "EXECUTION_PROVIDERS_FAIL_CLOSED"
 
-      - name: Verify HMAC bridge auth and replay protection
+      - name: Verify legacy Make bridge is hard-disabled under Supabase V2
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 -X POST             -H 'content-type: application/json'             --data '{"signal_id":"deploycheck","symbol":"BTCUSDT"}'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/bridge-auth-selftest?nonce=$(date +%s%N)"             -o /tmp/bridge.json
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/bridge.json -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            --data '{"signal_id":"deploycheck","symbol":"BTCUSDT"}' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/bridge-auth-selftest?nonce=$(date +%s%N)")
           cat /tmp/bridge.json
-          python - <<'PY'
-          import json
+          BRIDGE_CODE="$code" python - <<'PY'
+          import json, os
           r=json.load(open('/tmp/bridge.json'))
-          assert r.get('ok') is True
-          assert r.get('first') == 'BRIDGE_AUTH_OK'
-          assert r.get('replay') == 'REPLAY_BLOCKED'
+          assert os.environ.get('BRIDGE_CODE') == '410'
+          assert r.get('status') == 'LEGACY_EXECUTION_DISABLED'
+          assert r.get('financialAction') is False
           assert r.get('oldVercelFallback') is False
           PY
 
