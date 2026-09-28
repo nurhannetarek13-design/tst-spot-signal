@@ -1,0 +1,36 @@
+name: Bootstrap Binance Ed25519 Key
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bootstrap-binance-ed25519.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - name: Generate Ed25519 keypair and store private key in Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          openssl genpkey -algorithm ED25519 -out /tmp/binance-ed25519-private.pem
+          openssl pkey -in /tmp/binance-ed25519-private.pem -pubout -out /tmp/binance-ed25519-public.pem
+          npx wrangler secret put BINANCE_ED25519_PRIVATE_KEY < /tmp/binance-ed25519-private.pem
+          echo "BINANCE_ED25519_PUBLIC_KEY_BEGIN"
+          cat /tmp/binance-ed25519-public.pem
+          echo "BINANCE_ED25519_PUBLIC_KEY_END"
+          rm -f /tmp/binance-ed25519-private.pem /tmp/binance-ed25519-public.pem
