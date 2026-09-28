@@ -768,15 +768,16 @@ function freeBalance(accountData, asset) {
 }
 
 export async function supabaseReadOnlyReconcile(env) {
-  const [account, openOrders, openLists, restrictions, accountStatus] = await Promise.all([
+  const [account, openOrders, openLists, restrictions, accountStatus, apiTradingStatus] = await Promise.all([
     relay(env, "GET", "/api/v3/account", { omitZeroBalances: "true" }, 15000),
     relay(env, "GET", "/api/v3/openOrders", {}, 15000),
     relay(env, "GET", "/api/v3/openOrderList", {}, 15000),
     relay(env, "GET", "/sapi/v1/account/apiRestrictions", {}, 15000),
     relay(env, "GET", "/sapi/v1/account/status", {}, 15000),
+    relay(env, "GET", "/sapi/v1/account/apiTradingStatus", {}, 15000),
   ]);
 
-  const allReadsOk = [account, openOrders, openLists, restrictions, accountStatus].every((r) => r?.ok === true);
+  const allReadsOk = [account, openOrders, openLists, restrictions, accountStatus, apiTradingStatus].every((r) => r?.ok === true);
   if (!allReadsOk) {
     return {
       ok: false,
@@ -786,6 +787,7 @@ export async function supabaseReadOnlyReconcile(env) {
       openOrderListsOk: openLists.ok === true,
       apiRestrictionsOk: restrictions.ok === true,
       accountStatusOk: accountStatus.ok === true,
+      apiTradingStatusOk: apiTradingStatus.ok === true,
       canTrade: account.data?.canTrade === true,
       noUnknownOrders: false,
       noUnprotectedPositions: false,
@@ -801,6 +803,7 @@ export async function supabaseReadOnlyReconcile(env) {
         openOrderLists: openLists.diagnostics || null,
         restrictions: restrictions.diagnostics || null,
         accountStatus: accountStatus.diagnostics || null,
+        apiTradingStatus: apiTradingStatus.diagnostics || null,
       },
     };
   }
@@ -847,11 +850,15 @@ export async function supabaseReadOnlyReconcile(env) {
 
   const statusValue = String(accountStatus.data?.data ?? accountStatus.data ?? "").toLowerCase();
   const accountNormal = !statusValue || statusValue === "normal";
+  const tradingStatusData = (apiTradingStatus.data?.data && typeof apiTradingStatus.data.data === "object")
+    ? apiTradingStatus.data.data
+    : (apiTradingStatus.data || {});
+  const apiTradingLocked = tradingStatusData?.isLocked === true;
   const noUnknownOrders = unknownRows.length === 0 && unknownLists.length === 0;
   const noUnprotectedPositions = unprotectedRows.length === 0;
-  const permissionSafe = readingAllowed && !prohibitedPermissionEnabled;
+  const permissionSafe = readingAllowed && spotTradingPermission && !prohibitedPermissionEnabled;
   const canTrade = account.data?.canTrade === true;
-  const ok = canTrade && accountNormal && permissionSafe && noUnknownOrders && noUnprotectedPositions;
+  const ok = canTrade && accountNormal && !apiTradingLocked && permissionSafe && noUnknownOrders && noUnprotectedPositions;
 
   const assets = Array.isArray(account.data?.balances)
     ? account.data.balances
@@ -870,6 +877,7 @@ export async function supabaseReadOnlyReconcile(env) {
     readingAllowed,
     spotTradingPermission,
     prohibitedPermissionEnabled,
+    apiTradingLocked,
     noUnknownOrders,
     noUnprotectedPositions,
     openOrdersChecked: rows.length,
@@ -891,6 +899,7 @@ export async function supabaseReadOnlyReconcile(env) {
       openOrderLists: openLists.diagnostics || null,
       restrictions: restrictions.diagnostics || null,
       accountStatus: accountStatus.diagnostics || null,
+      apiTradingStatus: apiTradingStatus.diagnostics || null,
     },
   };
 }
