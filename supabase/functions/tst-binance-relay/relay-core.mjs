@@ -86,6 +86,8 @@ function validateWrite(path, method, q) {
     if (String(q.get("side") || "").toUpperCase() !== "SELL") throw new Error("OCO_SIDE_BLOCKED");
     finitePositive(q.get("quantity"), "BAD_OCO_QTY");
     requireClientId(q.get("listClientOrderId"), ["TSTO","TSTC"]);
+    requireClientId(q.get("aboveClientOrderId"), ["TSTT","TSTU"]);
+    requireClientId(q.get("belowClientOrderId"), ["TSTS","TSTV"]);
     const aboveType = String(q.get("aboveType") || "").toUpperCase();
     const belowType = String(q.get("belowType") || "").toUpperCase();
     if (aboveType !== "LIMIT_MAKER") throw new Error("OCO_ABOVE_TYPE_BLOCKED");
