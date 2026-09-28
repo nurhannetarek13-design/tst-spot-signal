@@ -9,6 +9,7 @@ import {
   supabaseExecutionConfigured,
   supabaseDryRunExecution,
   supabaseReconcileActiveTrades,
+  supabaseSigningModeProbe,
 } from "./supabase-live-client.js";
 
 export function executionProvider(env = {}) {
@@ -73,4 +74,12 @@ export async function executionReconcileActiveTrades(env) {
     return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
   }
   return supabaseReconcileActiveTrades(env);
+}
+
+
+export async function executionSigningModeProbe(env) {
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
+  }
+  return supabaseSigningModeProbe(env);
 }
