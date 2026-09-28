@@ -78,3 +78,29 @@ assert.throws(()=>parseAndValidateCapability({
 },{nowMs:now,writesEnabled:false}),/STALE_CAPABILITY/);
 
 console.log("SUPABASE_RELAY_CORE_SELFTEST_PASS");
+
+
+const dryRun=parseAndValidateCapability({
+  ...base,method:"POST",path:"/api/v3/order/test",
+  query:q({symbol:"SOLUSDT",side:"BUY",type:"MARKET",quoteOrderQty:"5.50",newClientOrderId:"TSTBdryrun1234"})
+},{nowMs:now,writesEnabled:false});
+assert.equal(dryRun.isWrite,false);
+assert.equal(dryRun.isTest,true);
+
+const duplicateQuery=`symbol=SOLUSDT&symbol=BTCUSDT&recvWindow=5000&timestamp=${now}&signature=${sig}`;
+assert.throws(()=>parseAndValidateCapability({
+  ...base,method:"GET",path:"/api/v3/order",query:duplicateQuery
+},{nowMs:now,writesEnabled:false}),/DUPLICATE_PARAM/);
+
+assert.throws(()=>parseAndValidateCapability({
+  ...base,method:"DELETE",path:"/api/v3/order",
+  query:q({symbol:"SOLUSDT",origClientOrderId:"BADCLIENT123"})
+},{nowMs:now,writesEnabled:true}),/CLIENT_ID_PREFIX_BLOCKED/);
+
+const cancel=parseAndValidateCapability({
+  ...base,method:"DELETE",path:"/api/v3/order",
+  query:q({symbol:"SOLUSDT",origClientOrderId:"TSTB12345678"})
+},{nowMs:now,writesEnabled:true});
+assert.equal(cancel.isWrite,true);
+
+console.log("SUPABASE_RELAY_DRYRUN_AND_DUPLICATE_GUARDS_PASS");
