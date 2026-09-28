@@ -51,7 +51,11 @@ jobs:
           python - <<'PY'
           import json
           r=json.load(open('/tmp/immutable.json'))
+          assert r.get('ok') is True
+          assert r.get('canTrade') is True
+          assert r.get('status') in {'SIGNED_BINANCE_RELAY_OK','BINANCE_RELAY_OK','BINANCE_READONLY_RELAY_OK'}
           assert r.get('financialAction') is False
+          assert r.get('noBalanceValuesExposed') is True
           assert r.get('noSecretValuesExposed') is True
           PY
 
