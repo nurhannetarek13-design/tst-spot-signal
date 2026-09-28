@@ -184,6 +184,32 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
+      - name: Verify Supabase V2 replay and intent idempotency
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-auth-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-auth-selftest.json || true
+          cat /tmp/v2-auth-selftest.json 2>/dev/null || true
+          curl --silent --show-error --max-time 20 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/supabase-v2-idempotency-selftest?nonce=$(date +%s%N)"             -o /tmp/v2-idempotency.json || true
+          cat /tmp/v2-idempotency.json 2>/dev/null || true
+          python - <<'PY'
+          import json
+          a=json.load(open('/tmp/v2-auth-selftest.json'))
+          i=json.load(open('/tmp/v2-idempotency.json'))
+          assert a.get('financialAction') is False
+          assert a.get('noSecretValuesExposed') is True
+          assert a.get('ok') is True
+          assert (a.get('replay') or {}).get('status') == 'RELAY_REPLAY_BLOCKED'
+          assert (a.get('stale') or {}).get('status') == 'RELAY_AUTH_STALE'
+          assert i.get('financialAction') is False
+          assert i.get('noSecretValuesExposed') is True
+          assert i.get('ok') is True
+          assert i.get('firstClaim') is True
+          assert i.get('secondClaim') is False
+          print("SUPABASE_V2_REPLAY_AND_IDEMPOTENCY_PASS")
+          PY
+
       - name: Probe Binance signing mode safely
         if: always()
         shell: bash
