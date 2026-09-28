@@ -137,33 +137,64 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --silent --show-error --max-time 25 \
-            -H 'cache-control: no-store' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/live-readiness?nonce=$(date +%s%N)" \
-            -o /tmp/readiness.json
-          cat /tmp/readiness.json
+
+          # Refresh signed Make V2 route health before evaluating readiness.
+          curl --fail --silent --show-error --max-time 35 -X POST \
+            -H 'content-type: application/json' \
+            --data '{}' \
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/make-v2-dry-probe?phase=pre-readiness&nonce=$(date +%s%N)" \
+            -o /tmp/pre-readiness-v2.json
+          cat /tmp/pre-readiness-v2.json
           python - <<'PY'
           import json
-          r=json.load(open('/tmp/readiness.json'))
+          r=json.load(open('/tmp/pre-readiness-v2.json'))
           assert r.get('ok') is True
-          assert r.get('infrastructureReady') is True
-          assert r.get('railwayDependency') is False
-          assert r.get('userConfirmationRequired') is True
-          assert r.get('autoBuy') is False
-          assert r.get('autonomousExecution') is False
-          assert r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE'
-          assert r.get('oldVercelFallback') is False
-          assert r.get('status') == 'MANUAL_LIVE_E2E_ARMED'
-          assert r.get('executionReady') is True
-          assert r.get('blocker') is None
-          assert r.get('executorConfigured') is True
-          assert r.get('liveExecutionEnabled') is True
-          assert r.get('e2eArmed') is True
-          assert r.get('autonomousExecution') is False
-          assert r.get('manualOnly') is True
-          assert r.get('noBalanceValuesExposed') is True
-          assert r.get('noSecretValuesExposed') is True
+          assert r.get('financialAction') is False
+          assert r.get('buyVerified') is True
+          assert r.get('ocoVerified') is True
+          assert r.get('healthRefreshed') is True
           PY
+
+          # Honor the recovery state machine instead of assuming health is immediate after deploy.
+          ok=0
+          for attempt in $(seq 1 30); do
+            curl --silent --show-error --max-time 25 \
+              -H 'cache-control: no-store' \
+              "https://tst-spot-signal.nurhanne-tarek13.workers.dev/live-readiness?attempt=$attempt&nonce=$(date +%s%N)" \
+              -o /tmp/readiness.json || true
+            cat /tmp/readiness.json 2>/dev/null || true
+            echo
+            if python - <<'PY'
+          import json,sys
+          try:
+              r=json.load(open('/tmp/readiness.json'))
+          except Exception:
+              sys.exit(1)
+          checks=[
+              r.get('ok') is True,
+              r.get('infrastructureReady') is True,
+              r.get('railwayDependency') is False,
+              r.get('userConfirmationRequired') is True,
+              r.get('autoBuy') is False,
+              r.get('autonomousExecution') is False,
+              r.get('executionRoute') == 'CLOUDFLARE_HMAC_MAKE',
+              r.get('oldVercelFallback') is False,
+              r.get('status') == 'MANUAL_LIVE_E2E_ARMED',
+              r.get('executionReady') is True,
+              r.get('blocker') is None,
+              r.get('executorConfigured') is True,
+              r.get('liveExecutionEnabled') is True,
+              r.get('e2eArmed') is True,
+              r.get('manualOnly') is True,
+              r.get('noBalanceValuesExposed') is True,
+              r.get('noSecretValuesExposed') is True,
+          ]
+          sys.exit(0 if all(checks) else 1)
+          PY
+            then ok=1; break; fi
+            sleep 10
+          done
+          test "$ok" = 1
 
       - name: Verify Telegram callback webhook
         if: always()
