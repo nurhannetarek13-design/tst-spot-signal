@@ -1,8 +1,4 @@
 import {
-  makeReadOnlyHeartbeat,
-  MAKE_EXECUTION_ROUTE,
-} from "./make-live-client.js";
-import {
   manualBuyAndProtectViaSupabase,
   supabaseReadOnlyHeartbeat,
   supabaseReadOnlyReconcile,
