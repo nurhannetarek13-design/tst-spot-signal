@@ -557,11 +557,18 @@ export default {
       });
     }
     if (url.pathname === "/infra-credential-presence") {
-      const apiKeyPresent = Boolean(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY);
+      const rawApiKey = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
+      const apiKeyPresent = Boolean(rawApiKey);
       const apiSecretPresent = Boolean(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY);
+      let apiKeyFingerprint = null;
+      if (rawApiKey) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawApiKey));
+        apiKeyFingerprint = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
       return Response.json({
         ok: true,
         cloudflareBinanceApiKeyPresent: apiKeyPresent,
+        cloudflareBinanceApiKeyFingerprint: apiKeyFingerprint,
         cloudflareBinanceSecretPresent: apiSecretPresent,
         cloudflareBinanceCredentialsComplete: apiKeyPresent && apiSecretPresent,
         telegramRelaySecretPresent: Boolean(env.TELEGRAM_BOT_TOKEN),
