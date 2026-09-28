@@ -4,6 +4,11 @@ import {
   serializeBinanceValue,
   signRelayEnvelope,
 } from "./binance-signing.js";
+import {
+  supabaseStateGet,
+  supabaseStatePut,
+  supabaseStateClaim,
+} from "./supabase-state-client.js";
 
 function stableHash(value) {
   const input = String(value || "");
@@ -84,31 +89,16 @@ const TRADE_STATES = new Set([
   "FAILED_SAFE",
 ]);
 
-function stateStub(env) {
-  const id = env.STATE_COORDINATOR.idFromName("global");
-  return env.STATE_COORDINATOR.get(id);
-}
-
 async function getStateKey(env, key) {
-  const r = await stateStub(env).fetch("https://state/get?key=" + encodeURIComponent(key));
-  return r.ok ? await r.json() : null;
+  return await supabaseStateGet(env,key);
 }
 
 async function putStateKey(env, key, value, ttlMs = 90 * 24 * 60 * 60 * 1000) {
-  await stateStub(env).fetch("https://state/put?key=" + encodeURIComponent(key), {
-    method:"PUT",
-    headers:{"content-type":"application/json"},
-    body:JSON.stringify({value,expiresAt:Date.now()+ttlMs}),
-  });
+  return await supabaseStatePut(env,key,value,ttlMs);
 }
 
 async function claimStateKey(env, key, value, ttlMs = 90 * 24 * 60 * 60 * 1000) {
-  const r = await stateStub(env).fetch("https://state/claim?key=" + encodeURIComponent(key), {
-    method:"POST",
-    headers:{"content-type":"application/json"},
-    body:JSON.stringify({value,expiresAt:Date.now()+ttlMs}),
-  });
-  return r.ok;
+  return await supabaseStateClaim(env,key,value,ttlMs);
 }
 
 async function updateActiveIntentIndex(env, intentId, state, row = {}) {
@@ -125,8 +115,7 @@ async function updateActiveIntentIndex(env, intentId, state, row = {}) {
 }
 
 async function readTradeState(env, intentId) {
-  const r = await stateStub(env).fetch("https://state/get?key=" + encodeURIComponent("trade-intent:" + intentId));
-  return r.ok ? await r.json() : null;
+  return await getStateKey(env,"trade-intent:" + intentId);
 }
 
 async function writeTradeState(env, intentId, state, patch = {}) {
@@ -142,32 +131,20 @@ async function writeTradeState(env, intentId, state, patch = {}) {
     updatedAt: Date.now(),
     createdAt: Number(previous?.createdAt || patch?.createdAt || Date.now()),
   };
-  await stateStub(env).fetch("https://state/put?key=" + encodeURIComponent("trade-intent:" + intentId), {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value: row, expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000 }),
-  });
+  await putStateKey(env,"trade-intent:" + intentId,row);
   await updateActiveIntentIndex(env,intentId,state,row);
   return row;
 }
 
 async function claimIntent(env, intentId, patch = {}) {
   const row = {
-    value: {
-      intentId,
-      state: "SIGNAL_CREATED",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      ...patch,
-    },
-    expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,
+    intentId,
+    state: "SIGNAL_CREATED",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...patch,
   };
-  const r = await stateStub(env).fetch("https://state/claim?key=" + encodeURIComponent("trade-intent:" + intentId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(row),
-  });
-  return r.ok;
+  return await claimStateKey(env,"trade-intent:" + intentId,row);
 }
 
 
