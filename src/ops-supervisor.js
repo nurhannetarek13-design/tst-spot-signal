@@ -1180,7 +1180,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       if (typeof worker.scheduled === "function") await worker.scheduled(event, env, ctx);
-      await heartbeat(env, ["scanner", "market-data", "strategy", "risk", "watchdog"], { source: "CLOUDFLARE_CRON" });
+      await heartbeat(env, ["scanner", "market-data", "strategy", "risk", "watchdog", "offsite-backup"], { source: "CLOUDFLARE_CRON" });
       await putState(env, "ops:scheduler:last", { at: Date.now(), source: "CLOUDFLARE_CRON" });
 
       // Refresh external execution health before evaluating supervisor state.
