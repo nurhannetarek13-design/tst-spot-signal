@@ -635,10 +635,17 @@ async function snapshot(env) {
   };
 }
 
+async function claimDiagnosticSlot(env, name, ttlSec = 30) {
+  return claimState(env,`diagnostic:${name}`,{at:Date.now()},ttlSec);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/supabase-v2-auth-selftest" && request.method === "POST") {
+      if(!(await claimDiagnosticSlot(env,"supabase-v2-auth-selftest",15))){
+        return Response.json({ok:false,status:"DIAGNOSTIC_THROTTLED",financialAction:false,noSecretValuesExposed:true},{status:429});
+      }
       const result=await executionRelayAuthSelftest(env).catch((error)=>({
         ok:false,status:"SUPABASE_V2_AUTH_SELFTEST_ERROR",
         reason:String(error?.message||error).slice(0,160),
@@ -647,6 +654,9 @@ export default {
       return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
     }
     if (url.pathname === "/supabase-v2-idempotency-selftest" && request.method === "POST") {
+      if(!(await claimDiagnosticSlot(env,"supabase-v2-idempotency-selftest",15))){
+        return Response.json({ok:false,status:"DIAGNOSTIC_THROTTLED",financialAction:false,noSecretValuesExposed:true},{status:429});
+      }
       const result=await executionIntentIdempotencySelftest(env).catch((error)=>({
         ok:false,status:"SUPABASE_V2_IDEMPOTENCY_SELFTEST_ERROR",
         reason:String(error?.message||error).slice(0,160),
