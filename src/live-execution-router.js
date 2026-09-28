@@ -8,6 +8,7 @@ import {
   supabaseReadOnlyReconcile,
   supabaseExecutionConfigured,
   supabaseDryRunExecution,
+  supabaseReconcileActiveTrades,
 } from "./supabase-live-client.js";
 
 export function executionProvider(env = {}) {
@@ -64,4 +65,12 @@ export async function executionDryRun(env, input) {
     return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
   }
   return supabaseDryRunExecution(env, input);
+}
+
+
+export async function executionReconcileActiveTrades(env) {
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
+  }
+  return supabaseReconcileActiveTrades(env);
 }
