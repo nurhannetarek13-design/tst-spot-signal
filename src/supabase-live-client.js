@@ -957,23 +957,17 @@ export async function supabaseRelayReplaySelftest(env) {
 
 export async function supabaseRelayAuthSelftest(env) {
   const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  const pair=binanceCredentials(env);
-  if(!url || !pair.apiKey || !pair.ed25519PrivateKey){
+  const privateKey=relayAuthPrivateKey(env);
+  if(!url || !privateKey){
     return {ok:false,status:"RELAY_SELFTEST_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
   }
 
-  const timing=await getBinanceServerTime(env,{force:true});
-  const signed=await buildSignedBinanceQuery(
-    {...pair,signingMode:pair.signingMode},
-    {omitZeroBalances:"true"},
-    {timestampMs:Date.now()+Number(timing.offsetMs||0),recvWindow:5000},
-  );
-  const auth=await buildRelayAuth(pair,"GET","/api/v3/account",signed.query);
+  const query=canonicalRelayQuery({omitZeroBalances:"true"});
+  const auth=await buildRelayAuth(env,"GET","/api/v3/account",query);
   const body={
     method:"GET",
     path:"/api/v3/account",
-    apiKey:pair.apiKey,
-    query:signed.query,
+    query,
     relayTimestamp:auth.relayTimestamp,
     relayNonce:auth.relayNonce,
     relaySignature:auth.relaySignature,
@@ -986,20 +980,27 @@ export async function supabaseRelayAuthSelftest(env) {
       signal:AbortSignal.timeout(10_000),
     });
     const data=await r.json().catch(()=>({}));
-    return {httpStatus:r.status,status:String(data?.status||("HTTP_"+r.status)),ok:r.ok&&data?.ok===true,binanceCode:data?.binanceCode??null};
+    return {
+      httpStatus:r.status,
+      status:String(data?.status||("HTTP_"+r.status)),
+      ok:r.ok&&data?.ok===true,
+      binanceCode:data?.binanceCode??null,
+      financialAction:data?.financialAction===true,
+    };
   };
+
   const first=await send(body);
   const replay=await send(body);
 
   const staleTimestamp=Date.now()-30_000;
   const staleNonce=randomNonce();
-  const staleSigned=await signRelayEnvelope(pair.ed25519PrivateKey,{
+  const staleSigned=await signRelayEnvelope(privateKey,{
     relayTimestamp:staleTimestamp,
     relayNonce:staleNonce,
     method:"GET",
     path:"/api/v3/account",
-    apiKey:pair.apiKey,
-    query:signed.query,
+    apiKey:"",
+    query,
   });
   const stale=await send({
     ...body,
@@ -1008,7 +1009,12 @@ export async function supabaseRelayAuthSelftest(env) {
     relaySignature:staleSigned.relaySignature,
   });
 
-  const ok=replay.status==="RELAY_REPLAY_BLOCKED" && stale.status==="RELAY_AUTH_STALE";
+  const ok=replay.status==="RELAY_REPLAY_BLOCKED"
+    && replay.httpStatus===401
+    && stale.status==="RELAY_AUTH_STALE"
+    && stale.httpStatus===401
+    && first.financialAction!==true
+    && replay.financialAction!==true;
   return {
     ok,
     status:ok?"SUPABASE_RELAY_AUTH_SELFTEST_PASS":"SUPABASE_RELAY_AUTH_SELFTEST_FAIL",
@@ -1050,27 +1056,13 @@ export async function supabaseIntentIdempotencySelftest(env) {
 
 export async function supabaseApiKeyOnlyProbe(env) {
   const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  const pair=binanceCredentials(env);
-  if(!url || !pair.apiKey || !pair.ed25519PrivateKey){
-    return {ok:false,status:"API_KEY_PROBE_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
-  }
-  const method="GET";
-  const path="/api/v3/historicalTrades";
-  const query="symbol=BTCUSDT&limit=1";
-  const auth=await buildRelayAuth(pair,method,path,query);
-  const r=await fetch(url,{
-    method:"POST",
-    headers:{
-      "content-type":"application/json",
-      "cache-control":"no-store",
-      "x-region":relayRegion(env),
-    },
-    body:JSON.stringify({
-      method,path,apiKey:pair.apiKey,query,
-      relayTimestamp:auth.relayTimestamp,
-      relayNonce:auth.relayNonce,
-      relaySignature:auth.relaySignature,
-    }),
+  if(!url) return {ok:false,status:"SUPABASE_RELAY_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
+  const endpoint=new URL(url);
+  endpoint.searchParams.set("probe","signerHealth");
+  endpoint.searchParams.set("nonce",randomNonce());
+  const r=await fetch(endpoint.toString(),{
+    method:"GET",
+    headers:{"cache-control":"no-store","x-region":relayRegion(env)},
     signal:AbortSignal.timeout(15_000),
   });
   const data=await r.json().catch(()=>({}));
@@ -1078,41 +1070,28 @@ export async function supabaseApiKeyOnlyProbe(env) {
     ok:r.ok && data?.ok===true,
     status:String(data?.status || ("HTTP_"+r.status)),
     httpStatus:r.status,
-    binanceCode:data?.binanceCode ?? null,
-    apiKeyOnlyProbe:true,
+    apiKeyPresent:data?.apiKeyPresent===true,
+    privateKeyPresent:data?.privateKeyPresent===true,
+    apiKeySource:data?.apiKeySource || null,
     financialAction:false,
     noSecretValuesExposed:true,
   };
 }
 
 export async function supabaseSigningModeProbe(env) {
-  const base=binanceCredentials(env);
-  const modes=["HMAC","ED25519"];
-  const results=[];
-  for(const mode of modes){
-    const candidate={...base,signingMode:mode};
-    const credentialPresent=mode==="HMAC" ? Boolean(candidate.hmacSecret) : Boolean(candidate.ed25519PrivateKey);
-    if(!candidate.apiKey || !credentialPresent){
-      results.push({mode,ok:false,status:"SIGNING_CREDENTIAL_MISSING",httpStatus:null,binanceCode:null});
-      continue;
-    }
-    const r=await relay(env,"GET","/api/v3/account",{omitZeroBalances:"true"},15000,mode);
-    results.push({
-      mode,
+  const r=await relay(env,"GET","/api/v3/account",{omitZeroBalances:"true"},15000);
+  return {
+    ok:r.ok===true,
+    status:r.ok===true?"BINANCE_SIGNING_MODE_PROVEN":"BINANCE_SIGNING_MODE_NOT_PROVEN",
+    signingMode:"ED25519_SUPABASE_VAULT",
+    results:[{
+      mode:"ED25519_SUPABASE_VAULT",
       ok:r.ok===true,
       status:r.status||null,
       httpStatus:Number(r.httpStatus||0)||null,
       binanceCode:r.body?.binanceCode ?? r.diagnostics?.binanceCode ?? null,
       diagnostics:r.diagnostics||null,
-    });
-    if(r.ok===true) break;
-  }
-  const winner=results.find((x)=>x.ok===true)||null;
-  return {
-    ok:Boolean(winner),
-    status:winner?"BINANCE_SIGNING_MODE_PROVEN":"NO_VALID_BINANCE_SIGNING_MODE",
-    signingMode:winner?.mode||null,
-    results,
+    }],
     financialAction:false,
     noSecretValuesExposed:true,
   };
