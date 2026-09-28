@@ -1,4 +1,5 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
+import { readLivePolicy } from "./live-cutover-policy.js";
 import {
   manualBuyAndProtect,
   executionReadOnlyHeartbeat,
@@ -80,57 +81,109 @@ function riskCappedQuote(entry, stop, requested = 5.5) {
   return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
 }
 
-async function executionOperational(env) {
+async function executionOperational(env, symbol = null) {
   const now = Date.now();
-  const [ops, reconciliation, bridge, ownership] = await Promise.all([
+  const [ops, reconciliationState, bridge, ownership, daily, unknownState, unprotectedState] = await Promise.all([
     getState(env, "ops:state"),
     getState(env, "ops:reconciliation:last"),
     getState(env, "bridge:health"),
     getState(env, "bridge:ownership"),
+    getState(env, "risk:daily-live"),
+    getState(env, "live:unknown-orders"),
+    getState(env, "live:unprotected-positions"),
   ]);
   const fresh = (at, maxMs = 20 * 60 * 1000) => Number(at || 0) > 0 && now - Number(at || 0) <= maxMs;
   const ready = executorConfigured(env);
   const provider = executionProvider(env);
+  const policy = readLivePolicy(env);
+  const unknownCount = Array.isArray(unknownState) ? unknownState.length : Number(unknownState?.count || 0);
+  const unprotectedCount = Array.isArray(unprotectedState) ? unprotectedState.length : Number(unprotectedState?.count || 0);
+  const realizedLoss = Math.abs(Number(daily?.realizedLossUSDT || 0));
+
+  if (policy.emergencyKillSwitch === true) {
+    return {
+      ok:false,
+      provider,
+      state:String(ops?.state || "UNKNOWN"),
+      blocker:"EMERGENCY_KILL_SWITCH",
+      executorConfigured:ready,
+    };
+  }
+  if (realizedLoss >= Math.abs(Number(policy.dailyLossCapUSDT || 0))) {
+    return {
+      ok:false,
+      provider,
+      state:String(ops?.state || "UNKNOWN"),
+      blocker:"DAILY_LOSS_CAP_REACHED",
+      executorConfigured:ready,
+    };
+  }
+  if (unknownCount > 0) {
+    return { ok:false, provider, state:String(ops?.state || "UNKNOWN"), blocker:"UNKNOWN_ORDERS_PRESENT", executorConfigured:ready };
+  }
+  if (unprotectedCount > 0) {
+    return { ok:false, provider, state:String(ops?.state || "UNKNOWN"), blocker:"UNPROTECTED_POSITION_PRESENT", executorConfigured:ready };
+  }
 
   if (provider === "SUPABASE_V2") {
-    const heartbeat = await executionReadOnlyHeartbeat(env);
+    const [heartbeat, liveReconciliation] = await Promise.all([
+      executionReadOnlyHeartbeat(env),
+      executionReadOnlyReconcile(env),
+    ]);
     const transportOk = heartbeat?.transportOk === true
       && heartbeat?.body?.canTrade === true
       && heartbeat?.body?.financialAction === false;
+    const reconciliationOk = liveReconciliation?.ok === true
+      && liveReconciliation?.noUnknownOrders === true
+      && liveReconciliation?.noUnprotectedPositions === true;
+    const openPositions = Number(liveReconciliation?.protectedOrderLists || 0);
+    const sameSymbolOpen = symbol
+      ? (liveReconciliation?.botOpenSymbols || []).includes(String(symbol).toUpperCase())
+      : false;
+    const capacityOk = openPositions < Number(policy.maxOpenPositions || 1);
+    const stateFresh = reconciliationState?.ok === true && fresh(reconciliationState?.at);
     const ok = ready
       && ops?.state === "HEALTHY"
-      && reconciliation?.ok === true
-      && fresh(reconciliation?.at)
-      && transportOk;
+      && stateFresh
+      && transportOk
+      && reconciliationOk
+      && capacityOk
+      && !sameSymbolOpen;
     return {
       ok,
       provider,
-      state: String(ops?.state || "UNKNOWN"),
-      reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
-      bridgeOk: transportOk,
-      ownershipOk: transportOk,
-      executorConfigured: ready,
+      state:String(ops?.state || "UNKNOWN"),
+      reconciliationOk:stateFresh && reconciliationOk,
+      bridgeOk:transportOk,
+      ownershipOk:transportOk,
+      executorConfigured:ready,
+      openPositions,
+      maxOpenPositions:Number(policy.maxOpenPositions || 1),
+      sameSymbolOpen,
+      dailyLossUSDT:realizedLoss,
+      dailyLossCapUSDT:Number(policy.dailyLossCapUSDT || 0),
       heartbeat,
+      liveReconciliation,
+      blocker:!ready ? "EXECUTOR_NOT_READY"
+        : ops?.state !== "HEALTHY" ? "OPS_NOT_HEALTHY"
+        : !stateFresh ? "STALE_RECONCILIATION"
+        : !transportOk ? "BINANCE_READONLY_UNHEALTHY"
+        : !reconciliationOk ? "LIVE_RECONCILIATION_BLOCKED"
+        : !capacityOk ? "MAX_OPEN_POSITIONS"
+        : sameSymbolOpen ? "DUPLICATE_SYMBOL_POSITION"
+        : null,
     };
   }
 
-  const ok = ready
-    && ops?.state === "HEALTHY"
-    && reconciliation?.ok === true
-    && fresh(reconciliation?.at)
-    && bridge?.ok === true
-    && fresh(bridge?.at)
-    && ownership?.owner === executionOwner(env)
-    && ownership?.exclusive === true
-    && fresh(ownership?.at);
   return {
-    ok,
+    ok:false,
     provider,
-    state: String(ops?.state || "UNKNOWN"),
-    reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
-    bridgeOk: bridge?.ok === true && fresh(bridge?.at),
-    ownershipOk: ownership?.owner === executionOwner(env) && ownership?.exclusive === true && fresh(ownership?.at),
-    executorConfigured: ready,
+    state:String(ops?.state || "UNKNOWN"),
+    blocker:"LEGACY_FINANCIAL_ROUTE_DISABLED",
+    reconciliationOk:false,
+    bridgeOk:bridge?.ok === true && fresh(bridge?.at),
+    ownershipOk:ownership?.owner === executionOwner(env) && ownership?.exclusive === true && fresh(ownership?.at),
+    executorConfigured:ready,
   };
 }
 
@@ -530,7 +583,7 @@ async function executeConfirmedBuy(env, s) {
   if (!executorConfigured(env)) {
     throw new Error("EXECUTOR_NOT_READY");
   }
-  const operational = await executionOperational(env);
+  const operational = await executionOperational(env, String(s.symbol || "").toUpperCase());
   if (!operational.ok) {
     throw new Error("EXECUTION_OPERATIONAL_GATE_FAILED");
   }
