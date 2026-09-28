@@ -33,6 +33,77 @@ async function claimState(env, key, value, ttl = STATE_TTL_SEC) {
   });
   return r.ok;
 }
+async function hmacHexRaw(secret, text) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret || "")),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function cloudflareBinanceCreds(env) {
+  const key = env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "";
+  const secret = env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "";
+  return { key: String(key || "").trim(), secret: String(secret || "").trim() };
+}
+
+async function vercelTransportV2ReadOnlyPreflight(env) {
+  const c = cloudflareBinanceCreds(env);
+  if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
+    return { ok: false, status: "FREE_TRANSPORT_CREDENTIALS_MISSING", financialAction: false };
+  }
+  const qs = new URLSearchParams({
+    omitZeroBalances: "true",
+    recvWindow: "5000",
+    timestamp: String(Date.now()),
+  }).toString();
+  const binanceSignature = await hmacHexRaw(c.secret, qs);
+  const body = JSON.stringify({
+    method: "GET",
+    path: "/api/v3/account",
+    apiKey: c.key,
+    network: "production",
+    query: `${qs}&signature=${binanceSignature}`,
+  });
+  const ts = String(Date.now());
+  const relaySignature = await hmacHexRaw(env.TELEGRAM_BOT_TOKEN, `${ts}.${body}`);
+  try {
+    const r = await fetch("https://tst-spot-signal.vercel.app/api/binance-transport-v2", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-executor-timestamp": ts,
+        "x-executor-signature": relaySignature,
+      },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const row = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && row?.ok === true && row?.status === "BINANCE_READONLY_RELAY_OK",
+      status: row?.status || `HTTP_${r.status}`,
+      httpStatus: r.status,
+      canTrade: row?.data?.canTrade === true,
+      accountType: row?.data?.accountType || null,
+      financialAction: false,
+      noBalanceValuesExposed: true,
+      noSecretValuesExposed: true,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "VERCEL_TRANSPORT_V2_UNREACHABLE",
+      reason: String(e?.message || e).slice(0, 100),
+      financialAction: false,
+      noSecretValuesExposed: true,
+    };
+  }
+}
+
 async function tg(env, text) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -189,6 +260,17 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/free-transport-v2-preflight") {
+      const result = await vercelTransportV2ReadOnlyPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/infra-credential-presence") {
       const apiKeyPresent = Boolean(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY);
       const apiSecretPresent = Boolean(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY);
