@@ -826,23 +826,32 @@ export default {
         }
 
         if (operationalOk) {
+          const source = providerNow === "SUPABASE_V2"
+            ? "SUPABASE_V2_READONLY_WATCHDOG"
+            : "MAKE_V2_READONLY_WATCHDOG";
           await putState(env, "bridge:health", {
             ok: true,
             at: now,
             route: executionRoute(env),
             routeVersion: routeVersion(env),
-            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
+            source,
           });
           await putState(env, "bridge:ownership", {
             owner: executionOwner(env),
             at: now,
             exclusive: true,
             routeVersion: routeVersion(env),
-            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
+            source,
           });
-          await heartbeat(env, ["binance-readonly", "offsite-backup"], {
-            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG"
+          await recordReconciliation(env, {
+            ok: true,
+            open_orders_checked: 0,
+            protected_orders_checked: 0,
+            source,
           });
+          await heartbeat(env, ["binance-readonly", "offsite-backup"], { source });
+          const refreshed = await computeState(env);
+          await alertTransition(env, refreshed);
         } else if (providerNow !== "SUPABASE_V2") {
           await recordReconciliation(env, {
             ok: false,
