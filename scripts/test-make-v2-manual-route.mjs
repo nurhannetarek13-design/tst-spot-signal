@@ -11,7 +11,19 @@ const execute = src.slice(start, end);
 assert.match(execute, /manualBuyAndProtect\(env,/);
 assert.doesNotMatch(execute, /signedBinance\(/);
 assert.match(execute, /MAKE_EXECUTOR_V2_READY/);
+assert.match(execute, /makeV2Operational\(env\)/);
+assert.match(execute, /requireFreshMakeV2ExecutionRoute\(env\)/);
 assert.match(execute, /Math\.min\(requested, 5\.5\)/);
+
+const freshPreflightStart = src.indexOf("async function requireFreshMakeV2ExecutionRoute(env)");
+const freshPreflightEnd = src.indexOf("\nasync function executeConfirmedBuy(env, s)", freshPreflightStart);
+assert.ok(freshPreflightStart >= 0 && freshPreflightEnd > freshPreflightStart, "fresh Make V2 preflight must exist");
+const freshPreflight = src.slice(freshPreflightStart, freshPreflightEnd);
+assert.match(freshPreflight, /makeReadOnlyHeartbeat\(env\)/);
+assert.match(freshPreflight, /bridge:route:BUY_V2/);
+assert.match(freshPreflight, /bridge:route:OCO_V2/);
+assert.match(freshPreflight, /BRIDGE_AUTH_OK/);
+assert.match(freshPreflight, /MAKE_V2_FRESH_PREFLIGHT_NOT_EXECUTED/);
 
 const prepStart = src.indexOf('if (action === "PREP" && s)');
 const prepEnd = src.indexOf('\n  if (action === "CANCEL")', prepStart);
