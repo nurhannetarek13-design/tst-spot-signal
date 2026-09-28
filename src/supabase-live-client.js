@@ -268,109 +268,91 @@ function isDefiniteReject(body = {}, httpStatus = 0) {
   return status >= 400 && status < 500;
 }
 
-async function relay(env, method, path, params = {}, timeoutMs = 15000, signingModeOverride = null) {
-  const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  const pair = binanceCredentials(env);
-  if (signingModeOverride) pair.signingMode = String(signingModeOverride).toUpperCase() === "ED25519" ? "ED25519" : "HMAC";
-  if (!url) return { ok: false, status: "SUPABASE_RELAY_NOT_CONFIGURED", noRequestSent: true };
-  if (!signingCredentialsReady(pair)) return { ok: false, status: "BINANCE_CREDENTIALS_MISSING", noRequestSent: true };
-  if (!pair.ed25519PrivateKey) return { ok: false, status: "SUPABASE_RELAY_AUTH_KEY_MISSING", noRequestSent: true };
+async function relay(env, method, path, params = {}, timeoutMs = 15000) {
+  const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  if(!url) return {ok:false,status:"SUPABASE_RELAY_NOT_CONFIGURED",noRequestSent:true};
+  if(!relayAuthPrivateKey(env)) return {ok:false,status:"SUPABASE_RELAY_AUTH_KEY_MISSING",noRequestSent:true};
 
-  let timing;
-  let signed;
-  try {
-    // Signed requests use a fresh Binance time sample. Reliability matters more than saving one public GET.
-    timing = await getBinanceServerTime(env,{force:true});
-    const timestampMs = Date.now() + Number(timing.offsetMs || 0);
-    signed = await buildSignedBinanceQuery(pair, params, { timestampMs, recvWindow: 5000 });
-  } catch (error) {
-    return {
-      ok: false,
-      status: "BINANCE_SIGNING_PREP_FAILED",
-      reason: String(error?.message || error).slice(0, 160),
-      noRequestSent: true,
-    };
-  }
-
+  let query="";
   let auth;
-  try {
-    auth = await buildRelayAuth(pair, method, path, signed.query);
-  } catch (error) {
+  try{
+    query=canonicalRelayQuery(params);
+    auth=await buildRelayAuth(env,method,path,query);
+  }catch(error){
     return {
       ok:false,
       status:"SUPABASE_RELAY_AUTH_PREP_FAILED",
       reason:String(error?.message || error).slice(0,160),
       noRequestSent:true,
-      diagnostics:safeSigningDiagnostics({
-        endpoint:path,
-        method,
-        unsignedPayload:signed.unsignedPayload,
-        timestampMs:signed.timestampMs,
-        serverTimeMs:Number(timing.serverTimeMs || 0),
-        signingMode:signed.signingMode,
-      }),
+      diagnostics:{
+        endpoint:String(path||""),
+        method:String(method||"").toUpperCase(),
+        unsignedIntentQuery:query,
+        signingAuthority:"SUPABASE_VAULT",
+        secretExposed:false,
+      },
     };
   }
-  const diagnosticBase = safeSigningDiagnostics({
-    endpoint: path,
-    method,
-    unsignedPayload: signed.unsignedPayload,
-    timestampMs: signed.timestampMs,
-    serverTimeMs: Number(timing.serverTimeMs || 0),
-    signingMode: signed.signingMode,
-  });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const startedAt = Date.now();
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store",
-        "x-region": relayRegion(env),
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  const startedAt=Date.now();
+  try{
+    const r=await fetch(url,{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "cache-control":"no-store",
+        "x-region":relayRegion(env),
       },
-      body: JSON.stringify({
+      body:JSON.stringify({
         method,
         path,
-        apiKey: pair.apiKey,
-        query: signed.query,
-        relayTimestamp: auth.relayTimestamp,
-        relayNonce: auth.relayNonce,
-        relaySignature: auth.relaySignature,
+        query,
+        relayTimestamp:auth.relayTimestamp,
+        relayNonce:auth.relayNonce,
+        relaySignature:auth.relaySignature,
       }),
-      signal: controller.signal,
+      signal:controller.signal,
     });
-    const body = await r.json().catch(() => ({}));
-    const diagnostics = {
-      ...diagnosticBase,
+    const body=await r.json().catch(()=>({}));
+    return {
+      ok:r.ok && body?.ok===true,
       httpStatus:r.status,
-      binanceCode:body?.binanceCode == null ? null : Number(body.binanceCode),
-    };
-    return {
-      ok: r.ok && body?.ok === true,
-      httpStatus: r.status,
-      status: String(body?.status || ("HTTP_" + r.status)),
+      status:String(body?.status || ("HTTP_"+r.status)),
       body,
-      data: body?.data ?? null,
-      unknown: isUnknownBinanceResponse(body, r.status),
-      definiteReject: isDefiniteReject(body, r.status),
-      notFound: isNotFoundResponse(body),
-      latencyMs: Date.now() - startedAt,
-      diagnostics,
+      data:body?.data ?? null,
+      unknown:isUnknownBinanceResponse(body,r.status),
+      definiteReject:isDefiniteReject(body,r.status),
+      notFound:isNotFoundResponse(body),
+      latencyMs:Date.now()-startedAt,
+      diagnostics:body?.diagnostics || {
+        endpoint:String(path||""),
+        method:String(method||"").toUpperCase(),
+        unsignedIntentQuery:query,
+        signingAuthority:"SUPABASE_VAULT",
+        httpStatus:r.status,
+        binanceCode:body?.binanceCode ?? null,
+        secretExposed:false,
+      },
     };
-  } catch (error) {
+  }catch(error){
     return {
-      ok: false,
-      unknown: true,
-      status: "SUPABASE_RELAY_TRANSPORT_UNKNOWN",
-      reason: String(error?.message || error).slice(0, 120),
-      mayResend: false,
-      latencyMs: Date.now() - startedAt,
-      diagnostics: diagnosticBase,
+      ok:false,
+      unknown:true,
+      status:"SUPABASE_RELAY_TRANSPORT_UNKNOWN",
+      reason:String(error?.message || error).slice(0,120),
+      mayResend:false,
+      latencyMs:Date.now()-startedAt,
+      diagnostics:{
+        endpoint:String(path||""),
+        method:String(method||"").toUpperCase(),
+        unsignedIntentQuery:query,
+        signingAuthority:"SUPABASE_VAULT",
+        secretExposed:false,
+      },
     };
-  } finally {
+  }finally{
     clearTimeout(timer);
   }
 }
