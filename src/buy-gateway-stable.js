@@ -927,7 +927,13 @@ async function handleTelegramWebhook(request, env) {
       await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Order size is below the safe minimum", show_alert: true });
       return new Response("ok");
     }
-    const rec = Math.floor(Math.min(requested, 5.5) * 100) / 100;
+    const rec = riskCappedQuote(
+      Number(s.entry),
+      Number(s.stop),
+      requested,
+      Number(s.score || 0),
+      Number(readLivePolicy(env).maxOrderUSDT || DEFAULT_MAX_ORDER_USDT),
+    );
     const p = { ...s, confirmedQuoteUSDT: rec, prepareExpiresAt: Date.now() + PREPARE_TTL_SEC * 1000 };
     await putState(env, `prepared:${id}`, p, PREPARE_TTL_SEC);
     await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Trade prepared — no purchase yet" });
