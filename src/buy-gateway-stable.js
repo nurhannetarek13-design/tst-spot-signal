@@ -81,9 +81,23 @@ function riskCappedQuote(entry, stop, requested = 5.5) {
   return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
 }
 
+function validRealE2EV20(row) {
+  return row?.realProductionE2E === true
+    && String(row?.stage || "") === "COMPLETE"
+    && row?.buyFilled === true
+    && row?.protectionActive === true
+    && row?.restartRecovery === true
+    && row?.exitFilled === true
+    && row?.databaseBinanceReconciliation === true
+    && row?.noUnknownOrders === true
+    && row?.noUnprotectedPositions === true
+    && Array.isArray(row?.orphanOrders)
+    && row.orphanOrders.length === 0;
+}
+
 async function executionOperationalUnsafe(env, symbol = null) {
   const now = Date.now();
-  const [ops, reconciliationState, bridge, ownership, daily, unknownState, unprotectedState] = await Promise.all([
+  const [ops, reconciliationState, bridge, ownership, daily, unknownState, unprotectedState, adminPause] = await Promise.all([
     getState(env, "ops:state"),
     getState(env, "ops:reconciliation:last"),
     getState(env, "bridge:health"),
@@ -91,6 +105,7 @@ async function executionOperationalUnsafe(env, symbol = null) {
     getState(env, "risk:daily-live"),
     getState(env, "live:unknown-orders"),
     getState(env, "live:unprotected-positions"),
+    getState(env, "live:admin-pause"),
   ]);
   const fresh = (at, maxMs = 20 * 60 * 1000) => Number(at || 0) > 0 && now - Number(at || 0) <= maxMs;
   const ready = executorConfigured(env);
@@ -100,6 +115,15 @@ async function executionOperationalUnsafe(env, symbol = null) {
   const unprotectedCount = Array.isArray(unprotectedState) ? unprotectedState.length : Number(unprotectedState?.count || 0);
   const realizedLoss = Math.abs(Number(daily?.realizedLossUSDT || 0));
 
+  if (adminPause?.paused === true) {
+    return {
+      ok:false,
+      provider,
+      state:String(ops?.state || "UNKNOWN"),
+      blocker:"ADMIN_PAUSE_ACTIVE",
+      executorConfigured:ready,
+    };
+  }
   if (policy.emergencyKillSwitch === true) {
     return {
       ok:false,
@@ -764,6 +788,48 @@ async function handleTelegramWebhook(request, env) {
   if (m) {
     if (String(m.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
     const text = String(m.text || "").trim().toUpperCase().replace(/\s+/g, " ");
+    if (text === "PAUSE LIVE TRADING" || text === "/PAUSE_LIVE" || text === "/PAUSE_LIVE_TRADING") {
+      await putState(env,"live:admin-pause",{paused:true,at:Date.now(),source:"TELEGRAM_ADMIN"},30*24*60*60);
+      await tg(env,"sendMessage",{
+        chat_id:String(env.TELEGRAM_CHAT_ID),
+        text:"🛑 LIVE TRADING PAUSED\nNew entries are blocked immediately. Existing protective OCO orders are NOT cancelled.",
+      });
+      return new Response("ok");
+    }
+
+    if (text === "RESUME LIMITED LIVE" || text === "/RESUME_LIMITED_LIVE") {
+      const now=Date.now();
+      const [ops,reconciliation,unknownState,unprotectedState,e2eProof] = await Promise.all([
+        getState(env,"ops:state"),
+        getState(env,"ops:reconciliation:last"),
+        getState(env,"live:unknown-orders"),
+        getState(env,"live:unprotected-positions"),
+        getState(env,"live:e2e-result-v20"),
+      ]);
+      const unknownCount=Array.isArray(unknownState)?unknownState.length:Number(unknownState?.count||0);
+      const unprotectedCount=Array.isArray(unprotectedState)?unprotectedState.length:Number(unprotectedState?.count||0);
+      const reconciliationFresh=reconciliation?.ok===true && Number(reconciliation?.at||0)>0 && now-Number(reconciliation.at)<=20*60*1000;
+      const resumeAllowed=executorConfigured(env)
+        && ops?.state==="HEALTHY"
+        && reconciliationFresh
+        && unknownCount===0
+        && unprotectedCount===0
+        && validRealE2EV20(e2eProof);
+      if(!resumeAllowed){
+        await tg(env,"sendMessage",{
+          chat_id:String(env.TELEGRAM_CHAT_ID),
+          text:"⛔ RESUME BLOCKED\nSafety/readiness gates are not all healthy. Trading remains paused.",
+        });
+        return new Response("ok");
+      }
+      await putState(env,"live:admin-pause",{paused:false,at:Date.now(),source:"TELEGRAM_ADMIN"},30*24*60*60);
+      await tg(env,"sendMessage",{
+        chat_id:String(env.TELEGRAM_CHAT_ID),
+        text:"✅ LIMITED LIVE RESUMED\nAdmin pause cleared. All normal health, risk, reconciliation, position-limit and execution gates still apply.",
+      });
+      return new Response("ok");
+    }
+
     if (text === "RUN E2E TEST" || text === "/RUN_E2E" || text === "/RUN_E2E_TEST") {
       await tg(env,"sendMessage",{
         chat_id:String(env.TELEGRAM_CHAT_ID),
@@ -1089,9 +1155,9 @@ async function processAutonomousCandidate(env) {
     await notifyOnce(env,"kill-switch","🛑 Emergency kill switch activated. New automated entries are paused.",3600);
     return {ok:false,status:"EMERGENCY_KILL_SWITCH"};
   }
-  const firstE2E=await getState(env,"cutover:e2e:result");
-  if(!(firstE2E?.ok===true&&firstE2E?.manual===true)){
-    return {ok:false,status:"AUTONOMOUS_BLOCKED_UNTIL_MANUAL_E2E"};
+  const e2eProof=await getState(env,"live:e2e-result-v20");
+  if(!validRealE2EV20(e2eProof)){
+    return {ok:false,status:"AUTONOMOUS_BLOCKED_UNTIL_REAL_E2E_V20"};
   }
   const candidate=await getState(env,"live:candidate:latest");
   if(!candidate?.id) return {ok:false,status:"NO_AUTONOMOUS_CANDIDATE"};
