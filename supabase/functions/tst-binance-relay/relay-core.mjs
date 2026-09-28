@@ -11,6 +11,10 @@ export const READ_PATHS = new Set([
   "/sapi/v1/account/status",
 ]);
 
+export const TEST_PATHS = new Set([
+  "/api/v3/order/test",
+]);
+
 export const WRITE_PATHS = new Set([
   "/api/v3/order",
   "/api/v3/orderList/oco",
@@ -27,11 +31,14 @@ export function parseAndValidateCapability(body, { nowMs = Date.now(), writesEna
   writesEnabled = writesEnabled === true;
 
   if (!["GET","POST","DELETE"].includes(method)) throw new Error("METHOD_BLOCKED");
-  if (!(READ_PATHS.has(path) || WRITE_PATHS.has(path))) throw new Error("PATH_BLOCKED");
+  if (!(READ_PATHS.has(path) || TEST_PATHS.has(path) || WRITE_PATHS.has(path))) throw new Error("PATH_BLOCKED");
   if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey)) throw new Error("BAD_API_KEY_SHAPE");
   if (!query || query.length > 4096) throw new Error("BAD_QUERY");
 
   const q = new URLSearchParams(query);
+  const keys=[...q.keys()];
+  const duplicateKeys=[...new Set(keys.filter((key,index)=>keys.indexOf(key)!==index))];
+  if (duplicateKeys.length) throw new Error("DUPLICATE_PARAM");
   const signature = String(q.get("signature") || "");
   const timestamp = Number(q.get("timestamp"));
   const recvWindow = Number(q.get("recvWindow") || 5000);
@@ -41,11 +48,21 @@ export function parseAndValidateCapability(body, { nowMs = Date.now(), writesEna
   if (!Number.isFinite(timestamp) || Math.abs(nowMs - timestamp) > 10_000) throw new Error("STALE_CAPABILITY");
   if (!Number.isFinite(recvWindow) || recvWindow < 1 || recvWindow > 5000) throw new Error("BAD_RECV_WINDOW");
 
-  const isWrite = method !== "GET";
+  const isTest = TEST_PATHS.has(path);
+  const isWrite = method !== "GET" && !isTest;
   if (isWrite && !writesEnabled) throw new Error("FINANCIAL_WRITES_DISABLED");
-  if (isWrite) validateWrite(path, method, q);
+  if (isWrite || isTest) validateWrite(path, method, q);
 
-  return { method, path, apiKey, query, q, isWrite };
+  const unsignedQuery=query
+    .split("&")
+    .filter((part)=>!part.startsWith("signature="))
+    .join("&");
+  const signatureType=hmacShape?"HMAC_SHA256":"ED25519";
+  return {
+    method, path, apiKey, query, q, isWrite, isTest,
+    unsignedQuery, timestamp, recvWindow, signatureType,
+    timestampDeltaMs: nowMs - timestamp,
+  };
 }
 
 function requireSpotSymbol(q) {
@@ -68,7 +85,7 @@ function finitePositive(v, name) {
 }
 
 function validateWrite(path, method, q) {
-  if (path === "/api/v3/order" && method === "POST") {
+  if ((path === "/api/v3/order" || path === "/api/v3/order/test") && method === "POST") {
     requireSpotSymbol(q);
     const side = String(q.get("side") || "").toUpperCase();
     const type = String(q.get("type") || "").toUpperCase();
