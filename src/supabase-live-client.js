@@ -890,6 +890,179 @@ export async function supabaseReadOnlyHeartbeat(env) {
   };
 }
 
+function sumTrades(trades = []) {
+  const rows=Array.isArray(trades)?trades:[];
+  const commissions={};
+  let qty=0,quote=0;
+  for(const t of rows){
+    const q=Number(t?.qty||0),p=Number(t?.price||0),qq=Number(t?.quoteQty||0);
+    qty+=Number.isFinite(q)?q:0;
+    quote+=Number.isFinite(qq)&&qq>0?qq:(Number.isFinite(q*p)?q*p:0);
+    const asset=String(t?.commissionAsset||"");
+    const fee=Number(t?.commission||0);
+    if(asset&&Number.isFinite(fee)) commissions[asset]=(commissions[asset]||0)+fee;
+  }
+  return {qty,quote,commissions};
+}
+
+async function tradesForOrder(env, symbol, orderId) {
+  if (!(Number(orderId)>0)) return {ok:false,status:"ORDER_ID_MISSING",trades:[]};
+  const r=await relay(env,"GET","/api/v3/myTrades",{symbol,orderId:Number(orderId)},15000);
+  return {ok:r.ok===true,status:r.status,trades:Array.isArray(r.data)?r.data:[],response:r};
+}
+
+async function applyDailyRealizedPnlOnce(env,intentId,pnlUSDT) {
+  const claimed=await claimStateKey(env,"daily-pnl-applied:"+intentId,{at:Date.now(),pnlUSDT},365*24*60*60*1000);
+  if(!claimed) return {applied:false,status:"DAILY_PNL_ALREADY_APPLIED"};
+  const day=new Date().toISOString().slice(0,10);
+  const current=await getStateKey(env,"risk:daily-live");
+  const sameDay=current?.day===day;
+  const previousPnl=sameDay?Number(current?.realizedPnlUSDT||0):0;
+  const nextPnl=previousPnl+Number(pnlUSDT||0);
+  const row={
+    day,
+    realizedPnlUSDT:nextPnl,
+    realizedLossUSDT:Math.max(0,-nextPnl),
+    updatedAt:Date.now(),
+  };
+  await putStateKey(env,"risk:daily-live",row,3*24*60*60*1000);
+  return {applied:true,status:"DAILY_PNL_APPLIED",...row};
+}
+
+export async function supabaseReconcileTradeByIntent(env, intentId) {
+  const state=await readTradeState(env,intentId);
+  if(!state) return {ok:false,status:"TRADE_INTENT_NOT_FOUND",intentId,financialAction:false};
+  if(state.state==="EXITED") return {ok:true,status:"TRADE_ALREADY_EXITED",intentId,state,financialAction:false};
+  if(!["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED"].includes(String(state.state||""))){
+    return {ok:true,status:"TRADE_NOT_ACTIVE",intentId,state,financialAction:false};
+  }
+
+  const symbol=String(state.symbol||"").toUpperCase();
+  if(!symbol) return {ok:false,status:"TRADE_SYMBOL_MISSING",intentId,financialAction:false};
+
+  const listId=String(state.listClientOrderId||"");
+  const tpId=String(state.takeProfitClientOrderId||"");
+  const stopId=String(state.stopClientOrderId||"");
+  const [list,tp,sl,account]=await Promise.all([
+    listId?queryOrderList(env,listId):Promise.resolve({found:false,confirmedAbsent:true}),
+    tpId?queryOrder(env,symbol,tpId):Promise.resolve({found:false,confirmedAbsent:true}),
+    stopId?queryOrder(env,symbol,stopId):Promise.resolve({found:false,confirmedAbsent:true}),
+    relay(env,"GET","/api/v3/account",{omitZeroBalances:"true"},15000),
+  ]);
+
+  if(list.unknown||tp.unknown||sl.unknown||!account.ok){
+    logExecution("EXIT_RECONCILIATION_UNKNOWN",{intentId,symbol,state:state.state,reconciliationOutcome:"UNKNOWN"});
+    return {ok:false,status:"EXIT_RECONCILIATION_UNKNOWN",intentId,reconciliationRequired:true,financialAction:false};
+  }
+
+  if(list.found && ["EXECUTING","RESPONSE"].includes(String(list.list?.listOrderStatus||""))){
+    return {ok:true,status:"POSITION_STILL_PROTECTED",intentId,state:"PROTECTED",financialAction:false};
+  }
+
+  const tpFilled=tp.found && String(tp.order?.status||"")==="FILLED";
+  const slFilled=sl.found && String(sl.order?.status||"")==="FILLED";
+  let exitOrder=null,exitReason=null;
+  if(tpFilled){ exitOrder=tp.order; exitReason="TAKE_PROFIT"; }
+  else if(slFilled){ exitOrder=sl.order; exitReason="STOP_LOSS"; }
+
+  const baseAsset=symbol.replace(/USDT$/,"");
+  const balances=Array.isArray(account.data?.balances)?account.data.balances:[];
+  const baseRow=balances.find((x)=>String(x?.asset||"")===baseAsset);
+  const baseTotal=Number(baseRow?.free||0)+Number(baseRow?.locked||0);
+  const trackedQty=Number(state.protectedQty||state.executedQty||0);
+
+  if(!exitOrder){
+    const listDone=list.found && ["ALL_DONE","REJECT"].includes(String(list.list?.listOrderStatus||""));
+    const allProtectionGone=(!tp.found||["CANCELED","EXPIRED","REJECTED"].includes(String(tp.order?.status||"")))
+      &&(!sl.found||["CANCELED","EXPIRED","REJECTED"].includes(String(sl.order?.status||"")));
+    if(listDone&&allProtectionGone){
+      if(trackedQty>0 && baseTotal < trackedQty*0.2){
+        await writeTradeState(env,intentId,"EXITED",{
+          exitReason:"EXTERNAL_POSITION_CHANGE",
+          exitedAt:Date.now(),
+          exitOrderId:null,
+          realizedPnlUSDT:null,
+          reconciliationOutcome:"EXTERNAL_EXIT_DETECTED",
+        });
+        logExecution("EXTERNAL_POSITION_CHANGE",{intentId,symbol,state:"EXITED",reconciliationOutcome:"EXTERNAL_EXIT_DETECTED"});
+        return {ok:true,status:"EXTERNAL_EXIT_DETECTED",intentId,exitReason:"EXTERNAL_POSITION_CHANGE",financialAction:false};
+      }
+      await writeTradeState(env,intentId,"FAILED_SAFE",{
+        reason:"PROTECTION_GONE_POSITION_MAY_REMAIN",
+        unprotectedPosition:true,
+        baseBalanceObserved:baseTotal,
+      });
+      logExecution("PROTECTION_LOST",{intentId,symbol,state:"FAILED_SAFE",reconciliationOutcome:"UNPROTECTED"});
+      return {ok:false,status:"PROTECTION_LOST_POSITION_MAY_REMAIN",intentId,unprotectedPosition:true,reconciliationRequired:true,financialAction:false};
+    }
+    return {ok:true,status:"POSITION_RECONCILED_OPEN",intentId,state:state.state,financialAction:false};
+  }
+
+  const [entryTrades,exitTrades]=await Promise.all([
+    tradesForOrder(env,symbol,state.buyOrderId),
+    tradesForOrder(env,symbol,exitOrder.orderId),
+  ]);
+  const entry=sumTrades(entryTrades.trades);
+  const exit=sumTrades(exitTrades.trades);
+  const feeAssets={...entry.commissions};
+  for(const [asset,fee] of Object.entries(exit.commissions)) feeAssets[asset]=(feeAssets[asset]||0)+Number(fee||0);
+  const usdtFees=Number(feeAssets.USDT||0);
+  const realizedPnlUSDT=(exit.quote-entry.quote)-usdtFees;
+  const nonQuoteFees=Object.fromEntries(Object.entries(feeAssets).filter(([asset])=>asset!=="USDT"));
+
+  const lock=await claimStateKey(env,"exit-finalize:"+intentId,{at:Date.now(),exitOrderId:exitOrder.orderId},365*24*60*60*1000);
+  if(!lock){
+    const current=await readTradeState(env,intentId);
+    return {ok:true,status:"EXIT_ALREADY_FINALIZED",intentId,state:current,financialAction:false};
+  }
+
+  const daily=await applyDailyRealizedPnlOnce(env,intentId,realizedPnlUSDT);
+  await writeTradeState(env,intentId,"EXITED",{
+    exitReason,
+    exitedAt:Date.now(),
+    exitOrderId:exitOrder.orderId,
+    exitClientOrderId:exitOrder.clientOrderId||null,
+    sellQty:exit.qty,
+    exitQuote:exit.quote,
+    entryQuote:entry.quote,
+    realizedPnlUSDT,
+    commissionByAsset:feeAssets,
+    nonQuoteFees,
+    dailyRiskAfterExit:daily,
+    reconciliationOutcome:"EXIT_MATCHED_BINANCE_FILLS",
+  });
+  logExecution("TRADE_EXITED",{intentId,symbol,state:"EXITED",binanceOrderId:exitOrder.orderId,reconciliationOutcome:exitReason});
+  return {
+    ok:true,
+    status:"TRADE_EXITED",
+    intentId,
+    symbol,
+    exitReason,
+    exitOrderId:exitOrder.orderId,
+    realizedPnlUSDT,
+    commissionByAsset:feeAssets,
+    nonQuoteFees,
+    dailyRisk:daily,
+    financialAction:false,
+  };
+}
+
+export async function supabaseReconcileActiveTrades(env) {
+  const index=await getStateKey(env,"live:active-intents");
+  const rows=Array.isArray(index)?index.filter(Boolean):[];
+  const results=[];
+  for(const row of rows.slice(0,20)){
+    results.push(await supabaseReconcileTradeByIntent(env,String(row.intentId||"")));
+  }
+  return {
+    ok:results.every((x)=>x?.ok===true),
+    status:"ACTIVE_TRADE_RECONCILIATION_COMPLETE",
+    checked:results.length,
+    results,
+    financialAction:false,
+  };
+}
+
 export async function supabaseDryRunExecution(env, input) {
   const pair = binanceCredentials(env);
   if (!relayConfigured(env) || !signingCredentialsReady(pair) || !pair.ed25519PrivateKey) {
