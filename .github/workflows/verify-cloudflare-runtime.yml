@@ -40,6 +40,21 @@ jobs:
           assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
           PY
+      - name: Verify direct Cloudflare Binance read-only access
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 20 \
+            "$WORKER_URL/cloudflare-binance-direct-preflight?nonce=$(date +%s%N)" \
+            -o /tmp/direct.json
+          cat /tmp/direct.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/direct.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          PY
+
       - name: Verify Railway-free live runtime
         shell: bash
         run: |
