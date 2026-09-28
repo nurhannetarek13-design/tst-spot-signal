@@ -69,10 +69,25 @@ function normalizedBinanceSecretCandidates(rawSecret) {
   }
   const noWhitespace = raw.replace(/\s+/g, "");
   if (noWhitespace !== raw) rows.push(["REMOVE_WHITESPACE", noWhitespace]);
+  const noZeroWidth = raw.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  if (noZeroWidth !== raw) rows.push(["REMOVE_ZERO_WIDTH", noZeroWidth]);
   const noPrefix = raw.replace(/^BINANCE_(?:API_)?SECRET(?:_KEY)?\s*[:=]\s*/i, "");
   if (noPrefix !== raw) rows.push(["STRIP_SECRET_PREFIX", noPrefix]);
-  const unwrapped = noPrefix.replace(/^["'`](.*)["'`]$/, "$1").replace(/\s+/g, "");
+  const unwrapped = noPrefix.replace(/^["'`](.*)["'`]$/, "$1").replace(/\s+/g, "").replace(/[\u200B-\u200D\uFEFF]/g, "");
   if (unwrapped !== raw) rows.push(["PREFIX_QUOTES_WHITESPACE_NORMALIZED", unwrapped]);
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (decoded !== raw) rows.push(["URL_DECODE", decoded.trim()]);
+  } catch {}
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === "string") rows.push(["JSON_STRING_VALUE", parsed.trim()]);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const key of ["secret","secretKey","apiSecret","api_secret","BINANCE_API_SECRET","BINANCE_SECRET","BINANCE_SECRET_KEY"]) {
+        if (typeof parsed[key] === "string" && parsed[key].trim()) rows.push([`JSON_FIELD_${key}`, parsed[key].trim()]);
+      }
+    }
+  } catch {}
   const seen = new Set();
   return rows
     .filter(([,value]) => value && !seen.has(value) && seen.add(value))
