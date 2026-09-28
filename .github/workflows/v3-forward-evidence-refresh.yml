@@ -17,6 +17,8 @@ on:
       - 'validation/indicator-v3/backtest-integrity-input.json'
       - 'scripts/build_v3_forward_holdout.py'
       - 'scripts/build_v3_precision_evidence.py'
+      - 'tests/test_build_v3_backtest_integrity.py'
+      - 'scripts/build_v3_backtest_integrity.py'
       - 'scripts/v3_session_performance.py'
       - 'research/backtest_integrity_gate.py'
       - '.github/workflows/v3-forward-evidence-refresh.yml'
@@ -46,11 +48,13 @@ jobs:
         run: |
           python -m py_compile scripts/build_v3_forward_holdout.py
           python -m py_compile scripts/build_v3_precision_evidence.py
+          python -m py_compile scripts/build_v3_backtest_integrity.py
           python -m py_compile scripts/v3_session_performance.py
           python -m py_compile research/backtest_integrity_gate.py
           python -m unittest -v tests/test_v3_forward_holdout.py
           python -m unittest -v tests/test_v3_precision_evidence.py
           python -m unittest -v tests/test_backtest_integrity_gate.py
+          python -m unittest -v tests/test_build_v3_backtest_integrity.py
 
       - name: Build prospective forward holdout
         run: |
@@ -66,9 +70,9 @@ jobs:
             --state ready_bot/indicator_state.json \
             --output validation/indicator-v3/session-performance.json
 
-      - name: Build historical integrity status
+      - name: Build historical integrity status from machine evidence
         run: |
-          python research/backtest_integrity_gate.py
+          python scripts/build_v3_backtest_integrity.py             --methodology validation/indicator-v3/backtest-integrity-input.json             --universe validation/indicator-v3/point-in-time-universe.json             --replay validation/indicator-v3/spot-v3-replay-aggregate.json             --output validation/indicator-v3/backtest-integrity-latest.json
 
       - name: Build unified V3 precision evidence
         run: |
