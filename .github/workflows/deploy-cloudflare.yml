@@ -66,6 +66,8 @@ jobs:
           node scripts/test-ops-recovery.mjs
           node scripts/test-live-cutover-policy.mjs
           node scripts/test-binance-spot-filters.mjs
+          node scripts/test-binance-ed25519-signing.mjs
+          node scripts/test-supabase-relay-core.mjs
           node scripts/test-live-accounting.mjs
           node scripts/test-make-v2-manual-route.mjs
           node --check api/binance-signed-relay.mjs
