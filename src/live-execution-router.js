@@ -6,6 +6,7 @@ import {
 import {
   manualBuyAndProtectViaSupabase,
   supabaseReadOnlyHeartbeat,
+  supabaseReadOnlyReconcile,
   supabaseExecutionConfigured,
 } from "./supabase-live-client.js";
 
@@ -31,6 +32,11 @@ export function executionOwner(env = {}) {
 
 export function routeVersion(env = {}) {
   return executionProvider(env) === "SUPABASE_V2" ? "supabase-v2" : MAKE_EXECUTION_ROUTE.version;
+}
+
+export async function executionReadOnlyReconcile(env) {
+  if (executionProvider(env) === "SUPABASE_V2") return supabaseReadOnlyReconcile(env);
+  return null;
 }
 
 export async function executionReadOnlyHeartbeat(env) {
