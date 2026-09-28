@@ -231,7 +231,7 @@ async function prepareManualE2EPrompt(env) {
   if (!claimed) return { ok:true, status:"MANUAL_E2E_PROMPT_LOCKED" };
 
   const symbol = "SOLUSDT";
-  const book = await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  const book = await executionPublicMarketData(env,`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
   const ask = Number(book.askPrice || 0), bid = Number(book.bidPrice || 0);
   if (!(ask > 0 && bid > 0 && ask >= bid)) return { ok:false, status:"E2E_BOOK_UNAVAILABLE" };
   const spread = (ask - bid) / ((ask + bid) / 2);
