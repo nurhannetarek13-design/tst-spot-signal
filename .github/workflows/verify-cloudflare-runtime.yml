@@ -27,6 +27,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Report Cloudflare legacy credential presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20             "$WORKER_URL/infra-credential-presence?nonce=$(date +%s%N)"             -o /tmp/cred.json
+          cat /tmp/cred.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/cred.json'))
+          assert r.get('ok') is True
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          PY
       - name: Verify Railway-free live runtime
         shell: bash
         run: |
