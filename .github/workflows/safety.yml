@@ -62,6 +62,10 @@ jobs:
             echo "Go/No-Go regressed to hardcoded Make execution route"
             exit 1
           fi
+          if grep -q 'signedBinance(' src/buy-gateway-stable.js; then
+            echo "Active buy gateway must not call legacy signedBinance helper"
+            exit 1
+          fi
       - name: Assert Supabase V2 execution safety invariants
         shell: bash
         run: |
