@@ -323,7 +323,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 \
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
             -H 'cache-control: no-store' \
             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/ops-status?nonce=$(date +%s%N)" \
             -o /tmp/ops.json
@@ -332,6 +333,8 @@ jobs:
           import json
           r=json.load(open('/tmp/ops.json'))
           assert r.get('ok') is True
+          assert r.get('state') == 'HEALTHY'
+          assert r.get('stale') == []
           assert r.get('persistentScheduler') is True
           assert r.get('deadManMonitoring') is True
           assert r.get('recoveryStateMachine') is True
