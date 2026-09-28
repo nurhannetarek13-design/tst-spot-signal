@@ -419,10 +419,6 @@ async function executionPriceGate(env, symbol, referenceEntry, referenceStop, re
   return {ask,bid,spreadPct:spread*100,deviationPct:deviation*100};
 }
 
-async function signedBinance() {
-  throw new Error("LEGACY_VERCEL_SIGNER_REVOKED");
-}
-
 function safeRelayDiagnostic(errorText) {
   const s=String(errorText||"");
   if (s.includes("-2015")) return "BINANCE_CREDENTIAL_OR_IP_REJECTED";
@@ -476,12 +472,30 @@ async function refreshAccountSafety(env, force = false) {
     if (cached?.checkedAt && Date.now()-Number(cached.checkedAt)<5*60*1000) return cached;
   }
   try {
-    const [restrictions, accountStatus, apiTradingStatus]=await Promise.all([
-      signedBinance(env,"GET","/sapi/v1/account/apiRestrictions",{}),
-      signedBinance(env,"GET","/sapi/v1/account/status",{}),
-      signedBinance(env,"GET","/sapi/v1/account/apiTradingStatus",{}),
-    ]);
-    const result=evaluateCloudflareAccountSafety(restrictions,accountStatus,apiTradingStatus);
+    const reconciliation=await executionReadOnlyReconcile(env);
+    const reasons=[];
+    if (reconciliation?.status === "SUPABASE_RECONCILIATION_READ_FAILED") reasons.push("ACCOUNT_RECONCILIATION_READ_FAILED");
+    if (reconciliation?.readingAllowed !== true) reasons.push("READ_PERMISSION_REQUIRED");
+    if (reconciliation?.spotTradingPermission !== true) reasons.push("SPOT_TRADING_PERMISSION_REQUIRED");
+    if (reconciliation?.prohibitedPermissionEnabled === true) reasons.push("PROHIBITED_API_PERMISSION_ENABLED");
+    if (reconciliation?.accountNormal !== true) reasons.push("ACCOUNT_STATUS_NOT_NORMAL");
+    if (reconciliation?.apiTradingLocked === true) reasons.push("API_TRADING_LOCKED");
+    if (reconciliation?.noUnknownOrders !== true) reasons.push("UNKNOWN_ORDERS_PRESENT");
+    if (reconciliation?.noUnprotectedPositions !== true) reasons.push("UNPROTECTED_POSITION_PRESENT");
+    const result={
+      ok:reconciliation?.ok===true && reasons.length===0,
+      reasons,
+      accountStatus:reconciliation?.accountNormal===true ? "normal" : null,
+      isLocked:reconciliation?.apiTradingLocked===true,
+      withdrawalsDisabled:reconciliation?.prohibitedPermissionEnabled!==true,
+      futuresDisabled:reconciliation?.prohibitedPermissionEnabled!==true,
+      marginDisabled:reconciliation?.prohibitedPermissionEnabled!==true,
+      spotPermission:reconciliation?.spotTradingPermission===true,
+      noUnknownOrders:reconciliation?.noUnknownOrders===true,
+      noUnprotectedPositions:reconciliation?.noUnprotectedPositions===true,
+      checkedAt:Date.now(),
+      source:"SUPABASE_V2_RECONCILIATION",
+    };
     await putState(env,"binance:account-safety:last",result,10*60);
     return result;
   } catch (e) {
@@ -490,6 +504,7 @@ async function refreshAccountSafety(env, force = false) {
       reasons:["ACCOUNT_SAFETY_UNAVAILABLE"],
       diagnostic:safeRelayDiagnostic(String(e?.message||e)),
       checkedAt:Date.now(),
+      source:"SUPABASE_V2_RECONCILIATION",
     };
     await putState(env,"binance:account-safety:last",result,2*60);
     return result;
@@ -499,11 +514,15 @@ async function refreshAccountSafety(env, force = false) {
 async function refreshBalance(env) {
   const c = creds(env);
   try {
-    const [account, accountSafety] = await Promise.all([
-      signedBinance(env, "GET", "/api/v3/account", {}),
+    const [heartbeat, accountSafety] = await Promise.all([
+      executionReadOnlyHeartbeat(env),
       refreshAccountSafety(env, false),
     ]);
-    const balances = (account.balances || [])
+    if (heartbeat?.transportOk !== true || heartbeat?.raw?.ok !== true) {
+      throw new Error(String(heartbeat?.body?.status || "SUPABASE_V2_ACCOUNT_READ_FAILED"));
+    }
+    const account = heartbeat?.raw?.data || {};
+    const balances = (Array.isArray(account?.balances) ? account.balances : [])
       .map((b) => ({ asset: b.asset, free: Number(b.free || 0), locked: Number(b.locked || 0) }))
       .filter((b) => b.free > 0 || b.locked > 0);
     const usdt = balances.find((b) => b.asset === "USDT") || { asset: "USDT", free: 0, locked: 0 };
