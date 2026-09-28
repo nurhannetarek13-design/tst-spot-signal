@@ -1,5 +1,5 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
-import { manualBuyAndProtect } from "./make-live-client.js";
+import { manualBuyAndProtect, makeReadOnlyHeartbeat } from "./make-live-client.js";
 export { SignalState };
 
 const SIGNAL_TTL_SEC = 10 * 60;
@@ -426,12 +426,42 @@ async function refreshBalance(env) {
   }
 }
 
+async function requireFreshMakeV2ExecutionRoute(env) {
+  const startedAt = Date.now();
+  const watchdog = await makeReadOnlyHeartbeat(env);
+  if (watchdog?.transportOk !== true) {
+    throw new Error("MAKE_V2_FRESH_PREFLIGHT_TRANSPORT_FAILED");
+  }
+  const [buyAudit, ocoAudit] = await Promise.all([
+    getState(env, "bridge:route:BUY_V2"),
+    getState(env, "bridge:route:OCO_V2"),
+  ]);
+  const freshAccepted = (row) =>
+    row?.lastStatus === "BRIDGE_AUTH_OK"
+    && Number(row?.acceptedAt || 0) >= startedAt - 1000
+    && Date.now() - Number(row?.acceptedAt || 0) <= 30_000;
+  if (!freshAccepted(buyAudit) || !freshAccepted(ocoAudit)) {
+    throw new Error("MAKE_V2_FRESH_PREFLIGHT_NOT_EXECUTED");
+  }
+  return {
+    ok:true,
+    buyAcceptedAt:Number(buyAudit.acceptedAt || 0),
+    ocoAcceptedAt:Number(ocoAudit.acceptedAt || 0),
+    routeVersion:String(buyAudit.routeVersion || ocoAudit.routeVersion || "v2"),
+  };
+}
+
 async function executeConfirmedBuy(env, s) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
   if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
     throw new Error("MAKE_EXECUTOR_V2_NOT_READY");
   }
+  const operational = await makeV2Operational(env);
+  if (!operational.ok) {
+    throw new Error("MAKE_V2_OPERATIONAL_GATE_FAILED");
+  }
+  await requireFreshMakeV2ExecutionRoute(env);
 
   const symbol = String(s.symbol || "").toUpperCase();
   if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) throw new Error("BAD_SYMBOL");
