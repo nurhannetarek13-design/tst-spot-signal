@@ -373,13 +373,14 @@ async function handleFastSignalIngest(request, env) {
   const rawId=String(body.id||`${symbol}-${Date.now()}`);
   const id=rawId.replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || compactId({symbol,entry,createdAt:Date.now()});
   const now=Date.now();
-  const signal={id,symbol,entry,stop,target,strategy:String(body.strategy||"FAST30_60").slice(0,100),score:Number.isFinite(score)?score:null,createdAt:now,expiresAt:now+SIGNAL_TTL_SEC*1000,recommendedUSDT:rec,confirmedQuoteUSDT:rec,prepareExpiresAt:now+PREPARE_TTL_SEC*1000};
+  const signal={id,symbol,entry,stop,target,strategy:String(body.strategy||"").trim().slice(0,100),score:Number.isFinite(score)?score:null,createdAt:now,expiresAt:now+SIGNAL_TTL_SEC*1000,recommendedUSDT:rec,confirmedQuoteUSDT:rec,prepareExpiresAt:now+PREPARE_TTL_SEC*1000};
   await putState(env,`live-signal:${id}`,signal,SIGNAL_TTL_SEC);
   await putState(env,`prepared:${id}`,signal,PREPARE_TTL_SEC);
+  const proposal=buildTelegramTradeProposal(signal,rec);
   await tg(env,"sendMessage",{
     chat_id:String(env.TELEGRAM_CHAT_ID),
-    text:`🚨 TRADE PROPOSAL — ${symbol} — BINANCE SPOT\n💵 Recommended: ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score)?score:"—"}/100\n📉 Risk at SL ≈ ${fmt(rec*((entry-stop)/entry))} USDT\n\nNo order is sent until you press CONFIRM BUY.`,
-    reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]}
+    text:proposal.text,
+    reply_markup:proposal.reply_markup,
   });
   await putState(env,`buy-prompt:${id}`,{sentAt:now,source:"FAST_INGEST"},SIGNAL_TTL_SEC);
   return Response.json({ok:true,status:"FAST_SIGNAL_READY",id,symbol,recommendedUSDT:rec,canTrade:true,credentialMode:"LIVE",autoBuy:false,userConfirmationRequired:true});
@@ -394,6 +395,22 @@ async function tg(env, method, payload) {
   const row = await r.json().catch(() => ({ ok: false }));
   if (!r.ok || row.ok === false) throw new Error(`Telegram ${method} failed`);
   return row;
+}
+
+export function buildTelegramTradeProposal(signal, recommendedUSDT) {
+  const strategy=String(signal?.strategy||"").trim() || "UNKNOWN";
+  const rec=Number(recommendedUSDT);
+  const entry=Number(signal?.entry);
+  const stop=Number(signal?.stop);
+  const target=Number(signal?.target);
+  const score=Number(signal?.score);
+  const id=String(signal?.id||"");
+  return {
+    text:`🚨 TRADE PROPOSAL — ${String(signal?.symbol||"")} — BINANCE SPOT\n💵 Recommended: ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score)?score:"—"}/100\n🧠 Strategy: ${strategy}\n📉 Risk at SL ≈ ${fmt(rec*((entry-stop)/entry))} USDT\n\nNo order is sent until you press CONFIRM BUY.`,
+    reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]},
+    financialAction:false,
+    binanceBuySubmitted:false,
+  };
 }
 
 function fmt(v) {
