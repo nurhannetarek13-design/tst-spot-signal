@@ -1,13 +1,18 @@
+# Legacy V1 research is intentionally frozen and must not track V3 runtime config changes.
 name: Indicator-Only Precision Calibration
 # retrigger after calibration syntax fix
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/indicator_only_precision_calibration.py'
+      - '.github/workflows/indicator-only-precision-calibration.yml'
   push:
     branches: [main]
     paths:
       - 'research/indicator_only_precision_calibration.py'
-      - 'ready_bot/indicator_config.json'
       - '.github/workflows/indicator-only-precision-calibration.yml'
 
 permissions:
@@ -54,6 +59,7 @@ jobs:
           path: validation/indicator-only-precision-calibration-latest.json
           retention-days: 14
       - name: Persist calibration snapshot
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           cp validation/indicator-only-precision-calibration-latest.json /tmp/calibration.json
           for i in 1 2 3 4 5; do

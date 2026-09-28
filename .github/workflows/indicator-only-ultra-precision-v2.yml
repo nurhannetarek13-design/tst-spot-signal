@@ -1,12 +1,18 @@
+# Legacy V1/V2 research is frozen and must not track V3 runtime config changes.
 name: Indicator-Only Ultra Precision V2
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/indicator_only_precision_calibration.py'
+      - 'research/indicator_only_ultra_precision_v2.py'
+      - '.github/workflows/indicator-only-ultra-precision-v2.yml'
   push:
     branches: [main]
     paths:
       - 'research/indicator_only_ultra_precision_v2.py'
-      - 'ready_bot/indicator_config.json'
       - '.github/workflows/indicator-only-ultra-precision-v2.yml'
 
 permissions:
@@ -55,6 +61,7 @@ jobs:
           path: validation/indicator-only-ultra-precision-v2-latest.json
           retention-days: 14
       - name: Persist snapshot
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           cp validation/indicator-only-ultra-precision-v2-latest.json /tmp/ultra.json
           for i in 1 2 3 4 5; do

@@ -24,7 +24,48 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
 
-CFG=json.loads(pathlib.Path("ready_bot/indicator_config.json").read_text())
+FROZEN_V1_CFG = {
+    "engine": "INDICATOR_ONLY_V1",
+    "universe": {
+        "quote_asset": "USDT",
+        "min_quote_volume_24h": 20000000,
+        "max_symbols": 25,
+    },
+    "entry": {
+        "min_score": 90,
+        "max_spread_bps": 12,
+        "min_taker_buy_ratio": 0.56,
+        "hard_taker_floor": 0.50,
+        "min_relative_quote_volume": 1.50,
+        "hard_relative_volume_floor": 0.80,
+        "rsi_min": 52,
+        "rsi_max": 70,
+        "rsi_veto": 78,
+        "atr_pct_min": 0.005,
+        "atr_pct_max": 0.04,
+        "atr_pct_veto": 0.06,
+        "btc_max_1h_drop": -0.015,
+    },
+    "risk": {
+        "starting_cash_usdt": 20.08,
+        "max_quote_per_trade_usdt": 10,
+        "max_open_positions": 3,
+        "max_daily_loss_usdt": 2,
+        "max_risk_per_trade_usdt": 0.20,
+        "max_portfolio_stop_risk_usdt": 0.60,
+        "stop_atr_multiplier": 1.5,
+        "min_stop_fraction": 0.012,
+        "max_stop_fraction": 0.03,
+        "reward_risk": 2,
+        "breakeven_at_r": 1,
+        "trailing_atr_multiplier": 1.5,
+        "fee_rate": 0.001,
+        "slippage_rate": 0.0005,
+    },
+}
+# This is a historical V1 research contract. Do not bind it to the evolving
+# V3 runtime config; doing so makes old evidence non-reproducible.
+CFG = FROZEN_V1_CFG
 BASE="https://data-api.binance.vision"
 DAYS=540
 DEV_EXCLUDE_DAYS=180
