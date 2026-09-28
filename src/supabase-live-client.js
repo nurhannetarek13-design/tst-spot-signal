@@ -509,12 +509,20 @@ async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrder
   };
 }
 
-async function emergencyClose(env, { signalId, symbol, quantity }) {
+async function emergencyClose(env, { intentId, signalId, symbol, quantity }) {
   const ids = clientIds(signalId);
   const existing = await queryOrder(env, symbol, ids.emergency);
   if (existing.found) {
     const state = String(existing.order?.status || "");
     if (state === "FILLED") {
+      await writeTradeState(env, intentId, "FAILED_SAFE", {
+        symbol,
+        signalId,
+        emergencyClosed:true,
+        emergencyOrderId:existing.order?.orderId ?? null,
+        executedQty:Number(existing.order?.executedQty || 0),
+        recovered:true,
+      });
       return { ok: true, status: "PROTECTION_FAILED_EMERGENCY_CLOSED", emergencyOrder: existing.order, recovered: true };
     }
     return {
@@ -538,11 +546,26 @@ async function emergencyClose(env, { signalId, symbol, quantity }) {
     newOrderRespType: "FULL",
   });
   if (sent.ok) {
+    await writeTradeState(env, intentId, "FAILED_SAFE", {
+      symbol,
+      signalId,
+      emergencyClosed:true,
+      emergencyOrderId:sent.data?.orderId ?? null,
+      executedQty:Number(sent.data?.executedQty || 0),
+    });
     return { ok: true, status: "PROTECTION_FAILED_EMERGENCY_CLOSED", emergencyOrder: sent.data };
   }
 
   const rec = await queryWithRetries(() => queryOrder(env, symbol, ids.emergency));
   if (rec.found && String(rec.order?.status || "") === "FILLED") {
+    await writeTradeState(env, intentId, "FAILED_SAFE", {
+      symbol,
+      signalId,
+      emergencyClosed:true,
+      emergencyOrderId:rec.order?.orderId ?? null,
+      executedQty:Number(rec.order?.executedQty || 0),
+      recovered:true,
+    });
     return { ok: true, status: "PROTECTION_FAILED_EMERGENCY_CLOSED", emergencyOrder: rec.order, recovered: true };
   }
   return {
@@ -553,10 +576,22 @@ async function emergencyClose(env, { signalId, symbol, quantity }) {
   };
 }
 
-async function placeOco(env, { signalId, symbol, quantity, takeProfit, stopLoss, stopLimit }) {
+async function placeOco(env, { intentId, signalId, symbol, quantity, takeProfit, stopLoss, stopLimit }) {
   const ids = clientIds(signalId);
+  await writeTradeState(env, intentId, "PROTECTION_PENDING", {
+    symbol,
+    signalId,
+    protectedQty:String(quantity),
+    listClientOrderId:ids.list,
+    takeProfitClientOrderId:ids.takeProfit,
+    stopClientOrderId:ids.stop,
+  });
   const existing = await queryOrderList(env, ids.list);
   if (existing.found) {
+    await writeTradeState(env, intentId, "PROTECTED", {
+      orderListId:existing.list?.orderListId ?? null,
+      recovered:true,
+    });
     return { ok: true, status: "OCO_PLACED", orderList: existing.list, ids, recovered: true };
   }
   if (!existing.confirmedAbsent) {
@@ -579,10 +614,20 @@ async function placeOco(env, { signalId, symbol, quantity, takeProfit, stopLoss,
     newOrderRespType: "RESULT",
   });
 
-  if (sent.ok) return { ok: true, status: "OCO_PLACED", orderList: sent.data, ids };
+  if (sent.ok) {
+    await writeTradeState(env, intentId, "PROTECTED", {
+      orderListId:sent.data?.orderListId ?? null,
+      protectionLatencyMs:Number(sent.latencyMs || 0),
+    });
+    return { ok: true, status: "OCO_PLACED", orderList: sent.data, ids };
+  }
 
   const rec = await queryWithRetries(() => queryOrderList(env, ids.list));
   if (rec.found) {
+    await writeTradeState(env, intentId, "PROTECTED", {
+      orderListId:rec.list?.orderListId ?? null,
+      recovered:true,
+    });
     return { ok: true, status: "OCO_PLACED", orderList: rec.list, ids, recovered: true };
   }
 
