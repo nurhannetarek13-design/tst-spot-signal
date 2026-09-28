@@ -184,6 +184,33 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
+      - name: Report production Supabase V2 dry run
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 40 -X POST             -H 'cache-control: no-store'             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/production-v2-dry-run?nonce=$(date +%s%N)"             -o /tmp/v2-dryrun.json || true
+          cat /tmp/v2-dryrun.json 2>/dev/null || true
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('/tmp/v2-dryrun.json')
+          if not p.exists() or not p.read_text().strip():
+              print("V2_DRYRUN_STATUS=NO_RESPONSE")
+              raise SystemExit(0)
+          try: r=json.loads(p.read_text())
+          except Exception:
+              print("V2_DRYRUN_STATUS=NON_JSON_RESPONSE")
+              raise SystemExit(0)
+          assert r.get('financialAction') is False
+          print("V2_DRYRUN_OK=",r.get('ok'))
+          print("V2_DRYRUN_STATUS=",r.get('status'))
+          print("V2_DRYRUN_BINANCE_CODE=",r.get('binanceCode'))
+          print("V2_DRYRUN_ROUTE=",r.get('route'))
+          d=r.get('diagnostics') or {}
+          print("V2_DRYRUN_CANONICAL=",d.get('unsignedCanonicalPayload'))
+          print("V2_DRYRUN_TIMESTAMP_DELTA_MS=",d.get('timestampDeltaMs'))
+          PY
+
       - name: Verify Telegram callback webhook
         if: always()
         shell: bash
