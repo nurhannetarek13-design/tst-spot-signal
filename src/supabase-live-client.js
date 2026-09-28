@@ -954,6 +954,99 @@ export async function supabaseRelayReplaySelftest(env) {
   };
 }
 
+export async function supabaseRelayAuthSelftest(env) {
+  const url=String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  const pair=binanceCredentials(env);
+  if(!url || !pair.apiKey || !pair.ed25519PrivateKey){
+    return {ok:false,status:"RELAY_SELFTEST_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
+  }
+
+  const timing=await getBinanceServerTime(env,{force:true});
+  const signed=await buildSignedBinanceQuery(
+    {...pair,signingMode:pair.signingMode},
+    {omitZeroBalances:"true"},
+    {timestampMs:Date.now()+Number(timing.offsetMs||0),recvWindow:5000},
+  );
+  const auth=await buildRelayAuth(pair,"GET","/api/v3/account",signed.query);
+  const body={
+    method:"GET",
+    path:"/api/v3/account",
+    apiKey:pair.apiKey,
+    query:signed.query,
+    relayTimestamp:auth.relayTimestamp,
+    relayNonce:auth.relayNonce,
+    relaySignature:auth.relaySignature,
+  };
+  const send=async(payload)=>{
+    const r=await fetch(url,{
+      method:"POST",
+      headers:{"content-type":"application/json","cache-control":"no-store","x-region":relayRegion(env)},
+      body:JSON.stringify(payload),
+      signal:AbortSignal.timeout(10_000),
+    });
+    const data=await r.json().catch(()=>({}));
+    return {httpStatus:r.status,status:String(data?.status||("HTTP_"+r.status)),ok:r.ok&&data?.ok===true,binanceCode:data?.binanceCode??null};
+  };
+  const first=await send(body);
+  const replay=await send(body);
+
+  const staleTimestamp=Date.now()-30_000;
+  const staleNonce=randomNonce();
+  const staleSigned=await signRelayEnvelope(pair.ed25519PrivateKey,{
+    relayTimestamp:staleTimestamp,
+    relayNonce:staleNonce,
+    method:"GET",
+    path:"/api/v3/account",
+    apiKey:pair.apiKey,
+    query:signed.query,
+  });
+  const stale=await send({
+    ...body,
+    relayTimestamp:staleTimestamp,
+    relayNonce:staleNonce,
+    relaySignature:staleSigned.relaySignature,
+  });
+
+  const ok=replay.status==="RELAY_REPLAY_BLOCKED" && stale.status==="RELAY_AUTH_STALE";
+  return {
+    ok,
+    status:ok?"SUPABASE_RELAY_AUTH_SELFTEST_PASS":"SUPABASE_RELAY_AUTH_SELFTEST_FAIL",
+    first,
+    replay,
+    stale,
+    financialAction:false,
+    noSecretValuesExposed:true,
+  };
+}
+
+export async function supabaseIntentIdempotencySelftest(env) {
+  const signalId="IDEMPOTENCY_SELFTEST_"+Date.now();
+  const symbol="SOLUSDT";
+  const intentId=deterministicIntentId(signalId,symbol);
+  const first=await claimIntent(env,intentId,{signalId,symbol,selftest:true});
+  const second=await claimIntent(env,intentId,{signalId,symbol,selftest:true});
+  const state=await readTradeState(env,intentId);
+  await writeTradeState(env,intentId,"EXITED",{
+    signalId,
+    symbol,
+    selftest:true,
+    noFinancialAction:true,
+    exitReason:"SELFTEST_CLEANUP",
+    exitedAt:Date.now(),
+  });
+  const ok=first===true && second===false && state?.state==="SIGNAL_CREATED";
+  return {
+    ok,
+    status:ok?"TRADE_INTENT_IDEMPOTENCY_PASS":"TRADE_INTENT_IDEMPOTENCY_FAIL",
+    intentId,
+    firstClaim:first,
+    secondClaim:second,
+    stateBeforeCleanup:state?.state||null,
+    financialAction:false,
+    noSecretValuesExposed:true,
+  };
+}
+
 export async function supabaseSigningModeProbe(env) {
   const base=binanceCredentials(env);
   const modes=["HMAC","ED25519"];
