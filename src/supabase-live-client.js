@@ -1519,11 +1519,20 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
   if (!claimed) {
     const existing = await readTradeState(env, intentId);
     if (existing?.state === "EXITED") {
-      return { ok:false, status:"TRADE_INTENT_ALREADY_EXITED", noOrderSent:true, intentId };
+      return { ok:false, status:"TRADE_INTENT_ALREADY_EXITED", noOrderSent:true, mayResend:false, intentId };
     }
-    if (existing?.state === "FAILED_SAFE" && existing?.emergencyClosed !== true) {
-      return { ok:false, status:"TRADE_INTENT_FAILED_SAFE_LOCKED", noOrderSent:true, intentId };
+    if (existing?.state === "FAILED_SAFE") {
+      return { ok:false, status:"TRADE_INTENT_FAILED_SAFE_LOCKED", noOrderSent:true, mayResend:false, intentId };
     }
+    return {
+      ok:false,
+      status:"DUPLICATE_TRADE_INTENT_BLOCKED",
+      noOrderSent:true,
+      mayResend:false,
+      reconciliationRequired:["ENTRY_SUBMITTING","ENTRY_ACCEPTED","PARTIALLY_FILLED","FILLED","PROTECTION_PENDING","PROTECTED"].includes(String(existing?.state||"")),
+      intentId,
+      existingState:existing?.state || null,
+    };
   }
   await writeTradeState(env, intentId, "APPROVED", {
     signalId,
