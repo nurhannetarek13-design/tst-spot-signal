@@ -90,8 +90,11 @@ jobs:
             exit 1
           fi
           grep -q 'ED25519_SUPABASE_VAULT' supabase/functions/tst-binance-relay/index.ts
-          grep -q 'pgsodium.crypto_sign_detached' supabase/functions/tst-binance-relay/index.ts
-          grep -q 'BINANCE_PRIVATE_KEY_VAULT_NAME' supabase/functions/tst-binance-relay/index.ts
+          grep -q 'tst_binance_ed25519_sign' supabase/functions/tst-binance-relay/index.ts
+          if grep -q 'postgres from "npm:postgres' supabase/functions/tst-binance-relay/index.ts; then
+            echo "Supabase relay must not open direct Postgres connections"
+            exit 1
+          fi
           grep -q 'CALLER_SECURITY_PARAM_BLOCKED' supabase/functions/tst-binance-relay/relay-core.mjs
           if grep -Eq 'binanceCredentials\(|buildSignedBinanceQuery\(|getBinanceServerTime\(' src/supabase-live-client.js; then
             echo "Cloudflare must not sign Binance requests"
