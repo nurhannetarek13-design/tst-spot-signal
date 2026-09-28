@@ -1249,8 +1249,7 @@ export async function supabaseReconcileActiveTrades(env) {
 }
 
 export async function supabaseDryRunExecution(env, input) {
-  const pair = binanceCredentials(env);
-  if (!relayConfigured(env) || !signingCredentialsReady(pair) || !pair.ed25519PrivateKey) {
+  if (!relayConfigured(env) || !relayAuthPrivateKey(env)) {
     return { ok:false, status:"SUPABASE_DRYRUN_NOT_CONFIGURED", financialAction:false };
   }
 
