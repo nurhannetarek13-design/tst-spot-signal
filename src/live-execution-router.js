@@ -13,6 +13,7 @@ import {
   supabaseApiKeyOnlyProbe,
   supabaseRelayAuthSelftest,
   supabaseIntentIdempotencySelftest,
+  supabasePublicMarketData,
 } from "./supabase-live-client.js";
 
 export function executionProvider(env = {}) {
@@ -108,4 +109,12 @@ export async function executionApiKeyOnlyProbe(env) {
     return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
   }
   return supabaseApiKeyOnlyProbe(env);
+}
+
+
+export async function executionPublicMarketData(env, path) {
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    throw new Error("LEGACY_FINANCIAL_ROUTE_DISABLED");
+  }
+  return supabasePublicMarketData(env, path);
 }
