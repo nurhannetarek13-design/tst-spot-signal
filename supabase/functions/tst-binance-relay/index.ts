@@ -2,7 +2,7 @@ import postgres from "npm:postgres@3.4.9";
 import { parseAndValidateCapability, sanitizeResponse } from "./relay-core.mjs";
 
 const BASE=(Deno.env.get("BINANCE_PRIVATE_BASE_URL")||"https://api.binance.com").replace(/\/$/,"");
-const WRITES_ENABLED=false;
+const WRITES_ENABLED = false;
 const BINANCE_API_KEY_VAULT_NAME="binance_api_key_prod_v1";
 const BINANCE_PRIVATE_KEY_VAULT_NAME="binance_ed25519_private_key_prod_v1";
 const RELAY_PUBLIC_KEY_PEM=`-----BEGIN PUBLIC KEY-----
