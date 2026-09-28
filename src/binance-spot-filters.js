@@ -11,11 +11,37 @@ function floorStep(value, step) {
   const units = Math.floor((n + st * 1e-9) / st);
   return Number((units * st).toFixed(d));
 }
+const EXCHANGE_INFO_BASES = [
+  "https://data-api.binance.vision",
+  "https://api-gcp.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://api4.binance.com",
+  "https://api.binance.com",
+];
+
+async function fetchExchangeInfo(symbol) {
+  let last = null;
+  for (const base of EXCHANGE_INFO_BASES) {
+    try {
+      const r = await fetch(base + "/api/v3/exchangeInfo?symbol=" + encodeURIComponent(symbol), {
+        headers: { "cache-control": "no-store", "accept": "application/json" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      const text = await r.text();
+      if (r.ok) return JSON.parse(text || "{}");
+      last = `${r.status}:${text.slice(0,120)}`;
+    } catch (error) {
+      last = String(error?.message || error).slice(0,120);
+    }
+  }
+  throw new Error("EXCHANGE_INFO_UNAVAILABLE:" + String(last || "all-hosts-failed"));
+}
+
 export async function normalizeSpotProtection(symbol, quantity, takeProfit, stopLoss, stopLimit) {
   const s = String(symbol || "").toUpperCase();
-  const r = await fetch("https://api.binance.com/api/v3/exchangeInfo?symbol=" + encodeURIComponent(s), { headers: { "cache-control": "no-store" } });
-  if (!r.ok) throw new Error("EXCHANGE_INFO_UNAVAILABLE");
-  const j = await r.json();
+  const j = await fetchExchangeInfo(s);
   const row = Array.isArray(j?.symbols) ? j.symbols[0] : null;
   if (!row || row.status !== "TRADING") throw new Error("SYMBOL_NOT_TRADING");
   const byType = Object.fromEntries((row.filters || []).map((f) => [f.filterType, f]));
