@@ -33,6 +33,16 @@ export function deterministicIntentId(signalId, symbol = "") {
   return "TSTI" + stableHash(raw);
 }
 
+export function classifyDuplicateIntent(existing = null) {
+  const state=String(existing?.state || "");
+  if (state === "EXITED") return {status:"TRADE_INTENT_ALREADY_EXITED",reconciliationRequired:false};
+  if (state === "FAILED_SAFE") return {status:"TRADE_INTENT_FAILED_SAFE_LOCKED",reconciliationRequired:false};
+  return {
+    status:"DUPLICATE_TRADE_INTENT_BLOCKED",
+    reconciliationRequired:["ENTRY_SUBMITTING","ENTRY_ACCEPTED","PARTIALLY_FILLED","FILLED","PROTECTION_PENDING","PROTECTED"].includes(state),
+  };
+}
+
 function clientIds(signalId) {
   return {
     buy: cleanId(signalId, "TSTB"),
@@ -1518,18 +1528,13 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
   const claimed = await claimIntent(env, intentId, { signalId, symbol });
   if (!claimed) {
     const existing = await readTradeState(env, intentId);
-    if (existing?.state === "EXITED") {
-      return { ok:false, status:"TRADE_INTENT_ALREADY_EXITED", noOrderSent:true, mayResend:false, intentId };
-    }
-    if (existing?.state === "FAILED_SAFE") {
-      return { ok:false, status:"TRADE_INTENT_FAILED_SAFE_LOCKED", noOrderSent:true, mayResend:false, intentId };
-    }
+    const duplicate=classifyDuplicateIntent(existing);
     return {
       ok:false,
-      status:"DUPLICATE_TRADE_INTENT_BLOCKED",
+      status:duplicate.status,
       noOrderSent:true,
       mayResend:false,
-      reconciliationRequired:["ENTRY_SUBMITTING","ENTRY_ACCEPTED","PARTIALLY_FILLED","FILLED","PROTECTION_PENDING","PROTECTED"].includes(String(existing?.state||"")),
+      reconciliationRequired:duplicate.reconciliationRequired,
       intentId,
       existingState:existing?.state || null,
     };
