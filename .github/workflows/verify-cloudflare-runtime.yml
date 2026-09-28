@@ -116,6 +116,37 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
+      - name: Verify Supabase public Binance connectivity by region
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, subprocess
+          url="https://irinttijrhicxofsdplo.supabase.co/functions/v1/tst-binance-relay?probe=public"
+          regions=["eu-west-1","eu-central-1","us-east-1","us-west-2","ap-southeast-1","ap-northeast-1"]
+          results=[]
+          for region in regions:
+              p=subprocess.run(
+                  ["curl","--silent","--show-error","--max-time","20","-H",f"x-region: {region}",url],
+                  capture_output=True,text=True
+              )
+              try: row=json.loads(p.stdout or "{}")
+              except Exception: row={"ok":False,"status":"BAD_JSON"}
+              results.append({
+                  "requestedRegion":region,
+                  "region":row.get("region"),
+                  "ok":row.get("ok") is True,
+                  "status":row.get("status"),
+                  "upstreamHttpStatus":row.get("upstreamHttpStatus"),
+                  "binanceCode":row.get("binanceCode"),
+                  "financialAction":row.get("financialAction"),
+                  "financialWritesEnabled":row.get("financialWritesEnabled"),
+              })
+          print(json.dumps({"results":results},separators=(",",":")))
+          assert all(x.get("financialAction") is False for x in results)
+          assert all(x.get("financialWritesEnabled") is False for x in results)
+          PY
+
       - name: Verify Supabase Binance relay read-only access
         shell: bash
         run: |
