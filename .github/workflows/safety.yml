@@ -29,6 +29,24 @@ jobs:
       - run: node scripts/test-thesis-engine.mjs
       - run: node scripts/test-supabase-relay-core.mjs
       - run: node --check src/supabase-live-client.js
+      - name: Assert execution provider cutover is not Make-hardcoded
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'executionProvider(env)' src/ops-supervisor.js
+          grep -q 'executionRoute(env)' src/ops-supervisor.js
+          grep -q 'executorConfigured(env)' src/ops-supervisor.js
+          grep -q 'executionReadOnlyHeartbeat(env)' src/ops-supervisor.js
+          grep -q 'recordReconciliation(env' src/ops-supervisor.js
+          grep -q 'data-api.binance.vision' src/binance-spot-filters.js
+          if grep -q 'const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY' src/ops-supervisor.js; then
+            echo "Go/No-Go regressed to Make-only configuration"
+            exit 1
+          fi
+          if grep -q 'executionRoute: "CLOUDFLARE_HMAC_MAKE"' src/ops-supervisor.js; then
+            echo "Go/No-Go regressed to hardcoded Make execution route"
+            exit 1
+          fi
       - name: Assert Supabase V2 execution safety invariants
         shell: bash
         run: |
