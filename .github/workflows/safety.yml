@@ -58,6 +58,12 @@ jobs:
           grep -q 'reconciliationConfirmedAbsent' src/supabase-live-client.js
           grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/supabase-live-client.js
           grep -q 'const WRITES_ENABLED = false' supabase/functions/tst-binance-relay/index.ts
+          grep -Eq 'const ALLOWED_API_KEY_SHA256 = "[a-f0-9]{64}"' supabase/functions/tst-binance-relay/index.ts
+          grep -q 'API_KEY_NOT_ALLOWED' supabase/functions/tst-binance-relay/index.ts
+          if grep -Eq 'BINANCE_API_SECRET|BINANCE_SECRET_KEY|BINANCE_SECRET' supabase/functions/tst-binance-relay/index.ts; then
+            echo "Supabase relay must not store or depend on Binance API secret"
+            exit 1
+          fi
       - name: Assert thesis engine owns scanner decisions
         shell: bash
         run: |
