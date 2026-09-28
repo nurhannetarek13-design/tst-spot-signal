@@ -505,8 +505,8 @@ async function requireFreshExecutionRoute(env) {
 async function executeConfirmedBuy(env, s) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") throw new Error("LIVE_CREDENTIALS_REQUIRED");
-  if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
-    throw new Error("MAKE_EXECUTOR_V2_NOT_READY");
+  if (!executorConfigured(env)) {
+    throw new Error("EXECUTOR_NOT_READY");
   }
   const operational = await executionOperational(env);
   if (!operational.ok) {
@@ -559,7 +559,7 @@ async function executeConfirmedBuy(env, s) {
       emergencyClosed: false,
       autoBuy: false,
       userConfirmed: true,
-      executionRoute: "MAKE_V2",
+      executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       ocoOrderListId: Number(result?.oco?.body?.oco_order_list_id || 0) || null,
       clientIds: result?.clientIds || null,
@@ -581,14 +581,14 @@ async function executeConfirmedBuy(env, s) {
       emergencyClosed: true,
       autoBuy: false,
       userConfirmed: true,
-      executionRoute: "MAKE_V2",
+      executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       emergencyOrderId: Number(result?.oco?.body?.emergency_order_id || 0) || null,
       clientIds: result?.clientIds || null,
     };
   }
 
-  const status = String(result?.status || "MAKE_V2_EXECUTION_FAILED");
+  const status = String(result?.status || "EXECUTION_FAILED");
   if (result?.reconciliationRequired === true) {
     const currentUnknown = await getState(env, "live:unknown-orders");
     const rows = Array.isArray(currentUnknown) ? currentUnknown : [];
@@ -596,7 +596,7 @@ async function executeConfirmedBuy(env, s) {
       signalId: String(s.id || ""),
       symbol,
       status,
-      route: "MAKE_V2",
+      route: executionProvider(env),
       at: Date.now(),
     });
     await putState(env, "live:unknown-orders", rows.slice(-20), 30 * 24 * 60 * 60);
@@ -801,7 +801,7 @@ async function handleTelegramWebhook(request, env) {
             status: "MANUAL_E2E_FAILED",
             symbol: p.symbol,
             error: error.slice(0, 180),
-            executionRoute: "MAKE_V2",
+            executionRoute: executionProvider(env),
           }, 30 * 24 * 60 * 60);
         }
       }
