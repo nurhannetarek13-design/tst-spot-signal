@@ -21,6 +21,20 @@ jobs:
           python-version: "3.12"
 
       - run: npm ci
+      - name: Report runtime npm audit
+        shell: bash
+        run: |
+          npm audit --omit=dev --json > /tmp/npm-audit-runtime.json || true
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('/tmp/npm-audit-runtime.json','utf8'));
+          const v=r.metadata?.vulnerabilities||{};
+          console.log('RUNTIME_AUDIT',JSON.stringify(v));
+          const advisories=Object.entries(r.vulnerabilities||{}).map(([name,row])=>({
+            name,severity:row.severity,isDirect:row.isDirect,via:(row.via||[]).map(x=>typeof x==='string'?x:{title:x.title,url:x.url,severity:x.severity}),fixAvailable:row.fixAvailable
+          }));
+          console.log('RUNTIME_ADVISORIES',JSON.stringify(advisories));
+          NODE
       - run: npm test
       - run: node --check server.mjs
       - run: node --check src/index.js
