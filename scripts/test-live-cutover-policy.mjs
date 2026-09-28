@@ -53,3 +53,14 @@ assert.equal(accountingParity({
 }).clean,false);
 
 console.log("LIVE_CUTOVER_FAILURE_PATHS_SELFTEST_PASS");
+
+
+const safer=readLivePolicy({
+  MAX_ORDER_USDT:"4.5",
+  MAX_OPEN_POSITIONS:"0",
+  DAILY_LOSS_CAP_USDT:"0.05",
+});
+assert.equal(safer.maxOrderUSDT,4.5);
+assert.equal(safer.maxOpenPositions,0);
+assert.equal(safer.dailyLossCapUSDT,0.05);
+console.log("LOWER_RISK_CAPS_PRESERVED");
