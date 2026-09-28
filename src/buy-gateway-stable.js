@@ -1118,6 +1118,17 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/fast-signal-ingest" && request.method === "POST") return handleFastSignalIngest(request, env);
     if (url.pathname === "/telegram-webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
+    if (url.pathname === "/admin-e2e-prompt" && request.method === "POST") {
+      if(!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return Response.json({ok:false,status:"TELEGRAM_NOT_CONFIGURED"},{status:503});
+      const claimed=await claimState(env,"admin:e2e:v19:prompt-once",{at:Date.now()},3600);
+      if(!claimed) return Response.json({ok:true,status:"E2E_PROMPT_ALREADY_SENT"});
+      await tg(env,"sendMessage",{
+        chat_id:String(env.TELEGRAM_CHAT_ID),
+        text:"🧪 ADMIN CONTROL — production single real E2E",
+        reply_markup:{inline_keyboard:[[{text:"RUN E2E TEST",callback_data:"RUN_E2E:V19"}]]},
+      });
+      return Response.json({ok:true,status:"E2E_ADMIN_PROMPT_SENT",financialAction:false});
+    }
     if (url.pathname === "/telegram-webhook-check" && request.method === "POST") {
       try {
         return Response.json(await ensureTelegramWebhook(env), { headers: { "cache-control": "no-store" } });
