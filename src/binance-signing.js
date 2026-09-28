@@ -170,6 +170,7 @@ export async function signRelayEnvelope(privateKeyPem, {
   const apiKeyHash = await sha256Hex(String(apiKey || ""));
   const queryHash = await sha256Hex(String(query || ""));
   const canonical = [
+    "TST_SUPABASE_RELAY_V2",
     String(relayTimestamp || ""),
     String(relayNonce || ""),
     String(method || "").toUpperCase(),
