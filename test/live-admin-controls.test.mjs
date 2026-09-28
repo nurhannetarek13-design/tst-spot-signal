@@ -41,3 +41,26 @@ test("read-only production proof endpoint exposes deployed limited-live controls
   assert.match(src, /pauseCancelsExistingProtection:false/);
   assert.match(src, /financialAction:false/);
 });
+
+
+test("manual approval mode hard-blocks autonomous BUY execution", () => {
+  assert.match(src, /MANUAL_APPROVAL_ONLY/);
+  assert.match(src, /AUTONOMOUS_BLOCKED_MANUAL_APPROVAL_ONLY/);
+  assert.match(src, /offerLatestCandidateForManualApproval/);
+  assert.match(src, /manual-approval-prompt-lock/);
+  assert.match(src, /userConfirmationRequired:true/);
+  assert.match(src, /CONFIRM BUY/);
+});
+
+test("manual confirmation accepts verified real E2E v20 proof", () => {
+  assert.match(src, /getState\(env, "live:e2e-result-v20"\)/);
+  assert.match(src, /validRealE2EV20\(realE2EV20\)/);
+});
+
+test("scheduled production path offers manual approval instead of auto-buy", () => {
+  const start = src.indexOf("async scheduled(event, env, ctx)");
+  const block = src.slice(start, start + 1400);
+  assert.match(block, /manualOnly/);
+  assert.match(block, /offerLatestCandidateForManualApproval\(env\)/);
+  assert.match(block, /processAutonomousCandidate\(env\)/);
+});
