@@ -6,6 +6,7 @@ import {
   executionRoute,
   executorConfigured,
   executionOwner,
+  executionDryRun,
 } from "./live-execution-router.js";
 export { SignalState };
 
@@ -203,10 +204,6 @@ async function prepareManualE2EPrompt(env) {
 
 
 async function handleFastSignalIngest(request, env) {
-  const c = creds(env);
-  if (c.credentialMode !== "LIVE") {
-    return Response.json({ ok:false, status:"LIVE_CREDENTIALS_REQUIRED", credentialMode:c.credentialMode, autoBuy:false }, {status:503});
-  }
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
     return Response.json({ ok:false, status:"TELEGRAM_NOT_CONFIGURED", autoBuy:false }, {status:503});
   }
@@ -230,14 +227,39 @@ async function handleFastSignalIngest(request, env) {
   if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
   if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
 
+  const rec=riskCappedQuote(entry,stop,requested);
+  if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
+
+  if (body.dryRun === true) {
+    if (executionProvider(env) !== "SUPABASE_V2") {
+      return Response.json({ok:false,status:"DRYRUN_REQUIRES_SUPABASE_V2",financialAction:false},{status:409});
+    }
+    const rawId=String(body.id||`DRY-${symbol}-${Math.trunc(entry*1e8)}-${Math.trunc(stop*1e8)}`);
+    const id=rawId.replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || compactId({symbol,entry,createdAt:Date.now()});
+    const report=await executionDryRun(env,{
+      signal_id:id,
+      symbol,
+      entry_price:entry,
+      quote_amount_usdt:rec,
+      take_profit_price:target,
+      stop_loss_price:stop,
+    });
+    return Response.json({
+      ...report,
+      source:"FAST_SIGNAL_INGEST",
+      productionRoute:true,
+      userConfirmationRequired:false,
+      autoBuy:false,
+    },{status:report?.ok?200:503,headers:{"cache-control":"no-store"}});
+  }
+
+  const c = creds(env);
+  if (c.credentialMode !== "LIVE") {
+    return Response.json({ ok:false, status:"LIVE_CREDENTIALS_REQUIRED", credentialMode:c.credentialMode, autoBuy:false }, {status:503});
+  }
   const health = await executionOperational(env);
   if (!health.ok) {
     return Response.json({ok:false,status:"EXECUTION_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
-  }
-  const rec=riskCappedQuote(entry,stop,requested);
-  if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
-  if (body.dryRun === true) {
-    return Response.json({ok:true,status:"FAST_SIGNAL_DRYRUN_OK",canTrade:true,credentialMode:"LIVE",autoBuy:false,userConfirmationRequired:true,recommendedUSDT:rec});
   }
   const rawId=String(body.id||`${symbol}-${Date.now()}`);
   const id=rawId.replace(/[^A-Za-z0-9_-]/g,"").slice(0,40) || compactId({symbol,entry,createdAt:Date.now()});
