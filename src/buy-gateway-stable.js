@@ -731,11 +731,12 @@ async function ensureTelegramWebhook(env) {
   const allowed = Array.isArray(current.allowed_updates) ? current.allowed_updates : [];
   const matches = String(current.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
   const callbackAllowed = allowed.includes("callback_query");
+  const messageAllowed = allowed.includes("message");
 
-  if (!matches || !callbackAllowed) {
+  if (!matches || !callbackAllowed || !messageAllowed) {
     await tg(env, "setWebhook", {
       url: EXPECTED_TELEGRAM_WEBHOOK_URL,
-      allowed_updates: ["callback_query"],
+      allowed_updates: ["callback_query", "message"],
       drop_pending_updates: false,
     });
   }
@@ -745,17 +746,34 @@ async function ensureTelegramWebhook(env) {
   const verifiedAllowed = Array.isArray(v.allowed_updates) ? v.allowed_updates : [];
   const urlMatches = String(v.url || "") === EXPECTED_TELEGRAM_WEBHOOK_URL;
   const callbackQueryAllowed = verifiedAllowed.includes("callback_query");
+  const messageUpdateAllowed = verifiedAllowed.includes("message");
   return {
-    ok: urlMatches && callbackQueryAllowed,
-    status: urlMatches && callbackQueryAllowed ? "TELEGRAM_WEBHOOK_OK" : "TELEGRAM_WEBHOOK_MISMATCH",
+    ok: urlMatches && callbackQueryAllowed && messageUpdateAllowed,
+    status: urlMatches && callbackQueryAllowed && messageUpdateAllowed ? "TELEGRAM_WEBHOOK_OK" : "TELEGRAM_WEBHOOK_MISMATCH",
     urlMatches,
     callbackQueryAllowed,
+    messageUpdateAllowed,
     noSecretValuesExposed: true,
   };
 }
 
 async function handleTelegramWebhook(request, env) {
   const u = await request.json().catch(() => null);
+
+  const m = u?.message;
+  if (m) {
+    if (String(m.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
+    const text = String(m.text || "").trim().toUpperCase().replace(/\s+/g, " ");
+    if (text === "RUN E2E TEST" || text === "/RUN_E2E" || text === "/RUN_E2E_TEST") {
+      await tg(env,"sendMessage",{
+        chat_id:String(env.TELEGRAM_CHAT_ID),
+        text:"⚠️ REAL BINANCE SPOT E2E\nThis can submit exactly one capped real BUY. Press CONFIRM only if Supabase WRITES_ENABLED=true, E2E_TEST_MODE=true, AUTONOMOUS_ENABLED=false.",
+        reply_markup:{inline_keyboard:[[{text:"CONFIRM REAL E2E",callback_data:"CONFIRM_E2E:V19"}],[{text:"CANCEL",callback_data:"CANCEL_E2E:V19"}]]},
+      });
+    }
+    return new Response("ok");
+  }
+
   const q = u?.callback_query;
   if (!q) return new Response("ok");
   if (String(q.message?.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
