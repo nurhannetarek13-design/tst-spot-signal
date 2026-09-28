@@ -2,6 +2,7 @@ name: Deploy Cloudflare Live Runtime
 # Railway-free production deploy
 # production diagnostic deploy trigger: 2026-09-26 signer recovery
 # production sync trigger: 2026-09-28 supabase-only market path
+# production sync trigger: 2026-09-28 Supabase Vault signing cutover
 # Supabase V2 is the only permitted production financial provider.
 
 on:
@@ -81,6 +82,12 @@ jobs:
           grep -q 'executionRoute(env)' src/buy-gateway-stable.js
           grep -q 'executionProvider(env)' src/buy-gateway-stable.js
           grep -q 'SUPABASE_V2' src/live-execution-router.js
+          grep -q 'ED25519_SUPABASE_VAULT' supabase/functions/tst-binance-relay/index.ts
+          grep -q 'pgsodium.crypto_sign_detached' supabase/functions/tst-binance-relay/index.ts
+          if grep -Eq 'binanceCredentials\(|buildSignedBinanceQuery\(|getBinanceServerTime\(' src/supabase-live-client.js; then
+            echo "Cloudflare Binance signing dependency returned"
+            exit 1
+          fi
           grep -q 'LEGACY_VERCEL_SIGNER_REVOKED' api/binance-signed-relay.mjs
           grep -q 'oldVercelFallback: false' src/buy-gateway-stable.js
           grep -q 'liveExecutionEnabled: false' src/live-cutover-policy.js
