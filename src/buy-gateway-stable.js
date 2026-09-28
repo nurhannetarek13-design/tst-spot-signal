@@ -61,6 +61,113 @@ async function hmacHex(secret, text) {
 
 
 
+function riskCappedQuote(entry, stop, requested = 5.5) {
+  const e = Number(entry), s = Number(stop), req = Number(requested);
+  const stopPct = (e - s) / e;
+  if (!(e > 0 && s > 0 && stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
+  const riskSized = MAX_RISK_USDT / stopPct;
+  const requestCap = Number.isFinite(req) && req > 0 ? req : 5.5;
+  return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
+}
+
+async function makeV2Operational(env) {
+  const now = Date.now();
+  const [ops, reconciliation, bridge, ownership] = await Promise.all([
+    getState(env, "ops:state"),
+    getState(env, "ops:reconciliation:last"),
+    getState(env, "bridge:health"),
+    getState(env, "bridge:ownership"),
+  ]);
+  const fresh = (at, maxMs = 20 * 60 * 1000) => Number(at || 0) > 0 && now - Number(at || 0) <= maxMs;
+  const ready = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+  const ok = ready
+    && ops?.state === "HEALTHY"
+    && reconciliation?.ok === true
+    && fresh(reconciliation?.at)
+    && bridge?.ok === true
+    && fresh(bridge?.at)
+    && ownership?.owner === "MAKE_EXECUTOR_V2"
+    && ownership?.exclusive === true
+    && fresh(ownership?.at);
+  return {
+    ok,
+    state: String(ops?.state || "UNKNOWN"),
+    reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
+    bridgeOk: bridge?.ok === true && fresh(bridge?.at),
+    ownershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && fresh(ownership?.at),
+    executorConfigured: ready,
+  };
+}
+
+async function prepareManualE2EPrompt(env) {
+  const armed = String(env.E2E_ARMED || "").toLowerCase() === "true";
+  const liveEnabled = String(env.LIVE_EXECUTION_ENABLED || "").toLowerCase() === "true";
+  const autonomous = String(env.AUTONOMOUS_ENABLED || "").toLowerCase() === "true";
+  if (!armed || !liveEnabled || autonomous) return { ok:false, status:"E2E_PROMPT_NOT_ARMED" };
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return { ok:false, status:"TELEGRAM_NOT_CONFIGURED" };
+
+  const completed = await getState(env, "cutover:e2e:result");
+  if (completed?.ok === true && completed?.manual === true) return { ok:true, status:"MANUAL_E2E_ALREADY_COMPLETE" };
+
+  const recent = await getState(env, "cutover:e2e:prompt");
+  if (recent?.sentAt && Date.now() - Number(recent.sentAt) < SIGNAL_TTL_SEC * 1000) {
+    return { ok:true, status:"MANUAL_E2E_PROMPT_ALREADY_SENT", id:recent.id };
+  }
+
+  const health = await makeV2Operational(env);
+  if (!health.ok) return { ok:false, status:"MAKE_V2_OPERATIONAL_GATE_FAILED", health };
+
+  const claimed = await claimState(env, "cutover:e2e:prompt-lock", { at:Date.now() }, 60);
+  if (!claimed) return { ok:true, status:"MANUAL_E2E_PROMPT_LOCKED" };
+
+  const symbol = "SOLUSDT";
+  const book = await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  const ask = Number(book.askPrice || 0), bid = Number(book.bidPrice || 0);
+  if (!(ask > 0 && bid > 0 && ask >= bid)) return { ok:false, status:"E2E_BOOK_UNAVAILABLE" };
+  const spread = (ask - bid) / ((ask + bid) / 2);
+  if (spread > 0.0012) return { ok:false, status:"E2E_SPREAD_TOO_WIDE" };
+
+  const entry = ask;
+  const stop = roundTo(entry * 0.992, 0.01);
+  const target = roundTo(entry * 1.01, 0.01);
+  const rec = riskCappedQuote(entry, stop, 5.5);
+  if (rec < MIN_ORDER_USDT) return { ok:false, status:"E2E_SIZE_BELOW_MIN" };
+
+  const now = Date.now();
+  const id = `CUTOVERE2E-${now}`;
+  const signal = {
+    id,
+    symbol,
+    entry,
+    stop,
+    target,
+    strategy:"CUTOVER_MANUAL_E2E",
+    score:100,
+    createdAt:now,
+    expiresAt:now + SIGNAL_TTL_SEC * 1000,
+    recommendedUSDT:rec,
+    confirmedQuoteUSDT:rec,
+    prepareExpiresAt:now + PREPARE_TTL_SEC * 1000,
+  };
+  await putState(env, `live-signal:${id}`, signal, SIGNAL_TTL_SEC);
+  await putState(env, `prepared:${id}`, signal, PREPARE_TTL_SEC);
+  await tg(env, "sendMessage", {
+    chat_id:String(env.TELEGRAM_CHAT_ID),
+    text:`🧪 MANUAL LIVE E2E — ${symbol}\n💵 ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n\n⚠️ الاختبار لن ينفذ أي شراء إلا بعد ضغطك CONFIRM BUY.`,
+    reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM E2E BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]},
+  });
+  await putState(env, "cutover:e2e:prompt", {
+    id,
+    symbol,
+    sentAt:now,
+    quoteUSDT:rec,
+    automaticExecution:false,
+    executionRoute:"MAKE_V2",
+  }, SIGNAL_TTL_SEC);
+  return { ok:true, status:"MANUAL_E2E_PROMPT_SENT", id, symbol, quoteUSDT:rec };
+}
+
+
 async function handleFastSignalIngest(request, env) {
   const c = creds(env);
   if (c.credentialMode !== "LIVE") {
@@ -89,12 +196,11 @@ async function handleFastSignalIngest(request, env) {
   if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
   if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
 
-  const b=await refreshBalance(env);
-  if (!b?.ok || b.credentialMode !== "LIVE" || !b.canTrade || b.accountSafetyOk !== true) {
-    return Response.json({ok:false,status:"ACCOUNT_PREFLIGHT_FAILED",autoBuy:false},{status:503});
+  const health = await makeV2Operational(env);
+  if (!health.ok) {
+    return Response.json({ok:false,status:"MAKE_V2_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
   }
-  const free=Number(b.usdt?.free||0);
-  const rec=dynamicQuote(free,entry,stop,requested);
+  const rec=riskCappedQuote(entry,stop,requested);
   if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
   if (body.dryRun === true) {
     return Response.json({ok:true,status:"FAST_SIGNAL_DRYRUN_OK",canTrade:true,credentialMode:"LIVE",autoBuy:false,userConfirmationRequired:true,recommendedUSDT:rec});
@@ -424,11 +530,8 @@ async function sendPromptForActive(env) {
   if (c.credentialMode !== "LIVE") return;
 
   const active = (await getState(env, "paper:active")) || [];
-  const b = await refreshBalance(env);
-  if (!b?.ok || !b.canTrade || b.accountSafetyOk !== true || b.credentialMode !== "LIVE") {
-    return;
-  }
-  const free = Number(b.usdt?.free || 0);
+  const health = await makeV2Operational(env);
+  if (!health.ok) return;
   for (const p of active) {
     const id = compactId(p);
     if (await getState(env, `buy-prompt:${id}`)) continue;
@@ -444,7 +547,7 @@ async function sendPromptForActive(env) {
       expiresAt: Date.now() + SIGNAL_TTL_SEC * 1000,
     };
     if (!(s.stop < s.entry && s.target > s.entry)) continue;
-    const rec = free > 0 ? dynamicQuote(free, s.entry, s.stop) : 0;
+    const rec = riskCappedQuote(s.entry, s.stop, 5.5);
     s.recommendedUSDT = rec;
     await putState(env, `live-signal:${id}`, s, SIGNAL_TTL_SEC);
     if (rec >= MIN_ORDER_USDT) {
@@ -798,8 +901,9 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
-      // Live execution is fail-closed during Make bridge cutover.
-      // No legacy Vercel signer calls and no automatic live prompts are allowed here.
+      // Manual E2E preparation is non-financial: it only sends a Telegram confirmation prompt.
+      // No order can be submitted from cron; execution still requires the user's Telegram callback.
+      await prepareManualE2EPrompt(env).catch(() => {});
     })());
   }
 };

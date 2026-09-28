@@ -21,6 +21,32 @@ assert.doesNotMatch(prep, /refreshBalance\(/);
 assert.doesNotMatch(prep, /signedBinance\(/);
 assert.match(prep, /MAKE_EXECUTOR_V2_READY/);
 
+const ingestStart = src.indexOf("async function handleFastSignalIngest(request, env) {");
+const ingestEnd = src.indexOf("\nasync function tg(env, method, payload)", ingestStart);
+assert.ok(ingestStart >= 0 && ingestEnd > ingestStart, "fast ingest block must exist");
+const ingest = src.slice(ingestStart, ingestEnd);
+assert.doesNotMatch(ingest, /refreshBalance\(/);
+assert.doesNotMatch(ingest, /signedBinance\(/);
+assert.match(ingest, /makeV2Operational\(env\)/);
+assert.match(ingest, /riskCappedQuote\(/);
+
+const e2ePromptStart = src.indexOf("async function prepareManualE2EPrompt(env) {");
+const e2ePromptEnd = src.indexOf("\n\nasync function handleFastSignalIngest", e2ePromptStart);
+assert.ok(e2ePromptStart >= 0 && e2ePromptEnd > e2ePromptStart, "manual E2E prompt block must exist");
+const e2ePrompt = src.slice(e2ePromptStart, e2ePromptEnd);
+assert.doesNotMatch(e2ePrompt, /manualBuyAndProtect\(/);
+assert.doesNotMatch(e2ePrompt, /signedBinance\(/);
+assert.match(e2ePrompt, /CONFIRM E2E BUY/);
+assert.match(e2ePrompt, /automaticExecution:false/);
+assert.match(e2ePrompt, /SOLUSDT/);
+assert.match(e2ePrompt, /makeV2Operational\(env\)/);
+
+const scheduledStart = src.indexOf("async scheduled(event, env, ctx)");
+assert.ok(scheduledStart >= 0, "scheduled block must exist");
+const scheduled = src.slice(scheduledStart);
+assert.match(scheduled, /prepareManualE2EPrompt\(env\)/);
+assert.doesNotMatch(scheduled, /manualBuyAndProtect\(/);
+
 console.log("MAKE_V2_MANUAL_ROUTE_SELFTEST_PASS");
 
 const ops = readFileSync(new URL("../src/ops-supervisor.js", import.meta.url), "utf8");
@@ -28,6 +54,9 @@ assert.doesNotMatch(ops, /await manualBuyAndProtect\(env, input\)/);
 assert.match(ops, /manualOnly: true/);
 assert.match(ops, /automaticExecution: false/);
 assert.match(ops, /manualExecutionAllowed:/);
+assert.match(ops, /source: "MAKE_V2_READONLY_WATCHDOG"/);
+assert.match(ops, /putState\(env, "bridge:health"/);
+assert.match(ops, /putState\(env, "bridge:ownership"/);
 
 const confirmStart = src.indexOf('if (action === "CONFIRM")');
 const confirmEnd = src.indexOf('\n  return new Response("ok");', confirmStart);
