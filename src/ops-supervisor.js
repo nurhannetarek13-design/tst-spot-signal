@@ -638,13 +638,6 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/supabase-relay-replay-selftest" && request.method === "POST") {
-      const result=await supabaseRelayReplaySelftest(env);
-      return Response.json(result,{
-        status:result.ok?200:503,
-        headers:{"cache-control":"no-store"},
-      });
-    }
     if (url.pathname === "/supabase-v2-auth-selftest" && request.method === "POST") {
       const result=await executionRelayAuthSelftest(env).catch((error)=>({
         ok:false,status:"SUPABASE_V2_AUTH_SELFTEST_ERROR",
