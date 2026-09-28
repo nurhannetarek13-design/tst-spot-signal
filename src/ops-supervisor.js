@@ -2,7 +2,17 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
-import { makeReadOnlyHeartbeat, MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
+import { MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
+import {
+  executionReadOnlyHeartbeat,
+  executionReadOnlyReconcile,
+  executionProvider,
+  executionRoute,
+  executorConfigured,
+  executionOwner,
+  routeVersion,
+  executionRouteIds,
+} from "./live-execution-router.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -77,15 +87,15 @@ async function cloudflareBinanceWsAccountPreflight(env) {
   return await new Promise((resolve) => {
     let settled = false;
     let opened = false;
+    let ws;
     const finish = (value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      try { ws.close(1000, "done"); } catch {}
+      try { ws?.close(1000, "done"); } catch {}
       resolve(value);
     };
 
-    let ws;
     try {
       ws = new WebSocket("wss://ws-api.binance.com:443/ws-api/v3");
     } catch (error) {
@@ -247,6 +257,62 @@ async function cloudflareDirectBinanceReadOnlyPreflight(env) {
     noSecretValuesExposed: true,
   };
 }
+async function supabaseRelayReadOnlyPreflight(env) {
+  const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  const creds = cloudflareBinanceCreds(env);
+  if (!relayUrl || !creds.key || !creds.secret) {
+    return {
+      ok: false,
+      status: "SUPABASE_RELAY_NOT_CONFIGURED",
+      financialAction: false,
+      noSecretValuesExposed: true,
+    };
+  }
+
+  const qs = new URLSearchParams({
+    omitZeroBalances: "true",
+    recvWindow: "5000",
+    timestamp: String(Date.now()),
+  }).toString();
+  const signature = await hmacHexRaw(creds.secret, qs);
+  const body = {
+    method: "GET",
+    path: "/api/v3/account",
+    apiKey: creds.key,
+    query: `${qs}&signature=${signature}`,
+  };
+
+  try {
+    const r = await fetch(relayUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const row = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK",
+      status: row?.status || `HTTP_${r.status}`,
+      httpStatus: r.status,
+      canTrade: row?.data?.canTrade === true,
+      accountType: row?.data?.accountType || null,
+      financialAction: false,
+      noBalanceValuesExposed: true,
+      noSecretValuesExposed: true,
+      relay: "SUPABASE_EDGE_FUNCTION",
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "SUPABASE_RELAY_UNREACHABLE",
+      reason: String(e?.name || "FetchError"),
+      financialAction: false,
+      noSecretValuesExposed: true,
+      relay: "SUPABASE_EDGE_FUNCTION",
+    };
+  }
+}
+
 async function vercelImmutableRelayReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
@@ -512,6 +578,17 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/supabase-relay-preflight") {
+      const result = await supabaseRelayReadOnlyPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/vercel-immutable-relay-preflight") {
       const result = await vercelImmutableRelayReadOnlyPreflight(env);
       return Response.json({
@@ -759,12 +836,48 @@ export default {
       const daily = (await getState(env, "risk:daily-live")) || { realizedLossUSDT: 0 };
       const bridgeHealth = (await getState(env, "bridge:health")) || null;
       const ownership = (await getState(env, "bridge:ownership")) || null;
+      const provider = executionProvider(env);
+      const configured = executorConfigured(env);
+      const route = executionRoute(env);
       const now = Date.now();
       const hbAt = (name) => Number(typeof heartbeats?.[name] === "number" ? heartbeats[name] : heartbeats?.[name]?.at || 0);
-      const bridgeFresh = bridgeHealth?.ok === true && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
-      const ownershipFresh = ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
       const snapshotFresh = hbAt("offsite-backup") > 0 && now - hbAt("offsite-backup") <= HEARTBEAT_STALE_MS;
-      const executorConfigured = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+
+      let routeHealthy = false;
+      let ownershipFresh = false;
+      let readonlyHeartbeat = null;
+      let readonlyReconciliation = null;
+      if (provider === "SUPABASE_V2") {
+        [readonlyHeartbeat, readonlyReconciliation] = await Promise.all([
+          executionReadOnlyHeartbeat(env),
+          executionReadOnlyReconcile(env),
+        ]);
+        routeHealthy = readonlyHeartbeat?.transportOk === true
+          && readonlyHeartbeat?.body?.canTrade === true
+          && readonlyHeartbeat?.body?.financialAction === false
+          && readonlyReconciliation?.ok === true
+          && readonlyReconciliation?.financialAction === false;
+        ownershipFresh = routeHealthy && configured;
+        await recordReconciliation(env, {
+          ok: readonlyReconciliation?.ok === true,
+          reason: readonlyReconciliation?.ok === true ? null : String(readonlyReconciliation?.status || "SUPABASE_RECONCILIATION_FAILED"),
+          open_orders_checked: Number(readonlyReconciliation?.openOrdersChecked || 0),
+          protected_orders_checked: Number(readonlyReconciliation?.protectedOrderLists || 0),
+          source: "SUPABASE_V2_GO_NO_GO_READONLY",
+        });
+        await putState(env, "live:unprotected-positions",
+          Number(readonlyReconciliation?.orphanBotOrders || 0) > 0
+            ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.orphanBotOrders || 0), at:Date.now() }]
+            : []
+        );
+      } else {
+        routeHealthy = bridgeHealth?.ok === true
+          && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
+        ownershipFresh = ownership?.owner === executionOwner(env)
+          && ownership?.exclusive === true
+          && now - Number(ownership?.at || 0) <= HEARTBEAT_STALE_MS;
+      }
+
       const e2eResult = (await getState(env, "cutover:e2e:result")) || null;
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
       const manualE2EComplete = e2eResult?.ok === true && e2eResult?.manual === true;
@@ -773,8 +886,10 @@ export default {
         reconciliationOk: reconciliation?.ok === true && now - Number(reconciliation?.at || 0) <= HEARTBEAT_STALE_MS,
         snapshotFresh,
         watchdogHealthy: !ops.stale?.length,
-        binanceConnectionOk: hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
-        executionRouteHealthy: bridgeFresh && executorConfigured,
+        binanceConnectionOk: provider === "SUPABASE_V2"
+          ? routeHealthy
+          : hbAt("binance-readonly") > 0 && now - hbAt("binance-readonly") <= HEARTBEAT_STALE_MS,
+        executionRouteHealthy: routeHealthy && configured,
         executorOwnershipOk: ownershipFresh,
         unknownOrders: Array.isArray(unknown) ? unknown.length : Number(unknown?.count || 0),
         unprotectedPositions: Array.isArray(unprotected) ? unprotected.length : Number(unprotected?.count || 0),
@@ -784,13 +899,27 @@ export default {
       return Response.json({
         ok: true,
         ...gate,
-        executionRoute: "CLOUDFLARE_HMAC_MAKE",
-        bridgeFresh,
+        executionProvider: provider,
+        executionRoute: route,
+        routeVersion: routeVersion(env),
+        bridgeFresh: routeHealthy,
         executorOwnershipOk: ownershipFresh,
         offsiteSnapshotFresh: snapshotFresh,
-        executorConfigured,
+        executorConfigured: configured,
         e2eArmed,
         manualE2EComplete,
+        readonlyHeartbeat: provider === "SUPABASE_V2" ? {
+          transportOk: readonlyHeartbeat?.transportOk === true,
+          canTrade: readonlyHeartbeat?.body?.canTrade === true,
+          financialAction: false,
+        } : null,
+        readonlyReconciliation: provider === "SUPABASE_V2" ? {
+          ok: readonlyReconciliation?.ok === true,
+          openOrdersChecked: Number(readonlyReconciliation?.openOrdersChecked || 0),
+          protectedOrderLists: Number(readonlyReconciliation?.protectedOrderLists || 0),
+          orphanBotOrders: Number(readonlyReconciliation?.orphanBotOrders || 0),
+          financialAction: false,
+        } : null,
         manualExecutionAllowed: gate.go
           && readLivePolicy(env).liveExecutionEnabled === true
           && readLivePolicy(env).autonomousEnabled !== true
@@ -828,62 +957,100 @@ export default {
       const next = await computeState(env);
       await alertTransition(env, next);
 
-      const executorConfiguredNow = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
-      const lastMakeWatchdog = (await getState(env, "make:combined-watchdog:last-dispatch")) || null;
-      if (executorConfiguredNow && Date.now() - Number(lastMakeWatchdog?.at || 0) >= 14 * 60 * 1000) {
-        const watchdog = await makeReadOnlyHeartbeat(env);
+      const executorConfiguredNow = executorConfigured(env);
+      const providerNow = executionProvider(env);
+      const watchdogKey = providerNow === "SUPABASE_V2"
+        ? "supabase:combined-watchdog:last-dispatch"
+        : "make:combined-watchdog:last-dispatch";
+      const lastWatchdog = (await getState(env, watchdogKey)) || null;
+      if (executorConfiguredNow && Date.now() - Number(lastWatchdog?.at || 0) >= 14 * 60 * 1000) {
+        const watchdog = await executionReadOnlyHeartbeat(env);
         const now = Date.now();
-        const [buyAudit, ocoAudit] = await Promise.all([
-          getState(env, "bridge:route:BUY_V2"),
-          getState(env, "bridge:route:OCO_V2"),
-        ]);
-        const buyVerified = watchdog?.buy?.transportOk === true
-          && String(buyAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
-          && now - Number(buyAudit?.acceptedAt || 0) <= 60_000;
-        const ocoVerified = watchdog?.oco?.transportOk === true
-          && String(ocoAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
-          && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
-        const operationalOk = buyVerified && ocoVerified;
+        let operationalOk = false;
+        let buyVerified = false;
+        let ocoVerified = false;
+        let reconciliation = null;
+
+        if (providerNow === "SUPABASE_V2") {
+          reconciliation = await executionReadOnlyReconcile(env);
+          operationalOk = watchdog?.transportOk === true
+            && watchdog?.body?.canTrade === true
+            && watchdog?.body?.financialAction === false
+            && reconciliation?.ok === true;
+          buyVerified = operationalOk;
+          ocoVerified = operationalOk;
+
+          await recordReconciliation(env, {
+            ok: reconciliation?.ok === true,
+            reason: reconciliation?.ok === true ? null : String(reconciliation?.status || "SUPABASE_RECONCILIATION_FAILED"),
+            open_orders_checked: Number(reconciliation?.openOrdersChecked || 0),
+            protected_orders_checked: Number(reconciliation?.protectedOrderLists || 0),
+            source: "SUPABASE_V2_READONLY_RECONCILIATION",
+          });
+          await putState(env, "live:unprotected-positions",
+            Number(reconciliation?.orphanBotOrders || 0) > 0
+              ? [{ source:"SUPABASE_V2", count:Number(reconciliation.orphanBotOrders || 0), at:now }]
+              : []
+          );
+        } else {
+          const [buyAudit, ocoAudit] = await Promise.all([
+            getState(env, "bridge:route:BUY_V2"),
+            getState(env, "bridge:route:OCO_V2"),
+          ]);
+          buyVerified = watchdog?.buy?.transportOk === true
+            && String(buyAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+            && now - Number(buyAudit?.acceptedAt || 0) <= 60_000;
+          ocoVerified = watchdog?.oco?.transportOk === true
+            && String(ocoAudit?.lastStatus || "") === "BRIDGE_AUTH_OK"
+            && now - Number(ocoAudit?.acceptedAt || 0) <= 60_000;
+          operationalOk = buyVerified && ocoVerified;
+
+          if (!operationalOk) {
+            await recordReconciliation(env, {
+              ok: false,
+              reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
+              open_orders_checked: 0,
+              protected_orders_checked: 0,
+              source: "MAKE_V2_READONLY_WATCHDOG",
+            });
+          }
+        }
+
         if (operationalOk) {
           await putState(env, "bridge:health", {
             ok: true,
             at: now,
-            route: "CLOUDFLARE_HMAC_MAKE",
-            routeVersion: MAKE_EXECUTION_ROUTE.version,
-            source: "MAKE_V2_READONLY_WATCHDOG",
+            route: executionRoute(env),
+            routeVersion: routeVersion(env),
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
           });
           await putState(env, "bridge:ownership", {
-            owner: "MAKE_EXECUTOR_V2",
+            owner: executionOwner(env),
             at: now,
             exclusive: true,
-            routeVersion: MAKE_EXECUTION_ROUTE.version,
-            source: "MAKE_V2_READONLY_WATCHDOG",
+            routeVersion: routeVersion(env),
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG",
           });
-          await recordReconciliation(env, {
-            ok: true,
-            open_orders_checked: 0,
-            protected_orders_checked: 0,
-            source: "MAKE_V2_READONLY_WATCHDOG",
-          });
-          await heartbeat(env, ["binance-readonly", "offsite-backup"], { source: "MAKE_V2_READONLY_WATCHDOG" });
-        } else {
-          await recordReconciliation(env, {
-            ok: false,
-            reason: "MAKE_V2_WATCHDOG_VERIFICATION_FAILED",
-            open_orders_checked: 0,
-            protected_orders_checked: 0,
-            source: "MAKE_V2_READONLY_WATCHDOG",
+          await heartbeat(env, ["binance-readonly", "offsite-backup"], {
+            source: providerNow === "SUPABASE_V2" ? "SUPABASE_V2_READONLY_WATCHDOG" : "MAKE_V2_READONLY_WATCHDOG"
           });
         }
-        await putState(env, "make:combined-watchdog:last-dispatch", {
+
+        const ids = executionRouteIds(env);
+        await putState(env, watchdogKey, {
           at: now,
+          provider: providerNow,
           transportOk: watchdog?.transportOk === true,
           operationalOk,
-          buyRouteId: MAKE_EXECUTION_ROUTE.buy.id,
-          ocoRouteId: MAKE_EXECUTION_ROUTE.oco.id,
-          routeVersion: MAKE_EXECUTION_ROUTE.version,
+          buyRouteId: ids.buy,
+          ocoRouteId: ids.oco,
+          routeVersion: routeVersion(env),
           buyVerified,
           ocoVerified,
+          reconciliationOk: providerNow === "SUPABASE_V2" ? reconciliation?.ok === true : null,
+          openOrdersChecked: providerNow === "SUPABASE_V2" ? Number(reconciliation?.openOrdersChecked || 0) : null,
+          protectedOrderLists: providerNow === "SUPABASE_V2" ? Number(reconciliation?.protectedOrderLists || 0) : null,
+          orphanBotOrders: providerNow === "SUPABASE_V2" ? Number(reconciliation?.orphanBotOrders || 0) : null,
           httpStatus: Number(watchdog?.httpStatus || 0),
           status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
         });
