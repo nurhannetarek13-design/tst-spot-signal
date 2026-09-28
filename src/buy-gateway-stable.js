@@ -24,7 +24,8 @@ const SIGNAL_TTL_SEC = 10 * 60;
 const PREPARE_TTL_SEC = 5 * 60;
 const MAX_SIGNAL_AGE_MS = 10 * 60 * 1000;
 const MIN_ORDER_USDT = 5;
-const MAX_BALANCE_FRACTION = 0.80;
+const DEFAULT_MAX_ORDER_USDT = 25;
+const MAX_BALANCE_FRACTION = 0.50;
 const MAX_RISK_USDT = 0.20;
 const EXPECTED_TELEGRAM_WEBHOOK_URL = "https://tst-spot-signal.nurhanne-tarek13.workers.dev/telegram-webhook";
 
@@ -72,13 +73,22 @@ async function hmacHex(secret, text) {
 
 
 
-function riskCappedQuote(entry, stop, requested = 5.5) {
-  const e = Number(entry), s = Number(stop), req = Number(requested);
+function qualityRiskBudgetUSDT(score) {
+  const q = Number(score);
+  if (Number.isFinite(q) && q >= 96) return MAX_RISK_USDT;
+  if (Number.isFinite(q) && q >= 93) return Math.min(MAX_RISK_USDT, 0.15);
+  if (Number.isFinite(q) && q >= 90) return Math.min(MAX_RISK_USDT, 0.10);
+  return Math.min(MAX_RISK_USDT, 0.08);
+}
+
+function riskCappedQuote(entry, stop, requested = DEFAULT_MAX_ORDER_USDT, score = 90, maxOrder = DEFAULT_MAX_ORDER_USDT) {
+  const e = Number(entry), s = Number(stop), req = Number(requested), max = Number(maxOrder);
   const stopPct = (e - s) / e;
   if (!(e > 0 && s > 0 && stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
-  const riskSized = MAX_RISK_USDT / stopPct;
-  const requestCap = Number.isFinite(req) && req > 0 ? req : 5.5;
-  return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
+  const riskSized = qualityRiskBudgetUSDT(score) / stopPct;
+  const requestCap = Number.isFinite(req) && req > 0 ? req : DEFAULT_MAX_ORDER_USDT;
+  const hardCap = Number.isFinite(max) && max > 0 ? max : DEFAULT_MAX_ORDER_USDT;
+  return Math.floor(Math.min(riskSized, requestCap, hardCap) * 100) / 100;
 }
 
 function validRealE2EV20(row) {
@@ -321,9 +331,12 @@ async function handleFastSignalIngest(request, env) {
   const score=Number(body.score);
   if (!/^[A-Z0-9]{1,20}USDT$/.test(symbol)) return Response.json({ok:false,status:"BAD_SYMBOL"},{status:400});
   if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
-  if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
+  const policy=readLivePolicy(env);
+  if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > Number(policy.maxOrderUSDT || DEFAULT_MAX_ORDER_USDT)) {
+    return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
+  }
 
-  const rec=riskCappedQuote(entry,stop,requested);
+  const rec=riskCappedQuote(entry,stop,requested,score,policy.maxOrderUSDT);
   if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
 
   if (body.dryRun === true) {
@@ -365,7 +378,7 @@ async function handleFastSignalIngest(request, env) {
   await putState(env,`prepared:${id}`,signal,PREPARE_TTL_SEC);
   await tg(env,"sendMessage",{
     chat_id:String(env.TELEGRAM_CHAT_ID),
-    text:`🚨 CONFIRMED BUY — ${symbol} — SPOT\n💵 ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score)?score:"—"}/100\n\n⚡ ضغطة CONFIRM BUY تنفذ Market Buy حقيقي ثم تحط TP/SL تلقائيًا.`,
+    text:`🚨 TRADE PROPOSAL — ${symbol} — BINANCE SPOT\n💵 Recommended: ${fmt(rec)} USDT\n💲 Entry ref ${fmt(entry)}\n🎯 TP ${fmt(target)}\n🛑 SL ${fmt(stop)}\n⭐ Score ${Number.isFinite(score)?score:"—"}/100\n📉 Risk at SL ≈ ${fmt(rec*((entry-stop)/entry))} USDT\n\nNo order is sent until you press CONFIRM BUY.`,
     reply_markup:{inline_keyboard:[[{text:`✅ CONFIRM BUY ${fmt(rec)} USDT`,callback_data:`CONFIRM:${id}`}],[{text:"❌ CANCEL",callback_data:`CANCEL:${id}`}]]}
   });
   await putState(env,`buy-prompt:${id}`,{sentAt:now,source:"FAST_INGEST"},SIGNAL_TTL_SEC);
@@ -397,12 +410,14 @@ function compactId(p) {
   return (h >>> 0).toString(36);
 }
 
-function dynamicQuote(freeUSDT, entry, stop, requested = null) {
-  const stopPct = (entry - stop) / entry;
-  if (!(stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
-  const riskSized = MAX_RISK_USDT / stopPct;
-  const balanceCap = freeUSDT * MAX_BALANCE_FRACTION;
-  let size = Math.min(riskSized, balanceCap, 10);
+function dynamicQuote(freeUSDT, entry, stop, requested = null, score = 90, maxOrder = DEFAULT_MAX_ORDER_USDT) {
+  const e=Number(entry), s=Number(stop), free=Number(freeUSDT), max=Number(maxOrder);
+  const stopPct = (e - s) / e;
+  if (!(e > 0 && s > 0 && stopPct > 0)) throw new Error("INVALID_STOP_DISTANCE");
+  const riskSized = qualityRiskBudgetUSDT(score) / stopPct;
+  const balanceCap = Math.max(0, free) * MAX_BALANCE_FRACTION;
+  const hardCap = Number.isFinite(max) && max > 0 ? max : DEFAULT_MAX_ORDER_USDT;
+  let size = Math.min(riskSized, balanceCap, hardCap);
   const req = Number(requested);
   if (Number.isFinite(req) && req > 0) size = Math.min(size, req);
   return Math.floor(size * 100) / 100;
@@ -624,8 +639,19 @@ async function executeConfirmedBuy(env, s) {
   await executionPriceGate(env, symbol, entryRef, stopRef, targetRef);
 
   const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
-  if (!Number.isFinite(requested) || requested < 5) throw new Error("SIZE_TOO_SMALL");
-  const quoteUSDT = Math.floor(Math.min(requested, 5.5) * 100) / 100;
+  if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT) throw new Error("SIZE_TOO_SMALL");
+  const policy=readLivePolicy(env);
+  const balance=await refreshBalance(env);
+  const freeUSDT=Number(balance?.usdt?.free || 0);
+  const quoteUSDT=dynamicQuote(
+    freeUSDT,
+    entryRef,
+    stopRef,
+    requested,
+    Number(s.score || 0),
+    Number(policy.maxOrderUSDT || DEFAULT_MAX_ORDER_USDT),
+  );
+  if (quoteUSDT < MIN_ORDER_USDT) throw new Error("DYNAMIC_SIZE_BELOW_MIN_ORDER");
 
   const result = await manualBuyAndProtect(env, {
     signal_id: String(s.id || ""),
@@ -732,7 +758,7 @@ async function sendPromptForActive(env) {
       expiresAt: Date.now() + SIGNAL_TTL_SEC * 1000,
     };
     if (!(s.stop < s.entry && s.target > s.entry)) continue;
-    const rec = riskCappedQuote(s.entry, s.stop, 5.5);
+    const rec = riskCappedQuote(s.entry, s.stop, readLivePolicy(env).maxOrderUSDT, s.score, readLivePolicy(env).maxOrderUSDT);
     s.recommendedUSDT = rec;
     await putState(env, `live-signal:${id}`, s, SIGNAL_TTL_SEC);
     if (rec >= MIN_ORDER_USDT) {
@@ -1178,13 +1204,27 @@ async function offerLatestCandidateForManualApproval(env) {
   );
   if(!claimed) return {ok:false,status:"MANUAL_PROMPT_DUPLICATE_BLOCKED"};
 
+  const balance=await refreshBalance(env);
+  const freeUSDT=Number(balance?.usdt?.free || 0);
+  const recommendedUSDT=dynamicQuote(
+    freeUSDT,
+    Number(candidate.entry),
+    Number(candidate.stop),
+    Number(policy.maxOrderUSDT || DEFAULT_MAX_ORDER_USDT),
+    Number(candidate.score || 0),
+    Number(policy.maxOrderUSDT || DEFAULT_MAX_ORDER_USDT),
+  );
+  if(recommendedUSDT<MIN_ORDER_USDT){
+    return {ok:false,status:"DYNAMIC_SIZE_BELOW_MIN_ORDER",recommendedUSDT,freeUSDT};
+  }
+
   const raw=JSON.stringify({
     id:String(candidate.id),
     symbol:String(candidate.symbol||""),
     entry:Number(candidate.entry),
     stop:Number(candidate.stop),
     target:Number(candidate.target),
-    stakeUSDT:Number(candidate.recommendedUSDT||5.5),
+    stakeUSDT:recommendedUSDT,
     score:Number(candidate.score||0),
     strategy:String(candidate.strategy||""),
   });
@@ -1248,8 +1288,8 @@ async function processAutonomousCandidate(env) {
     strategy:String(candidate.strategy||""),
     score:Number(candidate.score||0),
     createdAt:Number(candidate.createdAt||Date.now()),
-    confirmedQuoteUSDT:Number(candidate.recommendedUSDT||5.5),
-    recommendedUSDT:Number(candidate.recommendedUSDT||5.5),
+    confirmedQuoteUSDT:Number(candidate.recommendedUSDT||DEFAULT_MAX_ORDER_USDT),
+    recommendedUSDT:Number(candidate.recommendedUSDT||DEFAULT_MAX_ORDER_USDT),
     autonomous:true,
   };
   await notifyOnce(env,`signal-accepted:${candidate.id}`,`🟢 Signal accepted — ${signal.symbol}\nStrategy: ${signal.strategy}\nAutomated execution entering V2 risk gates.`,SIGNAL_TTL_SEC);
@@ -1495,7 +1535,7 @@ export default {
         cloudflareBinanceCredentialsRequired: false,
         cloudflareRelayAuthKeyRequired: provider === "SUPABASE_V2",
         maxRiskUSDT: MAX_RISK_USDT,
-        maxBuyUSDT: 5.5,
+        maxBuyUSDT: Number(readLivePolicy(env).maxOrderUSDT || DEFAULT_MAX_ORDER_USDT),
         reconciliationOk: reconciliation?.ok === true,
         supervisorState: opsState?.state || null,
         executorConfigured: configured,
