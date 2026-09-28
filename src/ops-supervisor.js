@@ -980,11 +980,22 @@ export default {
           protected_orders_checked: Number(readonlyReconciliation?.protectedOrderLists || 0),
           source: "SUPABASE_V2_GO_NO_GO_READONLY",
         });
-        await putState(env, "live:unprotected-positions",
-          Number(readonlyReconciliation?.orphanBotOrders || 0) > 0
-            ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.orphanBotOrders || 0), at:Date.now() }]
-            : []
-        );
+        if (readonlyReconciliation?.ok === true) {
+          await putState(env, "live:unknown-orders",
+            Number(readonlyReconciliation?.unknownBotOrders || 0) > 0
+              ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unknownBotOrders || 0), at:Date.now() }]
+              : []
+          );
+          await putState(env, "live:unprotected-positions",
+            Number(readonlyReconciliation?.unprotectedBotOrders || 0) > 0
+              ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.unprotectedBotOrders || 0), at:Date.now() }]
+              : []
+          );
+        } else {
+          const sentinel={source:"SUPABASE_V2",status:"RECONCILIATION_UNAVAILABLE",at:Date.now()};
+          await putState(env,"live:unknown-orders",[sentinel]);
+          await putState(env,"live:unprotected-positions",[sentinel]);
+        }
       } else {
         routeHealthy = bridgeHealth?.ok === true
           && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
