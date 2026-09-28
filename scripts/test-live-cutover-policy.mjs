@@ -27,6 +27,12 @@ const riskBlocked=evaluateGoNoGo({...healthy,dailyLossUSDT:-0.5});
 assert.equal(riskBlocked.go,false);
 assert.ok(riskBlocked.failed.includes("DAILY_RISK_AVAILABLE"));
 
+const unreconciled=evaluateGoNoGo({...healthy,reconciliationOk:false,unknownOrders:0,unprotectedPositions:0});
+assert.equal(unreconciled.checks.NO_UNKNOWN_ORDERS,false);
+assert.equal(unreconciled.checks.NO_UNPROTECTED_POSITIONS,false);
+assert.ok(unreconciled.failed.includes("NO_UNKNOWN_ORDERS"));
+assert.ok(unreconciled.failed.includes("NO_UNPROTECTED_POSITIONS"));
+
 assert.deepEqual(protectionDecision({buyStatus:"REJECTED",executedQty:0,ocoAccepted:false}),{action:"NO_POSITION",protectedQty:0});
 assert.deepEqual(protectionDecision({buyStatus:"PARTIALLY_FILLED",executedQty:0.123,ocoAccepted:true}),{action:"PROTECTED",protectedQty:0.123});
 const ocoFail=protectionDecision({buyStatus:"FILLED",executedQty:0.123,ocoAccepted:false});
