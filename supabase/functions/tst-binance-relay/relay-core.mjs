@@ -9,6 +9,7 @@ export const READ_PATHS = new Set([
   "/api/v3/myTrades",
   "/sapi/v1/account/apiRestrictions",
   "/sapi/v1/account/status",
+  "/sapi/v1/account/apiTradingStatus",
 ]);
 
 export const TEST_PATHS = new Set([
