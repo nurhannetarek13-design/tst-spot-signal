@@ -29,9 +29,9 @@ async function fetchExchangeInfo(symbol) {
         headers: { "cache-control": "no-store", "accept": "application/json" },
         signal: AbortSignal.timeout(8_000),
       });
-      const text = await r.text();
-      if (r.ok) return JSON.parse(text || "{}");
-      last = `${r.status}:${text.slice(0,120)}`;
+      if (r.ok) return await r.json();
+      const text = typeof r.text === "function" ? await r.text() : "";
+      last = String(r.status) + ":" + String(text || "").slice(0,120);
     } catch (error) {
       last = String(error?.message || error).slice(0,120);
     }
