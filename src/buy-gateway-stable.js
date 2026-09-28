@@ -10,6 +10,7 @@ import {
   executionOwner,
   executionDryRun,
   executionReconcileActiveTrades,
+  executionPublicMarketData,
 } from "./live-execution-router.js";
 export { SignalState };
 
@@ -402,31 +403,8 @@ function roundTo(value, tick) {
   return Number((Math.round(value / tick) * tick).toFixed(decimals(tick)));
 }
 
-async function publicBinance(path) {
-  const bases = [
-    "https://data-api.binance.vision",
-    "https://api-gcp.binance.com",
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api3.binance.com",
-    "https://api4.binance.com",
-  ];
-  let last = "unavailable";
-  for (const base of bases) {
-    try {
-      const r = await fetch(base + path);
-      const text = await r.text();
-      if (r.ok) return JSON.parse(text || "{}");
-      last = `${r.status} ${text.slice(0, 300)}`;
-    } catch (e) {
-      last = String(e?.message || e);
-    }
-  }
-  throw new Error(`BINANCE_PUBLIC_FAILED: ${last}`);
-}
-
-async function executionPriceGate(symbol, referenceEntry, referenceStop, referenceTarget) {
-  const book = await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+async function executionPriceGate(env, symbol, referenceEntry, referenceStop, referenceTarget) {
+  const book = await executionPublicMarketData(env,`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
   const ask=Number(book.askPrice||0), bid=Number(book.bidPrice||0);
   const ref=Number(referenceEntry||0), stop=Number(referenceStop||0), target=Number(referenceTarget||0);
   if(!(ask>0 && bid>0 && ask>=bid && ref>0 && stop>0 && target>ref)) throw new Error("EXECUTION_BOOK_INVALID");
@@ -621,12 +599,12 @@ async function executeConfirmedBuy(env, s) {
     throw new Error("INVALID_TP_SL_GEOMETRY");
   }
 
-  const info = await publicBinance(`/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`);
+  const info = await executionPublicMarketData(env,`/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`);
   const market = info.symbols?.[0];
   if (!market || market.status !== "TRADING" || !market.isSpotTradingAllowed || market.quoteAsset !== "USDT") {
     throw new Error("PAIR_NOT_TRADABLE_SPOT");
   }
-  await executionPriceGate(symbol, entryRef, stopRef, targetRef);
+  await executionPriceGate(env, symbol, entryRef, stopRef, targetRef);
 
   const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
   if (!Number.isFinite(requested) || requested < 5) throw new Error("SIZE_TOO_SMALL");
@@ -986,7 +964,7 @@ async function productionV2DryRunSelftest(env) {
   if(!lock) return {ok:false,status:"DRYRUN_THROTTLED",financialAction:false};
 
   const symbol="SOLUSDT";
-  const book=await publicBinance(`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  const book=await executionPublicMarketData(env,`/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
   const ask=Number(book?.askPrice||0),bid=Number(book?.bidPrice||0);
   if(!(ask>0&&bid>0&&ask>=bid)) return {ok:false,status:"DRYRUN_BOOK_UNAVAILABLE",financialAction:false};
   const stop=Number((ask*0.992).toPrecision(12));
