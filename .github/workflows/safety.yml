@@ -27,6 +27,7 @@ jobs:
       - run: node --check src/edge-worker.js
       - run: node --check src/thesis-engine.js
       - run: node scripts/test-thesis-engine.mjs
+      - run: node scripts/test-supabase-relay-core.mjs
       - name: Assert thesis engine owns scanner decisions
         shell: bash
         run: |
