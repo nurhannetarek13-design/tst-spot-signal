@@ -1,6 +1,11 @@
 import baseWorker, { SignalState } from "./edge-worker.js";
 import { readLivePolicy } from "./live-cutover-policy.js";
 import {
+  supabaseStateGet,
+  supabaseStatePut,
+  supabaseStateClaim,
+} from "./supabase-state-client.js";
+import {
   manualBuyAndProtect,
   executionReadOnlyHeartbeat,
   executionReadOnlyReconcile,
@@ -34,31 +39,16 @@ function creds(env) {
   };
 }
 
-function stateStub(env) {
-  const id = env.STATE_COORDINATOR.idFromName("global");
-  return env.STATE_COORDINATOR.get(id);
-}
-
 async function getState(env, key) {
-  const r = await stateStub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);
-  return r.ok ? await r.json() : null;
+  return await supabaseStateGet(env,key);
 }
 
 async function putState(env, key, value, ttl) {
-  await stateStub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
-  });
+  return await supabaseStatePut(env,key,value,Number(ttl)*1000);
 }
 
 async function claimState(env, key, value, ttl) {
-  const r = await stateStub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
-  });
-  return r.ok;
+  return await supabaseStateClaim(env,key,value,Number(ttl)*1000);
 }
 
 async function hmacHex(secret, text) {
