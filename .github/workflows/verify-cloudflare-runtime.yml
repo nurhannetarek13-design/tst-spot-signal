@@ -60,6 +60,7 @@ jobs:
           PY
 
       - name: Verify direct Cloudflare Binance read-only access
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
