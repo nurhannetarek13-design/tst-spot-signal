@@ -79,7 +79,7 @@ function riskCappedQuote(entry, stop, requested = 5.5) {
   return Math.floor(Math.min(riskSized, requestCap, 5.5) * 100) / 100;
 }
 
-async function makeV2Operational(env) {
+async function executionOperational(env) {
   const now = Date.now();
   const [ops, reconciliation, bridge, ownership] = await Promise.all([
     getState(env, "ops:state"),
@@ -88,22 +88,47 @@ async function makeV2Operational(env) {
     getState(env, "bridge:ownership"),
   ]);
   const fresh = (at, maxMs = 20 * 60 * 1000) => Number(at || 0) > 0 && now - Number(at || 0) <= maxMs;
-  const ready = String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() === "true";
+  const ready = executorConfigured(env);
+  const provider = executionProvider(env);
+
+  if (provider === "SUPABASE_V2") {
+    const heartbeat = await executionReadOnlyHeartbeat(env);
+    const transportOk = heartbeat?.transportOk === true
+      && heartbeat?.body?.canTrade === true
+      && heartbeat?.body?.financialAction === false;
+    const ok = ready
+      && ops?.state === "HEALTHY"
+      && reconciliation?.ok === true
+      && fresh(reconciliation?.at)
+      && transportOk;
+    return {
+      ok,
+      provider,
+      state: String(ops?.state || "UNKNOWN"),
+      reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
+      bridgeOk: transportOk,
+      ownershipOk: transportOk,
+      executorConfigured: ready,
+      heartbeat,
+    };
+  }
+
   const ok = ready
     && ops?.state === "HEALTHY"
     && reconciliation?.ok === true
     && fresh(reconciliation?.at)
     && bridge?.ok === true
     && fresh(bridge?.at)
-    && ownership?.owner === "MAKE_EXECUTOR_V2"
+    && ownership?.owner === executionOwner(env)
     && ownership?.exclusive === true
     && fresh(ownership?.at);
   return {
     ok,
+    provider,
     state: String(ops?.state || "UNKNOWN"),
     reconciliationOk: reconciliation?.ok === true && fresh(reconciliation?.at),
     bridgeOk: bridge?.ok === true && fresh(bridge?.at),
-    ownershipOk: ownership?.owner === "MAKE_EXECUTOR_V2" && ownership?.exclusive === true && fresh(ownership?.at),
+    ownershipOk: ownership?.owner === executionOwner(env) && ownership?.exclusive === true && fresh(ownership?.at),
     executorConfigured: ready,
   };
 }
@@ -123,8 +148,8 @@ async function prepareManualE2EPrompt(env) {
     return { ok:true, status:"MANUAL_E2E_PROMPT_ALREADY_SENT", id:recent.id };
   }
 
-  const health = await makeV2Operational(env);
-  if (!health.ok) return { ok:false, status:"MAKE_V2_OPERATIONAL_GATE_FAILED", health };
+  const health = await executionOperational(env);
+  if (!health.ok) return { ok:false, status:"EXECUTION_OPERATIONAL_GATE_FAILED", health };
 
   const claimed = await claimState(env, "cutover:e2e:prompt-lock", { at:Date.now() }, 60);
   if (!claimed) return { ok:true, status:"MANUAL_E2E_PROMPT_LOCKED" };
@@ -205,9 +230,9 @@ async function handleFastSignalIngest(request, env) {
   if (![entry,stop,target].every(Number.isFinite) || !(stop < entry && target > entry)) return Response.json({ok:false,status:"BAD_LEVELS"},{status:400});
   if (!Number.isFinite(requested) || requested < MIN_ORDER_USDT || requested > 10) return Response.json({ok:false,status:"BAD_STAKE"},{status:400});
 
-  const health = await makeV2Operational(env);
+  const health = await executionOperational(env);
   if (!health.ok) {
-    return Response.json({ok:false,status:"MAKE_V2_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
+    return Response.json({ok:false,status:"EXECUTION_OPERATIONAL_GATE_FAILED",health,autoBuy:false},{status:503});
   }
   const rec=riskCappedQuote(entry,stop,requested);
   if (rec < MIN_ORDER_USDT) return Response.json({ok:false,status:"SIZE_TOO_SMALL",autoBuy:false},{status:409});
@@ -466,9 +491,9 @@ async function executeConfirmedBuy(env, s) {
   if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
     throw new Error("MAKE_EXECUTOR_V2_NOT_READY");
   }
-  const operational = await makeV2Operational(env);
+  const operational = await executionOperational(env);
   if (!operational.ok) {
-    throw new Error("MAKE_V2_OPERATIONAL_GATE_FAILED");
+    throw new Error("EXECUTION_OPERATIONAL_GATE_FAILED");
   }
   await requireFreshMakeV2ExecutionRoute(env);
 
@@ -569,7 +594,7 @@ async function sendPromptForActive(env) {
   if (c.credentialMode !== "LIVE") return;
 
   const active = (await getState(env, "paper:active")) || [];
-  const health = await makeV2Operational(env);
+  const health = await executionOperational(env);
   if (!health.ok) return;
   for (const p of active) {
     const id = compactId(p);
