@@ -665,6 +665,142 @@ export async function supabaseReadOnlyHeartbeat(env) {
   };
 }
 
+export async function supabaseDryRunExecution(env, input) {
+  const pair = binanceCredentials(env);
+  if (!relayConfigured(env) || !signingCredentialsReady(pair) || !pair.ed25519PrivateKey) {
+    return { ok:false, status:"SUPABASE_DRYRUN_NOT_CONFIGURED", financialAction:false };
+  }
+
+  const policy = readLivePolicy(env);
+  const quote = Math.min(Number(input?.quote_amount_usdt || 0), Number(policy.maxOrderUSDT));
+  const symbol = String(input?.symbol || "").toUpperCase();
+  const signalId = String(input?.signal_id || "");
+  const target = Number(input?.take_profit_price || 0);
+  const stop = Number(input?.stop_loss_price || 0);
+  const entry = Number(input?.entry_price || 0);
+  if (!(quote >= 5 && quote <= 5.5)) return { ok:false, status:"ORDER_SIZE_BLOCKED", financialAction:false };
+  if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol) || !(target > stop && stop > 0)) {
+    return { ok:false, status:"INVALID_EXECUTION_INPUT", financialAction:false };
+  }
+
+  const reconciliation = await supabaseReadOnlyReconcile(env);
+  if (!reconciliation.ok) {
+    return {
+      ok:false,
+      status:"DRYRUN_RECONCILIATION_BLOCKED",
+      reconciliation,
+      financialAction:false,
+    };
+  }
+
+  const account = await relay(env, "GET", "/api/v3/account", { omitZeroBalances:"true" }, 15000);
+  if (!account.ok) {
+    return { ok:false, status:"DRYRUN_ACCOUNT_READ_FAILED", diagnostics:account.diagnostics || null, financialAction:false };
+  }
+  const availableUSDT = freeBalance(account.data, "USDT");
+
+  let validation;
+  try {
+    validation = await validateSpotMarketBuy(symbol, quote, availableUSDT, {
+      referencePrice: entry > 0 ? entry : null,
+    });
+  } catch (error) {
+    return {
+      ok:false,
+      status:"DRYRUN_PRETRADE_REJECTED",
+      reason:String(error?.message || error).slice(0,160),
+      financialAction:false,
+    };
+  }
+
+  const ids = clientIds(signalId);
+  const buyParams = {
+    symbol,
+    side:"BUY",
+    type:"MARKET",
+    quoteOrderQty:validation.quoteOrderQty,
+    newClientOrderId:ids.buy,
+    newOrderRespType:"FULL",
+  };
+
+  const test = await relay(env, "POST", "/api/v3/order/test", buyParams, 15000);
+  if (!test.ok) {
+    return {
+      ok:false,
+      status:"BINANCE_ORDER_TEST_REJECTED",
+      binanceCode:test.body?.binanceCode ?? null,
+      httpStatus:test.httpStatus || null,
+      diagnostics:test.diagnostics || null,
+      validation,
+      reconciliation,
+      financialAction:false,
+    };
+  }
+
+  let protection;
+  try {
+    protection = await normalizeSpotProtection(
+      symbol,
+      validation.estimatedBaseQty,
+      target,
+      stop,
+      Number((stop * 0.998).toPrecision(12)),
+    );
+  } catch (error) {
+    return {
+      ok:false,
+      status:"DRYRUN_PROTECTION_REJECTED",
+      reason:String(error?.message || error).slice(0,160),
+      validation,
+      reconciliation,
+      financialAction:false,
+    };
+  }
+
+  const wouldSend = {
+    intentId:deterministicIntentId(signalId, symbol),
+    buy:{
+      method:"POST",
+      endpoint:"/api/v3/order",
+      params:buyParams,
+    },
+    protection:{
+      method:"POST",
+      endpoint:"/api/v3/orderList/oco",
+      params:{
+        symbol,
+        side:"SELL",
+        quantity:protection.quantity,
+        listClientOrderId:ids.list,
+        aboveType:"LIMIT_MAKER",
+        abovePrice:protection.takeProfit,
+        aboveClientOrderId:ids.takeProfit,
+        belowType:"STOP_LOSS_LIMIT",
+        belowStopPrice:protection.stopLoss,
+        belowPrice:protection.stopLimit,
+        belowClientOrderId:ids.stop,
+        belowTimeInForce:"GTC",
+        newOrderRespType:"RESULT",
+      },
+    },
+  };
+
+  return {
+    ok:true,
+    status:"SUPABASE_V2_PRODUCTION_DRYRUN_PASS",
+    route:"CLOUDFLARE_SIGNED_SUPABASE_BINANCE",
+    binanceOrderTestPassed:true,
+    writesEnabled:false,
+    liveExecutionEnabled:policy.liveExecutionEnabled === true,
+    autonomousEnabled:policy.autonomousEnabled === true,
+    validation,
+    reconciliation,
+    wouldSend,
+    diagnostics:test.diagnostics || null,
+    financialAction:false,
+  };
+}
+
 export async function manualBuyAndProtectViaSupabase(env, input) {
   const policy = readLivePolicy(env);
   if (policy.liveExecutionEnabled !== true) {
