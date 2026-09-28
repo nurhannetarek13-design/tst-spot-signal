@@ -264,7 +264,8 @@ jobs:
             --data '{"signal_id":"runtimecheck","symbol":"BTCUSDT"}' \
             "$WORKER_URL/bridge-auth-selftest?nonce=$(date +%s%N)")
           cat /tmp/bridge.json
-          curl --fail --silent --show-error --max-time 25 \
+          curl --fail --silent --show-error \
+            --retry 2 --retry-delay 2 --retry-all-errors --max-time 60 \
             "$WORKER_URL/go-no-go?nonce=$(date +%s%N)" -o /tmp/gate.json
           cat /tmp/gate.json
           BRIDGE_CODE="$bridge_code" python - <<'PY'
