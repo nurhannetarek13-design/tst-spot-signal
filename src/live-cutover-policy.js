@@ -4,6 +4,7 @@ export const LIVE_POLICY = Object.freeze({
   maxOrderUSDT: 5.5,
   maxOpenPositions: 1,
   dailyLossCapUSDT: 0.5,
+  emergencyKillSwitch: false,
 });
 
 export function readLivePolicy(env = {}) {
@@ -12,12 +13,14 @@ export function readLivePolicy(env = {}) {
   const requestedOrder = Number(env.MAX_ORDER_USDT ?? 5.5);
   const requestedPositions = Number(env.MAX_OPEN_POSITIONS ?? 1);
   const requestedDailyLoss = Number(env.DAILY_LOSS_CAP_USDT ?? 0.5);
+  const emergencyKillSwitch = String(env.EMERGENCY_KILL_SWITCH || "").toLowerCase() === "true";
   return Object.freeze({
     liveExecutionEnabled,
     autonomousEnabled,
     maxOrderUSDT: Number.isFinite(requestedOrder) ? Math.min(5.5, Math.max(5, requestedOrder)) : 5.5,
     maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(1, Math.floor(requestedPositions))) : 1,
     dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) ? Math.min(0.5, Math.max(0.1, requestedDailyLoss)) : 0.5,
+    emergencyKillSwitch,
   });
 }
 
@@ -45,6 +48,7 @@ export function evaluateGoNoGo({
     NO_UNKNOWN_ORDERS: Number(unknownOrders || 0) === 0,
     NO_UNPROTECTED_POSITIONS: Number(unprotectedPositions || 0) === 0,
     DAILY_RISK_AVAILABLE: Number(dailyLossUSDT || 0) > -Math.abs(Number(policy.dailyLossCapUSDT || 0)),
+    EMERGENCY_KILL_SWITCH_CLEAR: policy.emergencyKillSwitch !== true,
   };
   const activationChecks = {
     LIVE_EXECUTION_ENABLED: policy.liveExecutionEnabled === true,
