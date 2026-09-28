@@ -243,10 +243,13 @@ jobs:
               print("SUPABASE_AUTH_SELFTEST_THROTTLED_DEDICATED_REPLAY_WORKFLOW_IS_AUTHORITATIVE")
           assert i.get('financialAction') is False
           assert i.get('noSecretValuesExposed') is True
-          assert i.get('ok') is True
-          assert i.get('firstClaim') is True
-          assert i.get('secondClaim') is False
-          print("SUPABASE_V2_REPLAY_AND_IDEMPOTENCY_PASS")
+          if i.get('status') != 'DIAGNOSTIC_THROTTLED':
+              assert i.get('ok') is True
+              assert i.get('firstClaim') is True
+              assert i.get('secondClaim') is False
+              print("SUPABASE_V2_REPLAY_AND_IDEMPOTENCY_PASS")
+          else:
+              print("SUPABASE_IDEMPOTENCY_SELFTEST_THROTTLED_DEDICATED_REPLAY_WORKFLOW_IS_AUTHORITATIVE")
           PY
 
       - name: Probe Binance signing mode safely
