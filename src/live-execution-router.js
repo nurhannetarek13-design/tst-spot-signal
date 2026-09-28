@@ -1,5 +1,4 @@
 import {
-  manualBuyAndProtect as makeManualBuyAndProtect,
   makeReadOnlyHeartbeat,
   MAKE_EXECUTION_ROUTE,
 } from "./make-live-client.js";
@@ -12,7 +11,7 @@ import {
 } from "./supabase-live-client.js";
 
 export function executionProvider(env = {}) {
-  const requested = String(env.EXECUTION_PROVIDER || "MAKE_V2").trim().toUpperCase();
+  const requested = String(env.EXECUTION_PROVIDER || "SUPABASE_V2").trim().toUpperCase();
   return requested === "SUPABASE_V2" ? "SUPABASE_V2" : "MAKE_V2";
 }
 
@@ -46,10 +45,10 @@ export async function executionReadOnlyHeartbeat(env) {
 }
 
 export async function manualBuyAndProtect(env, input) {
-  if (executionProvider(env) === "SUPABASE_V2") {
-    return manualBuyAndProtectViaSupabase(env, input);
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", noOrderSent:true };
   }
-  return makeManualBuyAndProtect(env, input);
+  return manualBuyAndProtectViaSupabase(env, input);
 }
 
 export function executionRouteIds(env = {}) {
