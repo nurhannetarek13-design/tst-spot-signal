@@ -15,12 +15,12 @@ export const WRITE_PATHS = new Set([
 
 const SAFE_CLIENT_PREFIXES = ["TSTB","TSTX","TSTC","TSTQ","TSTO","TSTU","TSTV","TSTW","TSTS","TSTT"];
 
-export function parseAndValidateCapability(body, nowMs = Date.now()) {
+export function parseAndValidateCapability(body, { nowMs = Date.now(), writesEnabled = false } = {}) {
   const method = String(body?.method || "").toUpperCase();
   const path = String(body?.path || "");
   const apiKey = String(body?.apiKey || "");
   const query = String(body?.query || "");
-  const writesEnabled = body?.writesEnabled === true;
+  writesEnabled = writesEnabled === true;
 
   if (!["GET","POST","DELETE"].includes(method)) throw new Error("METHOD_BLOCKED");
   if (!(READ_PATHS.has(path) || WRITE_PATHS.has(path))) throw new Error("PATH_BLOCKED");
