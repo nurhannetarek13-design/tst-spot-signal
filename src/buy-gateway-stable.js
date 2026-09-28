@@ -614,9 +614,22 @@ async function executeConfirmedBuy(env, s) {
   const result = await manualBuyAndProtect(env, {
     signal_id: String(s.id || ""),
     symbol,
+    entry_price: entryRef,
     quote_amount_usdt: quoteUSDT,
     take_profit_price: targetRef,
     stop_loss_price: stopRef,
+    onEvent: async (event) => {
+      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+      const type=String(event?.type || "");
+      let text=null;
+      if(type==="BUY_SUBMITTED") text=`🟠 BUY submitted — ${symbol}\nIntent: ${event.intentId || "-"}\nAmount: ${fmt(event.quoteUSDT)} USDT`;
+      else if(type==="BUY_FILLED") text=`✅ BUY filled — ${symbol}\nQty: ${fmt(event.executedQty)}\nOrder: ${event.orderId || "-"}`;
+      else if(type==="BUY_PARTIAL_FILL") text=`⚠️ PARTIAL FILL — ${symbol}\nFilled qty: ${fmt(event.executedQty)}\nالباقي اتوقف عن إعادة الإرسال، والحماية هتتحط على الكمية المنفذة فقط.`;
+      else if(type==="PROTECTION_INSTALLED") text=`🛡️ TP/SL protection installed — ${symbol}\nOCO: ${event.orderListId || "-"}\nTP: ${event.takeProfit}\nSL: ${event.stopLoss}`;
+      else if(type==="PROTECTION_FAILURE_CRITICAL") text=`🚨 CRITICAL — protection failed for ${symbol}. Emergency-safe handling started and new entries are blocked.`;
+      else if(type==="EMERGENCY_CLOSE_FILLED") text=`⚠️ Emergency close completed — ${symbol}\nOrder: ${event.orderId || "-"}`;
+      if(text) await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text});
+    },
   });
 
   if (result?.status === "OCO_PLACED") {
