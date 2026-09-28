@@ -18,6 +18,11 @@ import {
   executionIntentIdempotencySelftest,
 } from "./live-execution-router.js";
 import { supabaseRelayReplaySelftest } from "./supabase-live-client.js";
+import {
+  supabaseStateGet,
+  supabaseStatePut,
+  supabaseStateClaim,
+} from "./supabase-state-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -25,29 +30,16 @@ const HEARTBEAT_STALE_MS = 20 * 60 * 1000;
 const RECOVERY_HOLD_MS = 60 * 1000;
 const WARMUP_MS = 2 * 60 * 1000;
 
-function stub(env) {
-  const id = env.STATE_COORDINATOR.idFromName("global");
-  return env.STATE_COORDINATOR.get(id);
-}
 async function getState(env, key) {
-  const r = await stub(env).fetch(`https://state/get?key=${encodeURIComponent(key)}`);
-  return r.ok ? await r.json() : null;
+  return await supabaseStateGet(env,key);
 }
 async function putState(env, key, value, ttl = STATE_TTL_SEC) {
-  await stub(env).fetch(`https://state/put?key=${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
-  });
+  return await supabaseStatePut(env,key,value,Number(ttl)*1000);
 }
 async function claimState(env, key, value, ttl = STATE_TTL_SEC) {
-  const r = await stub(env).fetch(`https://state/claim?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value, expiresAt: Date.now() + ttl * 1000 }),
-  });
-  return r.ok;
+  return await supabaseStateClaim(env,key,value,Number(ttl)*1000);
 }
+
 async function hmacHexRaw(secret, text) {
   const key = await crypto.subtle.importKey(
     "raw",
