@@ -115,3 +115,5 @@ export async function executionPublicMarketData(env, path) {
 }
 
 // Supabase Vault signer active; Cloudflare forwards authenticated unsigned intents only.
+
+// Supabase runtime state active; Durable Objects are no longer on the critical execution path.
