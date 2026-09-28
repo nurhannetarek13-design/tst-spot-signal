@@ -61,6 +61,92 @@ function cloudflareBinanceCreds(env) {
   return { key: String(key || "").trim(), secret: String(secret || "").trim() };
 }
 
+function normalizedBinanceSecretCandidates(rawSecret) {
+  const raw = String(rawSecret || "").trim();
+  const rows = [["RAW", raw]];
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith("`") && raw.endsWith("`"))) {
+    rows.push(["STRIP_OUTER_QUOTES", raw.slice(1, -1)]);
+  }
+  const noWhitespace = raw.replace(/\s+/g, "");
+  if (noWhitespace !== raw) rows.push(["REMOVE_WHITESPACE", noWhitespace]);
+  const noPrefix = raw.replace(/^BINANCE_(?:API_)?SECRET(?:_KEY)?\s*[:=]\s*/i, "");
+  if (noPrefix !== raw) rows.push(["STRIP_SECRET_PREFIX", noPrefix]);
+  const unwrapped = noPrefix.replace(/^["'`](.*)["'`]$/, "$1").replace(/\s+/g, "");
+  if (unwrapped !== raw) rows.push(["PREFIX_QUOTES_WHITESPACE_NORMALIZED", unwrapped]);
+  const seen = new Set();
+  return rows
+    .filter(([,value]) => value && !seen.has(value) && seen.add(value))
+    .map(([normalization,value]) => ({ normalization, value }));
+}
+
+async function binanceSecretNormalizationPreflight(env) {
+  const relayUrl = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  const rawKey = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
+  const rawSecret = env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "";
+  if (!relayUrl || !rawKey || !String(rawSecret || "").trim()) {
+    return { ok:false, status:"BINANCE_SECRET_NORMALIZATION_NOT_CONFIGURED", financialAction:false, noSecretValuesExposed:true };
+  }
+  const candidates = normalizedBinanceSecretCandidates(rawSecret);
+  const attempts = [];
+  for (const candidate of candidates) {
+    const qs = new URLSearchParams({
+      omitZeroBalances:"true",
+      recvWindow:"5000",
+      timestamp:String(Date.now()),
+    }).toString();
+    const signature = await hmacHexRaw(candidate.value, qs);
+    try {
+      const r = await fetch(relayUrl, {
+        method:"POST",
+        headers:{"content-type":"application/json","x-region":"eu-west-1"},
+        body:JSON.stringify({
+          method:"GET",
+          path:"/api/v3/account",
+          apiKey:rawKey,
+          query:`${qs}&signature=${signature}`,
+        }),
+        signal:AbortSignal.timeout(15_000),
+      });
+      const row = await r.json().catch(() => ({}));
+      const ok = r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK";
+      attempts.push({
+        normalization:candidate.normalization,
+        ok,
+        httpStatus:r.status,
+        upstreamHttpStatus:Number(row?.upstreamHttpStatus || 0),
+        binanceCode:row?.binanceCode ?? null,
+      });
+      if (ok) {
+        return {
+          ok:true,
+          status:"BINANCE_SECRET_NORMALIZATION_OK",
+          selectedNormalization:candidate.normalization,
+          canTrade:row?.data?.canTrade === true,
+          accountType:row?.data?.accountType || null,
+          attempts,
+          financialAction:false,
+          noBalanceValuesExposed:true,
+          noSecretValuesExposed:true,
+        };
+      }
+    } catch (e) {
+      attempts.push({
+        normalization:candidate.normalization,
+        ok:false,
+        transportError:String(e?.name || "FetchError"),
+      });
+    }
+  }
+  return {
+    ok:false,
+    status:"BINANCE_SECRET_NORMALIZATION_FAILED",
+    attempts,
+    financialAction:false,
+    noBalanceValuesExposed:true,
+    noSecretValuesExposed:true,
+  };
+}
+
 function cloudflareBinanceCredentialPairs(env) {
   const keys = [
     ["BINANCE_API_KEY", env.BINANCE_API_KEY],
@@ -751,6 +837,13 @@ export default {
         liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
         autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
       }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+    if (url.pathname === "/binance-secret-normalization-preflight") {
+      const result = await binanceSecretNormalizationPreflight(env);
+      return Response.json(result, {
         status: result.ok ? 200 : 503,
         headers: { "cache-control": "no-store" },
       });
