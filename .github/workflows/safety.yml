@@ -28,6 +28,18 @@ jobs:
       - run: node --check src/thesis-engine.js
       - run: node scripts/test-thesis-engine.mjs
       - run: node scripts/test-supabase-relay-core.mjs
+      - run: node --check src/supabase-live-client.js
+      - name: Assert Supabase V2 execution safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SUPABASE_EXECUTOR_READY' src/supabase-live-client.js
+          grep -q 'BUY_SUBMISSION_UNKNOWN' src/supabase-live-client.js
+          grep -q 'OCO_SUBMISSION_UNKNOWN' src/supabase-live-client.js
+          grep -q 'mayResend: false' src/supabase-live-client.js
+          grep -q 'reconciliationConfirmedAbsent' src/supabase-live-client.js
+          grep -q 'PROTECTION_FAILED_EMERGENCY_CLOSED' src/supabase-live-client.js
+          grep -q 'const WRITES_ENABLED = false' supabase/functions/tst-binance-relay/index.ts
       - name: Assert thesis engine owns scanner decisions
         shell: bash
         run: |
