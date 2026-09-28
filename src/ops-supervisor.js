@@ -2,6 +2,7 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
+// Runtime verification trigger: no behavioral change.
 import { MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
 import {
   executionReadOnlyHeartbeat,
