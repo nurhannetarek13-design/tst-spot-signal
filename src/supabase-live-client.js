@@ -1,5 +1,13 @@
 import { readLivePolicy } from "./live-cutover-policy.js";
-import { normalizeSpotProtection } from "./binance-spot-filters.js";
+import { normalizeSpotProtection, validateSpotMarketBuy } from "./binance-spot-filters.js";
+import {
+  binanceCredentials,
+  signingCredentialsReady,
+  buildSignedBinanceQuery,
+  computeServerTimeOffset,
+  safeSigningDiagnostics,
+  signRelayEnvelope,
+} from "./binance-signing.js";
 
 function cleanId(value, prefix, max = 32) {
   const base = String(value || "sig").replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "sig";
@@ -16,78 +24,69 @@ function clientIds(signalId) {
   };
 }
 
-function creds(env = {}) {
-  const key = String(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY || "").trim();
-  const secret = String(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY || "").trim();
-  const privateKeyPem = String(env.BINANCE_ED25519_PRIVATE_KEY || "").trim();
-  const requestedMode = String(env.BINANCE_SIGNING_MODE || "HMAC").trim().toUpperCase();
-  const mode = requestedMode === "ED25519" ? "ED25519" : "HMAC";
-  return { key, secret, privateKeyPem, mode };
+
+let serverTimeCache = { offsetMs: 0, serverTimeMs: 0, checkedAt: 0, roundTripMs: 0 };
+
+function relayRegion(env = {}) {
+  return String(env.SUPABASE_BINANCE_REGION || "eu-west-1").trim() || "eu-west-1";
 }
 
-function signingCredentialsReady(pair = {}) {
-  if (!pair.key) return false;
-  if (pair.mode === "ED25519") return Boolean(pair.privateKeyPem);
-  return Boolean(pair.secret);
-}
-
-async function hmacHex(secret, text) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(String(secret || "")),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function pkcs8PemBytes(pem) {
-  const compact = String(pem || "")
-    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-    .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\s+/g, "");
-  if (!compact) throw new Error("ED25519_PRIVATE_KEY_EMPTY");
-  const raw = atob(compact);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function bytesToBase64(bytes) {
+function randomNonce() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
   let raw = "";
-  const arr = new Uint8Array(bytes);
-  for (let i = 0; i < arr.length; i++) raw += String.fromCharCode(arr[i]);
-  return btoa(raw);
+  for (const b of bytes) raw += String.fromCharCode(b);
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-export async function signEd25519Base64(privateKeyPem, text) {
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8PemBytes(privateKeyPem),
-    { name: "Ed25519" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(text));
-  return bytesToBase64(sig);
-}
-
-async function signedQuery(pair, params = {}) {
-  const q = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === "") continue;
-    q.set(key, String(value));
+async function getBinanceServerTime(env, { force = false } = {}) {
+  const now = Date.now();
+  if (!force && serverTimeCache.checkedAt && now - serverTimeCache.checkedAt < 30_000) {
+    return { ...serverTimeCache, cached: true };
   }
-  q.set("recvWindow", "5000");
-  q.set("timestamp", String(Date.now()));
-  const unsigned = q.toString();
-  const signature = pair.mode === "ED25519"
-    ? await signEd25519Base64(pair.privateKeyPem, unsigned)
-    : await hmacHex(pair.secret, unsigned);
-  q.set("signature", signature);
-  return q.toString();
+  const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
+  if (!url) throw new Error("SUPABASE_RELAY_NOT_CONFIGURED");
+  const before = Date.now();
+  const r = await fetch(url + "?probe=time&nonce=" + encodeURIComponent(randomNonce()), {
+    method: "GET",
+    headers: { "cache-control": "no-store", "x-region": relayRegion(env) },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const after = Date.now();
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok || body?.ok !== true || !Number.isFinite(Number(body?.serverTime))) {
+    throw new Error("BINANCE_SERVER_TIME_UNAVAILABLE:" + String(body?.status || ("HTTP_" + r.status)));
+  }
+  const timing = computeServerTimeOffset({
+    localBeforeMs: before,
+    localAfterMs: after,
+    serverTimeMs: Number(body.serverTime),
+  });
+  serverTimeCache = {
+    ...timing,
+    serverTimeMs: Number(body.serverTime),
+    checkedAt: after,
+  };
+  return { ...serverTimeCache, cached: false };
+}
+
+async function buildRelayAuth(pair, method, path, query) {
+  if (!pair.ed25519PrivateKey) throw new Error("SUPABASE_RELAY_AUTH_KEY_MISSING");
+  const relayTimestamp = Date.now();
+  const relayNonce = randomNonce();
+  const signed = await signRelayEnvelope(pair.ed25519PrivateKey, {
+    relayTimestamp,
+    relayNonce,
+    method,
+    path,
+    apiKey: pair.apiKey,
+    query,
+  });
+  return {
+    relayTimestamp,
+    relayNonce,
+    relaySignature: signed.relaySignature,
+  };
 }
 
 function relayConfigured(env = {}) {
@@ -114,21 +113,64 @@ function isDefiniteReject(body = {}, httpStatus = 0) {
 
 async function relay(env, method, path, params = {}, timeoutMs = 15000) {
   const url = String(env.SUPABASE_BINANCE_RELAY_URL || "").trim();
-  const pair = creds(env);
+  const pair = binanceCredentials(env);
   if (!url) return { ok: false, status: "SUPABASE_RELAY_NOT_CONFIGURED", noRequestSent: true };
   if (!signingCredentialsReady(pair)) return { ok: false, status: "BINANCE_CREDENTIALS_MISSING", noRequestSent: true };
+  if (!pair.ed25519PrivateKey) return { ok: false, status: "SUPABASE_RELAY_AUTH_KEY_MISSING", noRequestSent: true };
 
-  const query = await signedQuery(pair, params);
+  let timing;
+  let signed;
+  try {
+    timing = await getBinanceServerTime(env);
+    const timestampMs = Date.now() + Number(timing.offsetMs || 0);
+    signed = await buildSignedBinanceQuery(pair, params, { timestampMs, recvWindow: 5000 });
+  } catch (error) {
+    return {
+      ok: false,
+      status: "BINANCE_SIGNING_PREP_FAILED",
+      reason: String(error?.message || error).slice(0, 160),
+      noRequestSent: true,
+    };
+  }
+
+  const auth = await buildRelayAuth(pair, method, path, signed.query);
+  const diagnosticBase = safeSigningDiagnostics({
+    endpoint: path,
+    method,
+    unsignedPayload: signed.unsignedPayload,
+    timestampMs: signed.timestampMs,
+    serverTimeMs: Number(timing.serverTimeMs || 0),
+    signingMode: signed.signingMode,
+  });
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
   try {
     const r = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ method, path, apiKey: pair.key, query }),
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "x-region": relayRegion(env),
+      },
+      body: JSON.stringify({
+        method,
+        path,
+        apiKey: pair.apiKey,
+        query: signed.query,
+        relayTimestamp: auth.relayTimestamp,
+        relayNonce: auth.relayNonce,
+        relaySignature: auth.relaySignature,
+      }),
       signal: controller.signal,
     });
     const body = await r.json().catch(() => ({}));
+    const diagnostics = safeSigningDiagnostics({
+      ...diagnosticBase,
+      httpStatus: r.status,
+      binanceCode: body?.binanceCode ?? null,
+    });
     return {
       ok: r.ok && body?.ok === true,
       httpStatus: r.status,
@@ -138,6 +180,8 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000) {
       unknown: isUnknownBinanceResponse(body, r.status),
       definiteReject: isDefiniteReject(body, r.status),
       notFound: isNotFoundResponse(body),
+      latencyMs: Date.now() - startedAt,
+      diagnostics,
     };
   } catch (error) {
     return {
@@ -146,6 +190,8 @@ async function relay(env, method, path, params = {}, timeoutMs = 15000) {
       status: "SUPABASE_RELAY_TRANSPORT_UNKNOWN",
       reason: String(error?.message || error).slice(0, 120),
       mayResend: false,
+      latencyMs: Date.now() - startedAt,
+      diagnostics: diagnosticBase,
     };
   } finally {
     clearTimeout(timer);
@@ -372,9 +418,10 @@ async function placeOco(env, { signalId, symbol, quantity, takeProfit, stopLoss,
 }
 
 export function supabaseExecutionConfigured(env = {}) {
-  const pair = creds(env);
+  const pair = binanceCredentials(env);
   return relayConfigured(env)
     && signingCredentialsReady(pair)
+    && Boolean(pair.ed25519PrivateKey)
     && String(env.SUPABASE_EXECUTOR_READY || "").toLowerCase() === "true";
 }
 
