@@ -17,6 +17,11 @@ const account=parseAndValidateCapability({
 assert.equal(account.isWrite,false);
 assert.equal(account.signatureType,"ED25519_SUPABASE_VAULT");
 
+const tradingStatus=parseAndValidateCapability({
+  method:"GET",path:"/sapi/v1/account/apiTradingStatus",query:""
+},{writesEnabled:false});
+assert.equal(tradingStatus.isWrite,false);
+
 assert.throws(()=>parseAndValidateCapability({
   method:"GET",path:"/api/v3/account",query:"timestamp=1800000000000"
 },{writesEnabled:false}),/CALLER_SECURITY_PARAM_BLOCKED/);
