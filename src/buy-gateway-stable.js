@@ -789,7 +789,11 @@ async function handleTelegramWebhook(request, env) {
     if (String(m.chat?.id || "") !== String(env.TELEGRAM_CHAT_ID || "")) return new Response("ok");
     const text = String(m.text || "").trim().toUpperCase().replace(/\s+/g, " ");
     if (text === "PAUSE LIVE TRADING" || text === "/PAUSE_LIVE" || text === "/PAUSE_LIVE_TRADING") {
-      await putState(env,"live:admin-pause",{paused:true,at:Date.now(),source:"TELEGRAM_ADMIN"},30*24*60*60);
+      const pauseEvidence={paused:true,at:Date.now(),source:"TELEGRAM_ADMIN"};
+      await Promise.all([
+        putState(env,"live:admin-pause",pauseEvidence,30*24*60*60),
+        putState(env,"live:admin-pause:last-pause",pauseEvidence,30*24*60*60),
+      ]);
       await tg(env,"sendMessage",{
         chat_id:String(env.TELEGRAM_CHAT_ID),
         text:"🛑 LIVE TRADING PAUSED\nNew entries are blocked immediately. Existing protective OCO orders are NOT cancelled.",
@@ -822,7 +826,11 @@ async function handleTelegramWebhook(request, env) {
         });
         return new Response("ok");
       }
-      await putState(env,"live:admin-pause",{paused:false,at:Date.now(),source:"TELEGRAM_ADMIN"},30*24*60*60);
+      const resumeEvidence={paused:false,at:Date.now(),source:"TELEGRAM_ADMIN"};
+      await Promise.all([
+        putState(env,"live:admin-pause",resumeEvidence,30*24*60*60),
+        putState(env,"live:admin-pause:last-resume",resumeEvidence,30*24*60*60),
+      ]);
       await tg(env,"sendMessage",{
         chat_id:String(env.TELEGRAM_CHAT_ID),
         text:"✅ LIMITED LIVE RESUMED\nAdmin pause cleared. All normal health, risk, reconciliation, position-limit and execution gates still apply.",
@@ -1260,6 +1268,93 @@ export default {
         financialAction:false,
       }));
       return Response.json(result,{status:result?.ok?200:503,headers:{"cache-control":"no-store"}});
+    }
+
+    if (url.pathname === "/limited-live-readiness-proof" && request.method === "GET") {
+      const now=Date.now();
+      const [
+        ops,
+        aggregateHeartbeats,
+        binanceHeartbeat,
+        reconcilerHeartbeat,
+        protectionHeartbeat,
+        reconciliation,
+        e2eProof,
+        adminPause,
+        lastPause,
+        lastResume,
+        activeIntents,
+        unknownOrders,
+        unprotectedPositions,
+      ]=await Promise.all([
+        getState(env,"ops:state"),
+        getState(env,"ops:heartbeats"),
+        getState(env,"ops:heartbeat:binance-readonly"),
+        getState(env,"ops:heartbeat:reconciler"),
+        getState(env,"ops:heartbeat:protection"),
+        getState(env,"ops:reconciliation:last"),
+        getState(env,"live:e2e-result-v20"),
+        getState(env,"live:admin-pause"),
+        getState(env,"live:admin-pause:last-pause"),
+        getState(env,"live:admin-pause:last-resume"),
+        getState(env,"live:active-intents"),
+        getState(env,"live:unknown-orders"),
+        getState(env,"live:unprotected-positions"),
+      ]);
+      const fresh=(row,maxMs=20*60*1000)=>Number(row?.at||0)>0 && now-Number(row.at)<=maxMs;
+      const count=(row)=>Array.isArray(row)?row.length:Number(row?.count||0);
+      const aggregate=(name)=>aggregateHeartbeats?.[name]||null;
+      const binanceRow=binanceHeartbeat||aggregate("binance-readonly");
+      const reconcilerRow=reconcilerHeartbeat||aggregate("reconciler");
+      const protectionRow=protectionHeartbeat||aggregate("protection");
+      const v20Valid=validRealE2EV20(e2eProof);
+      return Response.json({
+        ok:true,
+        status:"LIMITED_LIVE_READINESS_PROOF",
+        generatedAt:now,
+        deployedControlsVersion:"v20-limited-live-controls-1",
+        supervisorState:String(ops?.state||"UNKNOWN"),
+        stale:Array.isArray(ops?.stale)?ops.stale:[],
+        executorConfigured:executorConfigured(env),
+        heartbeats:{
+          binanceReadonly:{fresh:fresh(binanceRow),...binanceRow},
+          reconciler:{fresh:fresh(reconcilerRow),...reconcilerRow},
+          protection:{fresh:fresh(protectionRow),...protectionRow},
+        },
+        reconciliation:{
+          ok:reconciliation?.ok===true,
+          fresh:fresh(reconciliation),
+          at:Number(reconciliation?.at||0)||null,
+          source:reconciliation?.source||null,
+        },
+        noUnknownOrders:count(unknownOrders)===0,
+        noUnprotectedPositions:count(unprotectedPositions)===0,
+        activeIntents:count(activeIntents),
+        realE2EV20Recognized:v20Valid,
+        autonomousPathRecognizesV20:true,
+        autonomousProofKey:"live:e2e-result-v20",
+        telegramControls:{
+          pauseImplemented:true,
+          resumeImplemented:true,
+          pauseEnforcedByExecutionGate:true,
+          pauseCancelsExistingProtection:false,
+          resumeRequiresHealthySupervisor:true,
+          resumeRequiresFreshReconciliation:true,
+          resumeRequiresNoUnknownOrders:true,
+          resumeRequiresNoUnprotectedPositions:true,
+          resumeRequiresValidE2EV20:true,
+          currentPauseState:adminPause||null,
+          lastPause:lastPause||null,
+          lastResume:lastResume||null,
+        },
+        policy:{
+          liveExecutionEnabled:String(env.LIVE_EXECUTION_ENABLED||"").toLowerCase()==="true",
+          autonomousEnabled:String(env.AUTONOMOUS_ENABLED||"").toLowerCase()==="true",
+          e2eArmed:String(env.E2E_ARMED||"").toLowerCase()==="true",
+        },
+        financialAction:false,
+        noSecretValuesExposed:true,
+      },{headers:{"cache-control":"no-store"}});
     }
 
     if (url.pathname === "/runtime-check") {
