@@ -2,7 +2,16 @@ import worker, { SignalState } from "./buy-gateway-auth-wrapper.js";
 import { deriveOpsState } from "./ops-state-machine.js";
 import { verifyBridgeEnvelope, signBridgeEnvelope, rotateBridgeSecret } from "./bridge-auth.js";
 import { readLivePolicy, evaluateGoNoGo } from "./live-cutover-policy.js";
-import { makeReadOnlyHeartbeat, MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
+import { MAKE_EXECUTION_ROUTE } from "./make-live-client.js";
+import {
+  executionReadOnlyHeartbeat,
+  executionProvider,
+  executionRoute,
+  executorConfigured,
+  executionOwner,
+  routeVersion,
+  executionRouteIds,
+} from "./live-execution-router.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
