@@ -13,6 +13,7 @@ import {
   routeVersion,
   executionRouteIds,
 } from "./live-execution-router.js";
+import { supabaseRelayReplaySelftest } from "./supabase-live-client.js";
 export { SignalState };
 
 const STATE_TTL_SEC = 30 * 24 * 60 * 60;
@@ -634,6 +635,13 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/supabase-relay-replay-selftest" && request.method === "POST") {
+      const result=await supabaseRelayReplaySelftest(env);
+      return Response.json(result,{
+        status:result.ok?200:503,
+        headers:{"cache-control":"no-store"},
+      });
+    }
     if (url.pathname === "/supabase-relay-preflight") {
       const result = await supabaseRelayReadOnlyPreflight(env);
       return Response.json({
