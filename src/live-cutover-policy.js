@@ -17,9 +17,9 @@ export function readLivePolicy(env = {}) {
   return Object.freeze({
     liveExecutionEnabled,
     autonomousEnabled,
-    maxOrderUSDT: Number.isFinite(requestedOrder) ? Math.min(5.5, Math.max(5, requestedOrder)) : 5.5,
-    maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(1, Math.floor(requestedPositions))) : 1,
-    dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) ? Math.min(0.5, Math.max(0.1, requestedDailyLoss)) : 0.5,
+    maxOrderUSDT: Number.isFinite(requestedOrder) && requestedOrder > 0 ? Math.min(5.5, requestedOrder) : 5.5,
+    maxOpenPositions: Number.isFinite(requestedPositions) ? Math.min(1, Math.max(0, Math.floor(requestedPositions))) : 1,
+    dailyLossCapUSDT: Number.isFinite(requestedDailyLoss) && requestedDailyLoss > 0 ? Math.min(0.5, requestedDailyLoss) : 0.5,
     emergencyKillSwitch,
   });
 }
