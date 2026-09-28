@@ -1192,8 +1192,14 @@ export default {
       const watchdogKey = providerNow === "SUPABASE_V2"
         ? "supabase:combined-watchdog:last-dispatch"
         : "make:combined-watchdog:last-dispatch";
-      const lastWatchdog = (await getState(env, watchdogKey)) || null;
-      if (executorConfiguredNow && Date.now() - Number(lastWatchdog?.at || 0) >= 5 * 60 * 1000) {
+      const [lastWatchdog,lastReconcilerEvidence] = await Promise.all([
+        getState(env, watchdogKey),
+        providerNow === "SUPABASE_V2" ? getState(env, "ops:heartbeat:reconciler") : Promise.resolve(null),
+      ]);
+      const refreshReferenceAt = providerNow === "SUPABASE_V2"
+        ? Number(lastReconcilerEvidence?.at || 0)
+        : Number(lastWatchdog?.at || 0);
+      if (executorConfiguredNow && Date.now() - refreshReferenceAt >= 5 * 60 * 1000) {
         const watchdog = await executionReadOnlyHeartbeat(env);
         const now = Date.now();
         let operationalOk = false;
