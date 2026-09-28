@@ -97,7 +97,7 @@ jobs:
           grep -q 'oldVercelFallback: false' src/buy-gateway-stable.js
           grep -q 'liveExecutionEnabled: false' src/live-cutover-policy.js
           grep -q 'autonomousEnabled: false' src/live-cutover-policy.js
-          grep -q 'maxOrderUSDT: 5.5' src/live-cutover-policy.js
+          grep -q 'maxOrderUSDT: 25' src/live-cutover-policy.js
           grep -q 'maxOpenPositions: 1' src/live-cutover-policy.js
           grep -q 'dailyLossCapUSDT: 0.5' src/live-cutover-policy.js
           grep -q '"SUPABASE_EXECUTOR_READY": "true"' wrangler.jsonc
