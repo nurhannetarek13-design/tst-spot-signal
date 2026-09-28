@@ -1,5 +1,5 @@
 import { readLivePolicy } from "./live-cutover-policy.js";
-import { normalizeSpotProtection, validateSpotMarketBuy } from "./binance-spot-filters.js";
+import { normalizeSpotProtection, validateSpotMarketBuy, floorToFilterStep } from "./binance-spot-filters.js";
 import {
   binanceCredentials,
   signingCredentialsReady,
@@ -1580,7 +1580,11 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
 
   const summary = buySummary(buy.order, symbol);
   if (!(summary.netQty > 0 && summary.quoteSpent > 0)) {
-    await writeTradeState(env, intentId, "FAILED_SAFE", { reason:"BUY_FILL_QTY_MISSING" });
+    await writeTradeState(env, intentId, "FAILED_SAFE", {
+      reason:"BUY_FILL_QTY_MISSING",
+      unprotectedPosition:true,
+      emergencyClosed:false,
+    });
     return {
       ok:false,
       status:"BUY_FILL_QTY_MISSING",
@@ -1611,19 +1615,71 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
       { publicFetcher:(path)=>supabasePublicMarketData(env,path) },
     );
   } catch (error) {
+    const normalizationReason=String(error?.message || error).slice(0,120);
+    const marketStep=preTrade.validation?.filters?.marketLotSize?.stepSize
+      || preTrade.validation?.filters?.lotSize?.stepSize
+      || "0.00000001";
+    const emergencyQty=floorToFilterStep(summary.netQty,marketStep);
     await writeTradeState(env, intentId, "PROTECTION_PENDING", {
       reason:"PROTECTION_NORMALIZATION_FAILED",
       executedQty:summary.netQty,
+      unprotectedPosition:true,
+      normalizationReason,
+    });
+
+    let closed={ok:false,status:"EMERGENCY_CLOSE_QTY_INVALID",reconciliationRequired:true,mayResend:false};
+    if(Number(emergencyQty)>0){
+      closed=await emergencyClose(env,{
+        intentId,
+        signalId,
+        symbol,
+        quantity:emergencyQty,
+        eventSink,
+      });
+    }
+    if(closed.ok){
+      return {
+        ok:true,
+        status:"PROTECTION_NORMALIZATION_FAILED_EMERGENCY_CLOSED",
+        intentId,
+        buy:{body:{
+          status:buy.partial ? "BUY_PARTIAL_FINAL" : "BUY_FILLED",
+          order_id:buy.order?.orderId ?? null,
+          executed_qty:summary.netQty,
+          gross_executed_qty:summary.grossQty,
+          quote_spent:summary.quoteSpent,
+          weighted_price:summary.weightedPrice,
+          commissions:summary.commissions,
+        }},
+        oco:{body:{
+          status:"PROTECTION_NORMALIZATION_FAILED_EMERGENCY_CLOSED",
+          emergency_order_id:closed.emergencyOrder?.orderId ?? null,
+        }},
+        executedQty:summary.netQty,
+        protectedQty:0,
+        emergencyClosed:true,
+        preTrade:preTrade.validation,
+        normalizationReason,
+      };
+    }
+
+    await writeTradeState(env,intentId,"FAILED_SAFE",{
+      reason:closed.status || "PROTECTION_NORMALIZATION_FAILED",
+      executedQty:summary.netQty,
+      emergencyClosed:false,
+      unprotectedPosition:true,
+      normalizationReason,
     });
     return {
       ok:false,
-      status:"PROTECTION_NORMALIZATION_FAILED",
+      status:closed.status || "PROTECTION_NORMALIZATION_FAILED",
       reconciliationRequired:true,
       unprotectedPosition:true,
       mayResend:false,
       buy,
+      emergency:closed,
       intentId,
-      reason:String(error?.message || error).slice(0,120),
+      reason:normalizationReason,
     };
   }
 
@@ -1719,6 +1775,7 @@ export async function manualBuyAndProtectViaSupabase(env, input) {
       reason:closed.status || "UNPROTECTED_POSITION",
       executedQty:summary.netQty,
       emergencyClosed:false,
+      unprotectedPosition:true,
     });
     return {
       ok:false,
