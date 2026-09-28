@@ -171,6 +171,34 @@ jobs:
           print("SUPABASE_RELAY_OK=",r.get('ok'))
           print("SUPABASE_RELAY_STATUS=",r.get('status'))
           print("SUPABASE_CAN_TRADE=",r.get('canTrade'))
+          print("READING_ALLOWED=",r.get('readingAllowed'))
+          print("SPOT_TRADING_PERMISSION=",r.get('spotTradingPermission'))
+          print("PROHIBITED_PERMISSION_ENABLED=",r.get('prohibitedPermissionEnabled'))
+          print("API_TRADING_LOCKED=",r.get('apiTradingLocked'))
+          print("ACCOUNT_NORMAL=",r.get('accountNormal'))
+          print("NO_UNKNOWN_ORDERS=",r.get('noUnknownOrders'))
+          print("NO_UNPROTECTED_POSITIONS=",r.get('noUnprotectedPositions'))
+          PY
+
+      - name: Production V2 dry-run through real route
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 40 -X POST \
+            -H 'cache-control: no-store' \
+            "$WORKER_URL/production-v2-dry-run?nonce=$(date +%s%N)" \
+            -o /tmp/v2-dryrun.json
+          cat /tmp/v2-dryrun.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/v2-dryrun.json'))
+          assert r.get('financialAction') is False
+          print("V2_DRYRUN_OK=",r.get('ok'))
+          print("V2_DRYRUN_STATUS=",r.get('status'))
+          print("V2_DRYRUN_ROUTE=",r.get('route'))
+          print("V2_DRYRUN_BINANCE_CODE=",r.get('binanceCode'))
+          print("V2_DRYRUN_WOULD_SEND=",r.get('wouldSend'))
+          print("V2_DRYRUN_REASON=",r.get('reason'))
           PY
 
       - name: Verify Railway-free live runtime
