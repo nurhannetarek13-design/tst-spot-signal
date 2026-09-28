@@ -40,6 +40,21 @@ jobs:
           assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
           PY
+      - name: Verify immutable Vercel relay read-only access
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 20 \
+            "$WORKER_URL/vercel-immutable-relay-preflight?nonce=$(date +%s%N)" \
+            -o /tmp/immutable.json
+          cat /tmp/immutable.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/immutable.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          PY
+
       - name: Verify direct Cloudflare Binance read-only access
         shell: bash
         run: |
