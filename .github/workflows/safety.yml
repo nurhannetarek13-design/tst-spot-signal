@@ -28,6 +28,7 @@ jobs:
       - run: node --check src/thesis-engine.js
       - run: node scripts/test-thesis-engine.mjs
       - run: node scripts/test-supabase-relay-core.mjs
+      - run: node scripts/test-v2-intent-router-guards.mjs
       - run: node --check src/supabase-live-client.js
       - name: Assert execution provider cutover is not Make-hardcoded
         shell: bash
