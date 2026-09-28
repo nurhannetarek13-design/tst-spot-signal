@@ -51,6 +51,50 @@ function cloudflareBinanceCreds(env) {
   return { key: String(key || "").trim(), secret: String(secret || "").trim() };
 }
 
+async function cloudflareDirectBinanceReadOnlyPreflight(env) {
+  const c = cloudflareBinanceCreds(env);
+  if (!c.key || !c.secret) {
+    return { ok: false, status: "CLOUDFLARE_BINANCE_CREDENTIALS_MISSING", financialAction: false };
+  }
+  const qs = new URLSearchParams({
+    omitZeroBalances: "true",
+    recvWindow: "5000",
+    timestamp: String(Date.now()),
+  }).toString();
+  const signature = await hmacHexRaw(c.secret, qs);
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/account?${qs}&signature=${signature}`, {
+      method: "GET",
+      headers: {
+        "X-MBX-APIKEY": c.key,
+        "accept": "application/json",
+        "cache-control": "no-store",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const row = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && !(Number(row?.code) < 0),
+      status: r.ok ? "CLOUDFLARE_DIRECT_BINANCE_READONLY_OK" : "CLOUDFLARE_DIRECT_BINANCE_READONLY_FAILED",
+      httpStatus: r.status,
+      binanceCode: row?.code ?? null,
+      canTrade: row?.canTrade === true,
+      accountType: row?.accountType || null,
+      financialAction: false,
+      noBalanceValuesExposed: true,
+      noSecretValuesExposed: true,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "CLOUDFLARE_DIRECT_BINANCE_UNREACHABLE",
+      reason: String(e?.message || e).slice(0, 100),
+      financialAction: false,
+      noSecretValuesExposed: true,
+    };
+  }
+}
+
 async function vercelTransportV2ReadOnlyPreflight(env) {
   const c = cloudflareBinanceCreds(env);
   if (!c.key || !c.secret || !env.TELEGRAM_BOT_TOKEN) {
@@ -260,6 +304,17 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/cloudflare-binance-direct-preflight") {
+      const result = await cloudflareDirectBinanceReadOnlyPreflight(env);
+      return Response.json({
+        ...result,
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+      }, {
+        status: result.ok ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     if (url.pathname === "/free-transport-v2-preflight") {
       const result = await vercelTransportV2ReadOnlyPreflight(env);
       return Response.json({
