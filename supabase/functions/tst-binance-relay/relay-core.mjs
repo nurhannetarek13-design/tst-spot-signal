@@ -3,8 +3,12 @@ export const READ_PATHS = new Set([
   "/api/v3/openOrders",
   "/api/v3/order",
   "/api/v3/orderList",
+  "/api/v3/openOrderList",
+  "/api/v3/allOrderList",
   "/api/v3/allOrders",
   "/api/v3/myTrades",
+  "/sapi/v1/account/apiRestrictions",
+  "/sapi/v1/account/status",
 ]);
 
 export const WRITE_PATHS = new Set([
