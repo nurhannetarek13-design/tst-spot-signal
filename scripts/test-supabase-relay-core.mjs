@@ -3,6 +3,7 @@ import { parseAndValidateCapability } from "../supabase/functions/tst-binance-re
 
 const now=1_800_000_000_000;
 const sig="a".repeat(64);
+const edSig="A".repeat(86)+"==";
 const base={apiKey:"A".repeat(32)};
 
 function q(obj){
@@ -14,6 +15,12 @@ const account=parseAndValidateCapability({
   ...base,method:"GET",path:"/api/v3/account",query:q({})
 },{nowMs:now,writesEnabled:false});
 assert.equal(account.isWrite,false);
+
+const edQuery=new URLSearchParams({recvWindow:"5000",timestamp:String(now),signature:edSig}).toString();
+const edAccount=parseAndValidateCapability({
+  ...base,method:"GET",path:"/api/v3/account",query:edQuery
+},{nowMs:now,writesEnabled:false});
+assert.equal(edAccount.isWrite,false);
 
 assert.throws(()=>parseAndValidateCapability({
   ...base,method:"POST",path:"/api/v3/order",
