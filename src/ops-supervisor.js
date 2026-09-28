@@ -12,6 +12,7 @@ import {
   executionOwner,
   routeVersion,
   executionRouteIds,
+  executionSigningModeProbe,
 } from "./live-execution-router.js";
 import { supabaseRelayReplaySelftest } from "./supabase-live-client.js";
 export { SignalState };
@@ -639,6 +640,19 @@ export default {
       const result=await supabaseRelayReplaySelftest(env);
       return Response.json(result,{
         status:result.ok?200:503,
+        headers:{"cache-control":"no-store"},
+      });
+    }
+    if (url.pathname === "/binance-signing-mode-probe") {
+      const result = await executionSigningModeProbe(env).catch((error)=>({
+        ok:false,
+        status:"BINANCE_SIGNING_MODE_PROBE_ERROR",
+        reason:String(error?.message || error).slice(0,160),
+        financialAction:false,
+        noSecretValuesExposed:true,
+      }));
+      return Response.json(result,{
+        status:result?.ok ? 200 : 503,
         headers:{"cache-control":"no-store"},
       });
     }
