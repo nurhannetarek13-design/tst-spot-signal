@@ -10,6 +10,7 @@ import {
   supabaseDryRunExecution,
   supabaseReconcileActiveTrades,
   supabaseSigningModeProbe,
+  supabaseApiKeyOnlyProbe,
   supabaseRelayAuthSelftest,
   supabaseIntentIdempotencySelftest,
 } from "./supabase-live-client.js";
@@ -99,4 +100,12 @@ export async function executionIntentIdempotencySelftest(env) {
     return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
   }
   return supabaseIntentIdempotencySelftest(env);
+}
+
+
+export async function executionApiKeyOnlyProbe(env) {
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
+  }
+  return supabaseApiKeyOnlyProbe(env);
 }
