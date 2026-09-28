@@ -145,6 +145,22 @@ async function scan(env,sendAlert){
     const dedupeKey=`signal:${best.symbol}:${best.strategy}:${best.signalBar}`;
     if(await getState(env,dedupeKey)) return {ok:true,status:"DUPLICATE_SUPPRESSED",symbol:best.symbol,liveTrading:false};
     const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,target1:best.target1,target2:best.target2,quantity:best.quantity,notional:best.notional,score:best.score,thesisQuality:best.thesisQuality,thesis:best.thesis,confidence:best.confidence,derivatives,openedAt:Date.now(),signalBar:best.signalBar};
+    const liveCandidate={
+      id:`AUTO-${best.symbol}-${String(best.strategy||"SETUP").replace(/[^A-Za-z0-9]/g,"").slice(0,12)}-${best.signalBar}`,
+      symbol:best.symbol,
+      entry:Number(best.entry),
+      stop:Number(best.stop),
+      target:Number(best.target),
+      strategy:String(best.strategy||""),
+      score:Number(best.score||0),
+      thesisQuality:Number(best.thesisQuality||0),
+      createdAt:Date.now(),
+      signalBar:best.signalBar,
+      recommendedUSDT:Math.min(5.5,Number(best.notional||5.5)),
+      source:"CLOUDFLARE_DECISION_ENGINE",
+      liveEligible:true,
+    };
+    await putState(env,"live:candidate:latest",liveCandidate,10*60);
     await putState(env,dedupeKey,{createdAt:Date.now()},CFG.duplicateHours*3600);
     await putState(env,"paper:active",[position],CFG.maxHoldHours*3600+7200);
 
