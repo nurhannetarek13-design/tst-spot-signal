@@ -335,6 +335,66 @@ export function supabaseExecutionConfigured(env = {}) {
     && String(env.SUPABASE_EXECUTOR_READY || "").toLowerCase() === "true";
 }
 
+export async function supabaseReadOnlyReconcile(env) {
+  const [account, openOrders] = await Promise.all([
+    relay(env, "GET", "/api/v3/account", { omitZeroBalances: "true" }, 15000),
+    relay(env, "GET", "/api/v3/openOrders", {}, 15000),
+  ]);
+
+  if (!account.ok || !openOrders.ok) {
+    return {
+      ok: false,
+      status: "SUPABASE_RECONCILIATION_READ_FAILED",
+      accountOk: account.ok === true,
+      openOrdersOk: openOrders.ok === true,
+      canTrade: account.data?.canTrade === true,
+      openOrdersChecked: 0,
+      botOpenOrders: 0,
+      protectedOrderLists: 0,
+      orphanBotOrders: 0,
+      financialAction: false,
+    };
+  }
+
+  const rows = Array.isArray(openOrders.data) ? openOrders.data : [];
+  const botRows = rows.filter((row) => /^TST[A-Z]/.test(String(row?.clientOrderId || "")));
+  const ocoRows = botRows.filter((row) => Number(row?.orderListId ?? -1) >= 0);
+  const listGroups = new Map();
+  for (const row of ocoRows) {
+    const id = String(row.orderListId);
+    const current = listGroups.get(id) || [];
+    current.push(row);
+    listGroups.set(id, current);
+  }
+  const protectedOrderLists = [...listGroups.values()].filter((items) => {
+    const ids = items.map((x) => String(x?.clientOrderId || ""));
+    return ids.some((id) => id.startsWith("TSTT")) && ids.some((id) => id.startsWith("TSTS"));
+  }).length;
+  const orphanBotOrders = botRows.filter((row) => {
+    const id = String(row?.clientOrderId || "");
+    if (id.startsWith("TSTT") || id.startsWith("TSTS")) {
+      const group = listGroups.get(String(row?.orderListId ?? -1)) || [];
+      const ids = group.map((x) => String(x?.clientOrderId || ""));
+      return !(ids.some((x) => x.startsWith("TSTT")) && ids.some((x) => x.startsWith("TSTS")));
+    }
+    return true;
+  }).length;
+
+  return {
+    ok: account.data?.canTrade === true && orphanBotOrders === 0,
+    status: account.data?.canTrade === true && orphanBotOrders === 0
+      ? "SUPABASE_RECONCILIATION_OK"
+      : "SUPABASE_RECONCILIATION_FAILED",
+    canTrade: account.data?.canTrade === true,
+    accountType: account.data?.accountType || null,
+    openOrdersChecked: rows.length,
+    botOpenOrders: botRows.length,
+    protectedOrderLists,
+    orphanBotOrders,
+    financialAction: false,
+  };
+}
+
 export async function supabaseReadOnlyHeartbeat(env) {
   const r = await relay(env, "GET", "/api/v3/account", { omitZeroBalances: "true" }, 15000);
   return {
