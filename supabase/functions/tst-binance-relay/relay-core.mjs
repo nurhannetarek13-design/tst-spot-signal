@@ -23,45 +23,43 @@ export const WRITE_PATHS = new Set([
 
 const SAFE_CLIENT_PREFIXES = ["TSTB","TSTX","TSTC","TSTQ","TSTO","TSTU","TSTV","TSTW","TSTS","TSTT"];
 
-export function parseAndValidateCapability(body, { nowMs = Date.now(), writesEnabled = false } = {}) {
+export function parseAndValidateCapability(body, { writesEnabled = false } = {}) {
   const method = String(body?.method || "").toUpperCase();
   const path = String(body?.path || "");
-  const apiKey = String(body?.apiKey || "");
   const query = String(body?.query || "");
   writesEnabled = writesEnabled === true;
 
   if (!["GET","POST","DELETE"].includes(method)) throw new Error("METHOD_BLOCKED");
   if (!(READ_PATHS.has(path) || TEST_PATHS.has(path) || WRITE_PATHS.has(path))) throw new Error("PATH_BLOCKED");
-  if (!/^[A-Za-z0-9_-]{20,256}$/.test(apiKey)) throw new Error("BAD_API_KEY_SHAPE");
-  if (!query || query.length > 4096) throw new Error("BAD_QUERY");
+  if (query.length > 4096) throw new Error("BAD_QUERY");
 
   const q = new URLSearchParams(query);
   const keys=[...q.keys()];
   const duplicateKeys=[...new Set(keys.filter((key,index)=>keys.indexOf(key)!==index))];
   if (duplicateKeys.length) throw new Error("DUPLICATE_PARAM");
-  const signature = String(q.get("signature") || "");
-  const timestamp = Number(q.get("timestamp"));
-  const recvWindow = Number(q.get("recvWindow") || 5000);
-  const hmacShape = /^[a-f0-9]{64}$/i.test(signature);
-  const ed25519Shape = /^[A-Za-z0-9+/]{86}==$/.test(signature);
-  if (!(hmacShape || ed25519Shape)) throw new Error("BAD_BINANCE_SIGNATURE_SHAPE");
-  if (!Number.isFinite(timestamp) || Math.abs(nowMs - timestamp) > 10_000) throw new Error("STALE_CAPABILITY");
-  if (!Number.isFinite(recvWindow) || recvWindow < 1 || recvWindow > 5000) throw new Error("BAD_RECV_WINDOW");
+  if (q.has("signature") || q.has("timestamp") || q.has("recvWindow")) {
+    throw new Error("CALLER_SECURITY_PARAM_BLOCKED");
+  }
+  for (const key of keys) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(key)) throw new Error("BAD_PARAM_NAME");
+    const value=String(q.get(key) ?? "");
+    if (value.length > 512) throw new Error("BAD_PARAM_VALUE");
+  }
 
   const isTest = TEST_PATHS.has(path);
   const isWrite = method !== "GET" && !isTest;
   if (isWrite && !writesEnabled) throw new Error("FINANCIAL_WRITES_DISABLED");
   if (isWrite || isTest) validateWrite(path, method, q);
 
-  const unsignedQuery=query
-    .split("&")
-    .filter((part)=>!part.startsWith("signature="))
-    .join("&");
-  const signatureType=hmacShape?"HMAC_SHA256":"ED25519";
   return {
-    method, path, apiKey, query, q, isWrite, isTest,
-    unsignedQuery, timestamp, recvWindow, signatureType,
-    timestampDeltaMs: nowMs - timestamp,
+    method,
+    path,
+    query,
+    q,
+    isWrite,
+    isTest,
+    unsignedQuery:query,
+    signatureType:"ED25519_SUPABASE_VAULT",
   };
 }
 
