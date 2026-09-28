@@ -768,7 +768,7 @@ async function handleTelegramWebhook(request, env) {
       await tg(env,"sendMessage",{
         chat_id:String(env.TELEGRAM_CHAT_ID),
         text:"⚠️ REAL BINANCE SPOT E2E\nThis can submit exactly one capped real BUY. Press CONFIRM only if Supabase WRITES_ENABLED=true, E2E_TEST_MODE=true, AUTONOMOUS_ENABLED=false.",
-        reply_markup:{inline_keyboard:[[{text:"CONFIRM REAL E2E",callback_data:"CONFIRM_E2E:V19"}],[{text:"CANCEL",callback_data:"CANCEL_E2E:V19"}]]},
+        reply_markup:{inline_keyboard:[[{text:"CONFIRM REAL E2E",callback_data:"CONFIRM_E2E:V20"}],[{text:"CANCEL",callback_data:"CANCEL_E2E:V19"}]]},
       });
     }
     return new Response("ok");
@@ -786,7 +786,7 @@ async function handleTelegramWebhook(request, env) {
     await tg(env,"sendMessage",{
       chat_id:String(env.TELEGRAM_CHAT_ID),
       text:"⚠️ REAL BINANCE SPOT E2E\nThis can submit exactly one capped real BUY. Confirm only if Supabase WRITES_ENABLED=true, E2E_TEST_MODE=true, AUTONOMOUS_ENABLED=false.",
-      reply_markup:{inline_keyboard:[[{text:"CONFIRM REAL E2E",callback_data:"CONFIRM_E2E:V19"}],[{text:"CANCEL",callback_data:"CANCEL_E2E:V19"}]]},
+      reply_markup:{inline_keyboard:[[{text:"CONFIRM REAL E2E",callback_data:"CONFIRM_E2E:V20"}],[{text:"CANCEL",callback_data:"CANCEL_E2E:V19"}]]},
     });
     return new Response("ok");
   }
@@ -795,14 +795,14 @@ async function handleTelegramWebhook(request, env) {
     return new Response("ok");
   }
   if (action === "CONFIRM_E2E") {
-    const claimed=await claimState(env,"admin:e2e:v19:fire-once",{at:Date.now(),chatId:String(q.message?.chat?.id||"")},30*24*60*60);
+    const claimed=await claimState(env,"admin:e2e:v20:fire-once",{at:Date.now(),chatId:String(q.message?.chat?.id||"")},30*24*60*60);
     if(!claimed){
       await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Already triggered — duplicate blocked",show_alert:true});
       return new Response("ok");
     }
     await tg(env,"answerCallbackQuery",{callback_query_id:q.id,text:"Running one controlled E2E…"});
     const result=await triggerSupabaseRealE2E(env).catch(e=>({ok:false,status:"E2E_TRIGGER_ERROR",reason:String(e?.message||e).slice(0,160)}));
-    await putState(env,"admin:e2e:v19:trigger-result",{...result,at:Date.now()},30*24*60*60);
+    await putState(env,"admin:e2e:v20:trigger-result",{...result,at:Date.now()},30*24*60*60);
     await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text:result?.ok?"✅ E2E trigger completed.":"❌ E2E trigger failed: "+String(result?.status||result?.reason||"UNKNOWN").slice(0,120)});
     return new Response("ok");
   }
