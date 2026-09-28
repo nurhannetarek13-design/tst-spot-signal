@@ -42,7 +42,7 @@ jobs:
           assert r.get('noSecretValuesExposed') is True
           PY
 
-      - name: Prove Binance API key is recognized without signature
+      - name: Verify Supabase Vault Binance signer health
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +53,10 @@ jobs:
           r=json.load(open('/tmp/api-key.json'))
           assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
-          print("BINANCE_API_KEY_ONLY_OK=",r.get('ok'))
-          print("BINANCE_API_KEY_ONLY_STATUS=",r.get('status'))
-          print("BINANCE_API_KEY_ONLY_CODE=",r.get('binanceCode'))
+          print("SUPABASE_VAULT_SIGNER_OK=",r.get('ok'))
+          print("SUPABASE_VAULT_SIGNER_STATUS=",r.get('status'))
+          print("SUPABASE_PRIVATE_KEY_PRESENT=",r.get('privateKeyPresent'))
+          print("SUPABASE_API_KEY_PRESENT=",r.get('apiKeyPresent'))
+          print("SUPABASE_API_KEY_SOURCE=",r.get('apiKeySource'))
+          assert r.get('privateKeyPresent') is True
           PY
