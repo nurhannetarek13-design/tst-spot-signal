@@ -333,68 +333,179 @@ function buySummary(order, symbol) {
   };
 }
 
-async function placeBuy(env, { signalId, symbol, quoteUSDT }) {
+async function cancelUnresolvedEntry(env, symbol, clientId) {
+  const sent = await relay(env, "DELETE", "/api/v3/order", {
+    symbol,
+    origClientOrderId: clientId,
+  });
+  if (sent.ok) return { ok:true, status:"ENTRY_CANCEL_ACCEPTED", order:sent.data };
+  if (sent.notFound) return { ok:true, status:"ENTRY_CANCEL_NOT_FOUND", order:null };
+  return {
+    ok:false,
+    status:sent.unknown ? "ENTRY_CANCEL_UNKNOWN" : (sent.status || "ENTRY_CANCEL_REJECTED"),
+    reconciliationRequired:true,
+    mayResend:false,
+    response:sent,
+  };
+}
+
+function terminalEntryStatus(status) {
+  return ["FILLED","CANCELED","REJECTED","EXPIRED","EXPIRED_IN_MATCH"].includes(String(status || ""));
+}
+
+async function settleEntryOrder(env, symbol, clientId, firstOrder = null, attempts = 6) {
+  let order = firstOrder;
+  for (let i = 0; i < attempts; i++) {
+    if (order && terminalEntryStatus(order.status)) {
+      const executedQty = Number(order?.executedQty || 0);
+      if (String(order.status) === "FILLED") {
+        return { ok:true, status:"BUY_FILLED", order, partial:false };
+      }
+      if (executedQty > 0) {
+        return { ok:true, status:"BUY_PARTIAL_FINAL", order, partial:true };
+      }
+      return { ok:false, status:"ENTRY_TERMINATED_WITHOUT_FILL", order, noPosition:true, mayResend:false };
+    }
+    if (i > 0 || !order) {
+      const rec = await queryOrder(env, symbol, clientId);
+      if (rec.found) order = rec.order;
+      else if (!rec.confirmedAbsent) {
+        return { ok:false, status:"ENTRY_STATUS_UNKNOWN", reconciliationRequired:true, mayResend:false };
+      }
+    }
+    if (order && String(order.status) === "PARTIALLY_FILLED" && i >= 2) break;
+    if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, 250 * (i + 1)));
+  }
+
+  if (order && ["NEW","PARTIALLY_FILLED"].includes(String(order.status || ""))) {
+    const canceled = await cancelUnresolvedEntry(env, symbol, clientId);
+    if (!canceled.ok) return canceled;
+    const final = await queryWithRetries(() => queryOrder(env, symbol, clientId), 4);
+    if (!final.found) {
+      return { ok:false, status:"ENTRY_CANCEL_RECONCILIATION_UNKNOWN", reconciliationRequired:true, mayResend:false };
+    }
+    const executedQty = Number(final.order?.executedQty || 0);
+    if (executedQty > 0) {
+      return {
+        ok:true,
+        status:String(final.order?.status || "") === "FILLED" ? "BUY_FILLED" : "BUY_PARTIAL_FINAL",
+        order:final.order,
+        partial:String(final.order?.status || "") !== "FILLED",
+      };
+    }
+    return { ok:false, status:"ENTRY_CANCELED_WITHOUT_FILL", order:final.order, noPosition:true, mayResend:false };
+  }
+
+  return { ok:false, status:"ENTRY_FINAL_STATE_UNKNOWN", reconciliationRequired:true, mayResend:false, order };
+}
+
+async function preTradeMarketBuy(env, { symbol, quoteUSDT, referencePrice = null }) {
+  const account = await relay(env, "GET", "/api/v3/account", { omitZeroBalances:"true" }, 15000);
+  if (!account.ok) {
+    return { ok:false, status:"PRETRADE_ACCOUNT_READ_FAILED", response:account };
+  }
+  const availableUSDT = freeBalance(account.data, "USDT");
+  try {
+    const validation = await validateSpotMarketBuy(symbol, quoteUSDT, availableUSDT, { referencePrice });
+    return { ok:true, validation };
+  } catch (error) {
+    return { ok:false, status:String(error?.message || error).slice(0,160) || "PRETRADE_FILTER_REJECTED" };
+  }
+}
+
+async function placeBuy(env, { intentId, signalId, symbol, quoteUSDT, quoteOrderQty }) {
   const ids = clientIds(signalId);
   const existing = await queryOrder(env, symbol, ids.buy);
   if (existing.found) {
-    const state = String(existing.order?.status || "");
-    if (state === "FILLED") return { ok: true, status: "BUY_FILLED", order: existing.order, ids, recovered: true };
-    return {
-      ok: false,
-      status: "BUY_ALREADY_EXISTS_NONFINAL",
-      reconciliationRequired: true,
-      mayResend: false,
-      ids,
-      order: existing.order,
-    };
+    const settled = await settleEntryOrder(env, symbol, ids.buy, existing.order);
+    if (settled.ok) {
+      await writeTradeState(env, intentId, settled.partial ? "PARTIALLY_FILLED" : "FILLED", {
+        symbol,
+        signalId,
+        buyOrderId:settled.order?.orderId ?? null,
+        buyClientOrderId:ids.buy,
+        executedQty:Number(settled.order?.executedQty || 0),
+        recovered:true,
+      });
+      return { ...settled, ids, recovered:true };
+    }
+    return { ...settled, ids };
   }
   if (!existing.confirmedAbsent) {
-    return { ok: false, status: "BUY_PRECHECK_UNKNOWN", reconciliationRequired: true, mayResend: false, ids };
+    return { ok:false, status:"BUY_PRECHECK_UNKNOWN", reconciliationRequired:true, mayResend:false, ids };
   }
+
+  await writeTradeState(env, intentId, "ENTRY_SUBMITTING", {
+    symbol,
+    signalId,
+    buyClientOrderId:ids.buy,
+    quoteUSDT:Number(quoteUSDT),
+  });
 
   const placed = await relay(env, "POST", "/api/v3/order", {
     symbol,
-    side: "BUY",
-    type: "MARKET",
-    quoteOrderQty: Number(quoteUSDT).toFixed(2),
-    newClientOrderId: ids.buy,
-    newOrderRespType: "FULL",
+    side:"BUY",
+    type:"MARKET",
+    quoteOrderQty:String(quoteOrderQty),
+    newClientOrderId:ids.buy,
+    newOrderRespType:"FULL",
   });
 
-  if (placed.ok) return { ok: true, status: "BUY_FILLED", order: placed.data, ids };
+  if (placed.ok) {
+    await writeTradeState(env, intentId, "ENTRY_ACCEPTED", {
+      symbol,
+      signalId,
+      buyOrderId:placed.data?.orderId ?? null,
+      buyClientOrderId:ids.buy,
+      exchangeEntryStatus:String(placed.data?.status || "UNKNOWN"),
+      executedQty:Number(placed.data?.executedQty || 0),
+      entryLatencyMs:Number(placed.latencyMs || 0),
+    });
+    const settled = await settleEntryOrder(env, symbol, ids.buy, placed.data);
+    if (settled.ok) {
+      await writeTradeState(env, intentId, settled.partial ? "PARTIALLY_FILLED" : "FILLED", {
+        buyOrderId:settled.order?.orderId ?? placed.data?.orderId ?? null,
+        executedQty:Number(settled.order?.executedQty || 0),
+        exchangeEntryStatus:String(settled.order?.status || ""),
+      });
+      return { ...settled, ids };
+    }
+    return { ...settled, ids };
+  }
 
   if (placed.unknown) {
     const rec = await queryWithRetries(() => queryOrder(env, symbol, ids.buy));
     if (rec.found) {
-      const state = String(rec.order?.status || "");
-      if (state === "FILLED") return { ok: true, status: "BUY_FILLED", order: rec.order, ids, recovered: true };
-      return {
-        ok: false,
-        status: "BUY_EXISTS_AFTER_UNKNOWN",
-        reconciliationRequired: true,
-        mayResend: false,
-        ids,
-        order: rec.order,
-      };
+      const settled = await settleEntryOrder(env, symbol, ids.buy, rec.order);
+      if (settled.ok) {
+        await writeTradeState(env, intentId, settled.partial ? "PARTIALLY_FILLED" : "FILLED", {
+          buyOrderId:settled.order?.orderId ?? null,
+          buyClientOrderId:ids.buy,
+          executedQty:Number(settled.order?.executedQty || 0),
+          recovered:true,
+        });
+        return { ...settled, ids, recovered:true };
+      }
+      return { ...settled, ids };
     }
     return {
-      ok: false,
-      status: "BUY_SUBMISSION_UNKNOWN",
-      reconciliationRequired: true,
-      mayResend: false,
+      ok:false,
+      status:"BUY_SUBMISSION_UNKNOWN",
+      reconciliationRequired:true,
+      mayResend:false,
       ids,
-      reconciliationConfirmedAbsent: rec.confirmedAbsent === true,
+      reconciliationConfirmedAbsent:rec.confirmedAbsent === true,
     };
   }
 
   return {
-    ok: false,
-    status: placed.status || "BUY_REJECTED",
-    noOrderSent: placed.definiteReject === true,
-    reconciliationRequired: placed.definiteReject !== true,
-    mayResend: false,
+    ok:false,
+    status:placed.status || "BUY_REJECTED",
+    noOrderSent:placed.definiteReject === true,
+    reconciliationRequired:placed.definiteReject !== true,
+    mayResend:false,
     ids,
-    response: placed,
+    response:placed,
   };
 }
 
