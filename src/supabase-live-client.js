@@ -83,6 +83,39 @@ function stateStub(env) {
   return env.STATE_COORDINATOR.get(id);
 }
 
+async function getStateKey(env, key) {
+  const r = await stateStub(env).fetch("https://state/get?key=" + encodeURIComponent(key));
+  return r.ok ? await r.json() : null;
+}
+
+async function putStateKey(env, key, value, ttlMs = 90 * 24 * 60 * 60 * 1000) {
+  await stateStub(env).fetch("https://state/put?key=" + encodeURIComponent(key), {
+    method:"PUT",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({value,expiresAt:Date.now()+ttlMs}),
+  });
+}
+
+async function claimStateKey(env, key, value, ttlMs = 90 * 24 * 60 * 60 * 1000) {
+  const r = await stateStub(env).fetch("https://state/claim?key=" + encodeURIComponent(key), {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({value,expiresAt:Date.now()+ttlMs}),
+  });
+  return r.ok;
+}
+
+async function updateActiveIntentIndex(env, intentId, state) {
+  const key="live:active-intents";
+  const current=await getStateKey(env,key);
+  const rows=Array.isArray(current)?current.filter(Boolean):[];
+  const filtered=rows.filter((x)=>String(x?.intentId||"")!==String(intentId));
+  if (["PROTECTED","PROTECTION_PENDING","FILLED","PARTIALLY_FILLED"].includes(String(state))) {
+    filtered.push({intentId:String(intentId),state:String(state),updatedAt:Date.now()});
+  }
+  await putStateKey(env,key,filtered.slice(-20));
+}
+
 async function readTradeState(env, intentId) {
   const r = await stateStub(env).fetch("https://state/get?key=" + encodeURIComponent("trade-intent:" + intentId));
   return r.ok ? await r.json() : null;
@@ -106,6 +139,7 @@ async function writeTradeState(env, intentId, state, patch = {}) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ value: row, expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000 }),
   });
+  await updateActiveIntentIndex(env,intentId,state);
   return row;
 }
 
