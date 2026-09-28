@@ -45,8 +45,8 @@ export function evaluateGoNoGo({
     BINANCE_CONNECTION_OK: binanceConnectionOk === true,
     EXECUTION_ROUTE_HEALTHY: executionRouteHealthy === true,
     EXECUTOR_OWNERSHIP_OK: executorOwnershipOk === true,
-    NO_UNKNOWN_ORDERS: Number(unknownOrders || 0) === 0,
-    NO_UNPROTECTED_POSITIONS: Number(unprotectedPositions || 0) === 0,
+    NO_UNKNOWN_ORDERS: reconciliationOk === true && Number.isFinite(Number(unknownOrders)) && Number(unknownOrders) === 0,
+    NO_UNPROTECTED_POSITIONS: reconciliationOk === true && Number.isFinite(Number(unprotectedPositions)) && Number(unprotectedPositions) === 0,
     DAILY_RISK_AVAILABLE: Number(dailyLossUSDT || 0) > -Math.abs(Number(policy.dailyLossCapUSDT || 0)),
     EMERGENCY_KILL_SWITCH_CLEAR: policy.emergencyKillSwitch !== true,
   };
