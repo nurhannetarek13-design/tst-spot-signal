@@ -351,48 +351,79 @@ async function supabaseRelayReadOnlyPreflight(env) {
     };
   }
 
-  const qs = new URLSearchParams({
-    omitZeroBalances: "true",
-    recvWindow: "5000",
-    timestamp: String(Date.now()),
-  }).toString();
-  const signature = await hmacHexRaw(creds.secret, qs);
-  const body = {
-    method: "GET",
-    path: "/api/v3/account",
-    apiKey: creds.key,
-    query: `${qs}&signature=${signature}`,
-  };
+  const regions = [
+    "eu-west-1",
+    "eu-central-1",
+    "us-east-1",
+    "us-west-2",
+    "ap-southeast-1",
+    "ap-northeast-1",
+  ];
 
-  try {
-    const r = await fetch(relayUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const row = await r.json().catch(() => ({}));
-    return {
-      ok: r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK",
-      status: row?.status || `HTTP_${r.status}`,
-      httpStatus: r.status,
-      canTrade: row?.data?.canTrade === true,
-      accountType: row?.data?.accountType || null,
-      financialAction: false,
-      noBalanceValuesExposed: true,
-      noSecretValuesExposed: true,
-      relay: "SUPABASE_EDGE_FUNCTION",
+  const attempts = await Promise.all(regions.map(async (region) => {
+    const qs = new URLSearchParams({
+      omitZeroBalances: "true",
+      recvWindow: "5000",
+      timestamp: String(Date.now()),
+    }).toString();
+    const signature = await hmacHexRaw(creds.secret, qs);
+    const body = {
+      method: "GET",
+      path: "/api/v3/account",
+      apiKey: creds.key,
+      query: `${qs}&signature=${signature}`,
     };
-  } catch (e) {
-    return {
-      ok: false,
-      status: "SUPABASE_RELAY_UNREACHABLE",
-      reason: String(e?.name || "FetchError"),
-      financialAction: false,
-      noSecretValuesExposed: true,
-      relay: "SUPABASE_EDGE_FUNCTION",
-    };
-  }
+
+    try {
+      const r = await fetch(relayUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-region": region,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const row = await r.json().catch(() => ({}));
+      return {
+        region,
+        edgeRegion: r.headers.get("x-sb-edge-region") || null,
+        ok: r.ok && row?.ok === true && row?.status === "BINANCE_RELAY_OK",
+        status: row?.status || `HTTP_${r.status}`,
+        httpStatus: r.status,
+        upstreamHttpStatus: Number(row?.upstreamHttpStatus || 0),
+        canTrade: row?.data?.canTrade === true,
+        accountType: row?.data?.accountType || null,
+      };
+    } catch (e) {
+      return {
+        region,
+        edgeRegion: null,
+        ok: false,
+        status: "SUPABASE_RELAY_UNREACHABLE",
+        reason: String(e?.name || "FetchError"),
+        httpStatus: 0,
+        upstreamHttpStatus: 0,
+        canTrade: false,
+        accountType: null,
+      };
+    }
+  }));
+
+  const working = attempts.find((x) => x.ok === true) || null;
+  return {
+    ok: Boolean(working),
+    status: working ? "SUPABASE_REGIONAL_RELAY_OK" : "SUPABASE_REGIONAL_RELAY_BLOCKED",
+    selectedRegion: working?.region || null,
+    selectedEdgeRegion: working?.edgeRegion || null,
+    canTrade: working?.canTrade === true,
+    accountType: working?.accountType || null,
+    attempts,
+    financialAction: false,
+    noBalanceValuesExposed: true,
+    noSecretValuesExposed: true,
+    relay: "SUPABASE_EDGE_FUNCTION",
+  };
 }
 
 async function vercelImmutableRelayReadOnlyPreflight(env) {
