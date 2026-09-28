@@ -8,6 +8,7 @@ import {
   supabaseReadOnlyHeartbeat,
   supabaseReadOnlyReconcile,
   supabaseExecutionConfigured,
+  supabaseDryRunExecution,
 } from "./supabase-live-client.js";
 
 export function executionProvider(env = {}) {
@@ -56,4 +57,12 @@ export function executionRouteIds(env = {}) {
     return { buy: "SUPABASE_BUY_V2", oco: "SUPABASE_OCO_V2" };
   }
   return { buy: MAKE_EXECUTION_ROUTE.buy.id, oco: MAKE_EXECUTION_ROUTE.oco.id };
+}
+
+
+export async function executionDryRun(env, input) {
+  if (executionProvider(env) !== "SUPABASE_V2") {
+    return { ok:false, status:"LEGACY_FINANCIAL_ROUTE_DISABLED", financialAction:false };
+  }
+  return supabaseDryRunExecution(env, input);
 }
