@@ -196,7 +196,7 @@ async function prepareManualE2EPrompt(env) {
     sentAt:now,
     quoteUSDT:rec,
     automaticExecution:false,
-    executionRoute:"MAKE_V2",
+    executionRoute:executionProvider(env),
   }, SIGNAL_TTL_SEC);
   return { ok:true, status:"MANUAL_E2E_PROMPT_SENT", id, symbol, quoteUSDT:rec };
 }
@@ -694,8 +694,8 @@ async function handleTelegramWebhook(request, env) {
 
   const s = await getState(env, `live-signal:${id}`);
   if (action === "PREP" && s) {
-    if (String(env.MAKE_EXECUTOR_V2_READY || "").toLowerCase() !== "true") {
-      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Make V2 executor is not ready — no trade prepared", show_alert: true });
+    if (!executorConfigured(env)) {
+      await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Execution provider is not ready — no trade prepared", show_alert: true });
       return new Response("ok");
     }
     const requested = Number(s.confirmedQuoteUSDT || s.recommendedUSDT || 0);
@@ -765,7 +765,7 @@ async function handleTelegramWebhook(request, env) {
           ocoOrderListId: r.ocoOrderListId || null,
           emergencyOrderId: r.emergencyOrderId || null,
           clientIds: r.clientIds || null,
-          executionRoute: r.executionRoute || "MAKE_V2",
+          executionRoute: r.executionRoute || executionProvider(env),
         }, 30 * 24 * 60 * 60);
       }
       await putState(env, `execution-result:${id}`, {
@@ -819,7 +819,7 @@ async function notifyExecutionReadinessTransition(env, balance) {
   const lastError=balance ? null : await getState(env,"binance:balance:error");
   const ready=Boolean(
     c.credentialMode==="LIVE" &&
-    c.route===LIVE_ROUTE &&
+    c.route===executionRoute(env) &&
     balance?.ok &&
     balance?.canTrade &&
     balance?.accountSafetyOk === true
