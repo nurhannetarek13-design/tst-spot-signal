@@ -1,4 +1,3 @@
-import postgres from "npm:postgres@3.4.9";
 import { parseAndValidateCapability, sanitizeResponse } from "./relay-core.mjs";
 
 const BASE=(Deno.env.get("BINANCE_PRIVATE_BASE_URL")||"https://api.binance.com").replace(/\/$/,"");
@@ -11,16 +10,6 @@ MCowBQYDK2VwAyEAlaTKxorOgelDsnapk+ik3sFkDxJA5GdXbfZMBrFmjxA=
 const RELAY_AUTH_MAX_AGE_MS=15_000;
 const RELAY_NONCE_TTL_MS=10*60_000;
 const BINANCE_RECV_WINDOW=5000;
-
-let sqlClient:any=null;
-
-function db(){
-  if(sqlClient) return sqlClient;
-  const dbUrl=String(Deno.env.get("SUPABASE_DB_URL")||"").trim();
-  if(!dbUrl) throw new Error("SUPABASE_DB_URL_MISSING");
-  sqlClient=postgres(dbUrl,{max:1,prepare:false,ssl:"require",idle_timeout:20,connect_timeout:10});
-  return sqlClient;
-}
 
 function b64ToBytes(value:string){
   const raw=atob(String(value||""));
@@ -52,6 +41,28 @@ function json(status:number,payload:unknown){
     status,
     headers:{"content-type":"application/json","cache-control":"no-store"},
   });
+}
+
+function serviceAuthHeaders(){
+  const serviceRole=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
+  if(!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_MISSING");
+  return {
+    "content-type":"application/json",
+    "apikey":serviceRole,
+    "authorization":`Bearer ${serviceRole}`,
+  };
+}
+function supabaseUrl(){
+  const u=String(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
+  if(!u) throw new Error("SUPABASE_URL_MISSING");
+  return u;
+}
+async function restJson(url:string,init:RequestInit){
+  const r=await fetch(url,{...init,signal:AbortSignal.timeout(8_000)});
+  const text=await r.text();
+  let data:any=null;
+  try{data=text?JSON.parse(text):null;}catch{data=text;}
+  return {r,data};
 }
 
 async function claimRelayNonce(nonce:string,expiresAt:number){
@@ -112,126 +123,101 @@ function decodeStatePayload(value:string){
 
 async function handleRuntimeState(body:any){
   try{
-  const q=new URLSearchParams(String(body?.query||""));
-  const op=String(q.get("op")||"").toLowerCase();
-  const key=String(q.get("key")||"");
-  if(!/^[A-Za-z0-9:_|.\/-]{1,300}$/.test(key)){
-    return json(400,{ok:false,status:"STATE_BAD_KEY",financialAction:false});
-  }
-  const sql=db();
-
-  if(op==="get"){
-    const rows=await sql`
-      select value
-      from private.tst_runtime_state
-      where key=${key}
-        and (expires_at is null or expires_at > now())
-      limit 1
-    `;
-    return json(200,{ok:true,status:"STATE_GET_OK",found:rows.length>0,value:rows[0]?.value??null,financialAction:false});
-  }
-
-  if(op==="put" || op==="claim"){
-    const expiresAt=Number(q.get("expiresAt")||0);
-    const valueHash=String(q.get("valueHash")||"");
-    const statePayload=String(body?.statePayload||"");
-    if(!Number.isFinite(expiresAt)||expiresAt<=Date.now()||!/^[a-f0-9]{64}$/.test(valueHash)||!statePayload){
-      return json(400,{ok:false,status:"STATE_BAD_WRITE_INPUT",financialAction:false});
+    const q=new URLSearchParams(String(body?.query||""));
+    const op=String(q.get("op")||"").toLowerCase();
+    const key=String(q.get("key")||"");
+    if(!/^[A-Za-z0-9:_|.\/-]{1,300}$/.test(key)){
+      return json(400,{ok:false,status:"STATE_BAD_KEY",financialAction:false});
     }
-    if((await sha256Hex(statePayload))!==valueHash){
-      return json(401,{ok:false,status:"STATE_VALUE_HASH_MISMATCH",financialAction:false});
-    }
-    let value:any;
-    try{
-      value=JSON.parse(decodeStatePayload(statePayload));
-    }catch{
-      return json(400,{ok:false,status:"STATE_BAD_PAYLOAD",financialAction:false});
+    const base=supabaseUrl();
+    const headers=serviceAuthHeaders();
+
+    if(op==="get"){
+      const endpoint=new URL(base+"/rest/v1/tst_runtime_state");
+      endpoint.searchParams.set("select","value");
+      endpoint.searchParams.set("key","eq."+key);
+      endpoint.searchParams.set("limit","1");
+      const {r,data}=await restJson(endpoint.toString(),{method:"GET",headers});
+      if(!r.ok) return json(503,{ok:false,status:"STATE_BACKEND_ERROR",reason:"REST_GET_"+r.status,financialAction:false});
+      const row=Array.isArray(data)&&data.length?data[0]:null;
+      return json(200,{ok:true,status:"STATE_GET_OK",found:Boolean(row),value:row?.value??null,financialAction:false});
     }
 
-    if(op==="put"){
-      await sql`
-        insert into private.tst_runtime_state(key,value,expires_at,updated_at)
-        values(${key},${sql.json(value)},to_timestamp(${expiresAt}/1000.0),now())
-        on conflict(key) do update
-        set value=excluded.value,expires_at=excluded.expires_at,updated_at=now()
-      `;
-      return json(200,{ok:true,status:"STATE_PUT_OK",financialAction:false});
+    if(op==="put" || op==="claim"){
+      const expiresAt=Number(q.get("expiresAt")||0);
+      const valueHash=String(q.get("valueHash")||"");
+      const statePayload=String(body?.statePayload||"");
+      if(!Number.isFinite(expiresAt)||expiresAt<=Date.now()||!/^[a-f0-9]{64}$/.test(valueHash)||!statePayload){
+        return json(400,{ok:false,status:"STATE_BAD_WRITE_INPUT",financialAction:false});
+      }
+      if((await sha256Hex(statePayload))!==valueHash){
+        return json(401,{ok:false,status:"STATE_VALUE_HASH_MISMATCH",financialAction:false});
+      }
+      let value:any;
+      try{ value=JSON.parse(decodeStatePayload(statePayload)); }
+      catch{ return json(400,{ok:false,status:"STATE_BAD_PAYLOAD",financialAction:false}); }
+
+      if(op==="put"){
+        const endpoint=new URL(base+"/rest/v1/tst_runtime_state");
+        endpoint.searchParams.set("on_conflict","key");
+        const putHeaders={...headers,"prefer":"resolution=merge-duplicates,return=minimal"};
+        const {r}=await restJson(endpoint.toString(),{
+          method:"POST",
+          headers:putHeaders,
+          body:JSON.stringify({key,value,expires_at:new Date(expiresAt).toISOString(),updated_at:new Date().toISOString()}),
+        });
+        if(!r.ok) return json(503,{ok:false,status:"STATE_BACKEND_ERROR",reason:"REST_PUT_"+r.status,financialAction:false});
+        return json(200,{ok:true,status:"STATE_PUT_OK",financialAction:false});
+      }
+
+      const {r,data}=await restJson(base+"/rest/v1/rpc/tst_runtime_state_claim",{
+        method:"POST",
+        headers,
+        body:JSON.stringify({p_key:key,p_value:value,p_expires_at:new Date(expiresAt).toISOString()}),
+      });
+      if(!r.ok) return json(503,{ok:false,status:"STATE_BACKEND_ERROR",reason:"RPC_CLAIM_"+r.status,financialAction:false});
+      const claimed=data===true;
+      return json(claimed?200:409,{ok:claimed,claimed,status:claimed?"STATE_CLAIMED":"STATE_ALREADY_CLAIMED",financialAction:false});
     }
 
-    const rows=await sql`
-      insert into private.tst_runtime_state(key,value,expires_at,updated_at)
-      values(${key},${sql.json(value)},to_timestamp(${expiresAt}/1000.0),now())
-      on conflict(key) do update
-      set value=excluded.value,expires_at=excluded.expires_at,updated_at=now()
-      where private.tst_runtime_state.expires_at is not null
-        and private.tst_runtime_state.expires_at <= now()
-      returning key
-    `;
-    return json(rows.length?200:409,{
-      ok:rows.length>0,
-      claimed:rows.length>0,
-      status:rows.length?"STATE_CLAIMED":"STATE_ALREADY_CLAIMED",
-      financialAction:false,
-    });
-  }
-
-  return json(400,{ok:false,status:"STATE_BAD_OPERATION",financialAction:false});
+    return json(400,{ok:false,status:"STATE_BAD_OPERATION",financialAction:false});
   }catch(error){
-    return json(503,{
-      ok:false,
-      status:"STATE_BACKEND_ERROR",
-      reason:String(error?.message||error).slice(0,200),
-      financialAction:false,
-    });
+    return json(503,{ok:false,status:"STATE_BACKEND_ERROR",reason:String(error?.message||error).slice(0,200),financialAction:false});
   }
-
 }
 
 async function vaultSignerReady(){
-  const sql=db();
-  const rows=await sql`
-    select
-      exists(select 1 from vault.secrets where name=${BINANCE_PRIVATE_KEY_VAULT_NAME}) as private_key_present,
-      exists(select 1 from vault.secrets where name=${BINANCE_API_KEY_VAULT_NAME}) as vault_api_key_present
-  `;
   const envApiKey=Boolean(String(Deno.env.get("BINANCE_API_KEY")||"").trim());
+  let privateKeyPresent=false;
+  try{
+    const {r,data}=await restJson(supabaseUrl()+"/rest/v1/rpc/tst_binance_ed25519_sign",{
+      method:"POST",
+      headers:serviceAuthHeaders(),
+      body:JSON.stringify({p_payload:"tst-signer-health"}),
+    });
+    privateKeyPresent=r.ok && typeof data==="string" && data.length>40;
+  }catch{}
   return {
-    privateKeyPresent:rows[0]?.private_key_present===true,
-    apiKeyPresent:envApiKey||rows[0]?.vault_api_key_present===true,
-    apiKeySource:envApiKey?"EDGE_FUNCTION_SECRET":(rows[0]?.vault_api_key_present===true?"SUPABASE_VAULT":"MISSING"),
+    privateKeyPresent,
+    apiKeyPresent:envApiKey,
+    apiKeySource:envApiKey?"EDGE_FUNCTION_SECRET":"MISSING",
   };
 }
 
 async function getApiKey(){
   const envApiKey=String(Deno.env.get("BINANCE_API_KEY")||"").trim();
-  if(envApiKey) return {apiKey:envApiKey,source:"EDGE_FUNCTION_SECRET"};
-  const sql=db();
-  const rows=await sql`
-    select decrypted_secret as api_key
-    from vault.decrypted_secrets
-    where name=${BINANCE_API_KEY_VAULT_NAME}
-    limit 1
-  `;
-  const apiKey=String(rows[0]?.api_key||"").trim();
-  if(!apiKey) throw new Error("BINANCE_API_KEY_MISSING");
-  return {apiKey,source:"SUPABASE_VAULT"};
+  if(!envApiKey) throw new Error("BINANCE_API_KEY_MISSING");
+  return {apiKey:envApiKey,source:"EDGE_FUNCTION_SECRET"};
 }
 
 async function signWithVault(unsignedPayload:string){
-  const sql=db();
-  const rows=await sql`
-    select encode(
-      pgsodium.crypto_sign_detached(
-        convert_to(${String(unsignedPayload)},'UTF8'),
-        decode(decrypted_secret,'base64')
-      ),
-      'base64'
-    ) as signature
-    from vault.decrypted_secrets
-    where name=${BINANCE_PRIVATE_KEY_VAULT_NAME}
-    limit 1
-  `;
-  const signature=String(rows[0]?.signature||"").replace(/\s+/g,"");
+  const {r,data}=await restJson(supabaseUrl()+"/rest/v1/rpc/tst_binance_ed25519_sign",{
+    method:"POST",
+    headers:serviceAuthHeaders(),
+    body:JSON.stringify({p_payload:String(unsignedPayload)}),
+  });
+  if(!r.ok) throw new Error("BINANCE_SIGN_RPC_FAILED_"+r.status);
+  const signature=String(data||"").replace(/\s+/g,"");
   if(!/^[A-Za-z0-9+/]{86}==$/.test(signature)) throw new Error("BINANCE_VAULT_SIGNATURE_INVALID");
   return signature;
 }
