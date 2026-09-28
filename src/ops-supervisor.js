@@ -189,6 +189,21 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/infra-credential-presence") {
+      const apiKeyPresent = Boolean(env.BINANCE_API_KEY || env.BINANCE_KEY || env.BINANCE_APIKEY);
+      const apiSecretPresent = Boolean(env.BINANCE_API_SECRET || env.BINANCE_SECRET || env.BINANCE_SECRET_KEY);
+      return Response.json({
+        ok: true,
+        cloudflareBinanceApiKeyPresent: apiKeyPresent,
+        cloudflareBinanceSecretPresent: apiSecretPresent,
+        cloudflareBinanceCredentialsComplete: apiKeyPresent && apiSecretPresent,
+        telegramRelaySecretPresent: Boolean(env.TELEGRAM_BOT_TOKEN),
+        liveExecutionEnabled: readLivePolicy(env).liveExecutionEnabled === true,
+        autonomousEnabled: readLivePolicy(env).autonomousEnabled === true,
+        financialAction: false,
+        noSecretValuesExposed: true,
+      }, { headers: { "cache-control": "no-store" } });
+    }
     if (url.pathname === "/make-bridge-verify" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const result = await verifyBridgeEnvelope(env, body);
