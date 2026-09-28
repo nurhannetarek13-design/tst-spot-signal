@@ -1134,6 +1134,32 @@ export default {
       }
     }
 
+    if (url.pathname === "/stale-ingest-selftest" && request.method === "POST") {
+      if(!env.TELEGRAM_BOT_TOKEN){
+        return Response.json({ok:false,status:"TELEGRAM_SIGNING_SECRET_MISSING",financialAction:false},{status:503});
+      }
+      const body={id:"STALE-SELFTEST",symbol:"BTCUSDT",entry:100,stop:99,target:101,stakeUSDT:5.5,score:99,dryRun:true};
+      const raw=JSON.stringify(body);
+      const ts=String(Date.now()-120_000);
+      const signature=await hmacHex(env.TELEGRAM_BOT_TOKEN,`${ts}.${raw}`);
+      const req=new Request("https://internal/fast-signal-ingest",{
+        method:"POST",
+        headers:{"content-type":"application/json","x-fast-timestamp":ts,"x-fast-signature":signature},
+        body:raw,
+      });
+      const response=await handleFastSignalIngest(req,env);
+      const row=await response.json().catch(()=>({}));
+      const passed=response.status===401 && row?.status==="STALE_INGEST";
+      return Response.json({
+        ok:passed,
+        status:passed?"STALE_INGEST_REJECTION_OK":"STALE_INGEST_REJECTION_FAILED",
+        observedHttpStatus:response.status,
+        observedStatus:row?.status||null,
+        financialAction:false,
+        noSecretValuesExposed:true,
+      },{status:passed?200:503,headers:{"cache-control":"no-store"}});
+    }
+
     if (url.pathname === "/production-v2-dry-run" && request.method === "POST") {
       const result=await productionV2DryRunSelftest(env).catch((error)=>({
         ok:false,
