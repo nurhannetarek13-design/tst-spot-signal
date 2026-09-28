@@ -1100,16 +1100,17 @@ export default {
       if (typeof worker.scheduled === "function") await worker.scheduled(event, env, ctx);
       await heartbeat(env, ["scanner", "market-data", "strategy", "risk", "watchdog"], { source: "CLOUDFLARE_CRON" });
       await putState(env, "ops:scheduler:last", { at: Date.now(), source: "CLOUDFLARE_CRON" });
-      const next = await computeState(env);
-      await alertTransition(env, next);
 
+      // Refresh external execution health before evaluating supervisor state.
+      // This prevents a successful Supabase/Binance read-only cycle from being
+      // marked stale for an extra cron interval.
       const executorConfiguredNow = executorConfigured(env);
       const providerNow = executionProvider(env);
       const watchdogKey = providerNow === "SUPABASE_V2"
         ? "supabase:combined-watchdog:last-dispatch"
         : "make:combined-watchdog:last-dispatch";
       const lastWatchdog = (await getState(env, watchdogKey)) || null;
-      if (executorConfiguredNow && Date.now() - Number(lastWatchdog?.at || 0) >= 14 * 60 * 1000) {
+      if (executorConfiguredNow && Date.now() - Number(lastWatchdog?.at || 0) >= 5 * 60 * 1000) {
         const watchdog = await executionReadOnlyHeartbeat(env);
         const now = Date.now();
         let operationalOk = false;
@@ -1201,6 +1202,11 @@ export default {
           status: String(watchdog?.body?.status || watchdog?.status || "UNKNOWN").slice(0, 80),
         });
       }
+
+      // Evaluate supervisor state only after this cycle had a chance to refresh
+      // binance-readonly / reconciler / protection heartbeats.
+      const next = await computeState(env);
+      await alertTransition(env, next);
 
       const e2eArmed = String(env.E2E_ARMED || "").toLowerCase() === "true";
       if (e2eArmed) {
