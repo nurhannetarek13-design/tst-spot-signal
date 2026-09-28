@@ -85,6 +85,12 @@ function finitePositive(v, name) {
 }
 
 function validateWrite(path, method, q) {
+  if (path === "/api/v3/order" && method === "DELETE") {
+    requireSpotSymbol(q);
+    requireClientId(q.get("origClientOrderId"), ["TSTB","TSTQ"]);
+    return;
+  }
+
   if ((path === "/api/v3/order" || path === "/api/v3/order/test") && method === "POST") {
     requireSpotSymbol(q);
     const side = String(q.get("side") || "").toUpperCase();
