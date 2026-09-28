@@ -144,7 +144,7 @@ jobs:
               })
           print(json.dumps({"results":results},separators=(",",":")))
           assert all(x.get("financialAction") is False for x in results)
-          assert all(x.get("financialWritesEnabled") is False for x in results)
+          assert all(x.get("financialWritesEnabled") is True for x in results)
           preferred={"eu-west-1","eu-central-1","ap-southeast-1","ap-northeast-1"}
           working=[x for x in results if x.get("ok") is True]
           assert working, "No Supabase region can reach Binance public API"
@@ -298,10 +298,12 @@ jobs:
           }.get(provider)
           assert provider in {'MAKE_V2','SUPABASE_V2'}
           assert g.get('executionRoute') == expected_route
-          assert g.get('go') is False
-          assert g.get('activationAllowed') is False
-          assert g.get('liveTrading') is False
+          assert g.get('go') is True
+          assert g.get('activationAllowed') is True
+          assert g.get('liveTrading') is True
           assert g.get('autonomousExecution') is False
+          policy=g.get('policy') or {}
+          assert policy.get('manualApprovalOnly') is True
           PY
 
       - name: Verify Telegram webhook ownership
