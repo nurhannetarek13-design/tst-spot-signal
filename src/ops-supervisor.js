@@ -706,12 +706,30 @@ export default {
       let routeHealthy = false;
       let ownershipFresh = false;
       let readonlyHeartbeat = null;
+      let readonlyReconciliation = null;
       if (provider === "SUPABASE_V2") {
-        readonlyHeartbeat = await executionReadOnlyHeartbeat(env);
+        [readonlyHeartbeat, readonlyReconciliation] = await Promise.all([
+          executionReadOnlyHeartbeat(env),
+          executionReadOnlyReconcile(env),
+        ]);
         routeHealthy = readonlyHeartbeat?.transportOk === true
           && readonlyHeartbeat?.body?.canTrade === true
-          && readonlyHeartbeat?.body?.financialAction === false;
+          && readonlyHeartbeat?.body?.financialAction === false
+          && readonlyReconciliation?.ok === true
+          && readonlyReconciliation?.financialAction === false;
         ownershipFresh = routeHealthy && configured;
+        await recordReconciliation(env, {
+          ok: readonlyReconciliation?.ok === true,
+          reason: readonlyReconciliation?.ok === true ? null : String(readonlyReconciliation?.status || "SUPABASE_RECONCILIATION_FAILED"),
+          open_orders_checked: Number(readonlyReconciliation?.openOrdersChecked || 0),
+          protected_orders_checked: Number(readonlyReconciliation?.protectedOrderLists || 0),
+          source: "SUPABASE_V2_GO_NO_GO_READONLY",
+        });
+        await putState(env, "live:unprotected-positions",
+          Number(readonlyReconciliation?.orphanBotOrders || 0) > 0
+            ? [{ source:"SUPABASE_V2", count:Number(readonlyReconciliation.orphanBotOrders || 0), at:Date.now() }]
+            : []
+        );
       } else {
         routeHealthy = bridgeHealth?.ok === true
           && now - Number(bridgeHealth?.at || 0) <= HEARTBEAT_STALE_MS;
@@ -753,6 +771,13 @@ export default {
         readonlyHeartbeat: provider === "SUPABASE_V2" ? {
           transportOk: readonlyHeartbeat?.transportOk === true,
           canTrade: readonlyHeartbeat?.body?.canTrade === true,
+          financialAction: false,
+        } : null,
+        readonlyReconciliation: provider === "SUPABASE_V2" ? {
+          ok: readonlyReconciliation?.ok === true,
+          openOrdersChecked: Number(readonlyReconciliation?.openOrdersChecked || 0),
+          protectedOrderLists: Number(readonlyReconciliation?.protectedOrderLists || 0),
+          orphanBotOrders: Number(readonlyReconciliation?.orphanBotOrders || 0),
           financialAction: false,
         } : null,
         manualExecutionAllowed: gate.go
