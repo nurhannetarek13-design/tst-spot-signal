@@ -1,0 +1,33 @@
+name: Cloudflare Binance MultiHost Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cloudflare-binance-multihost-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe Cloudflare direct Binance private hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 90             "https://tst-spot-signal.nurhanne-tarek13.workers.dev/cloudflare-binance-direct-preflight?nonce=$(date +%s%N)"             -o /tmp/result.json
+          cat /tmp/result.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/result.json'))
+          assert r.get('financialAction') is False
+          assert r.get('noSecretValuesExposed') is True
+          print("DIRECT_OK=",r.get('ok'))
+          print("STATUS=",r.get('status'))
+          print("WORKING_HOST=",r.get('workingBaseHost'))
+          print("ATTEMPTS=",r.get('attempts'))
+          PY
