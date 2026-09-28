@@ -2,6 +2,7 @@ name: Deploy Cloudflare Live Runtime
 # Railway-free production deploy
 # production diagnostic deploy trigger: 2026-09-26 signer recovery
 # production sync trigger: 2026-09-28 supabase-only market path
+# Supabase V2 is the only permitted production financial provider.
 
 on:
   workflow_dispatch:
@@ -164,12 +165,8 @@ jobs:
           r=json.load(open('/tmp/readiness.json'))
           assert r.get('ok') is True
           provider=r.get('executionProvider')
-          expected_route={
-            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
-            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
-          }.get(provider)
-          assert provider in {'MAKE_V2','SUPABASE_V2'}
-          assert r.get('executionRoute') == expected_route
+          assert provider == 'SUPABASE_V2'
+          assert r.get('executionRoute') == 'CLOUDFLARE_SIGNED_SUPABASE_BINANCE'
           assert r.get('railwayDependency') is False
           assert r.get('userConfirmationRequired') is True
           assert r.get('autoBuy') is False
