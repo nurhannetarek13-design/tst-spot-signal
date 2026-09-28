@@ -164,6 +164,13 @@ jobs:
           print(json.dumps({"results":results},separators=(",",":")))
           assert all(x.get("financialAction") is False for x in results)
           assert all(x.get("financialWritesEnabled") is False for x in results)
+          preferred={"eu-west-1","eu-central-1","ap-southeast-1","ap-northeast-1"}
+          working=[x for x in results if x.get("ok") is True]
+          assert working, "No Supabase region can reach Binance public API"
+          assert any(x.get("requestedRegion") in preferred for x in working), "No preferred non-US region can reach Binance"
+          for x in results:
+              if x.get("requestedRegion") in {"us-east-1","us-west-2"} and not x.get("ok"):
+                  assert x.get("upstreamHttpStatus") in {451,403}, x
           PY
 
       - name: Verify Supabase Binance relay read-only access
