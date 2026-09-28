@@ -346,44 +346,54 @@ jobs:
           assert r.get('oldVercelFallback') is False
           PY
 
-      - name: Verify production Go No-Go stays fail-closed
+      - name: Verify production limited-live readiness proof stays non-financial
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 \
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 \
             -H 'cache-control: no-store' \
-            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/go-no-go?nonce=$(date +%s%N)" \
-            -o /tmp/gate.json
-          cat /tmp/gate.json
+            "https://tst-spot-signal.nurhanne-tarek13.workers.dev/limited-live-readiness-proof?nonce=$(date +%s%N)" \
+            -o /tmp/readiness-proof.json
+          cat /tmp/readiness-proof.json
           python - <<'PY'
           import json
-          r=json.load(open('/tmp/gate.json'))
-          checks=r.get('checks',{})
+          r=json.load(open('/tmp/readiness-proof.json'))
+          hb=r.get('heartbeats') or {}
+          tg=r.get('telegramControls') or {}
+          policy=r.get('policy') or {}
           assert r.get('ok') is True
-          provider=r.get('executionProvider')
-          expected_route={
-            'MAKE_V2':'CLOUDFLARE_HMAC_MAKE',
-            'SUPABASE_V2':'CLOUDFLARE_SIGNED_SUPABASE_BINANCE',
-          }.get(provider)
-          assert provider in {'MAKE_V2','SUPABASE_V2'}
-          assert r.get('executionRoute') == expected_route
-          assert r.get('go') is False
-          assert r.get('activationAllowed') is False
-          assert r.get('status') == 'NO_GO'
-          assert r.get('e2eArmed') is False
-          assert r.get('manualE2EComplete') is False
-          assert r.get('manualExecutionAllowed') is False
-          rr=r.get('readonlyReconciliation') or {}
-          if provider == 'SUPABASE_V2' and rr.get('ok') is not True:
-              assert checks.get('NO_UNKNOWN_ORDERS') is False
-              assert checks.get('NO_UNPROTECTED_POSITIONS') is False
-          else:
-              assert checks.get('NO_UNKNOWN_ORDERS') is True
-              assert checks.get('NO_UNPROTECTED_POSITIONS') is True
-          assert r.get('liveTrading') is False
-          assert r.get('autonomousExecution') is False
+          assert r.get('status') == 'LIMITED_LIVE_READINESS_PROOF'
+          assert r.get('financialAction') is False
           assert r.get('noSecretValuesExposed') is True
+          assert r.get('executorConfigured') is True
+          assert r.get('supervisorState') == 'HEALTHY'
+          assert r.get('stale') == []
+          assert (hb.get('binanceReadonly') or {}).get('fresh') is True
+          assert (hb.get('reconciler') or {}).get('fresh') is True
+          assert (hb.get('protection') or {}).get('fresh') is True
+          reconciliation=r.get('reconciliation') or {}
+          assert reconciliation.get('ok') is True
+          assert reconciliation.get('fresh') is True
+          assert r.get('noUnknownOrders') is True
+          assert r.get('noUnprotectedPositions') is True
+          assert r.get('activeIntents') == 0
+          assert r.get('realE2EV20Recognized') is True
+          assert r.get('autonomousPathRecognizesV20') is True
+          assert r.get('autonomousProofKey') == 'live:e2e-result-v20'
+          assert tg.get('pauseImplemented') is True
+          assert tg.get('resumeImplemented') is True
+          assert tg.get('pauseEnforcedByExecutionGate') is True
+          assert tg.get('pauseCancelsExistingProtection') is False
+          assert tg.get('resumeRequiresHealthySupervisor') is True
+          assert tg.get('resumeRequiresFreshReconciliation') is True
+          assert tg.get('resumeRequiresNoUnknownOrders') is True
+          assert tg.get('resumeRequiresNoUnprotectedPositions') is True
+          assert tg.get('resumeRequiresValidE2EV20') is True
+          assert policy.get('liveExecutionEnabled') is False
+          assert policy.get('autonomousEnabled') is False
+          assert policy.get('e2eArmed') is False
           PY
 
       - name: Verify scanner cannot auto-buy
