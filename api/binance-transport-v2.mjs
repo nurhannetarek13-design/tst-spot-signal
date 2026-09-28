@@ -10,24 +10,8 @@ const BINANCE_BASES = [
   "https://api4.binance.com",
 ];
 
-function safeEqualHex(a,b){
-  const aa=String(a||"").toLowerCase();
-  const bb=String(b||"").toLowerCase();
-  if(!/^[a-f0-9]{64}$/.test(aa)||!/^[a-f0-9]{64}$/.test(bb)) return false;
-  return crypto.timingSafeEqual(Buffer.from(aa,"hex"),Buffer.from(bb,"hex"));
-}
-
-function verifyRelay(req,raw){
-  const secret=String(process.env.TELEGRAM_BOT_TOKEN||"");
-  if(!secret) return {ok:false,status:"RELAY_SECRET_MISSING"};
-  const ts=String(req.headers["x-executor-timestamp"]||"");
-  const sig=String(req.headers["x-executor-signature"]||"");
-  const stamp=Number(ts);
-  if(!Number.isFinite(stamp)||Math.abs(Date.now()-stamp)>60_000){
-    return {ok:false,status:"STALE_RELAY_REQUEST"};
-  }
-  const expected=crypto.createHmac("sha256",secret).update(`${ts}.${raw}`).digest("hex");
-  return safeEqualHex(expected,sig)?{ok:true}:{ok:false,status:"BAD_RELAY_SIGNATURE"};
+function apiKeyFingerprint(apiKey){
+  return crypto.createHash("sha256").update(String(apiKey||"")).digest("hex");
 }
 
 function validateSignedQuery(query){
@@ -70,7 +54,8 @@ export default async function handler(req,res){
     return res.status(200).json({
       ok:true,
       status:"VERCEL_TRANSPORT_V2_READONLY_READY",
-      relaySecretPresent:Boolean(process.env.TELEGRAM_BOT_TOKEN),
+      authMode:"BINANCE_SIGNED_CAPABILITY",
+      relaySecretRequired:false,
       financialWritesEnabled:false,
       noSecretValuesExposed:true,
     });
@@ -81,9 +66,6 @@ export default async function handler(req,res){
   }
 
   const raw=typeof req.body==="string"?req.body:JSON.stringify(req.body||{});
-  const auth=verifyRelay(req,raw);
-  if(!auth.ok) return res.status(401).json({...auth,financialAction:false});
-
   let body={};
   try{body=typeof req.body==="object"?req.body:JSON.parse(raw||"{}");}catch{}
   const method=String(body.method||"").toUpperCase();
