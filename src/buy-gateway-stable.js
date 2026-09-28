@@ -8,6 +8,7 @@ import {
   executorConfigured,
   executionOwner,
   executionDryRun,
+  executionReconcileActiveTrades,
 } from "./live-execution-router.js";
 export { SignalState };
 
@@ -645,8 +646,8 @@ async function executeConfirmedBuy(env, s) {
       stop: stopRef,
       ocoPlaced: true,
       emergencyClosed: false,
-      autoBuy: false,
-      userConfirmed: true,
+      autoBuy: s.autonomous === true,
+      userConfirmed: s.autonomous !== true,
       executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       ocoOrderListId: Number(result?.oco?.body?.oco_order_list_id || 0) || null,
@@ -667,8 +668,8 @@ async function executeConfirmedBuy(env, s) {
       stop: stopRef,
       ocoPlaced: false,
       emergencyClosed: true,
-      autoBuy: false,
-      userConfirmed: true,
+      autoBuy: s.autonomous === true,
+      userConfirmed: s.autonomous !== true,
       executionRoute: executionProvider(env),
       buyOrderId: Number(result?.buy?.body?.order_id || 0) || null,
       emergencyOrderId: Number(result?.oco?.body?.emergency_order_id || 0) || null,
@@ -950,6 +951,91 @@ async function notifyExecutionReadinessTransition(env, balance) {
 }
 
 
+async function notifyOnce(env, key, text, ttl = 30 * 24 * 60 * 60) {
+  const claimed=await claimState(env,"notify:"+key,{at:Date.now()},ttl);
+  if(!claimed) return false;
+  if(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID){
+    await tg(env,"sendMessage",{chat_id:String(env.TELEGRAM_CHAT_ID),text}).catch(()=>{});
+  }
+  return true;
+}
+
+async function reconcileActiveLiveTrades(env) {
+  if(executionProvider(env)!=="SUPABASE_V2" || !executorConfigured(env)) return {ok:false,status:"RECONCILER_NOT_READY"};
+  const result=await executionReconcileActiveTrades(env);
+  for(const row of result?.results || []){
+    const intentId=String(row?.intentId||"");
+    if(row?.status==="TRADE_EXITED"){
+      const label=row.exitReason==="TAKE_PROFIT"?"🎯 TP hit":row.exitReason==="STOP_LOSS"?"🛑 SL hit":"✅ Position exited";
+      await notifyOnce(env,`exit:${intentId}`,`${label} — ${row.symbol}\nRealized P&L: ${fmt(row.realizedPnlUSDT)} USDT\nOrder: ${row.exitOrderId||"-"}`);
+      const loss=Number(row?.dailyRisk?.realizedLossUSDT||0);
+      const cap=Number(readLivePolicy(env).dailyLossCapUSDT||0);
+      if(cap>0&&loss>=cap){
+        await notifyOnce(env,`daily-loss:${row?.dailyRisk?.day||"today"}`,`⛔ Daily loss limit reached: ${fmt(loss)} USDT. New entries are paused.`,2*24*60*60);
+      }
+    }else if(row?.status==="EXTERNAL_EXIT_DETECTED"){
+      await notifyOnce(env,`external:${intentId}`,`⚠️ Manual/external position change detected — ${row.symbol}. Bot state was reconciled to EXITED.`);
+    }else if(row?.status==="PROTECTION_LOST_POSITION_MAY_REMAIN"){
+      await putState(env,"live:unprotected-positions",[{intentId,symbol:row?.symbol||null,status:row.status,at:Date.now()}],30*24*60*60);
+      await notifyOnce(env,`protection-lost:${intentId}`,`🚨 CRITICAL — protective OCO disappeared while a position may remain. New entries are blocked. Intent: ${intentId}`);
+    }else if(row?.status==="EXIT_RECONCILIATION_UNKNOWN"){
+      await putState(env,"live:unknown-orders",[{intentId,status:row.status,at:Date.now()}],30*24*60*60);
+      await notifyOnce(env,`reconcile-failed:${intentId}`,`🚨 Reconciliation failure — ${intentId}. No new entries until state is known.`);
+    }
+  }
+  return result;
+}
+
+async function processAutonomousCandidate(env) {
+  const policy=readLivePolicy(env);
+  if(policy.autonomousEnabled!==true) return {ok:false,status:"AUTONOMOUS_DISABLED"};
+  if(policy.liveExecutionEnabled!==true) return {ok:false,status:"LIVE_EXECUTION_DISABLED"};
+  if(policy.emergencyKillSwitch===true){
+    await notifyOnce(env,"kill-switch","🛑 Emergency kill switch activated. New automated entries are paused.",3600);
+    return {ok:false,status:"EMERGENCY_KILL_SWITCH"};
+  }
+  const firstE2E=await getState(env,"cutover:e2e:result");
+  if(!(firstE2E?.ok===true&&firstE2E?.manual===true)){
+    return {ok:false,status:"AUTONOMOUS_BLOCKED_UNTIL_MANUAL_E2E"};
+  }
+  const candidate=await getState(env,"live:candidate:latest");
+  if(!candidate?.id) return {ok:false,status:"NO_AUTONOMOUS_CANDIDATE"};
+  if(Date.now()-Number(candidate.createdAt||0)>MAX_SIGNAL_AGE_MS) return {ok:false,status:"STALE_AUTONOMOUS_CANDIDATE"};
+  const lock=await claimState(env,`autonomous-execution-lock:${candidate.id}`,{at:Date.now(),symbol:candidate.symbol},SIGNAL_TTL_SEC);
+  if(!lock) return {ok:false,status:"AUTONOMOUS_DUPLICATE_BLOCKED"};
+
+  const health=await executionOperational(env,candidate.symbol);
+  if(!health.ok){
+    await notifyOnce(env,`signal-rejected:${candidate.id}`,`⚪ Signal rejected — ${candidate.symbol}\nReason: ${health.blocker||"RISK_GATE"}`,SIGNAL_TTL_SEC);
+    return {ok:false,status:"AUTONOMOUS_RISK_GATE_REJECTED",health};
+  }
+
+  const signal={
+    id:String(candidate.id),
+    symbol:String(candidate.symbol||""),
+    entry:Number(candidate.entry),
+    stop:Number(candidate.stop),
+    target:Number(candidate.target),
+    strategy:String(candidate.strategy||""),
+    score:Number(candidate.score||0),
+    createdAt:Number(candidate.createdAt||Date.now()),
+    confirmedQuoteUSDT:Number(candidate.recommendedUSDT||5.5),
+    recommendedUSDT:Number(candidate.recommendedUSDT||5.5),
+    autonomous:true,
+  };
+  await notifyOnce(env,`signal-accepted:${candidate.id}`,`🟢 Signal accepted — ${signal.symbol}\nStrategy: ${signal.strategy}\nAutomated execution entering V2 risk gates.`,SIGNAL_TTL_SEC);
+  try{
+    const result=await executeConfirmedBuy(env,signal);
+    await putState(env,`autonomous-result:${candidate.id}`,{ok:true,at:Date.now(),status:result.status,symbol:signal.symbol,intentId:result.intentId||null},30*24*60*60);
+    return {ok:true,status:result.status,result};
+  }catch(error){
+    const reason=String(error?.message||error).slice(0,200);
+    await putState(env,`autonomous-result:${candidate.id}`,{ok:false,at:Date.now(),status:"AUTONOMOUS_EXECUTION_FAILED",symbol:signal.symbol,reason},30*24*60*60);
+    await notifyOnce(env,`auto-failed:${candidate.id}`,`❌ Automated BUY blocked/failed — ${signal.symbol}\n${reason}`,SIGNAL_TTL_SEC);
+    return {ok:false,status:"AUTONOMOUS_EXECUTION_FAILED",reason};
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -1085,9 +1171,13 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       if (baseWorker.scheduled) await baseWorker.scheduled(event, env, ctx);
-      // Manual E2E preparation is non-financial: it only sends a Telegram confirmation prompt.
-      // No order can be submitted from cron; execution still requires the user's Telegram callback.
-      await prepareManualE2EPrompt(env).catch(() => {});
+      await reconcileActiveLiveTrades(env).catch(() => {});
+      if (readLivePolicy(env).autonomousEnabled === true) {
+        await processAutonomousCandidate(env).catch(() => {});
+      } else {
+        // First production E2E remains manually confirmed while autonomous mode is OFF.
+        await prepareManualE2EPrompt(env).catch(() => {});
+      }
     })());
   }
 };
