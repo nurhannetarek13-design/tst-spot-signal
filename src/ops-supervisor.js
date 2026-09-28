@@ -61,6 +61,44 @@ function cloudflareBinanceCreds(env) {
   return { key: String(key || "").trim(), secret: String(secret || "").trim() };
 }
 
+function candidateSecretParts(rawSecret, rawKey) {
+  const raw=String(rawSecret||"").trim();
+  const key=String(rawKey||"").trim();
+  const rows=[["RAW",raw]];
+  const delimiters=[":",",","|",";"];
+  for(const d of delimiters){
+    if(!raw.includes(d)) continue;
+    const parts=raw.split(d).map(x=>x.trim()).filter(Boolean);
+    for(let i=0;i<parts.length;i++){
+      const p=parts[i];
+      if(p===key) continue;
+      if(p.length>=24 && p.length<=256) rows.push([`PART_${d.charCodeAt(0)}_${i}`,p]);
+    }
+  }
+  const seen=new Set();
+  return rows.filter(([,v])=>v && !seen.has(v) && seen.add(v)).map(([normalization,value])=>({normalization,value}));
+}
+
+async function binanceSecretPartsPreflight(env){
+  const relayUrl=String(env.SUPABASE_BINANCE_RELAY_URL||"").trim();
+  const rawKey=String(env.BINANCE_API_KEY||env.BINANCE_KEY||env.BINANCE_APIKEY||"").trim();
+  const rawSecret=env.BINANCE_API_SECRET||env.BINANCE_SECRET||env.BINANCE_SECRET_KEY||"";
+  if(!relayUrl||!rawKey||!String(rawSecret||"").trim()) return {ok:false,status:"SECRET_PARTS_NOT_CONFIGURED",financialAction:false,noSecretValuesExposed:true};
+  const attempts=[];
+  for(const candidate of candidateSecretParts(rawSecret,rawKey)){
+    const qs=new URLSearchParams({omitZeroBalances:"true",recvWindow:"5000",timestamp:String(Date.now())}).toString();
+    const signature=await hmacHexRaw(candidate.value,qs);
+    try{
+      const r=await fetch(relayUrl,{method:"POST",headers:{"content-type":"application/json","x-region":"eu-west-1"},body:JSON.stringify({method:"GET",path:"/api/v3/account",apiKey:rawKey,query:`${qs}&signature=${signature}`}),signal:AbortSignal.timeout(15000)});
+      const row=await r.json().catch(()=>({}));
+      const ok=r.ok&&row?.ok===true&&row?.status==="BINANCE_RELAY_OK";
+      attempts.push({normalization:candidate.normalization,ok,httpStatus:r.status,upstreamHttpStatus:Number(row?.upstreamHttpStatus||0),binanceCode:row?.binanceCode??null});
+      if(ok) return {ok:true,status:"BINANCE_SECRET_PART_OK",selectedNormalization:candidate.normalization,canTrade:row?.data?.canTrade===true,accountType:row?.data?.accountType||null,attempts,financialAction:false,noBalanceValuesExposed:true,noSecretValuesExposed:true};
+    }catch(e){attempts.push({normalization:candidate.normalization,ok:false,transportError:String(e?.name||"FetchError")});}
+  }
+  return {ok:false,status:"BINANCE_SECRET_PARTS_FAILED",attempts,financialAction:false,noBalanceValuesExposed:true,noSecretValuesExposed:true};
+}
+
 function cloudflareBinanceCredentialPairs(env) {
   const keys = [
     ["BINANCE_API_KEY", env.BINANCE_API_KEY],
@@ -693,6 +731,10 @@ async function snapshot(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/binance-secret-parts-preflight") {
+      const result = await binanceSecretPartsPreflight(env);
+      return Response.json(result,{status:result.ok?200:503,headers:{"cache-control":"no-store"}});
+    }
     if (url.pathname === "/supabase-relay-preflight") {
       const result = await supabaseRelayReadOnlyPreflight(env);
       return Response.json({
