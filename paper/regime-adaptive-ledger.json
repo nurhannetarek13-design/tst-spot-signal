@@ -2,40 +2,9 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 14.26059298,
-  "realizedPnLUSDT": -0.04842897,
-  "openPositions": [
-    {
-      "symbol": "PROVEUSDT",
-      "entry": 0.232,
-      "stop": 0.23082732676518988,
-      "qty": 8.227260513654,
-      "notionalUSDT": 1.90872444,
-      "riskUSDT": 0.2,
-      "score": 89,
-      "openedAt": "2026-09-24T04:55:31.030Z",
-      "signalBarTime": "2026-09-24T04:00:00.000Z",
-      "highestClose": 0.2439,
-      "barsHeld": 15,
-      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
-      "mode": "PAPER_ONLY"
-    },
-    {
-      "symbol": "SNDKBUSDT",
-      "entry": 1757.54,
-      "stop": 1740.8040229855771,
-      "qty": 0.002267629261,
-      "notionalUSDT": 3.98544913,
-      "riskUSDT": 0.2,
-      "score": 86,
-      "openedAt": "2026-09-24T23:14:00.262Z",
-      "signalBarTime": "2026-09-24T20:00:00.000Z",
-      "highestClose": 1784.25,
-      "barsHeld": 12,
-      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
-      "mode": "PAPER_ONLY"
-    }
-  ],
+  "cashUSDT": 20.10716767,
+  "realizedPnLUSDT": -0.11724687,
+  "openPositions": [],
   "closedTrades": [
     {
       "symbol": "ETHUSDT",
@@ -106,6 +75,34 @@
       "netPnLUSDT": -0.18114296,
       "barsHeld": 8,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
+    },
+    {
+      "symbol": "PROVEUSDT",
+      "entry": 0.232,
+      "exit": 0.23082733,
+      "qty": 8.227260513654,
+      "openedAt": "2026-09-24T04:55:31.030Z",
+      "closedAt": "2026-09-28T05:27:59.046Z",
+      "reason": "ATR_TRAILING_STOP",
+      "grossPnLUSDT": -0.00964789,
+      "costsUSDT": 0.00687141,
+      "netPnLUSDT": -0.0165193,
+      "barsHeld": 16,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
+    },
+    {
+      "symbol": "SNDKBUSDT",
+      "entry": 1757.54,
+      "exit": 1740.80402299,
+      "qty": 0.002267629261,
+      "openedAt": "2026-09-24T23:14:00.262Z",
+      "closedAt": "2026-09-28T05:27:59.046Z",
+      "reason": "ATR_TRAILING_STOP",
+      "grossPnLUSDT": -0.03795099,
+      "costsUSDT": 0.01434762,
+      "netPnLUSDT": -0.05229861,
+      "barsHeld": 13,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
     }
   ],
   "seenSignals": [
@@ -117,7 +114,7 @@
     "PROVEUSDT:1790222400000",
     "SNDKBUSDT:1790280000000"
   ],
-  "lastRunAt": "2026-09-27T23:04:59.395Z",
+  "lastRunAt": "2026-09-28T05:27:59.046Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -130,11 +127,11 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": 0,
+  "todayRealizedPnLUSDT": -0.06881791,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 5.89417357,
-  "closedTradeCount": 5,
+  "openExposureUSDT": 0,
+  "closedTradeCount": 7,
   "winCount": 2,
-  "lossCount": 3,
-  "winRate": 0.4
+  "lossCount": 5,
+  "winRate": 0.2857
 }
