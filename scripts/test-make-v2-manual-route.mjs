@@ -15,7 +15,7 @@ const execute = src.slice(start, end);
 assert.match(execute, /manualBuyAndProtect\(env,/);
 assert.doesNotMatch(execute, /signedBinance\(/);
 assert.match(execute, /executorConfigured\(env\)/);
-assert.match(execute, /executionOperational\(env\)/);
+assert.match(execute, /executionOperational\(env(?:,[^)]*)?\)/);
 assert.match(execute, /requireFreshExecutionRoute\(env\)/);
 assert.match(execute, /Math\.min\(requested, 5\.5\)/);
 assert.match(execute, /executionProvider\(env\)/);
@@ -45,7 +45,7 @@ assert.ok(ingestStart >= 0 && ingestEnd > ingestStart, "fast ingest block must e
 const ingest = src.slice(ingestStart, ingestEnd);
 assert.doesNotMatch(ingest, /refreshBalance\(/);
 assert.doesNotMatch(ingest, /signedBinance\(/);
-assert.match(ingest, /executionOperational\(env\)/);
+assert.match(ingest, /executionOperational\(env(?:,[^)]*)?\)/);
 assert.match(ingest, /riskCappedQuote\(/);
 
 const e2ePromptStart = src.indexOf("async function prepareManualE2EPrompt(env) {");
@@ -57,12 +57,14 @@ assert.doesNotMatch(e2ePrompt, /signedBinance\(/);
 assert.match(e2ePrompt, /CONFIRM E2E BUY/);
 assert.match(e2ePrompt, /automaticExecution:false/);
 assert.match(e2ePrompt, /SOLUSDT/);
-assert.match(e2ePrompt, /executionOperational\(env\)/);
+assert.match(e2ePrompt, /executionOperational\(env(?:,[^)]*)?\)/);
 
 const scheduledStart = src.indexOf("async scheduled(event, env, ctx)");
 assert.ok(scheduledStart >= 0, "scheduled block must exist");
 const scheduled = src.slice(scheduledStart);
 assert.match(scheduled, /prepareManualE2EPrompt\(env\)/);
+assert.match(scheduled, /processAutonomousCandidate\(env\)/);
+assert.match(scheduled, /reconcileActiveLiveTrades\(env\)/);
 assert.doesNotMatch(scheduled, /manualBuyAndProtect\(/);
 
 console.log("PROVIDER_AWARE_MANUAL_ROUTE_SELFTEST_PASS");
@@ -83,7 +85,8 @@ const router = readFileSync(new URL("../src/live-execution-router.js", import.me
 assert.match(router, /SUPABASE_V2/);
 assert.match(router, /MAKE_V2/);
 assert.match(router, /manualBuyAndProtectViaSupabase/);
-assert.match(router, /makeManualBuyAndProtect/);
+assert.doesNotMatch(router, /makeManualBuyAndProtect/);
+assert.match(router, /LEGACY_FINANCIAL_ROUTE_DISABLED/);
 assert.match(router, /executionReadOnlyReconcile/);
 
 const confirmStart = src.indexOf('if (action === "CONFIRM")');
