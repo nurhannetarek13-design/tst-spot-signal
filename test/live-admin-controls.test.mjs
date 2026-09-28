@@ -30,3 +30,14 @@ test("admin RESUME remains fail-closed behind readiness gates", () => {
   assert.match(src, /validRealE2EV20\(e2eProof\)/);
   assert.match(src, /Safety\/readiness gates are not all healthy\. Trading remains paused/);
 });
+
+
+test("read-only production proof endpoint exposes deployed limited-live controls", () => {
+  assert.match(src, /\/limited-live-readiness-proof/);
+  assert.match(src, /LIMITED_LIVE_READINESS_PROOF/);
+  assert.match(src, /autonomousPathRecognizesV20:true/);
+  assert.match(src, /pauseImplemented:true/);
+  assert.match(src, /resumeImplemented:true/);
+  assert.match(src, /pauseCancelsExistingProtection:false/);
+  assert.match(src, /financialAction:false/);
+});
