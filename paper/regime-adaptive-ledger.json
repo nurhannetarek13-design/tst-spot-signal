@@ -114,7 +114,7 @@
     "PROVEUSDT:1790222400000",
     "SNDKBUSDT:1790280000000"
   ],
-  "lastRunAt": "2026-09-28T16:46:45.128Z",
+  "lastRunAt": "2026-09-29T00:23:19.408Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -127,7 +127,7 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": -0.06881791,
+  "todayRealizedPnLUSDT": 0,
   "dailyLossGateOpen": true,
   "openExposureUSDT": 0,
   "closedTradeCount": 7,
