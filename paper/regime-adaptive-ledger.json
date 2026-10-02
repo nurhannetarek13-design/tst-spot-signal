@@ -8,15 +8,15 @@
     {
       "symbol": "ZROUSDT",
       "entry": 1.842,
-      "stop": 1.58829062,
+      "stop": 1.6465576203073318,
       "qty": 0.788303535125,
       "notionalUSDT": 1.45205511,
       "riskUSDT": 0.2,
       "score": 89,
       "openedAt": "2026-10-01T21:03:16.678Z",
       "signalBarTime": "2026-10-01T20:00:00.000Z",
-      "highestClose": 1.842,
-      "barsHeld": 0,
+      "highestClose": 1.912,
+      "barsHeld": 1,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -131,7 +131,7 @@
     "SNDKBUSDT:1790280000000",
     "ZROUSDT:1790884800000"
   ],
-  "lastRunAt": "2026-10-01T21:03:16.678Z",
+  "lastRunAt": "2026-10-02T05:42:08.197Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
