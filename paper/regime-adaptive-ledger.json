@@ -16,7 +16,7 @@
       "openedAt": "2026-10-01T21:03:16.678Z",
       "signalBarTime": "2026-10-01T20:00:00.000Z",
       "highestClose": 1.971,
-      "barsHeld": 2,
+      "barsHeld": 3,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -131,7 +131,7 @@
     "SNDKBUSDT:1790280000000",
     "ZROUSDT:1790884800000"
   ],
-  "lastRunAt": "2026-10-02T14:45:40.579Z",
+  "lastRunAt": "2026-10-02T20:46:52.894Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
