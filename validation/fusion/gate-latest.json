@@ -30,8 +30,11 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "vectorbt:LT_30_TRADES",
+    "vectorbt:BASE_PF_LT_1_15",
+    "vectorbt:BASE_EXPECTANCY_NONPOSITIVE",
+    "vectorbt:STRESS_PF_LT_1_0",
+    "vectorbt:STRESS_EXPECTANCY_NONPOSITIVE",
     "freqtrade:BASE_PF_LT_1_15",
     "freqtrade:BASE_EXPECTANCY_NONPOSITIVE",
     "freqtrade:STRESS_PF_LT_1_0",
@@ -68,8 +71,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:FAIL",
@@ -82,21 +83,21 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 29,
+      "independentEnginePass": false,
+      "baseProfitFactor": 0.9732353878635583,
+      "baseExpectancyUSDT": -0.00283094416527948,
+      "stressProfitFactor": 0.8338067231282073,
+      "stressExpectancyUSDT": -0.01935147855060957
     },
     "freqtrade": {
       "status": "FAIL",
@@ -167,6 +168,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-03T07:19:46.097546+00:00",
+  "generatedAt": "2026-10-03T07:20:01.167274+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
