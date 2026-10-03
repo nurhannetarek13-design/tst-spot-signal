@@ -8,28 +8,28 @@
   ],
   "btc_regime": {
     "crashVetoClear": true,
-    "ema200_4h": 81169.73363418656,
-    "ema20_1h": 84814.49237625106,
-    "ema50_1h": 84785.84195712936,
-    "ema50_4h": 84066.29772784672,
+    "ema200_4h": 81196.85488640414,
+    "ema20_1h": 84767.51653111007,
+    "ema50_1h": 84767.9578558171,
+    "ema50_4h": 84090.0624745895,
     "macroBullish": true,
     "ok": true,
-    "oneHourBullish": true,
-    "ret1h": -0.000307379471780167
+    "oneHourBullish": false,
+    "ret1h": 0.0025511382096634616
   },
   "btc_shock": {
     "ok": true,
     "reason": null,
-    "ret_1m": 0.0004258514664143842,
-    "ret_3m": 7.991559211117938e-05,
+    "ret_1m": -0.00019513720444663818,
+    "ret_3m": -0.00047668437023362653,
     "shock": false
   },
   "cash_usdt": 20.0470515136,
   "clock_sync": {
-    "offset_ms": 196.380615234375,
+    "offset_ms": 212.739013671875,
     "ok": true,
     "reasons": [],
-    "rtt_ms": 524.4443359375
+    "rtt_ms": 559.740234375
   },
   "closed_trades": [
     {
@@ -61,139 +61,25 @@
   "engine": "INDICATOR_ONLY_V3_EARLY_MOMENTUM",
   "executed_signal_ids": {},
   "exit_slippage_model": {},
-  "last_run": "2026-10-03T08:01:31.689337+00:00",
+  "last_run": "2026-10-03T13:21:36.937702+00:00",
   "loss_cooldown": {
     "active": false
   },
   "market_regime": {
     "allow_new_longs": true,
-    "breadth_15m": 0.9166666666666666,
-    "breadth_1h": 0.125,
-    "btc_atr_regime_ratio": 0.4615698886280443,
-    "btc_ret_1h": -0.000307379471780167,
-    "btc_ret_4h": -0.0016477063163019556,
+    "breadth_15m": 0.375,
+    "breadth_1h": 0.3333333333333333,
+    "btc_atr_regime_ratio": 0.26538503497173466,
+    "btc_ret_1h": 0.0025511382096634616,
+    "btc_ret_4h": 0.0032146398772525675,
     "macro_bull": true,
     "risk_multiplier": 0.75,
     "state": "RANGE",
     "symbols_in_breadth": 24,
-    "trend_1h": true
+    "trend_1h": false
   },
   "mode": "PAPER_ONLY",
-  "momentum_watchlist": [
-    {
-      "agg_cvd": {
-        "buy_quote": null,
-        "delta_quote": 28045.557839999994,
-        "latest_event_ms": 1791014484036.8298,
-        "ratio": 0.7512336933370108,
-        "sell_quote": null,
-        "slope_positive": false,
-        "source": "BINANCE_SPOT_WEBSOCKET_SIDECAR"
-      },
-      "breakout": {
-        "distance_atr": -1.7500000000000455,
-        "resistance": 0.5548
-      },
-      "chase_veto": true,
-      "depth_flow": {
-        "ask_cancel_quote_10s": 61585.97480000002,
-        "ask_liquidity_change_pct": -0.03481699122508486,
-        "bid_cancel_quote_10s": 152786.32838999998,
-        "bid_liquidity_change_pct": -0.03226430139318759,
-        "cancellation_rate_10s": 0.4930573187885625,
-        "microprice_bias_bps": 0.10942668113922115,
-        "pressure_change": 0.00255268983189727,
-        "source": "BINANCE_SPOT_WEBSOCKET_SIDECAR"
-      },
-      "micro_breakout_hold": {
-        "breakout": true,
-        "hold": true,
-        "ok": true,
-        "resistance": 0.5548
-      },
-      "obi": 0.6328947367528088,
-      "prefilter_score": 52,
-      "price_velocity": 0.0043321299638987565,
-      "production_guard": {
-        "adverse_selection": {
-          "bid_liquidity_change_pct": -0.03226430139318759,
-          "bullish_book": true,
-          "delta_quote": 28045.557839999994,
-          "microprice_bias_bps": 0.10942668113922115,
-          "obi": 0.6328947367528088,
-          "ok": true,
-          "reasons": [],
-          "trade_ratio": 0.7512336933370108
-        },
-        "decision_latency_ms": 4036.1865234375,
-        "freshness": {
-          "age_ms": 7652.020263671875,
-          "decision_latency_ms": 4036.1865234375,
-          "ok": false,
-          "reasons": [
-            "STALE_SIGNAL"
-          ]
-        },
-        "liquidity_disappearance": {
-          "ask_cancel_quote_10s": 61585.97480000002,
-          "ask_change_pct": -0.03481699122508486,
-          "bid_cancel_quote_10s": 152786.32838999998,
-          "bid_change_pct": -0.03226430139318759,
-          "cancellation_rate_10s": 0.4930573187885625,
-          "ok": true,
-          "reasons": []
-        },
-        "microstructure_source": "BINANCE_SPOT_WEBSOCKET_SIDECAR",
-        "session": "EUROPE",
-        "warmup": {
-          "counts": {
-            "15m": 249,
-            "1h": 249,
-            "1m": 249,
-            "3m": 249,
-            "depth": 3
-          },
-          "minimums": {
-            "15m": 220,
-            "1h": 220,
-            "1m": 60,
-            "3m": 30,
-            "depth": 3
-          },
-          "missing": [],
-          "ok": true
-        }
-      },
-      "regime": "RANGE",
-      "relative_strength": {
-        "excess_vs_btc": {
-          "15m": 0.007027454380964415,
-          "1h": -0.014458676390166292,
-          "5m": 0.004711358206664906
-        },
-        "percentile_15m": 0.9565217391304348,
-        "percentile_1h": 0.0,
-        "percentile_5m": 0.9565217391304348,
-        "score": 71.73913043478262,
-        "strong": true,
-        "weak": false
-      },
-      "rvol_1m": 2.8631958097963808,
-      "rvol_3m": 0.6707563894944427,
-      "score": 67.0,
-      "spread_stable_or_tightening": true,
-      "stage": "WATCH",
-      "symbol": "WLDUSDT",
-      "taker_last3": [
-        0.32242384683793307,
-        0.26488257651792374,
-        0.8122263349293632
-      ],
-      "taker_rising": false,
-      "trade_count_accel": 2.2463054187192117,
-      "vwap_distance_atr": -6.868447456017789
-    }
-  ],
+  "momentum_watchlist": [],
   "positions": {},
   "precision_evidence": {
     "claimSupported": false,
@@ -208,53 +94,53 @@
   "relative_strength": {
     "AAVEUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0016212858208856096,
-        "1h": -0.0013572526445222444,
-        "5m": 0.0003906886995699299
+        "15m": 0.0016802647789118108,
+        "1h": -0.011318741913976194,
+        "5m": -0.0018957336897373889
       },
-      "percentile_15m": 0.4782608695652174,
-      "percentile_1h": 0.6086956521739131,
-      "percentile_5m": 0.43478260869565216,
-      "score": 49.34782608695652,
+      "percentile_15m": 0.782608695652174,
+      "percentile_1h": 0.043478260869565216,
+      "percentile_5m": 0.13043478260869565,
+      "score": 33.69565217391305,
       "strong": false,
       "weak": false
     },
     "ADAUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0009390446372409267,
-        "1h": -0.006209932137181129,
-        "5m": 0.0006547435399073542
+        "15m": 0.0004087738175539979,
+        "1h": -0.0037751284177418576,
+        "5m": -0.0015117336738660336
       },
-      "percentile_15m": 0.2608695652173913,
-      "percentile_1h": 0.13043478260869565,
-      "percentile_5m": 0.6521739130434783,
-      "score": 38.47826086956521,
+      "percentile_15m": 0.6086956521739131,
+      "percentile_1h": 0.4782608695652174,
+      "percentile_5m": 0.17391304347826086,
+      "score": 40.21739130434783,
       "strong": false,
       "weak": false
     },
     "AVAXUSDT": {
       "excess_vs_btc": {
-        "15m": 0.003346550153297767,
-        "1h": -0.0008863762674301556,
-        "5m": 0.00047863121385316454
+        "15m": -0.0012165083494888318,
+        "1h": -0.007671511907112238,
+        "5m": -0.0021818740802941328
       },
-      "percentile_15m": 0.782608695652174,
-      "percentile_1h": 0.6521739130434783,
-      "percentile_5m": 0.4782608695652174,
-      "score": 62.82608695652174,
+      "percentile_15m": 0.30434782608695654,
+      "percentile_1h": 0.21739130434782608,
+      "percentile_5m": 0.08695652173913043,
+      "score": 19.565217391304344,
       "strong": false,
-      "weak": false
+      "weak": true
     },
     "BNBUSDT": {
       "excess_vs_btc": {
-        "15m": 0.00024903972146528286,
-        "1h": -0.0007368024769243142,
-        "5m": 0.00017482965769799463
+        "15m": 0.0017954128378352419,
+        "1h": -0.0007335465186539825,
+        "5m": -0.00029694791597367765
       },
-      "percentile_15m": 0.08695652173913043,
-      "percentile_1h": 0.6956521739130435,
-      "percentile_5m": 0.391304347826087,
-      "score": 36.08695652173913,
+      "percentile_15m": 0.8695652173913043,
+      "percentile_1h": 0.782608695652174,
+      "percentile_5m": 0.5217391304347826,
+      "score": 70.8695652173913,
       "strong": false,
       "weak": false
     },
@@ -264,258 +150,258 @@
         "1h": 0.0,
         "5m": 0.0
       },
-      "percentile_15m": 0.043478260869565216,
+      "percentile_15m": 0.5217391304347826,
       "percentile_1h": 0.8260869565217391,
-      "percentile_5m": 0.34782608695652173,
-      "score": 36.08695652173913,
+      "percentile_5m": 0.6956521739130435,
+      "score": 66.73913043478261,
       "strong": false,
       "weak": false
     },
     "DOGEUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0009823876645510543,
-        "1h": -0.0029194678983391897,
-        "5m": -0.0002727801874438107
+        "15m": -0.00045385288074228924,
+        "1h": -0.0029822656078095644,
+        "5m": -0.00022419161508535623
       },
-      "percentile_15m": 0.30434782608695654,
-      "percentile_1h": 0.4782608695652174,
-      "percentile_5m": 0.17391304347826086,
-      "score": 29.565217391304344,
+      "percentile_15m": 0.43478260869565216,
+      "percentile_1h": 0.6521739130434783,
+      "percentile_5m": 0.6086956521739131,
+      "score": 55.869565217391305,
       "strong": false,
-      "weak": true
+      "weak": false
     },
     "ENAUSDT": {
       "excess_vs_btc": {
-        "15m": 0.00314212157122562,
-        "1h": -0.004834008703027082,
-        "5m": 0.0006963978514815672
+        "15m": -0.001312396578315167,
+        "1h": -0.005554141212666508,
+        "5m": -0.000330484290384514
       },
-      "percentile_15m": 0.7391304347826086,
-      "percentile_1h": 0.21739130434782608,
-      "percentile_5m": 0.6956521739130435,
-      "score": 59.13043478260869,
+      "percentile_15m": 0.2608695652173913,
+      "percentile_1h": 0.30434782608695654,
+      "percentile_5m": 0.4782608695652174,
+      "score": 35.869565217391305,
       "strong": false,
       "weak": false
     },
     "ETHUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0006034000921385507,
-        "1h": 0.0008372124251511126,
-        "5m": -0.0004892456615013252
+        "15m": -0.00011309432127781793,
+        "1h": -0.00325144179871939,
+        "5m": -0.00016595008037567638
       },
-      "percentile_15m": 0.21739130434782608,
-      "percentile_1h": 0.9130434782608695,
-      "percentile_5m": 0.08695652173913043,
-      "score": 33.91304347826087,
+      "percentile_15m": 0.4782608695652174,
+      "percentile_1h": 0.5652173913043478,
+      "percentile_5m": 0.6521739130434783,
+      "score": 56.95652173913043,
       "strong": false,
       "weak": false
     },
     "LINKUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0014803706403324624,
-        "1h": -0.0070826581889887885,
-        "5m": 0.0005505325234482772
+        "15m": 0.0017077562812908287,
+        "1h": -0.007077000278629009,
+        "5m": 2.678911733355882e-05
       },
-      "percentile_15m": 0.43478260869565216,
-      "percentile_1h": 0.08695652173913043,
-      "percentile_5m": 0.6086956521739131,
-      "score": 41.73913043478261,
-      "strong": false,
+      "percentile_15m": 0.8260869565217391,
+      "percentile_1h": 0.2608695652173913,
+      "percentile_5m": 0.7391304347826086,
+      "score": 65.0,
+      "strong": true,
       "weak": false
     },
     "LTCUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0005524540521081311,
-        "1h": -0.0047293164556913014,
-        "5m": -0.00045377896674558826
+        "15m": -0.0020369174498895415,
+        "1h": -0.004561188460919796,
+        "5m": 0.0009644851080331529
       },
       "percentile_15m": 0.17391304347826086,
-      "percentile_1h": 0.2608695652173913,
-      "percentile_5m": 0.13043478260869565,
-      "score": 17.82608695652174,
+      "percentile_1h": 0.34782608695652173,
+      "percentile_5m": 0.8695652173913043,
+      "score": 49.565217391304344,
       "strong": false,
-      "weak": true
+      "weak": false
     },
     "NEARUSDT": {
       "excess_vs_btc": {
-        "15m": -0.0007354252154261331,
-        "1h": -0.007534926590110458,
-        "5m": -0.0025093446185207036
+        "15m": -0.002592941448312125,
+        "1h": -0.0038359347835392743,
+        "5m": 0.0009615997256594566
       },
-      "percentile_15m": 0.0,
-      "percentile_1h": 0.043478260869565216,
-      "percentile_5m": 0.0,
-      "score": 1.0869565217391304,
+      "percentile_15m": 0.08695652173913043,
+      "percentile_1h": 0.43478260869565216,
+      "percentile_5m": 0.8260869565217391,
+      "score": 46.95652173913044,
       "strong": false,
-      "weak": true
+      "weak": false
     },
     "PEPEUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0024824296657269818,
-        "1h": -0.0043874562089709634,
-        "5m": -0.00016492859124017656
+        "15m": 0.0027617149940246666,
+        "1h": -0.009560484004055958,
+        "5m": 0.002879002515508211
       },
-      "percentile_15m": 0.6086956521739131,
-      "percentile_1h": 0.34782608695652173,
-      "percentile_5m": 0.21739130434782608,
-      "score": 38.69565217391304,
-      "strong": false,
+      "percentile_15m": 0.9130434782608695,
+      "percentile_1h": 0.08695652173913043,
+      "percentile_5m": 0.9565217391304348,
+      "score": 72.3913043478261,
+      "strong": true,
       "weak": false
     },
     "PUMPUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0037653364842734627,
-        "1h": 0.004686941515575804,
-        "5m": 0.00183361792038772
+        "15m": -0.007810404264637638,
+        "1h": 0.028340300448765454,
+        "5m": -0.003787696596463719
       },
-      "percentile_15m": 0.8260869565217391,
-      "percentile_1h": 0.9565217391304348,
-      "percentile_5m": 0.8260869565217391,
-      "score": 85.86956521739131,
-      "strong": true,
-      "weak": false
+      "percentile_15m": 0.043478260869565216,
+      "percentile_1h": 1.0,
+      "percentile_5m": 0.0,
+      "score": 26.521739130434785,
+      "strong": false,
+      "weak": true
     },
     "QNTUSDT": {
       "excess_vs_btc": {
-        "15m": 0.00475410010173094,
-        "1h": 0.042575219158974664,
-        "5m": 0.011873166646855227
+        "15m": -0.012129919807304046,
+        "1h": -0.011482830182790615,
+        "5m": 0.004981856856958067
       },
-      "percentile_15m": 0.9130434782608695,
-      "percentile_1h": 1.0,
+      "percentile_15m": 0.0,
+      "percentile_1h": 0.0,
       "percentile_5m": 1.0,
-      "score": 96.95652173913044,
-      "strong": true,
+      "score": 40.0,
+      "strong": false,
       "weak": false
     },
     "SANDUSDT": {
       "excess_vs_btc": {
-        "15m": 0.008674235911593553,
-        "1h": -0.005570463615365284,
-        "5m": 0.0025416057559692895
+        "15m": 0.02089947211898302,
+        "1h": 0.012223143596082009,
+        "5m": -0.0034277659913580782
       },
       "percentile_15m": 1.0,
-      "percentile_1h": 0.17391304347826086,
-      "percentile_5m": 0.9130434782608695,
-      "score": 75.8695652173913,
-      "strong": true,
+      "percentile_1h": 0.9130434782608695,
+      "percentile_5m": 0.043478260869565216,
+      "score": 59.56521739130435,
+      "strong": false,
       "weak": false
     },
     "SOLUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0012928601161689146,
-        "1h": -0.0006135079288058787,
-        "5m": -0.0010020288758542106
+        "15m": 0.0006598618657629451,
+        "1h": -0.001126278600242614,
+        "5m": -0.00047268346446049936
       },
-      "percentile_15m": 0.391304347826087,
+      "percentile_15m": 0.6521739130434783,
       "percentile_1h": 0.7391304347826086,
-      "percentile_5m": 0.043478260869565216,
-      "score": 33.91304347826087,
+      "percentile_5m": 0.391304347826087,
+      "score": 56.95652173913044,
       "strong": false,
+      "weak": false
+    },
+    "SPCXBUSDT": {
+      "excess_vs_btc": {
+        "15m": 0.000785942537694595,
+        "1h": -0.002488272804495706,
+        "5m": 0.0011600016926655021
+      },
+      "percentile_15m": 0.6956521739130435,
+      "percentile_1h": 0.6956521739130435,
+      "percentile_5m": 0.9130434782608695,
+      "score": 78.26086956521739,
+      "strong": true,
       "weak": false
     },
     "SUIUSDT": {
       "excess_vs_btc": {
-        "15m": 0.004727459915042753,
-        "1h": 0.00022082186769467604,
-        "5m": 0.001911914607098275
+        "15m": -0.00203930992379342,
+        "1h": -0.0038999832610879803,
+        "5m": -0.0015011077954357743
       },
-      "percentile_15m": 0.8695652173913043,
-      "percentile_1h": 0.8695652173913043,
-      "percentile_5m": 0.8695652173913043,
-      "score": 86.95652173913044,
-      "strong": true,
-      "weak": false
+      "percentile_15m": 0.13043478260869565,
+      "percentile_1h": 0.391304347826087,
+      "percentile_5m": 0.21739130434782608,
+      "score": 23.043478260869566,
+      "strong": false,
+      "weak": true
     },
     "TAOUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0028922885758958516,
-        "1h": -0.003824851933178497,
-        "5m": 0.0015651752149881126
+        "15m": 0.0011000977027941783,
+        "1h": -0.00839306260828887,
+        "5m": -0.0008501078982696697
       },
-      "percentile_15m": 0.6956521739130435,
-      "percentile_1h": 0.391304347826087,
-      "percentile_5m": 0.782608695652174,
-      "score": 65.43478260869566,
-      "strong": true,
-      "weak": false
-    },
-    "TRUMPUSDT": {
-      "excess_vs_btc": {
-        "15m": 0.0025514534962044477,
-        "1h": -0.003561092481798145,
-        "5m": -0.00016492859124017656
-      },
-      "percentile_15m": 0.6521739130434783,
-      "percentile_1h": 0.43478260869565216,
-      "percentile_5m": 0.2608695652173913,
-      "score": 44.13043478260869,
+      "percentile_15m": 0.7391304347826086,
+      "percentile_1h": 0.13043478260869565,
+      "percentile_5m": 0.34782608695652173,
+      "score": 43.043478260869556,
       "strong": false,
       "weak": false
     },
     "UNIUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0024235226376255747,
-        "1h": -0.0045967181742530006,
-        "5m": 0.0004915983810762636
+        "15m": -0.0017784527791213645,
+        "1h": -0.008205770658554212,
+        "5m": -0.00034435970239921065
       },
-      "percentile_15m": 0.5652173913043478,
-      "percentile_1h": 0.30434782608695654,
-      "percentile_5m": 0.5217391304347826,
-      "score": 48.26086956521739,
+      "percentile_15m": 0.21739130434782608,
+      "percentile_1h": 0.17391304347826086,
+      "percentile_5m": 0.43478260869565216,
+      "score": 29.34782608695652,
       "strong": false,
-      "weak": false
+      "weak": true
     },
     "WLDUSDT": {
       "excess_vs_btc": {
-        "15m": 0.007027454380964415,
-        "1h": -0.014458676390166292,
-        "5m": 0.004711358206664906
+        "15m": -0.0007421633741591105,
+        "1h": 0.005570857480706293,
+        "5m": -0.0012791149133446478
       },
-      "percentile_15m": 0.9565217391304348,
-      "percentile_1h": 0.0,
-      "percentile_5m": 0.9565217391304348,
-      "score": 71.73913043478262,
-      "strong": true,
-      "weak": false
-    },
-    "XAUTUSDT": {
-      "excess_vs_btc": {
-        "15m": 0.0004084981669058019,
-        "1h": -0.000581318368539252,
-        "5m": -7.30714822250178e-05
-      },
-      "percentile_15m": 0.13043478260869565,
-      "percentile_1h": 0.782608695652174,
-      "percentile_5m": 0.30434782608695654,
-      "score": 36.30434782608696,
+      "percentile_15m": 0.391304347826087,
+      "percentile_1h": 0.8695652173913043,
+      "percentile_5m": 0.2608695652173913,
+      "score": 45.869565217391305,
       "strong": false,
       "weak": false
     },
     "XRPUSDT": {
       "excess_vs_btc": {
-        "15m": 0.0019430576666427113,
-        "1h": -0.0021152315645590614,
-        "5m": 0.0005098807751138246
+        "15m": 4.869408264274178e-06,
+        "1h": -0.0030893875536720516,
+        "5m": -0.00027682276221563384
       },
-      "percentile_15m": 0.5217391304347826,
-      "percentile_1h": 0.5652173913043478,
+      "percentile_15m": 0.5652173913043478,
+      "percentile_1h": 0.6086956521739131,
       "percentile_5m": 0.5652173913043478,
-      "score": 54.99999999999999,
+      "score": 57.608695652173914,
       "strong": false,
       "weak": false
     },
     "ZECUSDT": {
       "excess_vs_btc": {
-        "15m": 0.001170176706428161,
-        "1h": -0.0027364717210907052,
-        "5m": 0.0007412823807662061
+        "15m": -0.0009299142681220562,
+        "1h": -0.003475889443938951,
+        "5m": -0.0010156203984744705
       },
       "percentile_15m": 0.34782608695652173,
       "percentile_1h": 0.5217391304347826,
-      "percentile_5m": 0.7391304347826086,
-      "score": 54.78260869565218,
+      "percentile_5m": 0.30434782608695654,
+      "score": 37.391304347826086,
       "strong": false,
+      "weak": false
+    },
+    "ZROUSDT": {
+      "excess_vs_btc": {
+        "15m": 0.003808482413959924,
+        "1h": 0.02694886179033662,
+        "5m": 0.0005315846751327014
+      },
+      "percentile_15m": 0.9565217391304348,
+      "percentile_1h": 0.9565217391304348,
+      "percentile_5m": 0.782608695652174,
+      "score": 88.69565217391305,
+      "strong": true,
       "weak": false
     }
   },
@@ -531,24 +417,24 @@
     "XRPUSDT",
     "ZECUSDT",
     "NEARUSDT",
-    "SUIUSDT",
-    "BNBUSDT",
     "WLDUSDT",
-    "DOGEUSDT",
+    "SUIUSDT",
     "SANDUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
     "QNTUSDT",
-    "AVAXUSDT",
     "UNIUSDT",
+    "AVAXUSDT",
     "TAOUSDT",
     "LINKUSDT",
     "ADAUSDT",
+    "LTCUSDT",
     "PUMPUSDT",
     "AAVEUSDT",
     "ENAUSDT",
+    "ZROUSDT",
     "PEPEUSDT",
-    "LTCUSDT",
-    "XAUTUSDT",
-    "HYPEUSDT",
-    "TRUMPUSDT"
+    "SPCXBUSDT",
+    "HYPEUSDT"
   ]
 }
