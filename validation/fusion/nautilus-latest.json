@@ -1,12 +1,46 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "base": {
+    "trades": 166,
+    "wins": 61,
+    "winRate": 0.3674698795180723,
+    "netPnlUSDT": -5.3558238,
+    "expectancyUSDT": -0.03226399879518072,
+    "profitFactor": 0.7328121151673824,
+    "maxDrawdownUSDT": 6.577511289999997
+  },
+  "stress2x": {
+    "trades": 166,
+    "wins": 60,
+    "winRate": 0.3614457831325301,
+    "netPnlUSDT": -8.09099703,
+    "expectancyUSDT": -0.04874094596385543,
+    "profitFactor": 0.6282673470409841,
+    "maxDrawdownUSDT": 8.68292214
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-03T01:51:57.337256+00:00",
-  "notes": "No unified candidate; Nautilus install and execution validation skipped."
+  "generatedAt": "2026-10-03T07:09:12.662561+00:00",
+  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
