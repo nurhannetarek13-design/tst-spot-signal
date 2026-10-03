@@ -33,8 +33,6 @@
     "CANDIDATE:MISSING",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -72,6 +70,7 @@
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
+    "jesse:LT_100_TRADES",
     "nautilus:CANDIDATE_ID_MISMATCH",
     "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:FAIL",
@@ -117,21 +116,21 @@
       "stressExpectancyUSDT": -0.03015505995098039
     },
     "jesse": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "validationScope": "FULL_CANDIDATE",
+      "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 190,
-      "independentEnginePass": false,
+      "trades": 0,
+      "independentEnginePass": null,
       "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": -0.012697037067109547,
+      "baseExpectancyUSDT": 0.0,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": -0.029163364370163154
+      "stressExpectancyUSDT": 0.0
     },
     "nautilus": {
       "status": "NO_CANDIDATE",
@@ -168,6 +167,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-03T08:31:50.035594+00:00",
+  "generatedAt": "2026-10-03T08:32:04.662564+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
