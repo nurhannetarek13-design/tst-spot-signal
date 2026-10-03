@@ -1,10 +1,10 @@
 {
   "engine": "UNIFIED_FUSION_GATE",
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "symbol": null,
-  "family": null,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
   "historicalScope": "FULL_CANDIDATE",
   "forwardScope": "FULL_CANDIDATE",
   "requiredValidators": [
@@ -30,7 +30,14 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "CANDIDATE:MISSING",
+    "vectorbt:CANDIDATE_ID_MISMATCH",
+    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "freqtrade:CANDIDATE_ID_MISMATCH",
+    "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
+    "jesse:CANDIDATE_ID_MISMATCH",
+    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
+    "nautilus:CANDIDATE_ID_MISMATCH",
+    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -57,7 +64,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "CANDIDATE:MISSING",
     "vectorbt:CANDIDATE_ID_MISMATCH",
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
@@ -166,6 +172,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-03T01:52:19.314283+00:00",
+  "generatedAt": "2026-10-03T07:08:03.184236+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
