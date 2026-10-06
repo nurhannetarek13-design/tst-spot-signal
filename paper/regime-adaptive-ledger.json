@@ -2,36 +2,21 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 11.65511256,
-  "realizedPnLUSDT": -0.11724687,
+  "cashUSDT": 18.5731598,
+  "realizedPnLUSDT": -0.22439963,
   "openPositions": [
     {
       "symbol": "ZROUSDT",
       "entry": 1.842,
-      "stop": 1.9590798349622123,
+      "stop": 1.9945868875243764,
       "qty": 0.788303535125,
       "notionalUSDT": 1.45205511,
       "riskUSDT": 0.2,
       "score": 89,
       "openedAt": "2026-10-01T21:03:16.678Z",
       "signalBarTime": "2026-10-01T20:00:00.000Z",
-      "highestClose": 2.225,
-      "barsHeld": 16,
-      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
-      "mode": "PAPER_ONLY"
-    },
-    {
-      "symbol": "BNBUSDT",
-      "entry": 788.7,
-      "stop": 778.8407036822572,
-      "qty": 0.008875364524,
-      "notionalUSDT": 7,
-      "riskUSDT": 0.18443536,
-      "score": 84,
-      "openedAt": "2026-10-03T23:06:19.901Z",
-      "signalBarTime": "2026-10-03T20:00:00.000Z",
-      "highestClose": 795.97,
-      "barsHeld": 9,
+      "highestClose": 2.254,
+      "barsHeld": 17,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -134,6 +119,20 @@
       "netPnLUSDT": -0.05229861,
       "barsHeld": 13,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
+    },
+    {
+      "symbol": "BNBUSDT",
+      "entry": 788.7,
+      "exit": 779.46626568,
+      "qty": 0.008875364524,
+      "openedAt": "2026-10-03T23:06:19.901Z",
+      "closedAt": "2026-10-06T23:50:32.600Z",
+      "reason": "ATR_TRAILING_STOP",
+      "grossPnLUSDT": -0.08195276,
+      "costsUSDT": 0.0252,
+      "netPnLUSDT": -0.10715276,
+      "barsHeld": 10,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
     }
   ],
   "seenSignals": [
@@ -147,7 +146,7 @@
     "ZROUSDT:1790884800000",
     "BNBUSDT:1791057600000"
   ],
-  "lastRunAt": "2026-10-06T18:24:35.105Z",
+  "lastRunAt": "2026-10-06T23:50:32.600Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -160,11 +159,11 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": 0,
+  "todayRealizedPnLUSDT": -0.10715276,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 8.45205511,
-  "closedTradeCount": 7,
+  "openExposureUSDT": 1.45205511,
+  "closedTradeCount": 8,
   "winCount": 2,
-  "lossCount": 5,
-  "winRate": 0.2857
+  "lossCount": 6,
+  "winRate": 0.25
 }
