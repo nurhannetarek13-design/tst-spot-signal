@@ -16,14 +16,14 @@
       "openedAt": "2026-10-01T21:03:16.678Z",
       "signalBarTime": "2026-10-01T20:00:00.000Z",
       "highestClose": 2.108,
-      "barsHeld": 13,
+      "barsHeld": 14,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     },
     {
       "symbol": "BNBUSDT",
       "entry": 788.7,
-      "stop": 777.155751387938,
+      "stop": 777.6879027551986,
       "qty": 0.008875364524,
       "notionalUSDT": 7,
       "riskUSDT": 0.18443536,
@@ -31,7 +31,7 @@
       "openedAt": "2026-10-03T23:06:19.901Z",
       "signalBarTime": "2026-10-03T20:00:00.000Z",
       "highestClose": 795.97,
-      "barsHeld": 6,
+      "barsHeld": 7,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -147,7 +147,7 @@
     "ZROUSDT:1790884800000",
     "BNBUSDT:1791057600000"
   ],
-  "lastRunAt": "2026-10-05T17:10:08.494Z",
+  "lastRunAt": "2026-10-06T01:18:56.290Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
