@@ -139,6 +139,7 @@ async function scan(env,sendAlert){
     const calibration=calibrationBySetup(await getState(env,"paper:ledger")||[]);
     const analyses=[];
     for(let i=0;i<selected.length;i+=3) analyses.push(...await Promise.all(selected.slice(i,i+3).map(x=>analyze(x,tradable.get(x.symbol),regime,calibration))));
+    await recordLearningDecisions(env,analyses,regime);
     const valid=analyses.filter(x=>x.valid).sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)||(b.netRR||0)-(a.netRR||0)||b.edge-a.edge);
     const best=valid[0]||null;
     if(!best) return {ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,setup:x.setup,thesisQuality:x.thesisQuality||0,confidence:x.confidence||null,status:x.status,rejectionReasons:x.rejectionReasons||[]})),liveTrading:false};
@@ -146,7 +147,7 @@ async function scan(env,sendAlert){
 
     const dedupeKey=`signal:${best.symbol}:${best.strategy}:${best.signalBar}`;
     if(await getState(env,dedupeKey)) return {ok:true,status:"DUPLICATE_SUPPRESSED",symbol:best.symbol,liveTrading:false};
-    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,target1:best.target1,target2:best.target2,quantity:best.quantity,notional:best.notional,score:best.score,thesisQuality:best.thesisQuality,thesis:best.thesis,confidence:best.confidence,derivatives,openedAt:Date.now(),signalBar:best.signalBar};
+    const position={symbol:best.symbol,lane:best.lane,strategy:best.strategy,regime:best.regime,setup:best.setup,entry:best.entry,stop:best.stop,target:best.target,target1:best.target1,target2:best.target2,quantity:best.quantity,notional:best.notional,score:best.score,thesisQuality:best.thesisQuality,thesis:best.thesis,confidence:best.confidence,derivatives,metrics:best.metrics||{},riskUSDT:best.riskUSDT,netRR:best.netRR,openedAt:Date.now(),signalBar:best.signalBar,mfePct:0,maePct:0,maxSeenPrice:best.entry,minSeenPrice:best.entry};
     const liveCandidate={
       id:`AUTO-${best.symbol}-${String(best.strategy||"SETUP").replace(/[^A-Za-z0-9]/g,"").slice(0,12)}-${best.signalBar}`,
       symbol:best.symbol,
@@ -479,12 +480,22 @@ function btcRegime(h1,h4){
   return {state:strong?"TREND_OK":neutral?"NEUTRAL":"RISK_OFF",close1h:fmt(c1.at(-1)),close4h:fmt(c4.at(-1)),ema50_1h:fmt(e50_1),ema50_4h:fmt(e50_4)};
 }
 
+async function recordLearningDecisions(env,analyses,marketRegime){
+  const now=Date.now(),log=await getState(env,"learning:decision-log")||[];
+  for(const a of Array.isArray(analyses)?analyses:[]) log.push({at:now,symbol:a.symbol||null,lane:a.lane||null,strategy:a.strategy||null,setup:a.setup||null,symbolRegime:a.regime||null,marketRegime:marketRegime?.state||null,status:a.status||null,valid:a.valid===true,score:Number.isFinite(Number(a.score))?Number(a.score):null,netRR:Number.isFinite(Number(a.netRR))?Number(a.netRR):null,riskUSDT:Number.isFinite(Number(a.riskUSDT))?Number(a.riskUSDT):null,rejectionReasons:a.rejectionReasons||[],metrics:a.metrics||{},financialAction:false,affectsLiveDecision:false});
+  if(log.length>2000) log.splice(0,log.length-2000);
+  await putState(env,"learning:decision-log",log,365*24*3600);
+  await putState(env,"learning:status",{mode:"OBSERVE_ONLY_NO_LIVE_GATING",records:log.length,lastUpdatedAt:now,financialAction:false,changesLiveSizing:false,changesLiveEligibility:false},365*24*3600);
+}
+
 async function monitorPaper(env){
   const active=(await getState(env,"paper:active")||[]).filter(Boolean); if(!active.length) return;
   const keep=[];
   for(const p of active){
     try{
       const priceData=await binance(`/api/v3/ticker/price?symbol=${p.symbol}`),price=Number(priceData.price),ageHours=(Date.now()-p.openedAt)/3600000;
+      p.maxSeenPrice=Math.max(Number(p.maxSeenPrice||p.entry),price); p.minSeenPrice=Math.min(Number(p.minSeenPrice||p.entry),price);
+      p.mfePct=Math.max(Number(p.mfePct||0),((p.maxSeenPrice-p.entry)/p.entry)*100); p.maePct=Math.max(Number(p.maePct||0),((p.entry-p.minSeenPrice)/p.entry)*100);
       let reason=null,exit=price; if(price<=p.stop){reason="STOP";} else if(price>=p.target){reason="TARGET";} else if(ageHours>=CFG.maxHoldHours){reason="TIME";}
       if(!reason){keep.push(p);continue;}
       const gross=p.quantity*(exit-p.entry),fees=p.notional*CFG.fee+p.quantity*exit*CFG.fee,pnl=gross-fees;
@@ -500,15 +511,11 @@ async function recordClosedTrade(env,trade){
   const ledger=await getState(env,"paper:ledger")||[]; ledger.push(trade); if(ledger.length>500) ledger.splice(0,ledger.length-500); await putState(env,"paper:ledger",ledger,365*24*3600);
   const evidence=computeEvidence(ledger); await putState(env,"paper:evidence",evidence,365*24*3600); return evidence;
 }
-function computeEvidence(ledger){
-  let netPnl=0,grossProfit=0,grossLoss=0,wins=0,equity=0,peak=0,maxDD=0;
-  const profits=[]; const byStrategy={};
-  for(const t of ledger){ const p=Number(t.pnl||0); netPnl+=p; equity+=p; peak=Math.max(peak,equity); maxDD=Math.max(maxDD,peak-equity); if(p>0){wins++;grossProfit+=p;profits.push(p);} else grossLoss+=Math.abs(p); const k=t.strategy||"UNKNOWN"; if(!byStrategy[k]) byStrategy[k]={trades:0,wins:0,netPnl:0}; byStrategy[k].trades++; byStrategy[k].wins+=p>0?1:0; byStrategy[k].netPnl+=p; }
-  profits.sort((a,b)=>b-a); const top2=(profits[0]||0)+(profits[1]||0);
-  return {closedTrades:ledger.length,wins,losses:ledger.length-wins,winRate:ledger.length?wins/ledger.length:0,netPnl,grossProfit,grossLoss,profitFactor:grossLoss>0?grossProfit/grossLoss:(grossProfit>0?999:0),expectancy:ledger.length?netPnl/ledger.length:0,maxDrawdownUSDT:maxDD,top2ProfitShare:grossProfit>0?top2/grossProfit:0,byStrategy,updatedAt:Date.now()};
-}
+function scoreBucket(score){const q=Number(score);return q>=96?"96-100":q>=93?"93-95":q>=90?"90-92":"<90";}
+function aggregateTrades(trades){let netPnl=0,grossProfit=0,grossLoss=0,wins=0,equity=0,peak=0,maxDD=0,fees=0,mfe=0,mae=0;for(const t of trades){const p=Number(t.pnl||0);netPnl+=p;equity+=p;peak=Math.max(peak,equity);maxDD=Math.max(maxDD,peak-equity);if(p>0){wins++;grossProfit+=p;}else grossLoss+=Math.abs(p);fees+=Number(t.fees||0);mfe+=Number(t.mfePct||0);mae+=Number(t.maePct||0);}return{trades:trades.length,closedTrades:trades.length,wins,losses:trades.length-wins,winRate:trades.length?wins/trades.length:0,netPnl,grossProfit,grossLoss,profitFactor:grossLoss>0?grossProfit/grossLoss:(grossProfit>0?999:0),expectancy:trades.length?netPnl/trades.length:0,maxDrawdownUSDT:maxDD,fees,avgMfePct:trades.length?mfe/trades.length:0,avgMaePct:trades.length?mae/trades.length:0};}
+function computeEvidence(ledger){const trades=Array.isArray(ledger)?ledger:[],base=aggregateTrades(trades),profits=trades.map(t=>Number(t.pnl||0)).filter(x=>x>0).sort((a,b)=>b-a),top2=(profits[0]||0)+(profits[1]||0),byStrategy={},byRegime={},byStrategyRegime={},byScoreBucket={};const add=(m,k,t)=>{if(!m[k])m[k]=[];m[k].push(t);};for(const t of trades){const st=String(t.strategy||"UNKNOWN"),rg=String(t.regime||"UNKNOWN"),sb=scoreBucket(t.score);add(byStrategy,st,t);add(byRegime,rg,t);add(byStrategyRegime,st+"|"+rg,t);add(byScoreBucket,sb,t);}const sm=m=>Object.fromEntries(Object.entries(m).map(([k,v])=>[k,aggregateTrades(v)]));return{...base,top2ProfitShare:base.grossProfit>0?top2/base.grossProfit:0,byStrategy:sm(byStrategy),byRegime:sm(byRegime),byStrategyRegime:sm(byStrategyRegime),byScoreBucket:sm(byScoreBucket),learningMode:"OBSERVE_ONLY_NO_LIVE_GATING",updatedAt:Date.now()};}
 async function getEvidence(env){ return await getState(env,"paper:evidence")||computeEvidence(await getState(env,"paper:ledger")||[]); }
-function publicEvidence(e){ return {closedTrades:e.closedTrades,wins:e.wins,losses:e.losses,winRate:round((e.winRate||0)*100,1),netPnlUSDT:round(e.netPnl||0,4),profitFactor:round(e.profitFactor||0,3),expectancyUSDT:round(e.expectancy||0,4),maxDrawdownUSDT:round(e.maxDrawdownUSDT||0,4),top2ProfitShare:round(e.top2ProfitShare||0,3),byStrategy:e.byStrategy||{}}; }
+function publicEvidence(e){return{closedTrades:e.closedTrades||0,wins:e.wins||0,losses:e.losses||0,winRate:round((e.winRate||0)*100,1),netPnlUSDT:round(e.netPnl||0,4),profitFactor:round(e.profitFactor||0,3),expectancyUSDT:round(e.expectancy||0,4),maxDrawdownUSDT:round(e.maxDrawdownUSDT||0,4),feesUSDT:round(e.fees||0,4),avgMfePct:round(e.avgMfePct||0,3),avgMaePct:round(e.avgMaePct||0,3),top2ProfitShare:round(e.top2ProfitShare||0,3),byStrategy:e.byStrategy||{},byRegime:e.byRegime||{},byStrategyRegime:e.byStrategyRegime||{},byScoreBucket:e.byScoreBucket||{},learningMode:e.learningMode||"OBSERVE_ONLY_NO_LIVE_GATING"};}
 async function paperStatus(env){ const active=await getState(env,"paper:active")||[],daily=await getDaily(env),evidence=await getEvidence(env),ledger=await getState(env,"paper:ledger")||[]; return json({ok:true,mode:"ADAPTIVE_MULTI_STRATEGY_PAPER",active,daily,evidence:publicEvidence(evidence),recentClosed:ledger.slice(-10).reverse().map(t=>({symbol:t.symbol,strategy:t.strategy,regime:t.regime,pnl:round(t.pnl,4),reason:t.reason,closedAt:t.closedAt})),liveTrading:false}); }
 
 function candle(k){ return {openTime:Number(k[0]),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4]),volume:Number(k[5]),closeTime:Number(k[6]),quoteVolume:Number(k[7]),takerBuyQuote:Number(k[10]||0)}; }
