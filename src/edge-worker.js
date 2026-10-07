@@ -106,7 +106,9 @@ export class SignalState {
 }
 
 async function scan(env,sendAlert){
+  const scanStartedAt=Date.now();
   try{
+    await putState(env,"scan:last",{at:scanStartedAt,status:"STARTED",financialAction:false},3600);
     const daily=await getDaily(env); const validators=await getFusionValidators(env,false);
     if(Number(daily.realizedPnlUSDT||0)<=-CFG.dailyLossCap) return {ok:true,status:"DAILY_LOSS_CAP",validators,liveTrading:false};
     const active=(await getState(env,"paper:active")||[]).filter(Boolean);
@@ -142,7 +144,7 @@ async function scan(env,sendAlert){
     await recordLearningDecisions(env,analyses,regime);
     const valid=analyses.filter(x=>x.valid).sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)||(b.netRR||0)-(a.netRR||0)||b.edge-a.edge);
     const best=valid[0]||null;
-    if(!best) return {ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,setup:x.setup,thesisQuality:x.thesisQuality||0,confidence:x.confidence||null,status:x.status,rejectionReasons:x.rejectionReasons||[]})),liveTrading:false};
+    if(!best){ const result={ok:true,status:"NO_STRONG_SETUP",marketRegime:regime,checked:selected.length,candidates:analyses.slice().sort((a,b)=>(b.thesisQuality||0)-(a.thesisQuality||0)).slice(0,3).map(x=>({symbol:x.symbol,strategy:x.strategy,setup:x.setup,thesisQuality:x.thesisQuality||0,confidence:x.confidence||null,status:x.status,rejectionReasons:x.rejectionReasons||[]})),liveTrading:false}; await putState(env,"scan:last",{at:Date.now(),startedAt:scanStartedAt,...result,financialAction:false},3600); return result; }
     const derivatives=await derivativesPressure(best.symbol).catch(error=>({status:"UNAVAILABLE",error:String(error?.message||error)}));
 
     const dedupeKey=`signal:${best.symbol}:${best.strategy}:${best.signalBar}`;
@@ -176,8 +178,8 @@ async function scan(env,sendAlert){
       const tradeButtons={inline_keyboard:[[{text:"🟢 افتح الزوج على Binance Spot",url:tradeUrl}]]};
       await telegram(env,[`🟡 LOCAL PAPER — ${pair} — SPOT`,`🧠 الاستراتيجية: ${best.strategy}`,`🌦️ السوق: ${best.regime}`,`⭐ القوة: ${best.score}/100`,`💵 المبلغ: ${fmt(best.notional)} USDT`,`💲 دخول: ${fmt(best.entry)}`,`🛑 Stop: ${fmt(best.stop)}`,`🎯 Target: ${fmt(best.target)}`,`📦 الكمية: ${fmt(best.quantity)}`,dline,vline,"","Local Cloudflare setup only. Microstructure + derivatives context are included; this is not the unified validated candidate.","📐 Net R:R: ${best.netRR||\"-\"}","🔗 Binance Spot: ${tradeUrl}","Paper only — مفيش شراء حقيقي من Binance."].join("\n"),tradeButtons);
     }
-    return {ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false};
-  }catch(error){ return {ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; }
+    const result={ok:true,status:"PAPER_SIGNAL_SENT",signal:best,validators,liveTrading:false}; await putState(env,"scan:last",{at:Date.now(),startedAt:scanStartedAt,status:result.status,symbol:best.symbol,strategy:best.strategy,financialAction:false},3600); return result;
+  }catch(error){ const result={ok:false,status:"SCAN_ERROR",error:String(error?.message||error),liveTrading:false}; await putState(env,"scan:last",{at:Date.now(),startedAt:scanStartedAt,...result,financialAction:false},3600).catch(()=>{}); return result; }
 }
 
 function summarize(t,info,book){
