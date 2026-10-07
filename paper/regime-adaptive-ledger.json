@@ -16,7 +16,7 @@
       "openedAt": "2026-10-01T21:03:16.678Z",
       "signalBarTime": "2026-10-01T20:00:00.000Z",
       "highestClose": 2.254,
-      "barsHeld": 18,
+      "barsHeld": 19,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
       "mode": "PAPER_ONLY"
     }
@@ -146,7 +146,7 @@
     "ZROUSDT:1790884800000",
     "BNBUSDT:1791057600000"
   ],
-  "lastRunAt": "2026-10-07T06:04:18.591Z",
+  "lastRunAt": "2026-10-07T15:34:46.250Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
