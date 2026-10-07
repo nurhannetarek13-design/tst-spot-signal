@@ -56,7 +56,7 @@ check("derivatives_has_data",deriv and int(deriv.get("usableCount") or 0)>=1,{"u
 
 check("worker_live_off_literal","liveTrading:false" in worker)
 check("worker_unified_gate","TST_UNIFIED_CANDIDATE_V1" in worker and "candidateFingerprint" in worker)
-check("worker_small_mid_universe","LIQUID_SMALL_MID_CAP_USDT_PLUS_NEW_LISTINGS" in worker)
+check("worker_full_spot_usdt_universe","ALL_SAFE_BINANCE_SPOT_USDT_ROTATING_DEEP_SCAN" in worker and "eligibleUniverseSize" in worker and "scanPerRun: 24" in worker)
 check("worker_microstructure","MICROSTRUCTURE_COMPOSITE" in worker and "micropriceOffsetBps" in worker)
 check("worker_derivatives_context","DERIVATIVES_SNAPSHOT_URL" in worker and "derivativesPressure" in worker)
 check("worker_forward_validator","forward-latest.json" in worker)
