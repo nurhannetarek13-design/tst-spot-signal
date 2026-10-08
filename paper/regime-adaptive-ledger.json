@@ -2,25 +2,9 @@
   "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
   "mode": "PAPER_ONLY",
   "startingEquityUSDT": 20.12,
-  "cashUSDT": 18.5731598,
-  "realizedPnLUSDT": -0.22439963,
-  "openPositions": [
-    {
-      "symbol": "ZROUSDT",
-      "entry": 1.842,
-      "stop": 1.9945868875243764,
-      "qty": 0.788303535125,
-      "notionalUSDT": 1.45205511,
-      "riskUSDT": 0.2,
-      "score": 89,
-      "openedAt": "2026-10-01T21:03:16.678Z",
-      "signalBarTime": "2026-10-01T20:00:00.000Z",
-      "highestClose": 2.254,
-      "barsHeld": 21,
-      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1",
-      "mode": "PAPER_ONLY"
-    }
-  ],
+  "cashUSDT": 20.14549969,
+  "realizedPnLUSDT": -0.10934225,
+  "openPositions": [],
   "closedTrades": [
     {
       "symbol": "ETHUSDT",
@@ -133,6 +117,20 @@
       "netPnLUSDT": -0.10715276,
       "barsHeld": 10,
       "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
+    },
+    {
+      "symbol": "ZROUSDT",
+      "entry": 1.842,
+      "exit": 1.99458689,
+      "qty": 0.788303535125,
+      "openedAt": "2026-10-01T21:03:16.678Z",
+      "closedAt": "2026-10-08T15:39:09.020Z",
+      "reason": "ATR_TRAILING_STOP",
+      "grossPnLUSDT": 0.12028478,
+      "costsUSDT": 0.0052274,
+      "netPnLUSDT": 0.11505738,
+      "barsHeld": 22,
+      "strategy": "REGIME_ADAPTIVE_RISK_MANAGED_MOMENTUM_V1"
     }
   ],
   "seenSignals": [
@@ -146,7 +144,7 @@
     "ZROUSDT:1790884800000",
     "BNBUSDT:1791057600000"
   ],
-  "lastRunAt": "2026-10-08T06:09:20.250Z",
+  "lastRunAt": "2026-10-08T15:39:09.020Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -159,11 +157,11 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": 0,
+  "todayRealizedPnLUSDT": 0.11505738,
   "dailyLossGateOpen": true,
-  "openExposureUSDT": 1.45205511,
-  "closedTradeCount": 8,
-  "winCount": 2,
+  "openExposureUSDT": 0,
+  "closedTradeCount": 9,
+  "winCount": 3,
   "lossCount": 6,
-  "winRate": 0.25
+  "winRate": 0.3333
 }
