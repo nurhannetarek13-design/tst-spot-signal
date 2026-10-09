@@ -144,7 +144,7 @@
     "ZROUSDT:1790884800000",
     "BNBUSDT:1791057600000"
   ],
-  "lastRunAt": "2026-10-08T21:21:40.682Z",
+  "lastRunAt": "2026-10-09T06:12:58.970Z",
   "liveTrading": false,
   "config": {
     "startingEquity": 20.12,
@@ -157,7 +157,7 @@
     "atrStopMult": 2.5,
     "maxHoldBars": 120
   },
-  "todayRealizedPnLUSDT": 0.11505738,
+  "todayRealizedPnLUSDT": 0,
   "dailyLossGateOpen": true,
   "openExposureUSDT": 0,
   "closedTradeCount": 9,
