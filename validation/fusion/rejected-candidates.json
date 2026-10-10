@@ -110,10 +110,11 @@
       "symbol": "SAHARAUSDT",
       "family": "TS_MOMENTUM",
       "hardFailValidators": [
+        "vectorbt",
         "freqtrade",
         "nautilus"
       ],
-      "rejectedAt": "2026-10-03T07:19:54.709769+00:00"
+      "rejectedAt": "2026-10-10T09:00:17.822578+00:00"
     },
     {
       "candidateId": "PUBLIC_EDGE_LAB:ARBUSDT:VOLATILITY_BREAKOUT",
