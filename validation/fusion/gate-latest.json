@@ -30,14 +30,18 @@
   "liveReady": false,
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
+    "vectorbt:BASE_PF_LT_1_15",
+    "vectorbt:BASE_EXPECTANCY_NONPOSITIVE",
+    "vectorbt:STRESS_PF_LT_1_0",
+    "vectorbt:STRESS_EXPECTANCY_NONPOSITIVE",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
-    "nautilus:CANDIDATE_ID_MISMATCH",
-    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
+    "nautilus:BASE_PF_LT_1_15",
+    "nautilus:BASE_EXPECTANCY_NONPOSITIVE",
+    "nautilus:STRESS_PF_LT_1_0",
+    "nautilus:STRESS_EXPECTANCY_NONPOSITIVE",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -64,8 +68,6 @@
   "liveTrading": false,
   "executorAutoEnable": false,
   "reasons": [
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "vectorbt:FAIL",
     "vectorbt:LT_100_TRADES",
     "freqtrade:CANDIDATE_ID_MISMATCH",
@@ -76,10 +78,7 @@
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
     "jesse:LT_100_TRADES",
-    "nautilus:CANDIDATE_ID_MISMATCH",
-    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:FAIL",
-    "nautilus:LT_100_TRADES",
     "forward:CANDIDATE_ID_MISMATCH",
     "forward:CANDIDATE_FINGERPRINT_MISMATCH",
     "forward:FAIL",
@@ -87,21 +86,21 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 44,
+      "independentEnginePass": false,
+      "baseProfitFactor": 0.8489587168665716,
+      "baseExpectancyUSDT": -0.018289321307038014,
+      "stressProfitFactor": 0.7338448720460643,
+      "stressExpectancyUSDT": -0.034786633293056486
     },
     "freqtrade": {
       "status": "NO_CANDIDATE",
@@ -138,21 +137,21 @@
       "stressExpectancyUSDT": 0.0
     },
     "nautilus": {
-      "status": "NO_CANDIDATE",
+      "status": "FAIL",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": null,
-      "candidateFingerprint": null,
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 0,
-      "independentEnginePass": null,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": 0.0,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": 0.0
+      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "candidateIdMatch": true,
+      "candidateFingerprintMatch": true,
+      "candidateMatch": true,
+      "trades": 168,
+      "independentEnginePass": false,
+      "baseProfitFactor": 0.7168239262733997,
+      "baseExpectancyUSDT": -0.034541161785714286,
+      "stressProfitFactor": 0.6147259004176103,
+      "stressExpectancyUSDT": -0.05101464160714285
     },
     "forward": {
       "status": "NO_CANDIDATE",
@@ -172,6 +171,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-10T08:52:50.108317+00:00",
+  "generatedAt": "2026-10-10T08:54:18.437207+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
