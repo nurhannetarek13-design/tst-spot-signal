@@ -1,46 +1,12 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "5a8be2536ed727aaa38e",
-  "symbol": "SAHARAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "params": {
-    "emaFast": 48,
-    "emaSlow": 120,
-    "retLookback": 24,
-    "retMin": 0.02,
-    "atrMin": 0.006,
-    "atrMax": 0.08,
-    "relvol": 0.8,
-    "holdBars": 24,
-    "sl": 0.03,
-    "tp": 0.06
-  },
-  "base": {
-    "trades": 157,
-    "wins": 57,
-    "winRate": 0.3630573248407643,
-    "netPnlUSDT": -2.06394952,
-    "expectancyUSDT": -0.013146175286624203,
-    "profitFactor": 0.8813381916459614,
-    "maxDrawdownUSDT": 3.30045261
-  },
-  "stress2x": {
-    "trades": 157,
-    "wins": 51,
-    "winRate": 0.3248407643312102,
-    "netPnlUSDT": -4.654768430000001,
-    "expectancyUSDT": -0.02964820656050956,
-    "profitFactor": 0.7558014543027518,
-    "maxDrawdownUSDT": 4.943681970000001
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-10T08:55:56.454699+00:00",
-  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
+  "generatedAt": "2026-10-10T09:03:08.628631+00:00",
+  "notes": "No unified candidate; Nautilus install and execution validation skipped."
 }
