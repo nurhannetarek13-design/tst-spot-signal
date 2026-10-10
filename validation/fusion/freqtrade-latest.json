@@ -1,13 +1,38 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "validationScope": "FULL_CANDIDATE",
+  "fullStrategyValidated": null,
+  "excludedConfirmations": [],
+  "eligibleOutcome": "CANDIDATE_VALIDATION",
+  "base": {
+    "trades": 195,
+    "wins": 66,
+    "winRate": 0.3384615384615385,
+    "profitFactor": 0.8642494764186744,
+    "expectancyUSDT": -0.015285495435897436,
+    "netPnlUSDT": -2.98067161,
+    "maxDrawdownUSDT": 3.81521696
+  },
+  "stress2x": {
+    "trades": 198,
+    "wins": 64,
+    "winRate": 0.32323232323232326,
+    "profitFactor": 0.775513594251347,
+    "expectancyUSDT": -0.027965124646464647,
+    "netPnlUSDT": -5.53709468,
+    "maxDrawdownUSDT": 5.548258879999999
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-09T09:38:49.031233+00:00",
-  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
+  "generatedAt": "2026-10-10T08:55:25.210327+00:00",
+  "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
