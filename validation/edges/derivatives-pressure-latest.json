@@ -8,52 +8,52 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "WLDUSDT",
-      "price": 0.5009,
-      "quoteVolume24h": 34217177.77665,
-      "score": 100,
-      "oiChange2h": 0.028982388888834087,
-      "takerBuySellRatio1h": 1.71895,
-      "fundingRate": -0.00010501,
-      "basis": -0.0008966378764538874,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "TIAUSDT",
-      "price": 0.6634,
-      "quoteVolume24h": 31333612.495494,
+      "symbol": "SUIUSDT",
+      "price": 0.9877,
+      "quoteVolume24h": 29033745.56215,
       "score": 90,
-      "oiChange2h": 0.0019546686571099148,
-      "takerBuySellRatio1h": 1.491025,
-      "fundingRate": -2.376e-05,
-      "basis": -0.0014820991092684421,
+      "oiChange2h": 0.006857961232212162,
+      "takerBuySellRatio1h": 1.3147,
+      "fundingRate": 1.689e-05,
+      "basis": -0.0008994839306324387,
       "paperLongPressure": true
     },
     {
       "symbol": "STRKUSDT",
-      "price": 0.06535,
-      "quoteVolume24h": 21423905.7067533,
-      "score": 90,
-      "oiChange2h": 0.018946970644263095,
-      "takerBuySellRatio1h": 1.3287499999999999,
+      "price": 0.06464,
+      "quoteVolume24h": 21117635.3006891,
+      "score": 60,
+      "oiChange2h": 0.0013149378599326411,
+      "takerBuySellRatio1h": 0.97525,
       "fundingRate": 5e-05,
-      "basis": -0.00028503929273548945,
-      "paperLongPressure": true
+      "basis": -0.0004601282976891552,
+      "paperLongPressure": false
     },
     {
-      "symbol": "SUIUSDT",
-      "price": 0.9863,
-      "quoteVolume24h": 30341743.96967,
-      "score": 80,
-      "oiChange2h": 0.015790998289829217,
-      "takerBuySellRatio1h": 1.14405,
-      "fundingRate": 5.978e-05,
-      "basis": -0.0006859914522224786,
-      "paperLongPressure": true
+      "symbol": "WLDUSDT",
+      "price": 0.5018,
+      "quoteVolume24h": 33857502.1701,
+      "score": 40,
+      "oiChange2h": -0.0031959277831962174,
+      "takerBuySellRatio1h": 0.70695,
+      "fundingRate": -0.0001365,
+      "basis": -0.0008148321166649986,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "TIAUSDT",
+      "price": 0.6593,
+      "quoteVolume24h": 30722619.82066,
+      "score": 40,
+      "oiChange2h": -0.016835505340185075,
+      "takerBuySellRatio1h": 0.7066250000000001,
+      "fundingRate": -5.573e-05,
+      "basis": -0.0001993685282875024,
+      "paperLongPressure": false
     }
   ],
   "universeCount": 4,
   "usableCount": 4,
   "failures": {},
-  "generatedAt": "2026-10-17T19:00:01.664557+00:00"
+  "generatedAt": "2026-10-17T21:22:47.282265+00:00"
 }
