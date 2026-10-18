@@ -1,13 +1,38 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "validationScope": "FULL_CANDIDATE",
+  "fullStrategyValidated": null,
+  "excludedConfirmations": [],
+  "eligibleOutcome": "CANDIDATE_VALIDATION",
+  "base": {
+    "trades": 182,
+    "wins": 61,
+    "winRate": 0.33516483516483514,
+    "profitFactor": 0.7968092177711712,
+    "expectancyUSDT": -0.022867540934065934,
+    "netPnlUSDT": -4.16189245,
+    "maxDrawdownUSDT": 4.161892450000001
+  },
+  "stress2x": {
+    "trades": 181,
+    "wins": 58,
+    "winRate": 0.32044198895027626,
+    "profitFactor": 0.6998772259760644,
+    "expectancyUSDT": -0.03725945220994475,
+    "netPnlUSDT": -6.74396085,
+    "maxDrawdownUSDT": 6.743960849999998
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-17T07:12:06.354026+00:00",
-  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
+  "generatedAt": "2026-10-18T07:26:10.304169+00:00",
+  "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
