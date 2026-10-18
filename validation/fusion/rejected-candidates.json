@@ -191,9 +191,9 @@
       "family": "TS_MOMENTUM",
       "hardFailValidators": [
         "vectorbt",
-        "nautilus"
+        "freqtrade"
       ],
-      "rejectedAt": "2026-10-10T08:54:36.892010+00:00"
+      "rejectedAt": "2026-10-18T07:26:27.310175+00:00"
     }
   ],
   "ttlDays": 7,
