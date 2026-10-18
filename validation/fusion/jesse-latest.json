@@ -1,36 +1,13 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "5a8be2536ed727aaa38e",
-  "symbol": "SAHARAUSDT",
-  "family": "TS_MOMENTUM",
-  "timeframe": "1h",
-  "base": {
-    "trades": 164,
-    "winRate": 0.38414634146341464,
-    "profitFactor": 0.0,
-    "expectancyUSDT": -0.005876237210692535,
-    "netPnlUSDT": -0.9637029025535757,
-    "maxDrawdown": -9.742161967261032
-  },
-  "stress2x": {
-    "trades": 164,
-    "winRate": 0.36585365853658536,
-    "profitFactor": 0.0,
-    "expectancyUSDT": -0.022344736255689536,
-    "netPnlUSDT": -3.6645367459330838,
-    "maxDrawdown": -18.27569886302298
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-18T07:35:18.245664+00:00",
-  "notes": "Historical Jesse validation is explicitly limited to the candle-derived core trigger when validationScope=CORE_TRIGGER_ONLY. It does not validate L2/order-book confirmation and cannot authorize live trading.",
-  "validationScope": "FULL_CANDIDATE",
-  "fullStrategyValidated": null,
-  "excludedConfirmations": [],
-  "eligibleOutcome": "CANDIDATE_VALIDATION"
+  "generatedAt": "2026-10-18T09:08:35.054779+00:00",
+  "notes": "No unified candidate; Jesse install and market download skipped."
 }
