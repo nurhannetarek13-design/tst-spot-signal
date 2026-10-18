@@ -4,9 +4,9 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "47d4daea870e3a1ab59c",
-  "symbol": "HOLOUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "params": {
@@ -22,25 +22,25 @@
     "tp": 0.06
   },
   "base": {
-    "trades": 42,
-    "wins": 17,
-    "winRate": 0.40476190476190477,
-    "netPnlUSDT": -0.8206655995156779,
-    "expectancyUSDT": -0.019539657131325664,
-    "profitFactor": 0.8458941816411951,
-    "maxDrawdownUSDT": 0.9769925537749161
+    "trades": 26,
+    "wins": 9,
+    "winRate": 0.34615384615384615,
+    "netPnlUSDT": -0.011609465469191421,
+    "expectancyUSDT": -0.0004465179026612085,
+    "profitFactor": 0.9951476438104945,
+    "maxDrawdownUSDT": 0.6911533483233171
   },
   "stress2x": {
-    "trades": 42,
-    "wins": 16,
-    "winRate": 0.38095238095238093,
-    "netPnlUSDT": -1.5134738134372872,
-    "expectancyUSDT": -0.036035090796125886,
-    "profitFactor": 0.7359496101310322,
-    "maxDrawdownUSDT": 1.5134738134372872
+    "trades": 26,
+    "wins": 9,
+    "winRate": 0.34615384615384615,
+    "netPnlUSDT": -0.44123649181050006,
+    "expectancyUSDT": -0.01697063430040385,
+    "profitFactor": 0.8347347829113697,
+    "maxDrawdownUSDT": 0.7727389967735074
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-18T07:24:46.581410+00:00",
+  "generatedAt": "2026-10-18T07:27:30.842622+00:00",
   "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
 }
