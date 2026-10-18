@@ -4,9 +4,9 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "47d4daea870e3a1ab59c",
-  "symbol": "HOLOUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "validationScope": "FULL_CANDIDATE",
@@ -14,25 +14,25 @@
   "excludedConfirmations": [],
   "eligibleOutcome": "CANDIDATE_VALIDATION",
   "base": {
-    "trades": 182,
-    "wins": 61,
-    "winRate": 0.33516483516483514,
-    "profitFactor": 0.7968092177711712,
-    "expectancyUSDT": -0.022867540934065934,
-    "netPnlUSDT": -4.16189245,
-    "maxDrawdownUSDT": 4.161892450000001
+    "trades": 194,
+    "wins": 65,
+    "winRate": 0.33505154639175255,
+    "profitFactor": 0.859137076514,
+    "expectancyUSDT": -0.016014401340206184,
+    "netPnlUSDT": -3.10679386,
+    "maxDrawdownUSDT": 3.99732629
   },
   "stress2x": {
-    "trades": 181,
-    "wins": 58,
-    "winRate": 0.32044198895027626,
-    "profitFactor": 0.6998772259760644,
-    "expectancyUSDT": -0.03725945220994475,
-    "netPnlUSDT": -6.74396085,
-    "maxDrawdownUSDT": 6.743960849999998
+    "trades": 197,
+    "wins": 63,
+    "winRate": 0.3197969543147208,
+    "profitFactor": 0.7719793815191239,
+    "expectancyUSDT": -0.028663549137055835,
+    "netPnlUSDT": -5.64671918,
+    "maxDrawdownUSDT": 5.646719179999997
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-10-18T07:26:10.304169+00:00",
+  "generatedAt": "2026-10-18T07:27:14.656830+00:00",
   "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
 }
