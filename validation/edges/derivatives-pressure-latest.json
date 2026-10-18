@@ -9,51 +9,51 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.1816,
-      "quoteVolume24h": 20668735.208839,
-      "score": 80,
-      "oiChange2h": 0.0021599567989365465,
-      "takerBuySellRatio1h": 1.08895,
-      "fundingRate": 3.584e-05,
-      "basis": -0.00045457360670875246,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 0.9609,
-      "quoteVolume24h": 27752719.17877,
-      "score": 60,
-      "oiChange2h": 0.0032292952123360585,
-      "takerBuySellRatio1h": 1.0180500000000001,
-      "fundingRate": -0.00010259,
-      "basis": -0.0004707547550383273,
+      "price": 0.176,
+      "quoteVolume24h": 26334927.142684,
+      "score": 70,
+      "oiChange2h": -0.0260491681726438,
+      "takerBuySellRatio1h": 1.2973,
+      "fundingRate": 2.058e-05,
+      "basis": -0.0002434590212082588,
       "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.4725,
-      "quoteVolume24h": 32119182.87078,
+      "price": 0.4612,
+      "quoteVolume24h": 34328076.58377,
       "score": 40,
-      "oiChange2h": -0.00928672275306519,
-      "takerBuySellRatio1h": 0.9400499999999999,
-      "fundingRate": -0.00019221,
-      "basis": -0.0008418875356008826,
+      "oiChange2h": -0.016696940324495424,
+      "takerBuySellRatio1h": 0.9741500000000001,
+      "fundingRate": -0.00028188,
+      "basis": -0.0009617429824101409,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.9451,
+      "quoteVolume24h": 32911275.91112,
+      "score": 40,
+      "oiChange2h": -0.035168404676963916,
+      "takerBuySellRatio1h": 1.029875,
+      "fundingRate": -8.443e-05,
+      "basis": -1.9832393206686838e-05,
       "paperLongPressure": false
     },
     {
       "symbol": "HBARUSDT",
-      "price": 0.08448,
-      "quoteVolume24h": 27021088.05265,
+      "price": 0.08255,
+      "quoteVolume24h": 28144371.44727,
       "score": 40,
-      "oiChange2h": -0.022200129179535733,
-      "takerBuySellRatio1h": 0.880275,
-      "fundingRate": 1.855e-05,
-      "basis": -0.00041770585151579276,
+      "oiChange2h": -0.05553400390217711,
+      "takerBuySellRatio1h": 1.00555,
+      "fundingRate": 6.7e-06,
+      "basis": -0.0006199039306366005,
       "paperLongPressure": false
     }
   ],
   "universeCount": 4,
   "usableCount": 4,
   "failures": {},
-  "generatedAt": "2026-10-18T18:14:12.569229+00:00"
+  "generatedAt": "2026-10-18T20:56:39.931965+00:00"
 }
