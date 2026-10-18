@@ -151,7 +151,7 @@
       "stressExpectancyUSDT": -0.048378601575757574
     },
     "forward": {
-      "status": "RESET_FOR_NEW_CANDIDATE",
+      "status": "COLLECTING",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
@@ -168,6 +168,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-18T07:26:39.043530+00:00",
+  "generatedAt": "2026-10-18T07:26:52.760457+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
