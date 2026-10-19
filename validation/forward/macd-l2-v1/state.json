@@ -1,11 +1,11 @@
 {
   "closedTrades": [],
   "lastProcessedBar": {
-    "BTCUSDT": 1792373399999,
-    "ETHUSDT": 1792373399999,
-    "SOLUSDT": 1792373399999
+    "BTCUSDT": 1792392299999,
+    "ETHUSDT": 1792392299999,
+    "SOLUSDT": 1792392299999
   },
   "positions": {},
-  "updatedAt": "2026-10-19T01:34:16.707664+00:00",
+  "updatedAt": "2026-10-19T06:52:29.098293+00:00",
   "version": 1
 }
