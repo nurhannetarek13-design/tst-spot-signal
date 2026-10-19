@@ -8,58 +8,58 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
+      "symbol": "SUIUSDT",
+      "price": 0.9958,
+      "quoteVolume24h": 41538144.97845,
+      "score": 40,
+      "oiChange2h": -0.007405588081209724,
+      "takerBuySellRatio1h": 0.773475,
+      "fundingRate": 0.0001,
+      "basis": -0.0003825331100874019,
+      "paperLongPressure": false
+    },
+    {
       "symbol": "ENAUSDT",
-      "price": 0.1916,
-      "quoteVolume24h": 31709622.515698,
-      "score": 80,
-      "oiChange2h": 0.019002841982427077,
-      "takerBuySellRatio1h": 1.053575,
+      "price": 0.1869,
+      "quoteVolume24h": 35224696.338897,
+      "score": 40,
+      "oiChange2h": -0.003994887116136936,
+      "takerBuySellRatio1h": 0.98585,
       "fundingRate": 5e-05,
-      "basis": -0.0004149191544459141,
-      "paperLongPressure": true
+      "basis": -0.0005108440695282823,
+      "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.4936,
-      "quoteVolume24h": 31543374.71367,
-      "score": 80,
-      "oiChange2h": 0.0024633859326028684,
-      "takerBuySellRatio1h": 1.061475,
-      "fundingRate": -2.63e-05,
-      "basis": -0.00028561829897577606,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 1.0098,
-      "quoteVolume24h": 37011096.95343,
-      "score": 60,
-      "oiChange2h": 0.012820629190958943,
-      "takerBuySellRatio1h": 1.0461,
-      "fundingRate": 3.019e-05,
-      "basis": -8.609313854934797e-06,
+      "price": 0.4979,
+      "quoteVolume24h": 33344566.23669,
+      "score": 40,
+      "oiChange2h": -0.015955261429591028,
+      "takerBuySellRatio1h": 1.0185,
+      "fundingRate": 0.0001,
+      "basis": -0.00018819041655981916,
       "paperLongPressure": false
     },
     {
       "symbol": "PUMPUSDT",
-      "price": 0.004436,
-      "quoteVolume24h": 30458939.995676,
-      "score": 60,
-      "oiChange2h": -0.011097534846892243,
-      "takerBuySellRatio1h": 1.10395,
-      "fundingRate": 3.913e-05,
-      "basis": -0.0005995893038677202,
+      "price": 0.004454,
+      "quoteVolume24h": 33266885.499108,
+      "score": 40,
+      "oiChange2h": -0.028191383391924063,
+      "takerBuySellRatio1h": 0.87175,
+      "fundingRate": 1.001e-05,
+      "basis": -0.0009496590881027389,
       "paperLongPressure": false
     },
     {
       "symbol": "HBARUSDT",
-      "price": 0.08413,
-      "quoteVolume24h": 27657880.53528,
+      "price": 0.08299,
+      "quoteVolume24h": 20701578.12922,
       "score": 40,
-      "oiChange2h": -0.0014025764987664058,
-      "takerBuySellRatio1h": 1.0447,
-      "fundingRate": -4.225e-05,
-      "basis": -0.00046499951503120585,
+      "oiChange2h": -0.024098129571757276,
+      "takerBuySellRatio1h": 0.9073,
+      "fundingRate": -3.56e-06,
+      "basis": -0.0009001778547090833,
       "paperLongPressure": false
     }
   ],
@@ -68,5 +68,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-19T05:39:37.549970+00:00"
+  "generatedAt": "2026-10-19T11:58:34.607912+00:00"
 }
