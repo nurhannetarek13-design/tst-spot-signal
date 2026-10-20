@@ -8,77 +8,65 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "GTCUSDT",
-      "price": 0.36486,
-      "quoteVolume24h": 21067650.444592,
-      "score": 85,
-      "oiChange2h": 0.13152889934174072,
-      "takerBuySellRatio1h": 1.076675,
-      "fundingRate": -0.00085582,
-      "basis": -0.0013542707834914847,
+      "symbol": "SUIUSDT",
+      "price": 0.998,
+      "quoteVolume24h": 27361161.9767,
+      "score": 80,
+      "oiChange2h": 0.01651890862580596,
+      "takerBuySellRatio1h": 1.1221,
+      "fundingRate": 3.214e-05,
+      "basis": -0.00044601937503196964,
       "paperLongPressure": true
     },
     {
-      "symbol": "SUIUSDT",
-      "price": 0.9959,
-      "quoteVolume24h": 30821842.62587,
-      "score": 70,
-      "oiChange2h": -0.008421543964655887,
-      "takerBuySellRatio1h": 1.2898,
-      "fundingRate": 7.198e-05,
-      "basis": -0.00019115469435915244,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "ARBUSDT",
-      "price": 0.1971,
-      "quoteVolume24h": 22903834.86003,
-      "score": 70,
-      "oiChange2h": -0.01415279704014305,
-      "takerBuySellRatio1h": 1.1570500000000001,
-      "fundingRate": -0.0001061,
-      "basis": -0.000471241491642016,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "PUMPUSDT",
-      "price": 0.004426,
-      "quoteVolume24h": 21875330.354952,
-      "score": 70,
-      "oiChange2h": -0.005734265305655795,
-      "takerBuySellRatio1h": 1.292475,
-      "fundingRate": 5e-05,
-      "basis": -0.0004947576026621547,
-      "paperLongPressure": false
-    },
-    {
       "symbol": "WLDUSDT",
-      "price": 0.5432,
-      "quoteVolume24h": 60008892.61488,
-      "score": 60,
-      "oiChange2h": -0.019791378657266656,
-      "takerBuySellRatio1h": 1.060325,
+      "price": 0.5567,
+      "quoteVolume24h": 64956842.49678,
+      "score": 70,
+      "oiChange2h": 0.03432754659111392,
+      "takerBuySellRatio1h": 0.981775,
       "fundingRate": 0.0001,
-      "basis": -0.00036256413573287904,
+      "basis": -0.0009417477621616044,
       "paperLongPressure": false
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.1879,
-      "quoteVolume24h": 24479297.83182,
+      "price": 0.1889,
+      "quoteVolume24h": 22058918.086644,
+      "score": 70,
+      "oiChange2h": 0.02471269643252061,
+      "takerBuySellRatio1h": 0.777925,
+      "fundingRate": 5e-05,
+      "basis": -0.0004764450308890611,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ARBUSDT",
+      "price": 0.1888,
+      "quoteVolume24h": 23025567.23863,
       "score": 40,
-      "oiChange2h": -0.009957819166032111,
-      "takerBuySellRatio1h": 0.9787,
-      "fundingRate": 4.958e-05,
-      "basis": -0.0005734306697320335,
+      "oiChange2h": -0.0015256731751105423,
+      "takerBuySellRatio1h": 1.01845,
+      "fundingRate": 0.0001,
+      "basis": -0.0010918642929037548,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "GTCUSDT",
+      "price": 0.34513,
+      "quoteVolume24h": 23066138.2865,
+      "score": 25,
+      "oiChange2h": -0.0472355864803109,
+      "takerBuySellRatio1h": 0.9962,
+      "fundingRate": -0.00335804,
+      "basis": -0.0088518443729797,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 8,
-  "usableCount": 6,
+  "universeCount": 6,
+  "usableCount": 5,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-20T07:04:47.846884+00:00"
+  "generatedAt": "2026-10-20T12:50:25.466400+00:00"
 }
