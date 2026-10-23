@@ -8,36 +8,36 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.212,
-      "quoteVolume24h": 33545584.923814,
+      "symbol": "SUIUSDT",
+      "price": 0.9746,
+      "quoteVolume24h": 27211372.95445,
       "score": 70,
-      "oiChange2h": 0.029758908757604452,
-      "takerBuySellRatio1h": 0.901075,
-      "fundingRate": 5e-05,
-      "basis": -0.00015026587387934054,
+      "oiChange2h": -0.006570565466925027,
+      "takerBuySellRatio1h": 1.44555,
+      "fundingRate": 3.562e-05,
+      "basis": -0.0006608748012824073,
       "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.5338,
-      "quoteVolume24h": 43418640.8745,
-      "score": 60,
-      "oiChange2h": 0.008173524486935646,
-      "takerBuySellRatio1h": 0.9636,
-      "fundingRate": 1.181e-05,
-      "basis": -0.0009044988122564046,
+      "price": 0.5085,
+      "quoteVolume24h": 40576291.88789,
+      "score": 40,
+      "oiChange2h": -0.00200152944867249,
+      "takerBuySellRatio1h": 1.049925,
+      "fundingRate": -8.386e-05,
+      "basis": -0.0009691896303197778,
       "paperLongPressure": false
     },
     {
-      "symbol": "SUIUSDT",
-      "price": 0.9888,
-      "quoteVolume24h": 27389742.78093,
-      "score": 60,
-      "oiChange2h": 0.0009550543039509307,
-      "takerBuySellRatio1h": 0.93155,
-      "fundingRate": 6.508e-05,
-      "basis": -0.0003956070215397345,
+      "symbol": "ENAUSDT",
+      "price": 0.2051,
+      "quoteVolume24h": 37427013.545227,
+      "score": 40,
+      "oiChange2h": -0.025081629856385734,
+      "takerBuySellRatio1h": 0.7867500000000001,
+      "fundingRate": 5e-05,
+      "basis": -0.0005626539089527149,
       "paperLongPressure": false
     }
   ],
@@ -47,5 +47,5 @@
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-23T18:35:19.721918+00:00"
+  "generatedAt": "2026-10-23T21:49:10.645710+00:00"
 }
