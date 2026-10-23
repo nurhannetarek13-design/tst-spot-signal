@@ -8,58 +8,58 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.1982,
-      "quoteVolume24h": 41568942.867379,
-      "score": 60,
-      "oiChange2h": -0.02077531363414431,
-      "takerBuySellRatio1h": 1.0667499999999999,
-      "fundingRate": -2.04e-05,
-      "basis": -0.0006746085242343991,
-      "paperLongPressure": false
+      "symbol": "PUMPUSDT",
+      "price": 0.004646,
+      "quoteVolume24h": 25505270.988083,
+      "score": 100,
+      "oiChange2h": 0.029796041224894987,
+      "takerBuySellRatio1h": 1.4897,
+      "fundingRate": 1.354e-05,
+      "basis": -0.0006543206687844583,
+      "paperLongPressure": true
     },
     {
-      "symbol": "WLDUSDT",
-      "price": 0.5445,
-      "quoteVolume24h": 63524726.00712,
-      "score": 40,
-      "oiChange2h": -0.01461832799632845,
-      "takerBuySellRatio1h": 0.9861,
-      "fundingRate": -3.02e-06,
-      "basis": -0.000165077485828502,
-      "paperLongPressure": false
+      "symbol": "ENAUSDT",
+      "price": 0.2001,
+      "quoteVolume24h": 38363781.610726,
+      "score": 90,
+      "oiChange2h": 0.013749428150874321,
+      "takerBuySellRatio1h": 1.27335,
+      "fundingRate": -2.201e-05,
+      "basis": -0.0011237175101701524,
+      "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.9737,
-      "quoteVolume24h": 38692639.09098,
-      "score": 40,
-      "oiChange2h": -0.0038209962135226094,
-      "takerBuySellRatio1h": 0.8969499999999999,
-      "fundingRate": -3.086e-05,
-      "basis": -0.000562057454216558,
-      "paperLongPressure": false
+      "price": 0.9907,
+      "quoteVolume24h": 35380913.37214,
+      "score": 80,
+      "oiChange2h": 0.017440484841023673,
+      "takerBuySellRatio1h": 1.11225,
+      "fundingRate": 1.921e-05,
+      "basis": -0.0008053124503920595,
+      "paperLongPressure": true
     },
     {
-      "symbol": "PUMPUSDT",
-      "price": 0.004555,
-      "quoteVolume24h": 27195550.616625,
-      "score": 40,
-      "oiChange2h": -0.008751271254971549,
-      "takerBuySellRatio1h": 0.725175,
-      "fundingRate": 2.313e-05,
-      "basis": -0.0007682042457550775,
+      "symbol": "WLDUSDT",
+      "price": 0.5538,
+      "quoteVolume24h": 58881016.32709,
+      "score": 70,
+      "oiChange2h": 0.021524782618303373,
+      "takerBuySellRatio1h": 1.02905,
+      "fundingRate": -3.955e-05,
+      "basis": -0.0007472651644111483,
       "paperLongPressure": false
     },
     {
       "symbol": "ALTUSDT",
-      "price": 0.00821,
-      "quoteVolume24h": 24425143.19709,
-      "score": 25,
-      "oiChange2h": -0.0018486975737679323,
-      "takerBuySellRatio1h": 1.0026,
-      "fundingRate": -0.010065,
-      "basis": -0.0167260081145979,
+      "price": 0.00776,
+      "quoteVolume24h": 21064731.22141,
+      "score": 45,
+      "oiChange2h": -0.0332055698761321,
+      "takerBuySellRatio1h": 1.084025,
+      "fundingRate": -0.00523933,
+      "basis": -0.012971116170537922,
       "paperLongPressure": false
     }
   ],
@@ -70,5 +70,5 @@
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-22T23:51:00.870901+00:00"
+  "generatedAt": "2026-10-23T03:10:10.500191+00:00"
 }
