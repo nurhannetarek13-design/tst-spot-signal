@@ -9,54 +9,43 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.2063,
-      "quoteVolume24h": 27610010.570563,
-      "score": 90,
-      "oiChange2h": 0.02446365384896576,
-      "takerBuySellRatio1h": 1.1168,
-      "fundingRate": 3.904e-05,
-      "basis": -0.00040725405716124374,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "PUMPUSDT",
-      "price": 0.004671,
-      "quoteVolume24h": 20592430.412814,
-      "score": 80,
-      "oiChange2h": 0.008075449836729698,
-      "takerBuySellRatio1h": 1.0997999999999999,
-      "fundingRate": 1.709e-05,
-      "basis": -0.00014558907910633412,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 1.001,
-      "quoteVolume24h": 28525634.72671,
-      "score": 60,
-      "oiChange2h": 0.007068754626798235,
-      "takerBuySellRatio1h": 0.93185,
-      "fundingRate": 6.762e-05,
-      "basis": 4.637747585078955e-06,
+      "price": 0.212,
+      "quoteVolume24h": 33545584.923814,
+      "score": 70,
+      "oiChange2h": 0.029758908757604452,
+      "takerBuySellRatio1h": 0.901075,
+      "fundingRate": 5e-05,
+      "basis": -0.00015026587387934054,
       "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.5414,
-      "quoteVolume24h": 51339167.11547,
-      "score": 40,
-      "oiChange2h": -0.001409265681445504,
-      "takerBuySellRatio1h": 0.917875,
-      "fundingRate": 9.958e-05,
-      "basis": -0.0006186966595312926,
+      "price": 0.5338,
+      "quoteVolume24h": 43418640.8745,
+      "score": 60,
+      "oiChange2h": 0.008173524486935646,
+      "takerBuySellRatio1h": 0.9636,
+      "fundingRate": 1.181e-05,
+      "basis": -0.0009044988122564046,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.9888,
+      "quoteVolume24h": 27389742.78093,
+      "score": 60,
+      "oiChange2h": 0.0009550543039509307,
+      "takerBuySellRatio1h": 0.93155,
+      "fundingRate": 6.508e-05,
+      "basis": -0.0003956070215397345,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 6,
-  "usableCount": 4,
+  "universeCount": 5,
+  "usableCount": 3,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-23T14:01:40.726940+00:00"
+  "generatedAt": "2026-10-23T18:35:19.721918+00:00"
 }
