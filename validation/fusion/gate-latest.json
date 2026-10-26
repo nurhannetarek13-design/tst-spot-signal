@@ -31,8 +31,6 @@
   "smallLiveReviewReady": false,
   "smallLiveReviewReasons": [
     "CANDIDATE:MISSING",
-    "vectorbt:CANDIDATE_ID_MISMATCH",
-    "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:CANDIDATE_ID_MISMATCH",
@@ -86,21 +84,21 @@
   ],
   "validatorSummary": {
     "vectorbt": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 28,
-      "independentEnginePass": false,
-      "baseProfitFactor": 1.0220857045614353,
-      "baseExpectancyUSDT": 0.0020956873389928743,
-      "stressProfitFactor": 0.863031873125276,
-      "stressExpectancyUSDT": -0.014432248095166874
+      "trades": 0,
+      "independentEnginePass": null,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": 0.0,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "freqtrade": {
       "status": "FAIL",
@@ -171,6 +169,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-10-26T07:21:42.781286+00:00",
+  "generatedAt": "2026-10-26T08:04:00.046905+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
