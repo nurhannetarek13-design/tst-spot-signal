@@ -9,35 +9,35 @@
   "candidates": [
     {
       "symbol": "WLDUSDT",
-      "price": 0.4364,
-      "quoteVolume24h": 30576136.77335,
-      "score": 70,
-      "oiChange2h": -0.005196138458657074,
-      "takerBuySellRatio1h": 1.408475,
-      "fundingRate": -0.00013227,
-      "basis": -0.000552471680069333,
-      "paperLongPressure": false
+      "price": 0.4383,
+      "quoteVolume24h": 32104500.3391,
+      "score": 80,
+      "oiChange2h": 0.00012439085345850032,
+      "takerBuySellRatio1h": 1.09055,
+      "fundingRate": -0.00013055,
+      "basis": -0.000754923498940796,
+      "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.9123,
-      "quoteVolume24h": 33670551.96858,
-      "score": 60,
-      "oiChange2h": 0.014462404128720907,
-      "takerBuySellRatio1h": 0.699825,
-      "fundingRate": 5.799e-05,
-      "basis": -0.000742944004606727,
+      "price": 0.911,
+      "quoteVolume24h": 33201179.36505,
+      "score": 70,
+      "oiChange2h": -0.0015451572422883197,
+      "takerBuySellRatio1h": 1.27125,
+      "fundingRate": 4.322e-05,
+      "basis": -0.0003267107082070009,
       "paperLongPressure": false
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.2079,
-      "quoteVolume24h": 42937090.07105,
+      "price": 0.2072,
+      "quoteVolume24h": 41838920.650992,
       "score": 40,
-      "oiChange2h": -0.008052620226175033,
-      "takerBuySellRatio1h": 0.915225,
-      "fundingRate": 4.724e-05,
-      "basis": -0.0006873337223847198,
+      "oiChange2h": -0.004736007243394291,
+      "takerBuySellRatio1h": 0.98895,
+      "fundingRate": 5e-05,
+      "basis": -0.000353889697620291,
       "paperLongPressure": false
     }
   ],
@@ -47,5 +47,5 @@
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-26T18:47:01.433099+00:00"
+  "generatedAt": "2026-10-26T23:00:02.333833+00:00"
 }
