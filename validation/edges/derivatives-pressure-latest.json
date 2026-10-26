@@ -9,43 +9,43 @@
   "candidates": [
     {
       "symbol": "WLDUSDT",
-      "price": 0.4401,
-      "quoteVolume24h": 25807260.5494,
-      "score": 90,
-      "oiChange2h": 0.007811865874105983,
-      "takerBuySellRatio1h": 1.1508,
-      "fundingRate": -0.00014803,
-      "basis": -0.0012361316373019626,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "ENAUSDT",
-      "price": 0.2051,
-      "quoteVolume24h": 42474936.585344,
-      "score": 60,
-      "oiChange2h": -0.006447100445233889,
-      "takerBuySellRatio1h": 1.106675,
-      "fundingRate": 5e-05,
-      "basis": -0.0005503318979046545,
+      "price": 0.4364,
+      "quoteVolume24h": 30576136.77335,
+      "score": 70,
+      "oiChange2h": -0.005196138458657074,
+      "takerBuySellRatio1h": 1.408475,
+      "fundingRate": -0.00013227,
+      "basis": -0.000552471680069333,
       "paperLongPressure": false
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.9178,
-      "quoteVolume24h": 29449315.01143,
+      "price": 0.9123,
+      "quoteVolume24h": 33670551.96858,
       "score": 60,
-      "oiChange2h": 0.0030597714396587428,
-      "takerBuySellRatio1h": 0.953125,
-      "fundingRate": 7.18e-05,
-      "basis": -0.00047432630047661295,
+      "oiChange2h": 0.014462404128720907,
+      "takerBuySellRatio1h": 0.699825,
+      "fundingRate": 5.799e-05,
+      "basis": -0.000742944004606727,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.2079,
+      "quoteVolume24h": 42937090.07105,
+      "score": 40,
+      "oiChange2h": -0.008052620226175033,
+      "takerBuySellRatio1h": 0.915225,
+      "fundingRate": 4.724e-05,
+      "basis": -0.0006873337223847198,
       "paperLongPressure": false
     }
   ],
   "universeCount": 5,
   "usableCount": 3,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES",
+    "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-26T12:10:12.639568+00:00"
+  "generatedAt": "2026-10-26T18:47:01.433099+00:00"
 }
