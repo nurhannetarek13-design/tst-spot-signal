@@ -8,43 +8,44 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.2093,
-      "quoteVolume24h": 33635899.30132,
-      "score": 100,
-      "oiChange2h": 0.029086919053494142,
-      "takerBuySellRatio1h": 1.175725,
-      "fundingRate": 5e-05,
-      "basis": -0.0007744794794954935,
+      "symbol": "WLDUSDT",
+      "price": 0.4401,
+      "quoteVolume24h": 25807260.5494,
+      "score": 90,
+      "oiChange2h": 0.007811865874105983,
+      "takerBuySellRatio1h": 1.1508,
+      "fundingRate": -0.00014803,
+      "basis": -0.0012361316373019626,
       "paperLongPressure": true
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.2051,
+      "quoteVolume24h": 42474936.585344,
+      "score": 60,
+      "oiChange2h": -0.006447100445233889,
+      "takerBuySellRatio1h": 1.106675,
+      "fundingRate": 5e-05,
+      "basis": -0.0005503318979046545,
+      "paperLongPressure": false
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.9174,
-      "quoteVolume24h": 31646111.05096,
-      "score": 90,
-      "oiChange2h": 0.013378925205784986,
-      "takerBuySellRatio1h": 1.2437,
-      "fundingRate": 8.722e-05,
-      "basis": -0.00039763874494946894,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "WLDUSDT",
-      "price": 0.444,
-      "quoteVolume24h": 30540651.61042,
-      "score": 90,
-      "oiChange2h": 0.01778701730204113,
-      "takerBuySellRatio1h": 1.476575,
-      "fundingRate": -4.26e-06,
-      "basis": -0.0010925808835013928,
-      "paperLongPressure": true
+      "price": 0.9178,
+      "quoteVolume24h": 29449315.01143,
+      "score": 60,
+      "oiChange2h": 0.0030597714396587428,
+      "takerBuySellRatio1h": 0.953125,
+      "fundingRate": 7.18e-05,
+      "basis": -0.00047432630047661295,
+      "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
+  "universeCount": 5,
   "usableCount": 3,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES",
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-26T05:43:57.206959+00:00"
+  "generatedAt": "2026-10-26T12:10:12.639568+00:00"
 }
