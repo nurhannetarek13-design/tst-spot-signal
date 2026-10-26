@@ -39,6 +39,6 @@
     "HOLDOUT_NET_NOT_POSITIVE",
     "BACKTEST_INTEGRITY_NOT_PROVEN"
   ],
-  "generatedAt": "2026-10-25T09:45:13.728565+00:00",
+  "generatedAt": "2026-10-26T10:59:43.095147+00:00",
   "note": "claimSupported is evidence-only and never enables live trading by itself."
 }
