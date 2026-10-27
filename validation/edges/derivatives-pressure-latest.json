@@ -9,43 +9,54 @@
   "candidates": [
     {
       "symbol": "SUIUSDT",
-      "price": 0.9096,
-      "quoteVolume24h": 29842910.69399,
+      "price": 0.9144,
+      "quoteVolume24h": 28401751.71751,
+      "score": 90,
+      "oiChange2h": 0.003216148502592109,
+      "takerBuySellRatio1h": 1.293175,
+      "fundingRate": -1.376e-05,
+      "basis": -0.000574273368886935,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.2059,
+      "quoteVolume24h": 37925792.532984,
       "score": 70,
-      "oiChange2h": -0.0019452375477291284,
-      "takerBuySellRatio1h": 1.27405,
-      "fundingRate": 3.766e-05,
-      "basis": 9.294848977292602e-05,
+      "oiChange2h": 0.04770047180365422,
+      "takerBuySellRatio1h": 1.01035,
+      "fundingRate": 5e-05,
+      "basis": -0.0004396394470743692,
       "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.4373,
-      "quoteVolume24h": 27339311.70869,
+      "price": 0.4288,
+      "quoteVolume24h": 25294822.3731,
       "score": 70,
-      "oiChange2h": -0.0037920759007632476,
-      "takerBuySellRatio1h": 1.199575,
-      "fundingRate": -0.00023549,
-      "basis": -0.00040050299682037327,
+      "oiChange2h": 0.02228963132357631,
+      "takerBuySellRatio1h": 0.8753500000000001,
+      "fundingRate": -4.832e-05,
+      "basis": -0.0006083042106876935,
       "paperLongPressure": false
     },
     {
-      "symbol": "ENAUSDT",
-      "price": 0.2075,
-      "quoteVolume24h": 41350642.973109,
+      "symbol": "NILUSDT",
+      "price": 0.09057,
+      "quoteVolume24h": 22382139.408106,
       "score": 40,
-      "oiChange2h": -0.001133063767914999,
-      "takerBuySellRatio1h": 0.982075,
-      "fundingRate": 5e-05,
-      "basis": -0.00010062144343192525,
+      "oiChange2h": -0.04459305515929346,
+      "takerBuySellRatio1h": 0.752825,
+      "fundingRate": -0.00042711,
+      "basis": -0.0022582030841611367,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 5,
-  "usableCount": 3,
+  "universeCount": 6,
+  "usableCount": 4,
   "failures": {
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-27T07:32:35.006168+00:00"
+  "generatedAt": "2026-10-27T13:53:42.878949+00:00"
 }
