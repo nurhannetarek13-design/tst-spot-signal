@@ -129,7 +129,7 @@
       "name": "derivatives_has_data",
       "ok": true,
       "detail": {
-        "usableCount": 4
+        "usableCount": 3
       }
     },
     {
@@ -248,6 +248,6 @@
       "detail": null
     }
   ],
-  "generatedAt": "2026-10-28T12:41:23.980922+00:00",
+  "generatedAt": "2026-10-28T22:29:37.661793+00:00",
   "note": "PASS means the research/paper architecture is internally fail-closed and wired. It does not mean a profitable live strategy exists."
 }
