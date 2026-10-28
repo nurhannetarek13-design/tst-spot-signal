@@ -8,47 +8,47 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "SUIUSDT",
-      "price": 0.9353,
-      "quoteVolume24h": 25463259.46542,
+      "symbol": "ENAUSDT",
+      "price": 0.2093,
+      "quoteVolume24h": 36801766.930194,
       "score": 90,
-      "oiChange2h": 0.010691724023558224,
-      "takerBuySellRatio1h": 1.4987249999999999,
-      "fundingRate": 4.05e-05,
-      "basis": -0.0007220523516232591,
+      "oiChange2h": 0.03176690057231579,
+      "takerBuySellRatio1h": 1.113475,
+      "fundingRate": 4.121e-05,
+      "basis": -0.0004224535898141868,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.9419,
+      "quoteVolume24h": 25715193.04675,
+      "score": 90,
+      "oiChange2h": 0.011947524034062296,
+      "takerBuySellRatio1h": 1.34495,
+      "fundingRate": 2.448e-05,
+      "basis": -0.0004262538614724365,
       "paperLongPressure": true
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.4399,
-      "quoteVolume24h": 20933218.65935,
-      "score": 60,
-      "oiChange2h": 0.009400325288497324,
-      "takerBuySellRatio1h": 0.9060250000000001,
-      "fundingRate": -0.00011009,
-      "basis": -0.0008941497352392691,
-      "paperLongPressure": false
+      "price": 0.4387,
+      "quoteVolume24h": 21566657.24816,
+      "score": 80,
+      "oiChange2h": 0.018879247365730212,
+      "takerBuySellRatio1h": 1.1492749999999998,
+      "fundingRate": -0.00015031,
+      "basis": -0.0006808627201333461,
+      "paperLongPressure": true
     },
     {
-      "symbol": "ENAUSDT",
-      "price": 0.2074,
-      "quoteVolume24h": 37248324.237181,
-      "score": 40,
-      "oiChange2h": -0.0051568543941054035,
-      "takerBuySellRatio1h": 0.910575,
-      "fundingRate": 2.427e-05,
-      "basis": -0.0008535460731673439,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "NILUSDT",
-      "price": 0.08494,
-      "quoteVolume24h": 24220823.77932,
-      "score": 40,
-      "oiChange2h": -0.04331475287477693,
-      "takerBuySellRatio1h": 0.929675,
-      "fundingRate": -0.00020467,
-      "basis": -0.0025717812970642573,
+      "symbol": "HAEDALUSDT",
+      "price": 0.03147,
+      "quoteVolume24h": 23497510.537827,
+      "score": 70,
+      "oiChange2h": 0.2293334664961284,
+      "takerBuySellRatio1h": 0.971025,
+      "fundingRate": -0.00022122,
+      "basis": -0.00019514657128427704,
       "paperLongPressure": false
     }
   ],
@@ -57,5 +57,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-28T02:29:32.795490+00:00"
+  "generatedAt": "2026-10-28T08:55:05.097591+00:00"
 }
