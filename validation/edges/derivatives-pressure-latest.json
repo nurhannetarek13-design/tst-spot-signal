@@ -9,46 +9,46 @@
   "candidates": [
     {
       "symbol": "SUIUSDT",
-      "price": 0.9296,
-      "quoteVolume24h": 25236134.87282,
-      "score": 80,
-      "oiChange2h": 0.0022472125459149783,
-      "takerBuySellRatio1h": 1.076,
-      "fundingRate": 4.787e-05,
-      "basis": -0.0004194947973412688,
+      "price": 0.9353,
+      "quoteVolume24h": 25463259.46542,
+      "score": 90,
+      "oiChange2h": 0.010691724023558224,
+      "takerBuySellRatio1h": 1.4987249999999999,
+      "fundingRate": 4.05e-05,
+      "basis": -0.0007220523516232591,
       "paperLongPressure": true
     },
     {
-      "symbol": "ENAUSDT",
-      "price": 0.2091,
-      "quoteVolume24h": 40203947.039435,
-      "score": 70,
-      "oiChange2h": -0.0070835227333645445,
-      "takerBuySellRatio1h": 1.326225,
-      "fundingRate": -1.5e-06,
-      "basis": -0.0006277218955297315,
+      "symbol": "WLDUSDT",
+      "price": 0.4399,
+      "quoteVolume24h": 20933218.65935,
+      "score": 60,
+      "oiChange2h": 0.009400325288497324,
+      "takerBuySellRatio1h": 0.9060250000000001,
+      "fundingRate": -0.00011009,
+      "basis": -0.0008941497352392691,
       "paperLongPressure": false
     },
     {
-      "symbol": "WLDUSDT",
-      "price": 0.4373,
-      "quoteVolume24h": 21004570.32348,
-      "score": 70,
-      "oiChange2h": -0.00543038609753943,
-      "takerBuySellRatio1h": 1.16555,
-      "fundingRate": -9.696e-05,
-      "basis": -0.0005974680957137046,
+      "symbol": "ENAUSDT",
+      "price": 0.2074,
+      "quoteVolume24h": 37248324.237181,
+      "score": 40,
+      "oiChange2h": -0.0051568543941054035,
+      "takerBuySellRatio1h": 0.910575,
+      "fundingRate": 2.427e-05,
+      "basis": -0.0008535460731673439,
       "paperLongPressure": false
     },
     {
       "symbol": "NILUSDT",
-      "price": 0.0916,
-      "quoteVolume24h": 23591840.687445,
+      "price": 0.08494,
+      "quoteVolume24h": 24220823.77932,
       "score": 40,
-      "oiChange2h": -0.023784064975193697,
-      "takerBuySellRatio1h": 0.693425,
-      "fundingRate": -0.00048022,
-      "basis": -0.0021329983894242677,
+      "oiChange2h": -0.04331475287477693,
+      "takerBuySellRatio1h": 0.929675,
+      "fundingRate": -0.00020467,
+      "basis": -0.0025717812970642573,
       "paperLongPressure": false
     }
   ],
@@ -57,5 +57,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-27T23:02:09.138269+00:00"
+  "generatedAt": "2026-10-28T02:29:32.795490+00:00"
 }
