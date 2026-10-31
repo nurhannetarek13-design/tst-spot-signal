@@ -8,54 +8,32 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "WLDUSDT",
-      "price": 0.397,
-      "quoteVolume24h": 22338735.55951,
-      "score": 90,
-      "oiChange2h": 0.006999072091754988,
-      "takerBuySellRatio1h": 1.16465,
-      "fundingRate": 0.0001,
-      "basis": -0.0002325228242426869,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "ONDOUSDT",
-      "price": 0.4119,
-      "quoteVolume24h": 20850514.80903,
-      "score": 90,
-      "oiChange2h": 0.00247275218915588,
-      "takerBuySellRatio1h": 1.57185,
-      "fundingRate": 3.296e-05,
-      "basis": -0.0007772272418148374,
-      "paperLongPressure": true
-    },
-    {
       "symbol": "ENAUSDT",
-      "price": 0.1914,
-      "quoteVolume24h": 35487947.813229,
+      "price": 0.1922,
+      "quoteVolume24h": 22901406.783505,
       "score": 40,
-      "oiChange2h": -0.0021166105002782265,
-      "takerBuySellRatio1h": 1.031,
-      "fundingRate": 2.772e-05,
-      "basis": -0.0005924127559799874,
+      "oiChange2h": -0.025724705411678817,
+      "takerBuySellRatio1h": 0.80735,
+      "fundingRate": -6.44e-06,
+      "basis": -0.000678455205678663,
       "paperLongPressure": false
     },
     {
-      "symbol": "BEAMXUSDT",
-      "price": 0.004992,
-      "quoteVolume24h": 21611407.628171,
-      "score": 40,
-      "oiChange2h": -0.04181323450113017,
-      "takerBuySellRatio1h": 1.004025,
-      "fundingRate": 5e-05,
-      "basis": 3.4111065629893744e-05,
+      "symbol": "LSKUSDT",
+      "price": 0.2819,
+      "quoteVolume24h": 20610076.41751,
+      "score": 35,
+      "oiChange2h": -0.12653620207340055,
+      "takerBuySellRatio1h": 1.03485,
+      "fundingRate": -0.00103334,
+      "basis": -0.0021833040015207805,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 5,
-  "usableCount": 4,
+  "universeCount": 3,
+  "usableCount": 2,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-31T13:15:49.790801+00:00"
+  "generatedAt": "2026-10-31T17:50:59.723593+00:00"
 }
