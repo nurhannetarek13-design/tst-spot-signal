@@ -8,25 +8,25 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.1896,
-      "quoteVolume24h": 20420778.919823,
-      "score": 60,
-      "oiChange2h": -0.01195647009789269,
-      "takerBuySellRatio1h": 1.054475,
-      "fundingRate": -1.485e-05,
-      "basis": -0.0007525372924094276,
-      "paperLongPressure": false
+      "symbol": "LSKUSDT",
+      "price": 0.2457,
+      "quoteVolume24h": 24909657.68741,
+      "score": 85,
+      "oiChange2h": 0.05218971355516122,
+      "takerBuySellRatio1h": 1.134525,
+      "fundingRate": -0.00121231,
+      "basis": -0.0014380303853561704,
+      "paperLongPressure": true
     },
     {
-      "symbol": "LSKUSDT",
-      "price": 0.246,
-      "quoteVolume24h": 23936560.60422,
-      "score": 45,
-      "oiChange2h": -0.17360570204514159,
-      "takerBuySellRatio1h": 1.05165,
-      "fundingRate": -0.00081913,
-      "basis": -0.004723728030806007,
+      "symbol": "ENAUSDT",
+      "price": 0.1887,
+      "quoteVolume24h": 20025295.500895,
+      "score": 40,
+      "oiChange2h": -0.004719521013135997,
+      "takerBuySellRatio1h": 1.0286,
+      "fundingRate": -1.98e-06,
+      "basis": -0.0003961175810611728,
       "paperLongPressure": false
     }
   ],
@@ -35,5 +35,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-31T20:55:55.281941+00:00"
+  "generatedAt": "2026-10-31T23:56:22.918336+00:00"
 }
