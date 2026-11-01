@@ -9,31 +9,20 @@
   "candidates": [
     {
       "symbol": "LSKUSDT",
-      "price": 0.2457,
-      "quoteVolume24h": 24909657.68741,
-      "score": 85,
-      "oiChange2h": 0.05218971355516122,
-      "takerBuySellRatio1h": 1.134525,
-      "fundingRate": -0.00121231,
-      "basis": -0.0014380303853561704,
+      "price": 0.2425,
+      "quoteVolume24h": 23967187.26591,
+      "score": 75,
+      "oiChange2h": 0.04075957758790172,
+      "takerBuySellRatio1h": 1.135125,
+      "fundingRate": -0.00098536,
+      "basis": -0.008478382625084602,
       "paperLongPressure": true
-    },
-    {
-      "symbol": "ENAUSDT",
-      "price": 0.1887,
-      "quoteVolume24h": 20025295.500895,
-      "score": 40,
-      "oiChange2h": -0.004719521013135997,
-      "takerBuySellRatio1h": 1.0286,
-      "fundingRate": -1.98e-06,
-      "basis": -0.0003961175810611728,
-      "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
-  "usableCount": 2,
+  "universeCount": 2,
+  "usableCount": 1,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-10-31T23:56:22.918336+00:00"
+  "generatedAt": "2026-11-01T04:34:49.568173+00:00"
 }
