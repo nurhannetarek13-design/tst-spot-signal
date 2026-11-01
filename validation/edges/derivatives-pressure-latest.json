@@ -9,13 +9,13 @@
   "candidates": [
     {
       "symbol": "XPLUSDT",
-      "price": 0.0732,
-      "quoteVolume24h": 25353276.432357,
+      "price": 0.07126,
+      "quoteVolume24h": 25347849.256639,
       "score": 40,
-      "oiChange2h": -0.004149549444082634,
-      "takerBuySellRatio1h": 0.938525,
+      "oiChange2h": -0.0035934745777960186,
+      "takerBuySellRatio1h": 0.8305750000000001,
       "fundingRate": 5e-05,
-      "basis": 0.0,
+      "basis": -0.0006144775628686983,
       "paperLongPressure": false
     }
   ],
@@ -24,5 +24,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-01T17:33:59.932439+00:00"
+  "generatedAt": "2026-11-01T21:37:54.491952+00:00"
 }
