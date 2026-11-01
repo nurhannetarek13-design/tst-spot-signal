@@ -9,20 +9,31 @@
   "candidates": [
     {
       "symbol": "LSKUSDT",
-      "price": 0.2425,
-      "quoteVolume24h": 23967187.26591,
-      "score": 75,
-      "oiChange2h": 0.04075957758790172,
-      "takerBuySellRatio1h": 1.135125,
-      "fundingRate": -0.00098536,
-      "basis": -0.008478382625084602,
-      "paperLongPressure": true
+      "price": 0.2192,
+      "quoteVolume24h": 21673328.45094,
+      "score": 65,
+      "oiChange2h": -0.013236321180444488,
+      "takerBuySellRatio1h": 1.163125,
+      "fundingRate": -0.00239295,
+      "basis": -0.0020889738567820837,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "XPLUSDT",
+      "price": 0.07237,
+      "quoteVolume24h": 22716022.751472,
+      "score": 40,
+      "oiChange2h": -0.002500566173118668,
+      "takerBuySellRatio1h": 0.8518749999999999,
+      "fundingRate": 5e-05,
+      "basis": -0.0008515436836383783,
+      "paperLongPressure": false
     }
   ],
-  "universeCount": 2,
-  "usableCount": 1,
+  "universeCount": 3,
+  "usableCount": 2,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-01T04:34:49.568173+00:00"
+  "generatedAt": "2026-11-01T11:37:47.934375+00:00"
 }
