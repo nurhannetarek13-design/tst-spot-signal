@@ -111,10 +111,9 @@
       "family": "TS_MOMENTUM",
       "hardFailValidators": [
         "vectorbt",
-        "freqtrade",
-        "nautilus"
+        "freqtrade"
       ],
-      "rejectedAt": "2026-10-26T07:13:02.349858+00:00"
+      "rejectedAt": "2026-11-02T09:29:15.078050+00:00"
     },
     {
       "candidateId": "PUBLIC_EDGE_LAB:ARBUSDT:VOLATILITY_BREAKOUT",
