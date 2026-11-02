@@ -124,17 +124,17 @@
       "pass": false,
       "validationScope": "FULL_CANDIDATE",
       "fullStrategyValidated": null,
-      "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "47d4daea870e3a1ab59c",
+      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+      "candidateFingerprint": "5a8be2536ed727aaa38e",
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 176,
+      "trades": 178,
       "independentEnginePass": false,
       "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": -0.006659777837217314,
+      "baseExpectancyUSDT": -0.015693569841325014,
       "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": -0.023117499319944616
+      "stressExpectancyUSDT": -0.03216346505950171
     },
     "nautilus": {
       "status": "FAIL",
@@ -171,6 +171,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-11-02T09:30:33.635865+00:00",
+  "generatedAt": "2026-11-02T09:38:02.950042+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
