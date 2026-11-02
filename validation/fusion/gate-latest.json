@@ -33,10 +33,6 @@
     "CANDIDATE:MISSING",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
-    "nautilus:CANDIDATE_ID_MISMATCH",
-    "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -74,9 +70,11 @@
     "jesse:CANDIDATE_ID_MISMATCH",
     "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "jesse:FAIL",
+    "jesse:LT_100_TRADES",
     "nautilus:CANDIDATE_ID_MISMATCH",
     "nautilus:CANDIDATE_FINGERPRINT_MISMATCH",
     "nautilus:FAIL",
+    "nautilus:LT_100_TRADES",
     "forward:CANDIDATE_ID_MISMATCH",
     "forward:CANDIDATE_FINGERPRINT_MISMATCH",
     "forward:FAIL",
@@ -118,38 +116,38 @@
       "stressExpectancyUSDT": -0.028410312039800996
     },
     "jesse": {
-      "status": "FAIL",
-      "pass": false,
-      "validationScope": "FULL_CANDIDATE",
-      "fullStrategyValidated": null,
-      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "5a8be2536ed727aaa38e",
-      "candidateIdMatch": false,
-      "candidateFingerprintMatch": false,
-      "candidateMatch": false,
-      "trades": 178,
-      "independentEnginePass": false,
-      "baseProfitFactor": 0.0,
-      "baseExpectancyUSDT": -0.015693569841325014,
-      "stressProfitFactor": 0.0,
-      "stressExpectancyUSDT": -0.03216346505950171
-    },
-    "nautilus": {
-      "status": "FAIL",
+      "status": "NO_CANDIDATE",
       "pass": false,
       "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
-      "candidateFingerprint": "5a8be2536ed727aaa38e",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
-      "trades": 158,
-      "independentEnginePass": false,
-      "baseProfitFactor": 0.8975500945815102,
-      "baseExpectancyUSDT": -0.011549946075949367,
-      "stressProfitFactor": 0.7723505764268991,
-      "stressExpectancyUSDT": -0.028055015126582275
+      "trades": 0,
+      "independentEnginePass": null,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": 0.0,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
+    },
+    "nautilus": {
+      "status": "NO_CANDIDATE",
+      "pass": false,
+      "validationScope": null,
+      "fullStrategyValidated": null,
+      "candidateId": null,
+      "candidateFingerprint": null,
+      "candidateIdMatch": false,
+      "candidateFingerprintMatch": false,
+      "candidateMatch": false,
+      "trades": 0,
+      "independentEnginePass": null,
+      "baseProfitFactor": 0.0,
+      "baseExpectancyUSDT": 0.0,
+      "stressProfitFactor": 0.0,
+      "stressExpectancyUSDT": 0.0
     },
     "forward": {
       "status": "NO_CANDIDATE",
@@ -169,6 +167,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-11-02T09:53:15.331373+00:00",
+  "generatedAt": "2026-11-02T09:54:21.863632+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
