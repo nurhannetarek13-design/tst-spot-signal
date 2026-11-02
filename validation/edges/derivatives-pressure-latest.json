@@ -8,21 +8,34 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
+      "symbol": "ENAUSDT",
+      "price": 0.1695,
+      "quoteVolume24h": 24544879.444307,
+      "score": 40,
+      "oiChange2h": -0.05374933347467348,
+      "takerBuySellRatio1h": 0.67105,
+      "fundingRate": 5e-05,
+      "basis": -0.0009330142947704401,
+      "paperLongPressure": false
+    },
+    {
       "symbol": "SUIUSDT",
-      "price": 0.8934,
-      "quoteVolume24h": 21652728.80842,
-      "score": 70,
-      "oiChange2h": -0.0025676265258949282,
-      "takerBuySellRatio1h": 1.321625,
+      "price": 0.8738,
+      "quoteVolume24h": 20390133.15483,
+      "score": 40,
+      "oiChange2h": -0.018329510818689276,
+      "takerBuySellRatio1h": 0.8129500000000001,
       "fundingRate": 0.0001,
-      "basis": -0.0004086910882127315,
+      "basis": -0.00030456609401785517,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 2,
-  "usableCount": 1,
+  "universeCount": 5,
+  "usableCount": 2,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES",
+    "PEPEUSDT": "NO_FUTURES_SERIES",
+    "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-02T07:55:26.935711+00:00"
+  "generatedAt": "2026-11-02T17:44:58.645696+00:00"
 }
