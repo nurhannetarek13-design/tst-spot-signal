@@ -9,33 +9,22 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.1722,
-      "quoteVolume24h": 25149720.988306,
-      "score": 80,
-      "oiChange2h": 0.00728879699290319,
-      "takerBuySellRatio1h": 1.093075,
+      "price": 0.1686,
+      "quoteVolume24h": 23437266.549885,
+      "score": 40,
+      "oiChange2h": -0.011308990482677972,
+      "takerBuySellRatio1h": 0.777825,
       "fundingRate": 5e-05,
-      "basis": -0.00039952656189523594,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 0.8781,
-      "quoteVolume24h": 21660254.65539,
-      "score": 80,
-      "oiChange2h": 0.002814067777754836,
-      "takerBuySellRatio1h": 1.08135,
-      "fundingRate": 0.0001,
-      "basis": -0.00012068424287214885,
-      "paperLongPressure": true
+      "basis": 1.127030382308547e-05,
+      "paperLongPressure": false
     }
   ],
-  "universeCount": 5,
-  "usableCount": 2,
+  "universeCount": 4,
+  "usableCount": 1,
   "failures": {
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-03T00:26:19.832873+00:00"
+  "generatedAt": "2026-11-03T07:06:02.986477+00:00"
 }
