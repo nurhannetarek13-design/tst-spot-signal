@@ -9,66 +9,54 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.1829,
-      "quoteVolume24h": 38812616.998905,
-      "score": 90,
-      "oiChange2h": 0.003170435573125019,
-      "takerBuySellRatio1h": 1.2296,
-      "fundingRate": 5e-05,
-      "basis": -0.0004486214445315051,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "PUMPUSDT",
-      "price": 0.004355,
-      "quoteVolume24h": 22512306.74162,
-      "score": 80,
-      "oiChange2h": 0.01314923597397133,
-      "takerBuySellRatio1h": 1.109625,
-      "fundingRate": 3.715e-05,
-      "basis": -0.00019518467915091708,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 0.9308,
-      "quoteVolume24h": 48347339.62535,
+      "price": 0.1811,
+      "quoteVolume24h": 32427680.472172,
       "score": 70,
-      "oiChange2h": -0.00533229823004866,
-      "takerBuySellRatio1h": 1.4027,
-      "fundingRate": 0.0001,
-      "basis": 3.625943655860553e-05,
+      "oiChange2h": -0.008344807448798397,
+      "takerBuySellRatio1h": 1.309475,
+      "fundingRate": 5e-05,
+      "basis": -0.0002298709293782064,
       "paperLongPressure": false
     },
     {
       "symbol": "TRUMPUSDT",
-      "price": 1.263,
-      "quoteVolume24h": 40243266.083031,
+      "price": 1.265,
+      "quoteVolume24h": 42311712.088511,
       "score": 60,
-      "oiChange2h": 0.008664701532350438,
-      "takerBuySellRatio1h": 0.8576250000000001,
-      "fundingRate": -0.00036832,
-      "basis": -0.0009439028322233423,
+      "oiChange2h": 0.008869069241026484,
+      "takerBuySellRatio1h": 0.9408749999999999,
+      "fundingRate": -0.00033696,
+      "basis": -0.0011997860210912759,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.9281,
+      "quoteVolume24h": 38388534.25809,
+      "score": 60,
+      "oiChange2h": 0.013023104152040332,
+      "takerBuySellRatio1h": 1.006725,
+      "fundingRate": 0.0001,
+      "basis": -0.0002130271391360683,
       "paperLongPressure": false
     },
     {
       "symbol": "WLDUSDT",
-      "price": 0.3787,
-      "quoteVolume24h": 28041870.66236,
+      "price": 0.3775,
+      "quoteVolume24h": 25336976.66921,
       "score": 40,
-      "oiChange2h": -0.00888300357364924,
-      "takerBuySellRatio1h": 0.9867,
-      "fundingRate": -0.00035783,
-      "basis": -0.00063800136476444,
+      "oiChange2h": -0.004278885213351846,
+      "takerBuySellRatio1h": 1.04285,
+      "fundingRate": -0.00017752,
+      "basis": -0.0007313756443566577,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 8,
-  "usableCount": 5,
+  "universeCount": 6,
+  "usableCount": 4,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES",
-    "RWUSDUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-05T02:38:55.277110+00:00"
+  "generatedAt": "2026-11-05T10:16:38.483806+00:00"
 }
