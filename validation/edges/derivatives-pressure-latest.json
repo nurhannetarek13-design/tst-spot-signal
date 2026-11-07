@@ -9,55 +9,33 @@
   "candidates": [
     {
       "symbol": "ONEUSDT",
-      "price": 0.001799,
-      "quoteVolume24h": 20209192.6755101,
+      "price": 0.001872,
+      "quoteVolume24h": 25419326.798895,
       "score": 90,
-      "oiChange2h": 0.1091432247491233,
-      "takerBuySellRatio1h": 1.113225,
-      "fundingRate": -1.132e-05,
-      "basis": -0.0013927576601671099,
+      "oiChange2h": 0.02920219859708495,
+      "takerBuySellRatio1h": 1.061275,
+      "fundingRate": 3.29e-05,
+      "basis": -0.0006688068485820597,
       "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.8696,
-      "quoteVolume24h": 24902148.54319,
-      "score": 70,
-      "oiChange2h": -0.002142811109456799,
-      "takerBuySellRatio1h": 1.170375,
-      "fundingRate": 7.416e-05,
-      "basis": -0.0005098871443194319,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "ENAUSDT",
-      "price": 0.1638,
-      "quoteVolume24h": 22872202.466514,
+      "price": 0.8656,
+      "quoteVolume24h": 21633880.86837,
       "score": 40,
-      "oiChange2h": -0.011881781213174403,
-      "takerBuySellRatio1h": 0.974475,
-      "fundingRate": 5e-05,
-      "basis": -0.0006867035281614697,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "CYBERUSDT",
-      "price": 0.336,
-      "quoteVolume24h": 20820934.58787,
-      "score": 25,
-      "oiChange2h": -0.12486685475955284,
-      "takerBuySellRatio1h": 0.9333,
-      "fundingRate": -0.0021306,
-      "basis": -0.006580282490009193,
+      "oiChange2h": -0.0010957343482592696,
+      "takerBuySellRatio1h": 0.9413,
+      "fundingRate": 0.0001,
+      "basis": -0.00039583262111153594,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 7,
-  "usableCount": 4,
+  "universeCount": 5,
+  "usableCount": 2,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-06T23:55:35.807491+00:00"
+  "generatedAt": "2026-11-07T04:31:28.730210+00:00"
 }
