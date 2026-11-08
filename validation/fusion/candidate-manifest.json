@@ -1,49 +1,8 @@
 {
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
-  "source": "VECTORBT",
-  "sourceGeneratedAt": "2026-11-08T07:45:19.365856+00:00",
-  "symbol": "ZECUSDT",
-  "family": "VOLATILITY_MOMENTUM",
-  "timeframe": "15m",
-  "params": {
-    "lookback": 12,
-    "relvol": 1.8,
-    "rsi_min": 57,
-    "sl": 0.018,
-    "tp": 0.04
-  },
-  "sourceMetrics": {
-    "base": {
-      "trades": 32,
-      "wins": 13,
-      "winRate": 0.40625,
-      "netPnlUSDT": 1.0318690388947664,
-      "expectancyUSDT": 0.03224590746546145,
-      "profitFactor": 1.6960595742932607,
-      "maxDrawdownUSDT": 0.33412207987455345
-    },
-    "stress2x": {
-      "trades": 32,
-      "wins": 13,
-      "winRate": 0.40625,
-      "netPnlUSDT": 0.6784837846015788,
-      "expectancyUSDT": 0.021202618268799336,
-      "profitFactor": 1.401429587756329,
-      "maxDrawdownUSDT": 0.39985368940420846
-    }
-  },
-  "liquidity": {
-    "quoteVolume24h": 123011531.12089,
-    "priceUSDT": null
-  },
-  "rankKey": [
-    0,
-    0.021202618268799336,
-    1.401429587756329,
-    32
-  ],
-  "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
-  "candidateFingerprint": "da5c8d2233ebec37f0dd",
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -197,9 +156,10 @@
   "poolSize": 3,
   "recentRejectedFingerprints": [
     "47d4daea870e3a1ab59c",
-    "5a8be2536ed727aaa38e"
+    "5a8be2536ed727aaa38e",
+    "da5c8d2233ebec37f0dd"
   ],
-  "authorization": "VALIDATION_AND_FORWARD_PAPER_ONLY",
+  "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "validatorsRequired": [
     "vectorbt",
@@ -208,5 +168,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-11-08T07:45:20.672969+00:00"
+  "generatedAt": "2026-11-08T09:30:41.549933+00:00"
 }

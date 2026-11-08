@@ -193,6 +193,17 @@
         "nautilus"
       ],
       "rejectedAt": "2026-11-02T09:28:00.862251+00:00"
+    },
+    {
+      "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
+      "candidateFingerprint": "da5c8d2233ebec37f0dd",
+      "symbol": "ZECUSDT",
+      "family": "VOLATILITY_MOMENTUM",
+      "hardFailValidators": [
+        "freqtrade",
+        "nautilus"
+      ],
+      "rejectedAt": "2026-11-08T09:30:41.549933+00:00"
     }
   ],
   "ttlDays": 7,
