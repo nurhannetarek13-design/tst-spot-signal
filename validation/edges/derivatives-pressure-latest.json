@@ -9,21 +9,20 @@
   "candidates": [
     {
       "symbol": "ONEUSDT",
-      "price": 0.002363,
-      "quoteVolume24h": 43399038.7632258,
-      "score": 70,
-      "oiChange2h": 0.1434689648159837,
-      "takerBuySellRatio1h": 1.0389,
-      "fundingRate": -2.956e-05,
-      "basis": -0.0006442588903489144,
+      "price": 0.002137,
+      "quoteVolume24h": 45318262.649583,
+      "score": 40,
+      "oiChange2h": -0.043113344429597134,
+      "takerBuySellRatio1h": 1.01855,
+      "fundingRate": -3.506e-05,
+      "basis": -0.0008905971688384362,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
+  "universeCount": 2,
   "usableCount": 1,
   "failures": {
-    "UUSDT": "NO_FUTURES_SERIES",
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-07T20:42:19.531283+00:00"
+  "generatedAt": "2026-11-08T00:09:06.087767+00:00"
 }
