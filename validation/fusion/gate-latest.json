@@ -35,8 +35,6 @@
     "vectorbt:CANDIDATE_FINGERPRINT_MISMATCH",
     "freqtrade:CANDIDATE_ID_MISMATCH",
     "freqtrade:CANDIDATE_FINGERPRINT_MISMATCH",
-    "jesse:CANDIDATE_ID_MISMATCH",
-    "jesse:CANDIDATE_FINGERPRINT_MISMATCH",
     "HISTORICAL:LT_3_INDEPENDENT_ENGINE_PASSES"
   ],
   "smallLiveReviewPolicy": {
@@ -120,17 +118,17 @@
       "stressExpectancyUSDT": -0.02820351317907445
     },
     "jesse": {
-      "status": "ERROR",
+      "status": "NO_CANDIDATE",
       "pass": false,
-      "validationScope": "FULL_CANDIDATE",
+      "validationScope": null,
       "fullStrategyValidated": null,
-      "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
-      "candidateFingerprint": "da5c8d2233ebec37f0dd",
+      "candidateId": null,
+      "candidateFingerprint": null,
       "candidateIdMatch": false,
       "candidateFingerprintMatch": false,
       "candidateMatch": false,
       "trades": 0,
-      "independentEnginePass": false,
+      "independentEnginePass": null,
       "baseProfitFactor": 0.0,
       "baseExpectancyUSDT": 0.0,
       "stressProfitFactor": 0.0,
@@ -171,6 +169,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-11-08T09:31:01.037128+00:00",
+  "generatedAt": "2026-11-08T09:31:23.693901+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
