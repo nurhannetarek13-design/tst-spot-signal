@@ -1,12 +1,41 @@
 {
   "engine": "NAUTILUS_TRADER",
   "strategyId": "TST_CANDIDATE_NAUTILUS_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
+  "candidateFingerprint": "da5c8d2233ebec37f0dd",
+  "symbol": "ZECUSDT",
+  "family": "VOLATILITY_MOMENTUM",
+  "timeframe": "15m",
+  "params": {
+    "lookback": 12,
+    "relvol": 1.8,
+    "rsi_min": 57,
+    "sl": 0.018,
+    "tp": 0.04
+  },
+  "base": {
+    "trades": 460,
+    "wins": 125,
+    "winRate": 0.2717391304347826,
+    "netPnlUSDT": -4.313451939999999,
+    "expectancyUSDT": -0.009377069434782608,
+    "profitFactor": 0.8247879353192098,
+    "maxDrawdownUSDT": 6.94865623
+  },
+  "stress2x": {
+    "trades": 460,
+    "wins": 119,
+    "winRate": 0.25869565217391305,
+    "netPnlUSDT": -11.89138248,
+    "expectancyUSDT": -0.02585083147826087,
+    "profitFactor": 0.6055794634712097,
+    "maxDrawdownUSDT": 12.91588160000001
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-08T02:20:38.948652+00:00",
-  "notes": "No unified candidate; Nautilus install and execution validation skipped."
+  "generatedAt": "2026-11-08T09:12:01.643099+00:00",
+  "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
