@@ -8,32 +8,45 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.1498,
-      "quoteVolume24h": 26906010.700955,
-      "score": 70,
-      "oiChange2h": 0.02594895376752171,
-      "takerBuySellRatio1h": 1.025625,
-      "fundingRate": 5e-05,
-      "basis": -0.0005016535405998335,
+      "symbol": "SUIUSDT",
+      "price": 0.8503,
+      "quoteVolume24h": 35954272.66387,
+      "score": 60,
+      "oiChange2h": 6.055015171235745e-05,
+      "takerBuySellRatio1h": 0.952975,
+      "fundingRate": 0.0001,
+      "basis": -0.0001857537244375207,
       "paperLongPressure": false
     },
     {
-      "symbol": "SUIUSDT",
-      "price": 0.8218,
-      "quoteVolume24h": 29386347.17979,
+      "symbol": "ENAUSDT",
+      "price": 0.1555,
+      "quoteVolume24h": 34729491.018064,
       "score": 60,
-      "oiChange2h": 0.009363930405277943,
-      "takerBuySellRatio1h": 0.8323499999999999,
-      "fundingRate": 2.205e-05,
-      "basis": -0.0006336578701017226,
+      "oiChange2h": 0.0040534820632476265,
+      "takerBuySellRatio1h": 1.0499749999999999,
+      "fundingRate": 8.39e-06,
+      "basis": -0.0007351564252362497,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ARBUSDT",
+      "price": 0.1766,
+      "quoteVolume24h": 32549378.16921,
+      "score": 40,
+      "oiChange2h": -0.014847251795000904,
+      "takerBuySellRatio1h": 0.9216,
+      "fundingRate": -4.789e-05,
+      "basis": -0.0010556448721424916,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
-  "usableCount": 2,
+  "universeCount": 6,
+  "usableCount": 3,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES",
+    "UUSDT": "NO_FUTURES_SERIES",
+    "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-09T10:01:59.649866+00:00"
+  "generatedAt": "2026-11-09T20:55:21.061462+00:00"
 }
