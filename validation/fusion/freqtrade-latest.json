@@ -1,38 +1,13 @@
 {
   "engine": "FREQTRADE",
   "strategyId": "TST_CANDIDATE_FREQTRADE_VALIDATOR_V1",
-  "status": "FAIL",
+  "status": "NO_CANDIDATE",
   "pass": false,
-  "independentEnginePass": false,
-  "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
-  "candidateFingerprint": "da5c8d2233ebec37f0dd",
-  "symbol": "ZECUSDT",
-  "family": "VOLATILITY_MOMENTUM",
-  "timeframe": "15m",
-  "validationScope": "FULL_CANDIDATE",
-  "fullStrategyValidated": null,
-  "excludedConfirmations": [],
-  "eligibleOutcome": "CANDIDATE_VALIDATION",
-  "base": {
-    "trades": 537,
-    "wins": 143,
-    "winRate": 0.26629422718808193,
-    "profitFactor": 0.7980324297077709,
-    "expectancyUSDT": -0.010536160260707635,
-    "netPnlUSDT": -5.65791806,
-    "maxDrawdownUSDT": 7.1774382499999945
-  },
-  "stress2x": {
-    "trades": 497,
-    "wins": 120,
-    "winRate": 0.2414486921529175,
-    "profitFactor": 0.5632808641077744,
-    "expectancyUSDT": -0.02820351317907445,
-    "netPnlUSDT": -14.017146050000001,
-    "maxDrawdownUSDT": 14.05157266
-  },
+  "candidateId": null,
+  "candidateFingerprint": null,
+  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-08T09:30:07.513630+00:00",
-  "notes": "Freqtrade validates only the manifest-declared historical scope. CORE_TRIGGER_ONLY explicitly excludes L2/order-book/taker-flow/spread/depth confirmation and cannot authorize live trading."
+  "generatedAt": "2026-11-09T10:21:57.558586+00:00",
+  "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
 }
