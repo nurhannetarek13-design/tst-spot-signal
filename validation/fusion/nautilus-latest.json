@@ -4,9 +4,9 @@
   "status": "FAIL",
   "pass": false,
   "independentEnginePass": false,
-  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
-  "candidateFingerprint": "47d4daea870e3a1ab59c",
-  "symbol": "HOLOUSDT",
+  "candidateId": "PUBLIC_EDGE_LAB:SAHARAUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "5a8be2536ed727aaa38e",
+  "symbol": "SAHARAUSDT",
   "family": "TS_MOMENTUM",
   "timeframe": "1h",
   "params": {
@@ -22,25 +22,25 @@
     "tp": 0.06
   },
   "base": {
-    "trades": 159,
-    "wins": 58,
-    "winRate": 0.36477987421383645,
-    "netPnlUSDT": -5.93714812,
-    "expectancyUSDT": -0.037340554213836474,
-    "profitFactor": 0.691578468226911,
-    "maxDrawdownUSDT": 6.371123319999997
+    "trades": 155,
+    "wins": 56,
+    "winRate": 0.36129032258064514,
+    "netPnlUSDT": -1.6956082399999992,
+    "expectancyUSDT": -0.010939407999999994,
+    "profitFactor": 0.9039125734970604,
+    "maxDrawdownUSDT": 3.71800919
   },
   "stress2x": {
-    "trades": 159,
-    "wins": 56,
-    "winRate": 0.3522012578616352,
-    "netPnlUSDT": -8.55575568,
-    "expectancyUSDT": -0.0538097841509434,
-    "profitFactor": 0.5908439540462824,
-    "maxDrawdownUSDT": 8.643161430000003
+    "trades": 155,
+    "wins": 52,
+    "winRate": 0.33548387096774196,
+    "netPnlUSDT": -4.25416593,
+    "expectancyUSDT": -0.027446231806451612,
+    "profitFactor": 0.7793856657421783,
+    "maxDrawdownUSDT": 5.4762851
   },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-10T10:19:40.801290+00:00",
+  "generatedAt": "2026-11-10T10:21:04.618038+00:00",
   "notes": "NautilusTrader event-driven Binance Spot CASH validation of the exact unified candidate; long-only; no leverage."
 }
