@@ -189,10 +189,10 @@
       "symbol": "HOLOUSDT",
       "family": "TS_MOMENTUM",
       "hardFailValidators": [
-        "jesse",
+        "vectorbt",
         "nautilus"
       ],
-      "rejectedAt": "2026-11-02T09:28:00.862251+00:00"
+      "rejectedAt": "2026-11-10T10:20:01.161320+00:00"
     },
     {
       "candidateId": "VECTORBT:ZECUSDT:VOLATILITY_MOMENTUM",
