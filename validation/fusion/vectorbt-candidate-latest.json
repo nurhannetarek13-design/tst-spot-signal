@@ -1,12 +1,46 @@
 {
   "engine": "VECTORBT_CANDIDATE",
   "strategyId": "TST_CANDIDATE_VECTORBT_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "params": {
+    "emaFast": 48,
+    "emaSlow": 120,
+    "retLookback": 24,
+    "retMin": 0.02,
+    "atrMin": 0.006,
+    "atrMax": 0.08,
+    "relvol": 0.8,
+    "holdBars": 24,
+    "sl": 0.03,
+    "tp": 0.06
+  },
+  "base": {
+    "trades": 40,
+    "wins": 15,
+    "winRate": 0.375,
+    "netPnlUSDT": -1.0794274315060703,
+    "expectancyUSDT": -0.02698568578765176,
+    "profitFactor": 0.7817315641175063,
+    "maxDrawdownUSDT": 1.2862302490039619
+  },
+  "stress2x": {
+    "trades": 40,
+    "wins": 14,
+    "winRate": 0.35,
+    "netPnlUSDT": -1.7387973452293968,
+    "expectancyUSDT": -0.04346993363073492,
+    "profitFactor": 0.6751372654930566,
+    "maxDrawdownUSDT": 1.8296159822302958
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-09T10:12:03.795457+00:00",
-  "notes": "No unified candidate; heavy VectorBT validation skipped."
+  "generatedAt": "2026-11-10T10:18:11.482275+00:00",
+  "notes": "Same unified candidate; next-bar entry; long-only; 5.5 USDT; realistic base and doubled friction."
 }
