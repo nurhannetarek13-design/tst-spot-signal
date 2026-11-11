@@ -5,9 +5,9 @@
   "pass": false,
   "candidateId": null,
   "candidateFingerprint": null,
-  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-10T10:27:08.598476+00:00",
+  "generatedAt": "2026-11-11T09:51:10.099775+00:00",
   "notes": "No unified candidate; Freqtrade image pull and backtest skipped."
 }
