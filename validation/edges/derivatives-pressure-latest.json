@@ -9,76 +9,64 @@
   "candidates": [
     {
       "symbol": "SUIUSDT",
-      "price": 0.8236,
-      "quoteVolume24h": 27001304.58436,
+      "price": 0.831,
+      "quoteVolume24h": 27614961.11553,
       "score": 90,
-      "oiChange2h": 0.0037463810200295544,
-      "takerBuySellRatio1h": 1.422825,
-      "fundingRate": -4.039e-05,
-      "basis": -0.0005424846105940295,
+      "oiChange2h": 0.00902175289128726,
+      "takerBuySellRatio1h": 1.273075,
+      "fundingRate": -1.402e-05,
+      "basis": -0.00018494617350162113,
       "paperLongPressure": true
     },
     {
-      "symbol": "ONEUSDT",
-      "price": 0.001853,
-      "quoteVolume24h": 24461431.2900607,
-      "score": 65,
-      "oiChange2h": 0.026359078175516082,
-      "takerBuySellRatio1h": 1.0028000000000001,
-      "fundingRate": -0.00099431,
-      "basis": -0.002949024013481294,
-      "paperLongPressure": false
-    },
-    {
       "symbol": "ENAUSDT",
-      "price": 0.1507,
-      "quoteVolume24h": 31328722.712865,
+      "price": 0.1537,
+      "quoteVolume24h": 31952624.833491,
       "score": 60,
-      "oiChange2h": 0.0012757020378750816,
-      "takerBuySellRatio1h": 0.77515,
-      "fundingRate": 2.95e-05,
-      "basis": -0.00021794453351442478,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "ARBUSDT",
-      "price": 0.1607,
-      "quoteVolume24h": 20308785.07006,
-      "score": 60,
-      "oiChange2h": 0.01053746289516666,
-      "takerBuySellRatio1h": 0.9473,
-      "fundingRate": -0.00015149,
-      "basis": 5.8530291916714106e-05,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "GRAMUSDT",
-      "price": 1.142,
-      "quoteVolume24h": 20920455.21635,
-      "score": 40,
-      "oiChange2h": -0.007231682339648993,
-      "takerBuySellRatio1h": 1.03965,
-      "fundingRate": 5e-05,
-      "basis": 1.2517287861779636e-06,
+      "oiChange2h": 0.003668881523616996,
+      "takerBuySellRatio1h": 0.9471499999999999,
+      "fundingRate": 4.311e-05,
+      "basis": -0.00023551049193071272,
       "paperLongPressure": false
     },
     {
       "symbol": "INITUSDT",
-      "price": 0.27423,
-      "quoteVolume24h": 34980343.845782,
+      "price": 0.31469,
+      "quoteVolume24h": 36447606.773133,
+      "score": 55,
+      "oiChange2h": 0.25453584532804174,
+      "takerBuySellRatio1h": 1.012925,
+      "fundingRate": -0.00887895,
+      "basis": -0.07063070426372442,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ARBUSDT",
+      "price": 0.1641,
+      "quoteVolume24h": 20779734.30283,
+      "score": 40,
+      "oiChange2h": -0.03339112836906433,
+      "takerBuySellRatio1h": 0.974525,
+      "fundingRate": 1.881e-05,
+      "basis": -0.00021624519159013644,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ONEUSDT",
+      "price": 0.001707,
+      "quoteVolume24h": 28721528.8485236,
       "score": 25,
-      "oiChange2h": -0.029196277012423222,
-      "takerBuySellRatio1h": 1.036725,
-      "fundingRate": -0.01780387,
-      "basis": -0.11409477768072962,
+      "oiChange2h": -0.18770419395180749,
+      "takerBuySellRatio1h": 0.88025,
+      "fundingRate": -0.00134879,
+      "basis": -0.005403500528603278,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 8,
-  "usableCount": 6,
+  "universeCount": 6,
+  "usableCount": 5,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES",
-    "RWUSDUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-10T23:54:00.661502+00:00"
+  "generatedAt": "2026-11-11T04:28:55.231572+00:00"
 }
