@@ -2,7 +2,7 @@
   "strategyId": "TST_UNIFIED_CANDIDATE_V1",
   "candidateId": null,
   "candidateFingerprint": null,
-  "status": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "status": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "candidatePool": [
     {
       "source": "PUBLIC_EDGE_LAB",
@@ -122,5 +122,5 @@
     "nautilus",
     "forward"
   ],
-  "generatedAt": "2026-11-10T10:21:24.915732+00:00"
+  "generatedAt": "2026-11-11T08:11:12.617205+00:00"
 }
