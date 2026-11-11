@@ -9,57 +9,57 @@
   "candidates": [
     {
       "symbol": "SUIUSDT",
-      "price": 0.831,
-      "quoteVolume24h": 27614961.11553,
-      "score": 90,
-      "oiChange2h": 0.00902175289128726,
-      "takerBuySellRatio1h": 1.273075,
-      "fundingRate": -1.402e-05,
-      "basis": -0.00018494617350162113,
+      "price": 0.8338,
+      "quoteVolume24h": 26220232.07413,
+      "score": 80,
+      "oiChange2h": 0.006471064404641513,
+      "takerBuySellRatio1h": 1.12865,
+      "fundingRate": -1.211e-05,
+      "basis": -0.00019574004245082044,
       "paperLongPressure": true
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.1537,
-      "quoteVolume24h": 31952624.833491,
+      "price": 0.153,
+      "quoteVolume24h": 30462512.219211,
       "score": 60,
-      "oiChange2h": 0.003668881523616996,
-      "takerBuySellRatio1h": 0.9471499999999999,
-      "fundingRate": 4.311e-05,
-      "basis": -0.00023551049193071272,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "INITUSDT",
-      "price": 0.31469,
-      "quoteVolume24h": 36447606.773133,
-      "score": 55,
-      "oiChange2h": 0.25453584532804174,
-      "takerBuySellRatio1h": 1.012925,
-      "fundingRate": -0.00887895,
-      "basis": -0.07063070426372442,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "ARBUSDT",
-      "price": 0.1641,
-      "quoteVolume24h": 20779734.30283,
-      "score": 40,
-      "oiChange2h": -0.03339112836906433,
-      "takerBuySellRatio1h": 0.974525,
-      "fundingRate": 1.881e-05,
-      "basis": -0.00021624519159013644,
+      "oiChange2h": 0.007715976906183419,
+      "takerBuySellRatio1h": 0.98685,
+      "fundingRate": 5e-05,
+      "basis": 4.917008803095868e-05,
       "paperLongPressure": false
     },
     {
       "symbol": "ONEUSDT",
-      "price": 0.001707,
-      "quoteVolume24h": 28721528.8485236,
+      "price": 0.001539,
+      "quoteVolume24h": 20263657.5084836,
+      "score": 60,
+      "oiChange2h": 0.004341752822067946,
+      "takerBuySellRatio1h": 1.009875,
+      "fundingRate": -0.00047318,
+      "basis": -0.002014072519604726,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "GRAMUSDT",
+      "price": 1.183,
+      "quoteVolume24h": 21324141.85583,
+      "score": 40,
+      "oiChange2h": -0.03633214338122448,
+      "takerBuySellRatio1h": 0.927575,
+      "fundingRate": 5e-05,
+      "basis": -0.0006070316164940026,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "INITUSDT",
+      "price": 0.18394,
+      "quoteVolume24h": 48942993.768386,
       "score": 25,
-      "oiChange2h": -0.18770419395180749,
-      "takerBuySellRatio1h": 0.88025,
-      "fundingRate": -0.00134879,
-      "basis": -0.005403500528603278,
+      "oiChange2h": -0.04804147138674897,
+      "takerBuySellRatio1h": 0.988825,
+      "fundingRate": -0.00433256,
+      "basis": -0.019965779256794214,
       "paperLongPressure": false
     }
   ],
@@ -68,5 +68,5 @@
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-11T04:28:55.231572+00:00"
+  "generatedAt": "2026-11-11T12:04:02.024234+00:00"
 }
