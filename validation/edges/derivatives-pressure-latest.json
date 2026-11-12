@@ -8,32 +8,43 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "GRAMUSDT",
-      "price": 1.225,
-      "quoteVolume24h": 26662088.34382,
-      "score": 100,
-      "oiChange2h": 0.031938780446874704,
-      "takerBuySellRatio1h": 1.182825,
-      "fundingRate": -5.774e-05,
-      "basis": -0.0003101078849008232,
+      "symbol": "ENAUSDT",
+      "price": 0.138,
+      "quoteVolume24h": 28260642.777155,
+      "score": 80,
+      "oiChange2h": 0.012155114202931694,
+      "takerBuySellRatio1h": 1.14005,
+      "fundingRate": 9.48e-06,
+      "basis": -0.0004244951462190061,
       "paperLongPressure": true
     },
     {
-      "symbol": "INITUSDT",
-      "price": 0.13842,
-      "quoteVolume24h": 28231288.884438,
-      "score": 45,
-      "oiChange2h": 0.015432644014181651,
-      "takerBuySellRatio1h": 1.04815,
-      "fundingRate": -0.00069028,
-      "basis": -0.004718522013719917,
+      "symbol": "SUIUSDT",
+      "price": 0.7957,
+      "quoteVolume24h": 26188344.63111,
+      "score": 80,
+      "oiChange2h": 0.0048741538195120615,
+      "takerBuySellRatio1h": 1.077075,
+      "fundingRate": -0.00010149,
+      "basis": -0.0007191803274547715,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "GRAMUSDT",
+      "price": 1.233,
+      "quoteVolume24h": 25602543.71672,
+      "score": 40,
+      "oiChange2h": -0.04750922420104531,
+      "takerBuySellRatio1h": 1.0068,
+      "fundingRate": -6.511e-05,
+      "basis": -0.0009933304952461919,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
-  "usableCount": 2,
+  "universeCount": 4,
+  "usableCount": 3,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-12T09:11:59.599971+00:00"
+  "generatedAt": "2026-11-12T17:40:58.753399+00:00"
 }
