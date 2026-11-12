@@ -9,31 +9,53 @@
   "candidates": [
     {
       "symbol": "GRAMUSDT",
-      "price": 1.213,
-      "quoteVolume24h": 27553542.87806,
-      "score": 40,
-      "oiChange2h": -0.00703920460993146,
-      "takerBuySellRatio1h": 1.0177749999999999,
-      "fundingRate": -9.29e-06,
-      "basis": -0.0005607414981693148,
+      "price": 1.19,
+      "quoteVolume24h": 26843214.23253,
+      "score": 90,
+      "oiChange2h": 0.009501403724073043,
+      "takerBuySellRatio1h": 1.8077999999999999,
+      "fundingRate": 5e-05,
+      "basis": 4.201698326600223e-06,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.8202,
+      "quoteVolume24h": 20106145.50882,
+      "score": 90,
+      "oiChange2h": 0.004512631939364242,
+      "takerBuySellRatio1h": 1.194,
+      "fundingRate": -2.482e-05,
+      "basis": -0.0006413719573679089,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.1453,
+      "quoteVolume24h": 20148372.961798,
+      "score": 60,
+      "oiChange2h": 0.01001022917869454,
+      "takerBuySellRatio1h": 1.017075,
+      "fundingRate": 5e-05,
+      "basis": -0.00010888131537434287,
       "paperLongPressure": false
     },
     {
       "symbol": "INITUSDT",
-      "price": 0.13514,
-      "quoteVolume24h": 42131575.863008,
+      "price": 0.1211,
+      "quoteVolume24h": 39416907.658357,
       "score": 25,
-      "oiChange2h": -0.13009007839702935,
-      "takerBuySellRatio1h": 0.963775,
-      "fundingRate": -0.00118176,
-      "basis": -0.008453654522331266,
+      "oiChange2h": -0.05746168879699054,
+      "takerBuySellRatio1h": 0.893075,
+      "fundingRate": -0.00076615,
+      "basis": -0.0098583260498607,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
-  "usableCount": 2,
+  "universeCount": 5,
+  "usableCount": 4,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-11T19:46:22.129750+00:00"
+  "generatedAt": "2026-11-12T01:46:28.857449+00:00"
 }
