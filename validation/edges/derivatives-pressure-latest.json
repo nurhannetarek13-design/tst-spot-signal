@@ -9,54 +9,43 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.1382,
-      "quoteVolume24h": 38404829.233334,
+      "price": 0.1371,
+      "quoteVolume24h": 39368509.201578,
       "score": 90,
-      "oiChange2h": 0.011439517270042332,
-      "takerBuySellRatio1h": 1.60345,
-      "fundingRate": 2.636e-05,
-      "basis": -0.0008938808647731555,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "GRAMUSDT",
-      "price": 1.148,
-      "quoteVolume24h": 28032879.72942,
-      "score": 90,
-      "oiChange2h": 0.0015867503519928494,
-      "takerBuySellRatio1h": 1.2167,
-      "fundingRate": -0.0001158,
-      "basis": -0.001700066524342403,
+      "oiChange2h": 0.005132164229039171,
+      "takerBuySellRatio1h": 1.3566500000000001,
+      "fundingRate": -7.65e-06,
+      "basis": -0.0005694050989436539,
       "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.8021,
-      "quoteVolume24h": 37387178.44052,
-      "score": 60,
-      "oiChange2h": 0.0019131798247116194,
-      "takerBuySellRatio1h": 0.93815,
-      "fundingRate": 6.024e-05,
-      "basis": -0.0005012078814506937,
-      "paperLongPressure": false
+      "price": 0.8087,
+      "quoteVolume24h": 33858760.96548,
+      "score": 90,
+      "oiChange2h": 0.015930212054862558,
+      "takerBuySellRatio1h": 1.536325,
+      "fundingRate": 0.0001,
+      "basis": -0.00024281303826378942,
+      "paperLongPressure": true
     },
     {
       "symbol": "BARDUSDT",
-      "price": 0.158,
-      "quoteVolume24h": 22209102.54624,
-      "score": 55,
-      "oiChange2h": 0.06009433407164422,
-      "takerBuySellRatio1h": 0.9835,
-      "fundingRate": -0.01941693,
-      "basis": -0.03677173158597746,
+      "price": 0.1337,
+      "quoteVolume24h": 23540762.83225,
+      "score": 25,
+      "oiChange2h": -0.1063372541982619,
+      "takerBuySellRatio1h": 0.928175,
+      "fundingRate": -0.01065444,
+      "basis": -0.006211180124223614,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 6,
-  "usableCount": 4,
+  "universeCount": 5,
+  "usableCount": 3,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-13T11:48:44.979772+00:00"
+  "generatedAt": "2026-11-13T19:08:18.315719+00:00"
 }
