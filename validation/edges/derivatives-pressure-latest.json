@@ -9,43 +9,42 @@
   "candidates": [
     {
       "symbol": "SHELLUSDT",
-      "price": 0.03199,
-      "quoteVolume24h": 32064959.749868,
-      "score": 85,
-      "oiChange2h": 0.13404703471268165,
-      "takerBuySellRatio1h": 1.0821749999999999,
-      "fundingRate": -0.000546,
-      "basis": -1.6602226014073018e-05,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "SUIUSDT",
-      "price": 0.7775,
-      "quoteVolume24h": 27723584.27072,
+      "price": 0.02912,
+      "quoteVolume24h": 39249792.027849,
       "score": 60,
-      "oiChange2h": 0.005744882855396982,
-      "takerBuySellRatio1h": 0.837875,
-      "fundingRate": -7.899e-05,
-      "basis": -0.0001681225471970027,
+      "oiChange2h": 0.0019292038837508407,
+      "takerBuySellRatio1h": 1.0306250000000001,
+      "fundingRate": -0.00010243,
+      "basis": -0.0006956249448496488,
       "paperLongPressure": false
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.1295,
-      "quoteVolume24h": 37286949.143624,
+      "price": 0.1257,
+      "quoteVolume24h": 29090878.651244,
       "score": 40,
-      "oiChange2h": -0.005928769484665919,
-      "takerBuySellRatio1h": 0.8996500000000001,
-      "fundingRate": 1.187e-05,
-      "basis": -3.1671753328854635e-06,
+      "oiChange2h": -0.005794727116686604,
+      "takerBuySellRatio1h": 0.786425,
+      "fundingRate": 2.672e-05,
+      "basis": -0.0008671928782023608,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.7629,
+      "quoteVolume24h": 24747044.48648,
+      "score": 40,
+      "oiChange2h": -0.005256015897843969,
+      "takerBuySellRatio1h": 0.740525,
+      "fundingRate": 3.59e-06,
+      "basis": -0.0007184100707439134,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 5,
+  "universeCount": 4,
   "usableCount": 3,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-14T06:51:01.631229+00:00"
+  "generatedAt": "2026-11-14T13:55:10.000892+00:00"
 }
