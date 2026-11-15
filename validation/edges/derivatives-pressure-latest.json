@@ -8,77 +8,78 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "KAVAUSDT",
-      "price": 0.02897,
-      "quoteVolume24h": 20745016.164499,
-      "score": 90,
-      "oiChange2h": 0.08584313294200907,
-      "takerBuySellRatio1h": 1.128825,
-      "fundingRate": 5e-05,
-      "basis": -0.0015913569576490039,
+      "symbol": "ASTERUSDT",
+      "price": 0.5265,
+      "quoteVolume24h": 35450817.563275,
+      "score": 100,
+      "oiChange2h": 0.07201104985095896,
+      "takerBuySellRatio1h": 1.265725,
+      "fundingRate": -1.421e-05,
+      "basis": -0.0003607435113635038,
       "paperLongPressure": true
     },
     {
-      "symbol": "NEARUSDT",
-      "price": 2.956,
-      "quoteVolume24h": 120220241.5946,
-      "score": 60,
-      "oiChange2h": 0.010027729761002746,
-      "takerBuySellRatio1h": 1.00925,
-      "fundingRate": -2.64e-06,
-      "basis": -0.00021763113737638395,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "ASTERUSDT",
-      "price": 0.4985,
-      "quoteVolume24h": 29877586.378015,
-      "score": 60,
-      "oiChange2h": 0.007967290849300701,
-      "takerBuySellRatio1h": 0.952675,
-      "fundingRate": 2.697e-05,
-      "basis": -0.00043890307363914083,
-      "paperLongPressure": false
-    },
-    {
-      "symbol": "SOPHUSDT",
-      "price": 0.00222,
-      "quoteVolume24h": 21857358.84649,
-      "score": 55,
-      "oiChange2h": 0.03997062258048145,
-      "takerBuySellRatio1h": 0.9577,
-      "fundingRate": -0.00149044,
-      "basis": -0.004493500874362399,
-      "paperLongPressure": false
-    },
-    {
       "symbol": "SUIUSDT",
-      "price": 0.6852,
-      "quoteVolume24h": 43373196.67634,
-      "score": 40,
-      "oiChange2h": -0.02104461166752436,
-      "takerBuySellRatio1h": 0.90975,
-      "fundingRate": -0.0001785,
-      "basis": -0.00029091329477404226,
+      "price": 0.7156,
+      "quoteVolume24h": 51354894.70883,
+      "score": 90,
+      "oiChange2h": 0.022419539239699526,
+      "takerBuySellRatio1h": 1.0695,
+      "fundingRate": -0.000207,
+      "basis": -0.0006599355624393732,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "WLDUSDT",
+      "price": 0.2607,
+      "quoteVolume24h": 22049858.7463,
+      "score": 70,
+      "oiChange2h": 0.021224286094710054,
+      "takerBuySellRatio1h": 1.04715,
+      "fundingRate": -0.00048978,
+      "basis": -0.0007059912395991352,
       "paperLongPressure": false
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.1127,
-      "quoteVolume24h": 35796468.608243,
-      "score": 40,
-      "oiChange2h": -0.012797101178472547,
-      "takerBuySellRatio1h": 0.991575,
-      "fundingRate": 2.657e-05,
-      "basis": -0.000339229249494144,
+      "price": 0.1173,
+      "quoteVolume24h": 39008497.823448,
+      "score": 60,
+      "oiChange2h": 0.0032395768830857374,
+      "takerBuySellRatio1h": 1.00095,
+      "fundingRate": 1.538e-05,
+      "basis": -0.0006911720861623172,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "KAVAUSDT",
+      "price": 0.027,
+      "quoteVolume24h": 21875358.564347,
+      "score": 55,
+      "oiChange2h": 0.04368305443982634,
+      "takerBuySellRatio1h": 1.03775,
+      "fundingRate": -0.00111204,
+      "basis": -0.0059932923420905615,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SOPHUSDT",
+      "price": 0.00213,
+      "quoteVolume24h": 24795078.17215,
+      "score": 25,
+      "oiChange2h": -0.05212371519282888,
+      "takerBuySellRatio1h": 0.96225,
+      "fundingRate": -0.00160536,
+      "basis": -0.011236900803838212,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 8,
+  "universeCount": 9,
   "usableCount": 6,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES",
+    "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-14T22:52:31.966371+00:00"
+  "generatedAt": "2026-11-15T02:21:23.838385+00:00"
 }
