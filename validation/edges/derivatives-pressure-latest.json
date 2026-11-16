@@ -8,36 +8,36 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "SUIUSDT",
-      "price": 0.7186,
-      "quoteVolume24h": 21495417.41641,
-      "score": 100,
-      "oiChange2h": 0.020515540035419777,
-      "takerBuySellRatio1h": 1.21515,
-      "fundingRate": -2.22e-05,
-      "basis": -0.0006524846130866457,
-      "paperLongPressure": true
-    },
-    {
       "symbol": "ENAUSDT",
-      "price": 0.1172,
-      "quoteVolume24h": 22218224.15216,
-      "score": 90,
-      "oiChange2h": 0.006970707975718637,
-      "takerBuySellRatio1h": 1.172,
-      "fundingRate": 4.379e-05,
-      "basis": -0.000653032354715033,
-      "paperLongPressure": true
+      "price": 0.1162,
+      "quoteVolume24h": 23970271.258702,
+      "score": 60,
+      "oiChange2h": -0.0037568683767902344,
+      "takerBuySellRatio1h": 1.1280999999999999,
+      "fundingRate": 3.409e-05,
+      "basis": -0.00025518538422042436,
+      "paperLongPressure": false
     },
     {
       "symbol": "ASTERUSDT",
-      "price": 0.5493,
-      "quoteVolume24h": 57187905.493748,
-      "score": 60,
-      "oiChange2h": 0.007125703788531501,
-      "takerBuySellRatio1h": 1.042325,
-      "fundingRate": 5e-05,
-      "basis": -0.0007756171642958609,
+      "price": 0.5689,
+      "quoteVolume24h": 62028224.365388,
+      "score": 40,
+      "oiChange2h": -0.011554136891209321,
+      "takerBuySellRatio1h": 0.887775,
+      "fundingRate": 1.973e-05,
+      "basis": -0.0005273334505184746,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "RAREUSDT",
+      "price": 0.01525,
+      "quoteVolume24h": 27792814.537362,
+      "score": 25,
+      "oiChange2h": -0.020897445828418237,
+      "takerBuySellRatio1h": 1.008,
+      "fundingRate": -0.00916891,
+      "basis": -0.03044404556645819,
       "paperLongPressure": false
     }
   ],
@@ -47,5 +47,5 @@
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-16T08:15:56.848196+00:00"
+  "generatedAt": "2026-11-16T18:45:47.544684+00:00"
 }
