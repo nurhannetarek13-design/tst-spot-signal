@@ -8,33 +8,22 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ASTERUSDT",
-      "price": 0.5794,
-      "quoteVolume24h": 23647138.667136,
-      "score": 80,
-      "oiChange2h": 0.013305885220878055,
-      "takerBuySellRatio1h": 1.1029499999999999,
-      "fundingRate": 1.657e-05,
-      "basis": -0.00017809059113105263,
-      "paperLongPressure": true
-    },
-    {
       "symbol": "ENAUSDT",
-      "price": 0.1141,
-      "quoteVolume24h": 24885120.70226,
+      "price": 0.1146,
+      "quoteVolume24h": 23840276.49241,
       "score": 60,
-      "oiChange2h": -0.002622210554620974,
-      "takerBuySellRatio1h": 1.13915,
-      "fundingRate": 5e-05,
-      "basis": -0.0004053377326572738,
+      "oiChange2h": -0.00927129535541349,
+      "takerBuySellRatio1h": 1.107,
+      "fundingRate": 3.637e-05,
+      "basis": -0.00024551087637603164,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 2,
+  "universeCount": 3,
+  "usableCount": 1,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-17T02:16:34.464090+00:00"
+  "generatedAt": "2026-11-17T10:56:45.023597+00:00"
 }
