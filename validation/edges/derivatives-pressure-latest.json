@@ -8,33 +8,44 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
+      "symbol": "BREVUSDT",
+      "price": 0.1071,
+      "quoteVolume24h": 28254586.89084,
+      "score": 55,
+      "oiChange2h": 0.24905196703062105,
+      "takerBuySellRatio1h": 1.021425,
+      "fundingRate": -0.00342532,
+      "basis": -0.043459864462462305,
+      "paperLongPressure": false
+    },
+    {
       "symbol": "ASTERUSDT",
-      "price": 0.5626,
-      "quoteVolume24h": 39037836.766706,
-      "score": 80,
-      "oiChange2h": 0.012699048014957581,
-      "takerBuySellRatio1h": 1.0646,
-      "fundingRate": 2.718e-05,
-      "basis": -0.0007641319993600959,
-      "paperLongPressure": true
+      "price": 0.5683,
+      "quoteVolume24h": 38525968.572968,
+      "score": 40,
+      "oiChange2h": -0.02800329450289929,
+      "takerBuySellRatio1h": 0.72285,
+      "fundingRate": -3.613e-05,
+      "basis": -0.0009556355886358725,
+      "paperLongPressure": false
     },
     {
       "symbol": "ENAUSDT",
-      "price": 0.1142,
-      "quoteVolume24h": 23229542.946076,
+      "price": 0.1143,
+      "quoteVolume24h": 22491263.895429,
       "score": 40,
-      "oiChange2h": -0.007676762914241575,
-      "takerBuySellRatio1h": 0.950425,
-      "fundingRate": 2.416e-05,
-      "basis": -0.0003613795188092128,
+      "oiChange2h": -0.02905729850161154,
+      "takerBuySellRatio1h": 1.045,
+      "fundingRate": 5e-05,
+      "basis": -0.0007394702921682539,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 2,
+  "universeCount": 5,
+  "usableCount": 3,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-17T19:38:33.599170+00:00"
+  "generatedAt": "2026-11-18T02:02:10.828906+00:00"
 }
