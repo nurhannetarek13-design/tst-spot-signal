@@ -1,13 +1,36 @@
 {
   "engine": "JESSE",
   "strategyId": "TST_CANDIDATE_JESSE_VALIDATOR_V1",
-  "status": "NO_CANDIDATE",
+  "status": "FAIL",
   "pass": false,
-  "candidateId": null,
-  "candidateFingerprint": null,
-  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
+  "independentEnginePass": false,
+  "candidateId": "PUBLIC_EDGE_LAB:HOLOUSDT:TS_MOMENTUM",
+  "candidateFingerprint": "47d4daea870e3a1ab59c",
+  "symbol": "HOLOUSDT",
+  "family": "TS_MOMENTUM",
+  "timeframe": "1h",
+  "base": {
+    "trades": 184,
+    "winRate": 0.3423913043478261,
+    "profitFactor": 0.0,
+    "expectancyUSDT": -0.020424178995489834,
+    "netPnlUSDT": -3.7580489351701294,
+    "maxDrawdown": -21.82960853063364
+  },
+  "stress2x": {
+    "trades": 184,
+    "winRate": 0.32608695652173914,
+    "profitFactor": 0.0,
+    "expectancyUSDT": -0.036870560803497834,
+    "netPnlUSDT": -6.784183187843602,
+    "maxDrawdown": -34.1015980038009
+  },
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-18T01:38:35.958382+00:00",
-  "notes": "No unified candidate; Jesse install and market download skipped."
+  "generatedAt": "2026-11-18T09:24:52.858979+00:00",
+  "notes": "Historical Jesse validation is explicitly limited to the candle-derived core trigger when validationScope=CORE_TRIGGER_ONLY. It does not validate L2/order-book confirmation and cannot authorize live trading.",
+  "validationScope": "FULL_CANDIDATE",
+  "fullStrategyValidated": null,
+  "excludedConfirmations": [],
+  "eligibleOutcome": "CANDIDATE_VALIDATION"
 }
