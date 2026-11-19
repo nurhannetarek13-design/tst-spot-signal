@@ -8,30 +8,21 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.112,
-      "quoteVolume24h": 21585469.130281,
-      "score": 90,
-      "oiChange2h": 0.01249988763734522,
-      "takerBuySellRatio1h": 1.15165,
-      "fundingRate": 5e-05,
-      "basis": -0.000590594721026072,
-      "paperLongPressure": true
-    },
-    {
       "symbol": "MMTUSDT",
-      "price": 0.2009,
-      "quoteVolume24h": 37606142.87522,
-      "score": 60,
-      "oiChange2h": -0.009093313909835365,
-      "takerBuySellRatio1h": 1.079875,
-      "fundingRate": 2.097e-05,
-      "basis": -0.0001906538337188568,
-      "paperLongPressure": false
+      "price": 0.3035,
+      "quoteVolume24h": 53575604.94625,
+      "score": 90,
+      "oiChange2h": 0.0345326456744115,
+      "takerBuySellRatio1h": 1.08305,
+      "fundingRate": -4.442e-05,
+      "basis": -1.7905575295018572e-05,
+      "paperLongPressure": true
     }
   ],
   "universeCount": 2,
-  "usableCount": 2,
-  "failures": {},
-  "generatedAt": "2026-11-19T09:04:58.272830+00:00"
+  "usableCount": 1,
+  "failures": {
+    "PEPEUSDT": "NO_FUTURES_SERIES"
+  },
+  "generatedAt": "2026-11-19T18:27:21.804395+00:00"
 }
