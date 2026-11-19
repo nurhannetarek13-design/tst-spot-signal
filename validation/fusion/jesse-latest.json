@@ -5,9 +5,9 @@
   "pass": false,
   "candidateId": null,
   "candidateFingerprint": null,
-  "candidateStatus": "POOL_EXHAUSTED_AFTER_VALIDATOR_REJECTIONS",
+  "candidateStatus": "NO_UNREJECTED_COMPATIBLE_CANDIDATE",
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
-  "generatedAt": "2026-11-19T07:49:32.872363+00:00",
+  "generatedAt": "2026-11-19T10:42:21.962508+00:00",
   "notes": "No unified candidate; Jesse install and market download skipped."
 }
