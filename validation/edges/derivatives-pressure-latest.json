@@ -9,31 +9,29 @@
   "candidates": [
     {
       "symbol": "ENAUSDT",
-      "price": 0.1124,
-      "quoteVolume24h": 23346867.166934,
-      "score": 100,
-      "oiChange2h": 0.026034889931027427,
-      "takerBuySellRatio1h": 1.203325,
-      "fundingRate": 3.704e-05,
-      "basis": -0.0003904474556316595,
+      "price": 0.112,
+      "quoteVolume24h": 21585469.130281,
+      "score": 90,
+      "oiChange2h": 0.01249988763734522,
+      "takerBuySellRatio1h": 1.15165,
+      "fundingRate": 5e-05,
+      "basis": -0.000590594721026072,
       "paperLongPressure": true
     },
     {
       "symbol": "MMTUSDT",
-      "price": 0.2195,
-      "quoteVolume24h": 42549144.09674,
-      "score": 40,
-      "oiChange2h": -0.06356471188773305,
-      "takerBuySellRatio1h": 1.0022250000000001,
-      "fundingRate": 4.777e-05,
-      "basis": 2.8985837501549483e-05,
+      "price": 0.2009,
+      "quoteVolume24h": 37606142.87522,
+      "score": 60,
+      "oiChange2h": -0.009093313909835365,
+      "takerBuySellRatio1h": 1.079875,
+      "fundingRate": 2.097e-05,
+      "basis": -0.0001906538337188568,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 3,
+  "universeCount": 2,
   "usableCount": 2,
-  "failures": {
-    "UUSDT": "NO_FUTURES_SERIES"
-  },
-  "generatedAt": "2026-11-19T01:01:19.457205+00:00"
+  "failures": {},
+  "generatedAt": "2026-11-19T09:04:58.272830+00:00"
 }
