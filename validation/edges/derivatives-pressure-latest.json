@@ -8,43 +8,55 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "SKYUSDT",
-      "price": 0.04674,
-      "quoteVolume24h": 21422243.62448,
-      "score": 80,
-      "oiChange2h": 0.014308018329691086,
-      "takerBuySellRatio1h": 1.13395,
-      "fundingRate": 5e-05,
-      "basis": -0.0009227756784314645,
+      "symbol": "ENAUSDT",
+      "price": 0.1056,
+      "quoteVolume24h": 28260959.283312,
+      "score": 90,
+      "oiChange2h": 0.0036716766247044674,
+      "takerBuySellRatio1h": 1.185325,
+      "fundingRate": -3.689e-05,
+      "basis": -3.692568138535801e-05,
       "paperLongPressure": true
     },
     {
       "symbol": "MMTUSDT",
-      "price": 0.2644,
-      "quoteVolume24h": 56170817.65264,
+      "price": 0.2424,
+      "quoteVolume24h": 47855218.75986,
       "score": 40,
-      "oiChange2h": -0.04750892165715748,
-      "takerBuySellRatio1h": 0.991425,
-      "fundingRate": 4.681e-05,
-      "basis": -0.0019308040139335292,
+      "oiChange2h": -0.0240945191791202,
+      "takerBuySellRatio1h": 0.978275,
+      "fundingRate": -1.11e-05,
+      "basis": -0.0013823838900695051,
       "paperLongPressure": false
     },
     {
-      "symbol": "ENAUSDT",
-      "price": 0.1037,
-      "quoteVolume24h": 22511755.329945,
+      "symbol": "SUIUSDT",
+      "price": 0.6989,
+      "quoteVolume24h": 24692014.35129,
       "score": 40,
-      "oiChange2h": -0.010187854428202359,
-      "takerBuySellRatio1h": 0.9184749999999999,
-      "fundingRate": -3.133e-05,
-      "basis": -0.001057703471944449,
+      "oiChange2h": -0.0014087924121177764,
+      "takerBuySellRatio1h": 1.01415,
+      "fundingRate": -7.692e-05,
+      "basis": -0.00036068589310567223,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "SKYUSDT",
+      "price": 0.04283,
+      "quoteVolume24h": 21332940.49389,
+      "score": 40,
+      "oiChange2h": -0.026229391420989234,
+      "takerBuySellRatio1h": 0.9248,
+      "fundingRate": 5e-05,
+      "basis": -0.0004891372328648114,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 3,
+  "universeCount": 6,
+  "usableCount": 4,
   "failures": {
-    "PEPEUSDT": "NO_FUTURES_SERIES"
+    "PEPEUSDT": "NO_FUTURES_SERIES",
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-20T00:47:48.233807+00:00"
+  "generatedAt": "2026-11-20T08:00:13.674495+00:00"
 }
