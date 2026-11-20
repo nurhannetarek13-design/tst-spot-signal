@@ -8,21 +8,43 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "MMTUSDT",
-      "price": 0.3035,
-      "quoteVolume24h": 53575604.94625,
-      "score": 90,
-      "oiChange2h": 0.0345326456744115,
-      "takerBuySellRatio1h": 1.08305,
-      "fundingRate": -4.442e-05,
-      "basis": -1.7905575295018572e-05,
+      "symbol": "SKYUSDT",
+      "price": 0.04674,
+      "quoteVolume24h": 21422243.62448,
+      "score": 80,
+      "oiChange2h": 0.014308018329691086,
+      "takerBuySellRatio1h": 1.13395,
+      "fundingRate": 5e-05,
+      "basis": -0.0009227756784314645,
       "paperLongPressure": true
+    },
+    {
+      "symbol": "MMTUSDT",
+      "price": 0.2644,
+      "quoteVolume24h": 56170817.65264,
+      "score": 40,
+      "oiChange2h": -0.04750892165715748,
+      "takerBuySellRatio1h": 0.991425,
+      "fundingRate": 4.681e-05,
+      "basis": -0.0019308040139335292,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.1037,
+      "quoteVolume24h": 22511755.329945,
+      "score": 40,
+      "oiChange2h": -0.010187854428202359,
+      "takerBuySellRatio1h": 0.9184749999999999,
+      "fundingRate": -3.133e-05,
+      "basis": -0.001057703471944449,
+      "paperLongPressure": false
     }
   ],
-  "universeCount": 2,
-  "usableCount": 1,
+  "universeCount": 4,
+  "usableCount": 3,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-19T18:27:21.804395+00:00"
+  "generatedAt": "2026-11-20T00:47:48.233807+00:00"
 }
