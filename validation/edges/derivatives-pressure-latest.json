@@ -9,46 +9,46 @@
   "candidates": [
     {
       "symbol": "NEARUSDT",
-      "price": 2.873,
-      "quoteVolume24h": 111951331.9489,
-      "score": 100,
-      "oiChange2h": 0.026328413986631993,
-      "takerBuySellRatio1h": 1.334125,
-      "fundingRate": 6.525e-05,
-      "basis": -0.000792053770528045,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "ENAUSDT",
-      "price": 0.0994,
-      "quoteVolume24h": 31786840.085427,
-      "score": 100,
-      "oiChange2h": 0.02857477755977511,
-      "takerBuySellRatio1h": 1.6637499999999998,
-      "fundingRate": -2.423e-05,
-      "basis": -0.0013096240461224484,
-      "paperLongPressure": true
-    },
-    {
-      "symbol": "MMTUSDT",
-      "price": 0.272,
-      "quoteVolume24h": 20987365.96102,
-      "score": 100,
-      "oiChange2h": 0.045566786069289655,
-      "takerBuySellRatio1h": 1.157275,
-      "fundingRate": 5e-05,
-      "basis": -0.0008733624454148048,
-      "paperLongPressure": true
+      "price": 2.626,
+      "quoteVolume24h": 117671057.3244,
+      "score": 40,
+      "oiChange2h": -0.03758097633314217,
+      "takerBuySellRatio1h": 0.8971750000000001,
+      "fundingRate": 4.552e-05,
+      "basis": -0.0011153573903130987,
+      "paperLongPressure": false
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.6564,
-      "quoteVolume24h": 41383384.54011,
+      "price": 0.5982,
+      "quoteVolume24h": 40370255.39966,
       "score": 40,
-      "oiChange2h": -0.00911893657343188,
-      "takerBuySellRatio1h": 0.9473,
-      "fundingRate": -7.118e-05,
-      "basis": -0.0007532011773786484,
+      "oiChange2h": -0.05556339674767574,
+      "takerBuySellRatio1h": 0.814625,
+      "fundingRate": -0.00013561,
+      "basis": -0.0014863660226716036,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.0909,
+      "quoteVolume24h": 33457335.514827,
+      "score": 40,
+      "oiChange2h": -0.0688177857183283,
+      "takerBuySellRatio1h": 0.755125,
+      "fundingRate": -2.571e-05,
+      "basis": -0.001875878563002309,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "MMTUSDT",
+      "price": 0.2519,
+      "quoteVolume24h": 20927600.1618,
+      "score": 40,
+      "oiChange2h": -0.04098713343029059,
+      "takerBuySellRatio1h": 1.010175,
+      "fundingRate": 2.98e-05,
+      "basis": -0.001437685415777823,
       "paperLongPressure": false
     }
   ],
@@ -59,5 +59,5 @@
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-20T23:14:47.543146+00:00"
+  "generatedAt": "2026-11-21T04:07:47.832536+00:00"
 }
