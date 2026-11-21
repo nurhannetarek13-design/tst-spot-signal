@@ -1,8 +1,8 @@
 {
   "engine": "VECTORBT",
   "strategyId": "TST_DISCOVERY_VECTORBT_V1",
-  "status": "PAPER_CANDIDATE_FOUND",
-  "pass": false,
+  "status": "CANDIDATE_FOUND",
+  "pass": true,
   "authorization": "RESEARCH_ONLY",
   "liveTrading": false,
   "universeMode": "ALL_BINANCE_USDT_SPOT_INCLUDING_NEW_LISTINGS",
@@ -408,41 +408,41 @@
   ],
   "newListingsScreened": [],
   "deepValidatedSymbols": [
-    "ZILUSDT",
+    "KERNELUSDT",
+    "SOPHUSDT",
     "LUNCUSDT",
-    "CYBERUSDT",
-    "BARDUSDT",
-    "STOUSDT",
-    "AVAUSDT",
-    "FFUSDT",
-    "BTTCUSDT",
-    "CITYUSDT",
     "BREVUSDT",
-    "ATMUSDT",
+    "HUMAUSDT",
+    "BARDUSDT",
+    "ZILUSDT",
+    "IQUSDT",
+    "GPSUSDT",
+    "STOUSDT",
+    "PORTALUSDT",
+    "FFUSDT",
+    "AUDIOUSDT",
+    "AVAUSDT",
+    "BLURUSDT",
+    "SHELLUSDT",
+    "BTTCUSDT",
+    "THETAUSDT",
     "XNOUSDT",
     "ZKCUSDT",
-    "METISUSDT",
-    "QKCUSDT",
-    "GNSUSDT",
-    "MMTUSDT",
-    "ZRXUSDT",
+    "INITUSDT",
+    "HOTUSDT",
     "ESPUSDT",
-    "FLUXUSDT",
-    "YGGUSDT",
-    "QTUMUSDT",
-    "IOTAUSDT",
-    "ANKRUSDT",
-    "\u5e01\u5b89\u4eba\u751fUSDT",
-    "GASUSDT",
-    "SOPHUSDT",
+    "GENIUSUSDT",
     "AIUSDT",
-    "SANTOSUSDT",
-    "KAIAUSDT",
-    "HEIUSDT",
-    "SUPERUSDT",
-    "TURTLEUSDT",
-    "JASMYUSDT",
-    "ALGOUSDT"
+    "ADXUSDT",
+    "ZRXUSDT",
+    "SCUSDT",
+    "ATMUSDT",
+    "STEEMUSDT",
+    "QIUSDT",
+    "MIRAUSDT",
+    "FLUXUSDT",
+    "PHAUSDT",
+    "TKOUSDT"
   ],
   "screenDays": 30,
   "deepDays": 120,
@@ -458,55 +458,146 @@
     "VOLATILITY_MOMENTUM",
     "VOLUME_ANOMALY"
   ],
-  "selected": null,
-  "selectedPaperCandidate": {
-    "family": "MEAN_REVERSION",
+  "selected": {
+    "family": "VOLUME_ANOMALY",
     "params": {
-      "bb": 1.6,
-      "rsi_in": 34,
-      "rsi_out": 50,
-      "sl": 0.015,
-      "tp": 0.025
+      "shock": 0.012,
+      "relvol": 1.6,
+      "mode": "CONTINUATION",
+      "sl": 0.018,
+      "tp": 0.035
     },
-    "symbol": "BTTCUSDT",
-    "candidateId": "VBT-BTTCUSDT-MEAN_REVERSION-021",
+    "symbol": "HUMAUSDT",
+    "candidateId": "VBT-HUMAUSDT-VOLUME_ANOMALY-057",
     "validation": {
-      "trades": 68,
-      "wins": 65,
-      "winRate": 0.9558823529411765,
-      "netPnlUSDT": 8.737401559044681,
-      "expectancyUSDT": 0.1284911993977159,
-      "profitFactor": 19.251701188411932,
-      "maxDrawdownUSDT": 0.1636249999999999
+      "trades": 44,
+      "wins": 16,
+      "winRate": 0.36363636363636365,
+      "netPnlUSDT": 1.2492419723569794,
+      "expectancyUSDT": 0.02839186300811317,
+      "profitFactor": 1.5559390672635567,
+      "maxDrawdownUSDT": 0.5863259852518667
     },
-    "score": 13.942379225908635,
+    "score": 5.7003080936452655,
     "isNewListing": false,
     "historyDays": 119.98958333333333,
-    "quoteVolume24h": 272612.9758813,
+    "quoteVolume24h": 7160165.05091,
     "holdoutBase": {
-      "trades": 45,
-      "wins": 37,
-      "winRate": 0.8222222222222222,
-      "netPnlUSDT": 4.603491082441045,
-      "expectancyUSDT": 0.10229980183202322,
-      "profitFactor": 6.325256942097576,
-      "maxDrawdownUSDT": 0.351588655462185
+      "trades": 44,
+      "wins": 17,
+      "winRate": 0.38636363636363635,
+      "netPnlUSDT": 1.4529053484763739,
+      "expectancyUSDT": 0.03302057610173577,
+      "profitFactor": 1.370277295682904,
+      "maxDrawdownUSDT": 1.7254732706802312
     },
     "holdoutStress2x": {
-      "trades": 45,
-      "wins": 37,
-      "winRate": 0.8222222222222222,
-      "netPnlUSDT": 4.103387487763928,
-      "expectancyUSDT": 0.09118638861697617,
-      "profitFactor": 5.31170123368416,
-      "maxDrawdownUSDT": 0.38426974789915924
+      "trades": 44,
+      "wins": 17,
+      "winRate": 0.38636363636363635,
+      "netPnlUSDT": 0.9669665042837046,
+      "expectancyUSDT": 0.021976511460993286,
+      "profitFactor": 1.229291115896833,
+      "maxDrawdownUSDT": 1.9439662904293002
     },
-    "liveEligible": false,
+    "liveEligible": true,
     "paperCandidate": true,
-    "discoveryPass": false
+    "discoveryPass": true
+  },
+  "selectedPaperCandidate": {
+    "family": "VOLUME_ANOMALY",
+    "params": {
+      "shock": 0.012,
+      "relvol": 1.6,
+      "mode": "CONTINUATION",
+      "sl": 0.018,
+      "tp": 0.035
+    },
+    "symbol": "HUMAUSDT",
+    "candidateId": "VBT-HUMAUSDT-VOLUME_ANOMALY-057",
+    "validation": {
+      "trades": 44,
+      "wins": 16,
+      "winRate": 0.36363636363636365,
+      "netPnlUSDT": 1.2492419723569794,
+      "expectancyUSDT": 0.02839186300811317,
+      "profitFactor": 1.5559390672635567,
+      "maxDrawdownUSDT": 0.5863259852518667
+    },
+    "score": 5.7003080936452655,
+    "isNewListing": false,
+    "historyDays": 119.98958333333333,
+    "quoteVolume24h": 7160165.05091,
+    "holdoutBase": {
+      "trades": 44,
+      "wins": 17,
+      "winRate": 0.38636363636363635,
+      "netPnlUSDT": 1.4529053484763739,
+      "expectancyUSDT": 0.03302057610173577,
+      "profitFactor": 1.370277295682904,
+      "maxDrawdownUSDT": 1.7254732706802312
+    },
+    "holdoutStress2x": {
+      "trades": 44,
+      "wins": 17,
+      "winRate": 0.38636363636363635,
+      "netPnlUSDT": 0.9669665042837046,
+      "expectancyUSDT": 0.021976511460993286,
+      "profitFactor": 1.229291115896833,
+      "maxDrawdownUSDT": 1.9439662904293002
+    },
+    "liveEligible": true,
+    "paperCandidate": true,
+    "discoveryPass": true
   },
   "newListingWatch": [],
   "finalists": [
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
+        "shock": 0.012,
+        "relvol": 1.6,
+        "mode": "CONTINUATION",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "HUMAUSDT",
+      "candidateId": "VBT-HUMAUSDT-VOLUME_ANOMALY-057",
+      "validation": {
+        "trades": 44,
+        "wins": 16,
+        "winRate": 0.36363636363636365,
+        "netPnlUSDT": 1.2492419723569794,
+        "expectancyUSDT": 0.02839186300811317,
+        "profitFactor": 1.5559390672635567,
+        "maxDrawdownUSDT": 0.5863259852518667
+      },
+      "score": 5.7003080936452655,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 7160165.05091,
+      "holdoutBase": {
+        "trades": 44,
+        "wins": 17,
+        "winRate": 0.38636363636363635,
+        "netPnlUSDT": 1.4529053484763739,
+        "expectancyUSDT": 0.03302057610173577,
+        "profitFactor": 1.370277295682904,
+        "maxDrawdownUSDT": 1.7254732706802312
+      },
+      "holdoutStress2x": {
+        "trades": 44,
+        "wins": 17,
+        "winRate": 0.38636363636363635,
+        "netPnlUSDT": 0.9669665042837046,
+        "expectancyUSDT": 0.021976511460993286,
+        "profitFactor": 1.229291115896833,
+        "maxDrawdownUSDT": 1.9439662904293002
+      },
+      "liveEligible": true,
+      "paperCandidate": true,
+      "discoveryPass": true
+    },
     {
       "family": "MEAN_REVERSION",
       "params": {
@@ -519,82 +610,35 @@
       "symbol": "BTTCUSDT",
       "candidateId": "VBT-BTTCUSDT-MEAN_REVERSION-021",
       "validation": {
-        "trades": 68,
-        "wins": 65,
-        "winRate": 0.9558823529411765,
-        "netPnlUSDT": 8.737401559044681,
-        "expectancyUSDT": 0.1284911993977159,
-        "profitFactor": 19.251701188411932,
+        "trades": 71,
+        "wins": 68,
+        "winRate": 0.9577464788732394,
+        "netPnlUSDT": 9.16640155904468,
+        "expectancyUSDT": 0.12910424731048845,
+        "profitFactor": 20.14784631312848,
         "maxDrawdownUSDT": 0.1636249999999999
       },
-      "score": 13.942379225908635,
+      "score": 14.026901142419536,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 272612.9758813,
+      "quoteVolume24h": 624026.27371154,
       "holdoutBase": {
-        "trades": 45,
+        "trades": 46,
         "wins": 37,
-        "winRate": 0.8222222222222222,
-        "netPnlUSDT": 4.603491082441045,
-        "expectancyUSDT": 0.10229980183202322,
-        "profitFactor": 6.325256942097576,
+        "winRate": 0.8043478260869565,
+        "netPnlUSDT": 4.617108017924917,
+        "expectancyUSDT": 0.10037191343315036,
+        "profitFactor": 6.273900280289079,
         "maxDrawdownUSDT": 0.351588655462185
       },
       "holdoutStress2x": {
-        "trades": 45,
+        "trades": 46,
         "wins": 37,
-        "winRate": 0.8222222222222222,
-        "netPnlUSDT": 4.103387487763928,
-        "expectancyUSDT": 0.09118638861697617,
-        "profitFactor": 5.31170123368416,
+        "winRate": 0.8043478260869565,
+        "netPnlUSDT": 4.105979781670738,
+        "expectancyUSDT": 0.0892604300363204,
+        "profitFactor": 5.216942662696617,
         "maxDrawdownUSDT": 0.38426974789915924
-      },
-      "liveEligible": false,
-      "paperCandidate": true,
-      "discoveryPass": false
-    },
-    {
-      "family": "TREND_BREAKOUT",
-      "params": {
-        "fast": 30,
-        "slow": 60,
-        "lookback": 40,
-        "relvol": 1.0,
-        "sl": 0.015,
-        "tp": 0.04
-      },
-      "symbol": "GNSUSDT",
-      "candidateId": "VBT-GNSUSDT-TREND_BREAKOUT-013",
-      "validation": {
-        "trades": 6,
-        "wins": 2,
-        "winRate": 0.3333333333333333,
-        "netPnlUSDT": 1.8122442932534728,
-        "expectancyUSDT": 0.3020407155422455,
-        "profitFactor": 4.657087046173827,
-        "maxDrawdownUSDT": 0.20871070516516993
-      },
-      "score": 19.62857987488201,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 114228.00165,
-      "holdoutBase": {
-        "trades": 8,
-        "wins": 3,
-        "winRate": 0.375,
-        "netPnlUSDT": 0.6838899232477493,
-        "expectancyUSDT": 0.08548624040596867,
-        "profitFactor": 2.577383032726552,
-        "maxDrawdownUSDT": 0.24265557317532827
-      },
-      "holdoutStress2x": {
-        "trades": 8,
-        "wins": 3,
-        "winRate": 0.375,
-        "netPnlUSDT": 0.5951172606619157,
-        "expectancyUSDT": 0.07438965758273947,
-        "profitFactor": 2.2190507012229936,
-        "maxDrawdownUSDT": 0.2754457077367143
       },
       "liveEligible": false,
       "paperCandidate": true,
@@ -603,44 +647,44 @@
     {
       "family": "VOLUME_ANOMALY",
       "params": {
-        "shock": 0.012,
+        "shock": 0.02,
         "relvol": 2.0,
-        "mode": "CONTINUATION",
+        "mode": "REVERSAL",
         "sl": 0.018,
         "tp": 0.035
       },
-      "symbol": "MMTUSDT",
-      "candidateId": "VBT-MMTUSDT-VOLUME_ANOMALY-059",
+      "symbol": "BARDUSDT",
+      "candidateId": "VBT-BARDUSDT-VOLUME_ANOMALY-064",
       "validation": {
-        "trades": 22,
+        "trades": 10,
         "wins": 7,
-        "winRate": 0.3181818181818182,
-        "netPnlUSDT": -0.22973020012607398,
-        "expectancyUSDT": -0.010442281823912453,
-        "profitFactor": 0.7296584717467129,
-        "maxDrawdownUSDT": 0.48582107633828964
+        "winRate": 0.7,
+        "netPnlUSDT": 0.27233768767322336,
+        "expectancyUSDT": 0.027233768767322336,
+        "profitFactor": 2.005378153632509,
+        "maxDrawdownUSDT": 0.1436975889400994
       },
-      "score": 1.6764175296918828,
+      "score": 6.252501978645131,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 48140329.49924,
+      "quoteVolume24h": 6164332.25364,
       "holdoutBase": {
-        "trades": 36,
-        "wins": 12,
-        "winRate": 0.3333333333333333,
-        "netPnlUSDT": 2.5586947168854692,
-        "expectancyUSDT": 0.07107485324681859,
-        "profitFactor": 1.807626565136982,
-        "maxDrawdownUSDT": 1.0968492451730008
+        "trades": 11,
+        "wins": 6,
+        "winRate": 0.5454545454545454,
+        "netPnlUSDT": 1.0523125362449086,
+        "expectancyUSDT": 0.09566477602226442,
+        "profitFactor": 2.471289609186689,
+        "maxDrawdownUSDT": 0.39848479291490696
       },
       "holdoutStress2x": {
-        "trades": 36,
-        "wins": 12,
-        "winRate": 0.3333333333333333,
-        "netPnlUSDT": 2.1597370645162153,
-        "expectancyUSDT": 0.05999269623656153,
-        "profitFactor": 1.6297970932124863,
-        "maxDrawdownUSDT": 1.1287843310136683
+        "trades": 11,
+        "wins": 6,
+        "winRate": 0.5454545454545454,
+        "netPnlUSDT": 0.9301380492216406,
+        "expectancyUSDT": 0.0845580044746946,
+        "profitFactor": 2.2086456436488797,
+        "maxDrawdownUSDT": 0.46415197530438146
       },
       "liveEligible": true,
       "paperCandidate": true,
@@ -655,130 +699,131 @@
         "sl": 0.018,
         "tp": 0.035
       },
-      "symbol": "CITYUSDT",
-      "candidateId": "VBT-CITYUSDT-VOLUME_ANOMALY-062",
+      "symbol": "GENIUSUSDT",
+      "candidateId": "VBT-GENIUSUSDT-VOLUME_ANOMALY-062",
       "validation": {
+        "trades": 9,
+        "wins": 8,
+        "winRate": 0.8888888888888888,
+        "netPnlUSDT": 1.4126653399102826,
+        "expectancyUSDT": 0.15696281554558697,
+        "profitFactor": 12.410351765909631,
+        "maxDrawdownUSDT": 0.12380559065066343
+      },
+      "score": 13.915180665095747,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 231646.0841,
+      "holdoutBase": {
         "trades": 7,
-        "wins": 6,
-        "winRate": 0.8571428571428571,
-        "netPnlUSDT": 0.6520781477124038,
-        "expectancyUSDT": 0.09315402110177197,
-        "profitFactor": 60.27983161021852,
-        "maxDrawdownUSDT": 0.01100000000000001
-      },
-      "score": 11.36231084407088,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 131937.95497,
-      "holdoutBase": {
-        "trades": 11,
-        "wins": 8,
-        "winRate": 0.7272727272727273,
-        "netPnlUSDT": 0.6402633507976377,
-        "expectancyUSDT": 0.05820575916342161,
-        "profitFactor": 3.299886532693379,
-        "maxDrawdownUSDT": 0.24400825278810326
+        "wins": 5,
+        "winRate": 0.7142857142857143,
+        "netPnlUSDT": 0.46776966669621156,
+        "expectancyUSDT": 0.0668242380994588,
+        "profitFactor": 3.294758736281542,
+        "maxDrawdownUSDT": 0.19284263465282273
       },
       "holdoutStress2x": {
-        "trades": 11,
-        "wins": 8,
-        "winRate": 0.7272727272727273,
-        "netPnlUSDT": 0.518501325421464,
-        "expectancyUSDT": 0.047136484129224,
-        "profitFactor": 2.66643808047466,
-        "maxDrawdownUSDT": 0.26578602230483184
+        "trades": 7,
+        "wins": 5,
+        "winRate": 0.7142857142857143,
+        "netPnlUSDT": 0.39022435171453373,
+        "expectancyUSDT": 0.05574633595921911,
+        "profitFactor": 2.729253287606355,
+        "maxDrawdownUSDT": 0.2036606099935106
       },
       "liveEligible": false,
       "paperCandidate": true,
       "discoveryPass": false
     },
     {
-      "family": "MEAN_REVERSION",
+      "family": "VOLUME_ANOMALY",
       "params": {
-        "bb": 2.0,
-        "rsi_in": 28,
-        "rsi_out": 55,
-        "sl": 0.02,
-        "tp": 0.025
-      },
-      "symbol": "METISUSDT",
-      "candidateId": "VBT-METISUSDT-MEAN_REVERSION-028",
-      "validation": {
-        "trades": 10,
-        "wins": 10,
-        "winRate": 1.0,
-        "netPnlUSDT": 0.9645180498673858,
-        "expectancyUSDT": 0.09645180498673858,
-        "profitFactor": 999.0,
-        "maxDrawdownUSDT": 0.0
-      },
-      "score": 11.558072199469542,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 242683.50921,
-      "holdoutBase": {
-        "trades": 20,
-        "wins": 17,
-        "winRate": 0.85,
-        "netPnlUSDT": 1.0375746907380035,
-        "expectancyUSDT": 0.05187873453690017,
-        "profitFactor": 4.367477647817779,
-        "maxDrawdownUSDT": 0.13963377926421452
-      },
-      "holdoutStress2x": {
-        "trades": 20,
-        "wins": 16,
-        "winRate": 0.8,
-        "netPnlUSDT": 0.8163158572137411,
-        "expectancyUSDT": 0.04081579286068705,
-        "profitFactor": 3.3621625453340562,
-        "maxDrawdownUSDT": 0.15524401043310096
-      },
-      "liveEligible": false,
-      "paperCandidate": true,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLATILITY_MOMENTUM",
-      "params": {
-        "lookback": 20,
-        "relvol": 1.4,
-        "rsi_min": 52,
+        "shock": 0.012,
+        "relvol": 2.0,
+        "mode": "REVERSAL",
         "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "GPSUSDT",
+      "candidateId": "VBT-GPSUSDT-VOLUME_ANOMALY-060",
+      "validation": {
+        "trades": 18,
+        "wins": 13,
+        "winRate": 0.7222222222222222,
+        "netPnlUSDT": 0.3377747372698166,
+        "expectancyUSDT": 0.01876526318165648,
+        "profitFactor": 1.3773368233924819,
+        "maxDrawdownUSDT": 0.7798944897028715
+      },
+      "score": 4.280989514351459,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 277440.053078,
+      "holdoutBase": {
+        "trades": 14,
+        "wins": 12,
+        "winRate": 0.8571428571428571,
+        "netPnlUSDT": 0.674488885330709,
+        "expectancyUSDT": 0.048177777523622074,
+        "profitFactor": 2.976555540605365,
+        "maxDrawdownUSDT": 0.29440774802860714
+      },
+      "holdoutStress2x": {
+        "trades": 14,
+        "wins": 12,
+        "winRate": 0.8571428571428571,
+        "netPnlUSDT": 0.5196595671271751,
+        "expectancyUSDT": 0.03711854050908393,
+        "profitFactor": 2.431864792802716,
+        "maxDrawdownUSDT": 0.3271460786111611
+      },
+      "liveEligible": false,
+      "paperCandidate": true,
+      "discoveryPass": false
+    },
+    {
+      "family": "TREND_BREAKOUT",
+      "params": {
+        "fast": 20,
+        "slow": 60,
+        "lookback": 40,
+        "relvol": 1.3,
+        "sl": 0.015,
         "tp": 0.04
       },
-      "symbol": "CYBERUSDT",
-      "candidateId": "VBT-CYBERUSDT-VOLATILITY_MOMENTUM-041",
+      "symbol": "BLURUSDT",
+      "candidateId": "VBT-BLURUSDT-TREND_BREAKOUT-007",
       "validation": {
-        "trades": 25,
-        "wins": 9,
-        "winRate": 0.36,
-        "netPnlUSDT": 0.10604315928376483,
-        "expectancyUSDT": 0.004241726371350593,
-        "profitFactor": 1.0832899575181905,
-        "maxDrawdownUSDT": 0.4572328049829573
+        "trades": 3,
+        "wins": 1,
+        "winRate": 0.3333333333333333,
+        "netPnlUSDT": 0.2497927401884224,
+        "expectancyUSDT": 0.08326424672947413,
+        "profitFactor": 2.28742099784175,
+        "maxDrawdownUSDT": 0.19402568437766538
       },
-      "score": 3.217862466905465,
+      "score": 9.041213374251157,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 4210790.11023,
+      "quoteVolume24h": 4816638.079474,
       "holdoutBase": {
-        "trades": 24,
-        "wins": 6,
-        "winRate": 0.25,
-        "netPnlUSDT": 1.1576259636588366,
-        "expectancyUSDT": 0.048234415152451526,
-        "profitFactor": 1.8373163085843087,
-        "maxDrawdownUSDT": 1.0320686892329562
+        "trades": 14,
+        "wins": 3,
+        "winRate": 0.21428571428571427,
+        "netPnlUSDT": 0.6615987210153467,
+        "expectancyUSDT": 0.047257051501096194,
+        "profitFactor": 1.6901709759994687,
+        "maxDrawdownUSDT": 0.5893857892413541
       },
       "holdoutStress2x": {
-        "trades": 24,
-        "wins": 5,
-        "winRate": 0.20833333333333334,
-        "netPnlUSDT": 0.892202914646165,
-        "expectancyUSDT": 0.037175121443590205,
-        "profitFactor": 1.5640843072221613,
-        "maxDrawdownUSDT": 1.1521567085630535
+        "trades": 14,
+        "wins": 3,
+        "winRate": 0.21428571428571427,
+        "netPnlUSDT": 0.5067823058791954,
+        "expectancyUSDT": 0.03619873613422824,
+        "profitFactor": 1.4697810563670637,
+        "maxDrawdownUSDT": 0.6438508685314028
       },
       "liveEligible": false,
       "paperCandidate": true,
@@ -807,7 +852,7 @@
       "score": 4.0294759732467185,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 3148950.98439,
+      "quoteVolume24h": 3347608.08083,
       "holdoutBase": {
         "trades": 16,
         "wins": 11,
@@ -833,44 +878,136 @@
     {
       "family": "VOLUME_ANOMALY",
       "params": {
+        "shock": 0.012,
+        "relvol": 2.0,
+        "mode": "REVERSAL",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "SCUSDT",
+      "candidateId": "VBT-SCUSDT-VOLUME_ANOMALY-060",
+      "validation": {
+        "trades": 25,
+        "wins": 12,
+        "winRate": 0.48,
+        "netPnlUSDT": -0.27700952512865634,
+        "expectancyUSDT": -0.011080381005146253,
+        "profitFactor": 0.8412474479139157,
+        "maxDrawdownUSDT": 1.0232657065170023
+      },
+      "score": 1.8017603822979882,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 603578.034892,
+      "holdoutBase": {
+        "trades": 18,
+        "wins": 12,
+        "winRate": 0.6666666666666666,
+        "netPnlUSDT": 0.5520936685274361,
+        "expectancyUSDT": 0.030671870473746452,
+        "profitFactor": 1.602390304703907,
+        "maxDrawdownUSDT": 0.38960218564845206
+      },
+      "holdoutStress2x": {
+        "trades": 18,
+        "wins": 10,
+        "winRate": 0.5555555555555556,
+        "netPnlUSDT": 0.35334282401439565,
+        "expectancyUSDT": 0.01963015688968865,
+        "profitFactor": 1.356475446824916,
+        "maxDrawdownUSDT": 0.41123421549264777
+      },
+      "liveEligible": false,
+      "paperCandidate": true,
+      "discoveryPass": false
+    },
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
         "shock": 0.02,
+        "relvol": 1.6,
+        "mode": "CONTINUATION",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "HOTUSDT",
+      "candidateId": "VBT-HOTUSDT-VOLUME_ANOMALY-061",
+      "validation": {
+        "trades": 3,
+        "wins": 2,
+        "winRate": 0.6666666666666666,
+        "netPnlUSDT": 0.1616615511363637,
+        "expectancyUSDT": 0.053887183712121235,
+        "profitFactor": 2.649874188945551,
+        "maxDrawdownUSDT": 0.09798416886543515
+      },
+      "score": 8.805878361745824,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 2674026.562874,
+      "holdoutBase": {
+        "trades": 49,
+        "wins": 18,
+        "winRate": 0.3673469387755102,
+        "netPnlUSDT": 1.449256444333415,
+        "expectancyUSDT": 0.02957666212925337,
+        "profitFactor": 1.3133119431200526,
+        "maxDrawdownUSDT": 1.1564791755367454
+      },
+      "holdoutStress2x": {
+        "trades": 49,
+        "wins": 17,
+        "winRate": 0.3469387755102041,
+        "netPnlUSDT": 0.9082661976423905,
+        "expectancyUSDT": 0.018536044849844703,
+        "profitFactor": 1.1828017605455725,
+        "maxDrawdownUSDT": 1.5517179351207924
+      },
+      "liveEligible": false,
+      "paperCandidate": true,
+      "discoveryPass": false
+    },
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
+        "shock": 0.012,
         "relvol": 1.6,
         "mode": "REVERSAL",
         "sl": 0.018,
         "tp": 0.035
       },
-      "symbol": "\u5e01\u5b89\u4eba\u751fUSDT",
-      "candidateId": "VBT-\u5e01\u5b89\u4eba\u751fUSDT-VOLUME_ANOMALY-062",
+      "symbol": "TKOUSDT",
+      "candidateId": "VBT-TKOUSDT-VOLUME_ANOMALY-058",
       "validation": {
-        "trades": 8,
-        "wins": 5,
-        "winRate": 0.625,
-        "netPnlUSDT": 0.5277449308750525,
-        "expectancyUSDT": 0.06596811635938156,
-        "profitFactor": 2.942021157917804,
-        "maxDrawdownUSDT": 0.14321236709569146
+        "trades": 16,
+        "wins": 13,
+        "winRate": 0.8125,
+        "netPnlUSDT": 0.5679241112406175,
+        "expectancyUSDT": 0.03549525695253859,
+        "profitFactor": 2.6722811472286967,
+        "maxDrawdownUSDT": 0.18302154933515136
       },
-      "score": 10.103653220686281,
+      "score": 8.356455603905982,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 1163771.1191,
+      "quoteVolume24h": 307566.30155,
       "holdoutBase": {
-        "trades": 9,
-        "wins": 6,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.31205316568277264,
-        "expectancyUSDT": 0.03467257396475251,
-        "profitFactor": 2.17437047387756,
-        "maxDrawdownUSDT": 0.14591908352668248
+        "trades": 18,
+        "wins": 11,
+        "winRate": 0.6111111111111112,
+        "netPnlUSDT": 0.5020546847971282,
+        "expectancyUSDT": 0.02789192693317379,
+        "profitFactor": 1.6915754929259554,
+        "maxDrawdownUSDT": 0.26530909240652256
       },
       "holdoutStress2x": {
-        "trades": 9,
-        "wins": 5,
-        "winRate": 0.5555555555555556,
-        "netPnlUSDT": 0.2126417010524596,
-        "expectancyUSDT": 0.023626855672495513,
-        "profitFactor": 1.7070177012219192,
-        "maxDrawdownUSDT": 0.15678402938901814
+        "trades": 18,
+        "wins": 11,
+        "winRate": 0.6111111111111112,
+        "netPnlUSDT": 0.3033539293568909,
+        "expectancyUSDT": 0.016852996075382827,
+        "profitFactor": 1.3781014560391354,
+        "maxDrawdownUSDT": 0.287065539761471
       },
       "liveEligible": false,
       "paperCandidate": true,
@@ -899,116 +1036,24 @@
       "score": 2.7237258141092306,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 397454.55756,
-      "holdoutBase": {
-        "trades": 15,
-        "wins": 10,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.5083811489123362,
-        "expectancyUSDT": 0.033892076594155746,
-        "profitFactor": 2.068163015431486,
-        "maxDrawdownUSDT": 0.2689451690178331
-      },
-      "holdoutStress2x": {
-        "trades": 15,
-        "wins": 10,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.3427070937082197,
-        "expectancyUSDT": 0.02284713958054798,
-        "profitFactor": 1.6459854267547103,
-        "maxDrawdownUSDT": 0.3017089876674649
-      },
-      "liveEligible": false,
-      "paperCandidate": true,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLUME_ANOMALY",
-      "params": {
-        "shock": 0.012,
-        "relvol": 2.0,
-        "mode": "REVERSAL",
-        "sl": 0.018,
-        "tp": 0.035
-      },
-      "symbol": "TURTLEUSDT",
-      "candidateId": "VBT-TURTLEUSDT-VOLUME_ANOMALY-060",
-      "validation": {
-        "trades": 15,
-        "wins": 10,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.24185782286765223,
-        "expectancyUSDT": 0.01612385485784348,
-        "profitFactor": 1.4980060355045781,
-        "maxDrawdownUSDT": 0.22181820908130853
-      },
-      "score": 4.612332909896726,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 149223.98734,
-      "holdoutBase": {
-        "trades": 19,
-        "wins": 14,
-        "winRate": 0.7368421052631579,
-        "netPnlUSDT": 0.5947362281155733,
-        "expectancyUSDT": 0.031301906742924906,
-        "profitFactor": 2.9573349617099614,
-        "maxDrawdownUSDT": 0.1546258620689664
-      },
-      "holdoutStress2x": {
-        "trades": 19,
-        "wins": 11,
-        "winRate": 0.5789473684210527,
-        "netPnlUSDT": 0.3849316873466888,
-        "expectancyUSDT": 0.02025956249193099,
-        "profitFactor": 2.021565657540917,
-        "maxDrawdownUSDT": 0.17649310344827676
-      },
-      "liveEligible": false,
-      "paperCandidate": true,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLUME_ANOMALY",
-      "params": {
-        "shock": 0.012,
-        "relvol": 1.6,
-        "mode": "REVERSAL",
-        "sl": 0.018,
-        "tp": 0.035
-      },
-      "symbol": "SANTOSUSDT",
-      "candidateId": "VBT-SANTOSUSDT-VOLUME_ANOMALY-058",
-      "validation": {
-        "trades": 11,
-        "wins": 9,
-        "winRate": 0.8181818181818182,
-        "netPnlUSDT": 0.422972712602408,
-        "expectancyUSDT": 0.03845206478203709,
-        "profitFactor": 4.209977338253556,
-        "maxDrawdownUSDT": 0.13176813043562907
-      },
-      "score": 9.211963745629014,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 68533.70317,
+      "quoteVolume24h": 451049.95364,
       "holdoutBase": {
         "trades": 17,
-        "wins": 13,
-        "winRate": 0.7647058823529411,
-        "netPnlUSDT": 0.5083292928277003,
-        "expectancyUSDT": 0.029901723107511786,
-        "profitFactor": 2.183366601233413,
-        "maxDrawdownUSDT": 0.15700033415157622
+        "wins": 10,
+        "winRate": 0.5882352941176471,
+        "netPnlUSDT": 0.29999022275965215,
+        "expectancyUSDT": 0.017646483691744243,
+        "profitFactor": 1.4147603456266233,
+        "maxDrawdownUSDT": 0.29137615149108514
       },
       "holdoutStress2x": {
         "trades": 17,
         "wins": 10,
         "winRate": 0.5882352941176471,
-        "netPnlUSDT": 0.32063326750955445,
-        "expectancyUSDT": 0.018860780441738497,
-        "profitFactor": 1.6445359818466867,
-        "maxDrawdownUSDT": 0.189876209692966
+        "netPnlUSDT": 0.11250274505919193,
+        "expectancyUSDT": 0.006617808532893643,
+        "profitFactor": 1.1406919612452053,
+        "maxDrawdownUSDT": 0.3351285277158188
       },
       "liveEligible": false,
       "paperCandidate": true,
@@ -1017,92 +1062,46 @@
     {
       "family": "MEAN_REVERSION",
       "params": {
-        "bb": 2.0,
+        "bb": 1.6,
         "rsi_in": 28,
-        "rsi_out": 55,
-        "sl": 0.02,
+        "rsi_out": 50,
+        "sl": 0.015,
         "tp": 0.025
       },
-      "symbol": "FLUXUSDT",
-      "candidateId": "VBT-FLUXUSDT-MEAN_REVERSION-028",
-      "validation": {
-        "trades": 19,
-        "wins": 10,
-        "winRate": 0.5263157894736842,
-        "netPnlUSDT": -0.09345376767172359,
-        "expectancyUSDT": -0.004918619351143347,
-        "profitFactor": 0.8926395320117321,
-        "maxDrawdownUSDT": 0.2794446405308998
-      },
-      "score": 2.3170484317977813,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 140831.919782,
-      "holdoutBase": {
-        "trades": 19,
-        "wins": 12,
-        "winRate": 0.631578947368421,
-        "netPnlUSDT": 0.3122070421371284,
-        "expectancyUSDT": 0.016431949586164653,
-        "profitFactor": 1.4960764435966412,
-        "maxDrawdownUSDT": 0.305693261455525
-      },
-      "holdoutStress2x": {
-        "trades": 19,
-        "wins": 11,
-        "winRate": 0.5789473684210527,
-        "netPnlUSDT": 0.10268531336622037,
-        "expectancyUSDT": 0.005404490177169493,
-        "profitFactor": 1.1454607835248916,
-        "maxDrawdownUSDT": 0.3275407583204169
-      },
-      "liveEligible": false,
-      "paperCandidate": true,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLUME_ANOMALY",
-      "params": {
-        "shock": 0.02,
-        "relvol": 1.6,
-        "mode": "REVERSAL",
-        "sl": 0.018,
-        "tp": 0.035
-      },
-      "symbol": "LUNCUSDT",
-      "candidateId": "VBT-LUNCUSDT-VOLUME_ANOMALY-062",
+      "symbol": "XNOUSDT",
+      "candidateId": "VBT-XNOUSDT-MEAN_REVERSION-017",
       "validation": {
         "trades": 7,
-        "wins": 6,
-        "winRate": 0.8571428571428571,
-        "netPnlUSDT": 0.4302070502046265,
-        "expectancyUSDT": 0.06145815002923236,
-        "profitFactor": 4.312041426492072,
-        "maxDrawdownUSDT": 0.1298918083462131
+        "wins": 5,
+        "winRate": 0.7142857142857143,
+        "netPnlUSDT": 0.22481438641078436,
+        "expectancyUSDT": 0.03211634091582634,
+        "profitFactor": 2.667882249308207,
+        "maxDrawdownUSDT": 0.12379032258064462
       },
-      "score": 10.052863868248119,
+      "score": 8.051032647000346,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 6654584.50906634,
+      "quoteVolume24h": 209656.33947,
       "holdoutBase": {
-        "trades": 8,
+        "trades": 10,
         "wins": 6,
-        "winRate": 0.75,
-        "netPnlUSDT": 0.106403420938527,
-        "expectancyUSDT": 0.013300427617315876,
-        "profitFactor": 1.2180548844693488,
-        "maxDrawdownUSDT": 0.3460148941121714
+        "winRate": 0.6,
+        "netPnlUSDT": 0.11539380304539637,
+        "expectancyUSDT": 0.011539380304539637,
+        "profitFactor": 1.2384361082293822,
+        "maxDrawdownUSDT": 0.4780027743290368
       },
       "holdoutStress2x": {
-        "trades": 8,
-        "wins": 6,
-        "winRate": 0.75,
-        "netPnlUSDT": 0.01820882291956949,
-        "expectancyUSDT": 0.002276102864946186,
-        "profitFactor": 1.035738626091573,
-        "maxDrawdownUSDT": 0.3566795438678149
+        "trades": 10,
+        "wins": 5,
+        "winRate": 0.5,
+        "netPnlUSDT": 0.005168183622928507,
+        "expectancyUSDT": 0.0005168183622928507,
+        "profitFactor": 1.0097040631430594,
+        "maxDrawdownUSDT": 0.5325793481285073
       },
-      "liveEligible": true,
+      "liveEligible": false,
       "paperCandidate": true,
       "discoveryPass": false
     },
@@ -1129,254 +1128,24 @@
       "score": 4.240182936508669,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 555857.856443,
+      "quoteVolume24h": 1029782.190046,
       "holdoutBase": {
-        "trades": 3,
-        "wins": 3,
-        "winRate": 1.0,
-        "netPnlUSDT": 0.2404288136114115,
-        "expectancyUSDT": 0.0801429378704705,
-        "profitFactor": 999.0,
-        "maxDrawdownUSDT": 0.0
-      },
-      "holdoutStress2x": {
-        "trades": 3,
-        "wins": 3,
-        "winRate": 1.0,
-        "netPnlUSDT": 0.20715511109528398,
-        "expectancyUSDT": 0.06905170369842799,
-        "profitFactor": 999.0,
-        "maxDrawdownUSDT": 0.0
-      },
-      "liveEligible": false,
-      "paperCandidate": false,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLUME_ANOMALY",
-      "params": {
-        "shock": 0.02,
-        "relvol": 2.0,
-        "mode": "CONTINUATION",
-        "sl": 0.018,
-        "tp": 0.035
-      },
-      "symbol": "ESPUSDT",
-      "candidateId": "VBT-ESPUSDT-VOLUME_ANOMALY-063",
-      "validation": {
-        "trades": 17,
-        "wins": 8,
-        "winRate": 0.47058823529411764,
-        "netPnlUSDT": 0.5480807395351386,
-        "expectancyUSDT": 0.032240043502066974,
-        "profitFactor": 1.634343666619149,
-        "maxDrawdownUSDT": 0.46969137627330737
-      },
-      "score": 5.551068924934894,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 272564.27347,
-      "holdoutBase": {
-        "trades": 7,
-        "wins": 2,
-        "winRate": 0.2857142857142857,
-        "netPnlUSDT": 0.07061582659465332,
-        "expectancyUSDT": 0.010087975227807617,
-        "profitFactor": 1.1926857959678032,
-        "maxDrawdownUSDT": 0.16868756081377972
-      },
-      "holdoutStress2x": {
-        "trades": 7,
-        "wins": 2,
-        "winRate": 0.2857142857142857,
-        "netPnlUSDT": -0.006531936995531493,
-        "expectancyUSDT": -0.000933133856504499,
-        "profitFactor": 0.9844909709612628,
-        "maxDrawdownUSDT": 0.2015517374295817
-      },
-      "liveEligible": false,
-      "paperCandidate": false,
-      "discoveryPass": false
-    },
-    {
-      "family": "MEAN_REVERSION",
-      "params": {
-        "bb": 2.0,
-        "rsi_in": 28,
-        "rsi_out": 50,
-        "sl": 0.02,
-        "tp": 0.025
-      },
-      "symbol": "KAIAUSDT",
-      "candidateId": "VBT-KAIAUSDT-MEAN_REVERSION-026",
-      "validation": {
-        "trades": 14,
-        "wins": 10,
-        "winRate": 0.7142857142857143,
-        "netPnlUSDT": 0.4784507233905147,
-        "expectancyUSDT": 0.03417505167075105,
-        "profitFactor": 1.8826606553692564,
-        "maxDrawdownUSDT": 0.2893361313868611
-      },
-      "score": 6.252386059267782,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 722143.88898,
-      "holdoutBase": {
-        "trades": 18,
-        "wins": 12,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.17465105164172995,
-        "expectancyUSDT": 0.00970283620231833,
-        "profitFactor": 1.292605798253781,
-        "maxDrawdownUSDT": 0.4141513203520949
-      },
-      "holdoutStress2x": {
-        "trades": 18,
-        "wins": 12,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": -0.02372197243398745,
-        "expectancyUSDT": -0.0013178873574437474,
-        "profitFactor": 0.9641851566317251,
-        "maxDrawdownUSDT": 0.4804497391028884
-      },
-      "liveEligible": false,
-      "paperCandidate": false,
-      "discoveryPass": false
-    },
-    {
-      "family": "MEAN_REVERSION",
-      "params": {
-        "bb": 1.6,
-        "rsi_in": 28,
-        "rsi_out": 50,
-        "sl": 0.015,
-        "tp": 0.025
-      },
-      "symbol": "HEIUSDT",
-      "candidateId": "VBT-HEIUSDT-MEAN_REVERSION-017",
-      "validation": {
-        "trades": 20,
-        "wins": 14,
-        "winRate": 0.7,
-        "netPnlUSDT": 0.03157694706940459,
-        "expectancyUSDT": 0.0015788473534702294,
-        "profitFactor": 1.034901263552207,
-        "maxDrawdownUSDT": 0.5425798194882576
-      },
-      "score": 2.8605041161984364,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 1050027.82283,
-      "holdoutBase": {
-        "trades": 23,
-        "wins": 16,
-        "winRate": 0.6956521739130435,
-        "netPnlUSDT": 0.0992957823644568,
-        "expectancyUSDT": 0.004317207928889426,
-        "profitFactor": 1.0923050571401838,
-        "maxDrawdownUSDT": 0.49235454043726573
-      },
-      "holdoutStress2x": {
-        "trades": 23,
-        "wins": 14,
-        "winRate": 0.6086956521739131,
-        "netPnlUSDT": -0.1540568660663383,
-        "expectancyUSDT": -0.006698124611579926,
-        "profitFactor": 0.8679371111258947,
-        "maxDrawdownUSDT": 0.5799497811375286
-      },
-      "liveEligible": false,
-      "paperCandidate": false,
-      "discoveryPass": false
-    },
-    {
-      "family": "VOLUME_ANOMALY",
-      "params": {
-        "shock": 0.02,
-        "relvol": 2.0,
-        "mode": "REVERSAL",
-        "sl": 0.018,
-        "tp": 0.035
-      },
-      "symbol": "SUPERUSDT",
-      "candidateId": "VBT-SUPERUSDT-VOLUME_ANOMALY-064",
-      "validation": {
-        "trades": 10,
-        "wins": 6,
-        "winRate": 0.6,
-        "netPnlUSDT": 0.32778125305343914,
-        "expectancyUSDT": 0.032778125305343915,
-        "profitFactor": 2.1846149925003875,
-        "maxDrawdownUSDT": 0.22881502484119226
-      },
-      "score": 6.892577234770308,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 866421.7169,
-      "holdoutBase": {
-        "trades": 12,
-        "wins": 8,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": 0.024583124201319105,
-        "expectancyUSDT": 0.0020485936834432586,
-        "profitFactor": 1.0315922469632084,
-        "maxDrawdownUSDT": 0.7603546913221204
-      },
-      "holdoutStress2x": {
-        "trades": 12,
-        "wins": 8,
-        "winRate": 0.6666666666666666,
-        "netPnlUSDT": -0.10757361566274619,
-        "expectancyUSDT": -0.008964467971895516,
-        "profitFactor": 0.8690367405570147,
-        "maxDrawdownUSDT": 0.7850026208722442
-      },
-      "liveEligible": false,
-      "paperCandidate": false,
-      "discoveryPass": false
-    },
-    {
-      "family": "MEAN_REVERSION",
-      "params": {
-        "bb": 1.6,
-        "rsi_in": 28,
-        "rsi_out": 50,
-        "sl": 0.015,
-        "tp": 0.025
-      },
-      "symbol": "XNOUSDT",
-      "candidateId": "VBT-XNOUSDT-MEAN_REVERSION-017",
-      "validation": {
-        "trades": 7,
-        "wins": 5,
-        "winRate": 0.7142857142857143,
-        "netPnlUSDT": 0.22481438641078436,
-        "expectancyUSDT": 0.03211634091582634,
-        "profitFactor": 2.667882249308207,
-        "maxDrawdownUSDT": 0.12379032258064462
-      },
-      "score": 8.051032647000346,
-      "isNewListing": false,
-      "historyDays": 119.98958333333333,
-      "quoteVolume24h": 104523.89692,
-      "holdoutBase": {
-        "trades": 9,
-        "wins": 5,
-        "winRate": 0.5555555555555556,
-        "netPnlUSDT": -0.044715193494396094,
-        "expectancyUSDT": -0.004968354832710677,
-        "profitFactor": 0.9076058121480473,
-        "maxDrawdownUSDT": 0.4780027743290368
-      },
-      "holdoutStress2x": {
-        "trades": 9,
+        "trades": 4,
         "wins": 4,
-        "winRate": 0.4444444444444444,
-        "netPnlUSDT": -0.14376953264004733,
-        "expectancyUSDT": -0.015974392515560813,
-        "profitFactor": 0.7300504926725833,
-        "maxDrawdownUSDT": 0.5325793481285073
+        "winRate": 1.0,
+        "netPnlUSDT": 0.31762303512023854,
+        "expectancyUSDT": 0.07940575878005963,
+        "profitFactor": 999.0,
+        "maxDrawdownUSDT": 0.0
+      },
+      "holdoutStress2x": {
+        "trades": 4,
+        "wins": 4,
+        "winRate": 1.0,
+        "netPnlUSDT": 0.27326105010009816,
+        "expectancyUSDT": 0.06831526252502454,
+        "profitFactor": 999.0,
+        "maxDrawdownUSDT": 0.0
       },
       "liveEligible": false,
       "paperCandidate": false,
@@ -1386,43 +1155,320 @@
       "family": "VOLUME_ANOMALY",
       "params": {
         "shock": 0.02,
-        "relvol": 2.0,
+        "relvol": 1.6,
         "mode": "REVERSAL",
         "sl": 0.018,
         "tp": 0.035
       },
-      "symbol": "JASMYUSDT",
-      "candidateId": "VBT-JASMYUSDT-VOLUME_ANOMALY-064",
+      "symbol": "LUNCUSDT",
+      "candidateId": "VBT-LUNCUSDT-VOLUME_ANOMALY-062",
       "validation": {
         "trades": 7,
         "wins": 6,
         "winRate": 0.8571428571428571,
-        "netPnlUSDT": 0.34974163445794204,
-        "expectancyUSDT": 0.04996309063684886,
-        "profitFactor": 3.997867797216348,
-        "maxDrawdownUSDT": 0.11666346153846163
+        "netPnlUSDT": 0.4302070502046265,
+        "expectancyUSDT": 0.06145815002923236,
+        "profitFactor": 4.312041426492072,
+        "maxDrawdownUSDT": 0.1298918083462131
       },
-      "score": 9.597691413935493,
+      "score": 10.052863868248119,
       "isNewListing": false,
       "historyDays": 119.98958333333333,
-      "quoteVolume24h": 182758.703498,
+      "quoteVolume24h": 3991296.61633709,
       "holdoutBase": {
         "trades": 10,
-        "wins": 6,
-        "winRate": 0.6,
-        "netPnlUSDT": -0.05164243013636019,
-        "expectancyUSDT": -0.005164243013636019,
-        "profitFactor": 0.906844329491312,
-        "maxDrawdownUSDT": 0.419696587827572
+        "wins": 7,
+        "winRate": 0.7,
+        "netPnlUSDT": 0.09471017928829203,
+        "expectancyUSDT": 0.009471017928829203,
+        "profitFactor": 1.1470931096933938,
+        "maxDrawdownUSDT": 0.3460148941121714
       },
       "holdoutStress2x": {
         "trades": 10,
-        "wins": 6,
+        "wins": 7,
+        "winRate": 0.7,
+        "netPnlUSDT": -0.015494735806090704,
+        "expectancyUSDT": -0.0015494735806090704,
+        "profitFactor": 0.9770878635040958,
+        "maxDrawdownUSDT": 0.3566795438678149
+      },
+      "liveEligible": false,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
+        "shock": 0.02,
+        "relvol": 1.6,
+        "mode": "REVERSAL",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "AIUSDT",
+      "candidateId": "VBT-AIUSDT-VOLUME_ANOMALY-062",
+      "validation": {
+        "trades": 6,
+        "wins": 3,
+        "winRate": 0.5,
+        "netPnlUSDT": -0.02401201776054493,
+        "expectancyUSDT": -0.004002002960090821,
+        "profitFactor": 0.9389275803472874,
+        "maxDrawdownUSDT": 0.22262832327123144
+      },
+      "score": 2.2293189193196548,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 509575.87385,
+      "holdoutBase": {
+        "trades": 13,
+        "wins": 8,
+        "winRate": 0.6153846153846154,
+        "netPnlUSDT": 0.11765021217527016,
+        "expectancyUSDT": 0.009050016321174628,
+        "profitFactor": 1.2116041702527243,
+        "maxDrawdownUSDT": 0.4909682668448147
+      },
+      "holdoutStress2x": {
+        "trades": 13,
+        "wins": 8,
+        "winRate": 0.6153846153846154,
+        "netPnlUSDT": -0.02561069894802831,
+        "expectancyUSDT": -0.0019700537652329467,
+        "profitFactor": 0.9580489763904888,
+        "maxDrawdownUSDT": 0.5455318621732984
+      },
+      "liveEligible": false,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 34,
+        "rsi_out": 55,
+        "sl": 0.02,
+        "tp": 0.025
+      },
+      "symbol": "ZRXUSDT",
+      "candidateId": "VBT-ZRXUSDT-MEAN_REVERSION-024",
+      "validation": {
+        "trades": 36,
+        "wins": 23,
+        "winRate": 0.6388888888888888,
+        "netPnlUSDT": -0.1529523658989907,
+        "expectancyUSDT": -0.004248676830527519,
+        "profitFactor": 0.8683872984265658,
+        "maxDrawdownUSDT": 0.367751145335682
+      },
+      "score": 2.5923082719778248,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 302789.1444,
+      "holdoutBase": {
+        "trades": 40,
+        "wins": 26,
+        "winRate": 0.65,
+        "netPnlUSDT": 0.24670118297707957,
+        "expectancyUSDT": 0.006167529574426989,
+        "profitFactor": 1.1704710727959589,
+        "maxDrawdownUSDT": 0.58961913473502
+      },
+      "holdoutStress2x": {
+        "trades": 40,
+        "wins": 24,
         "winRate": 0.6,
-        "netPnlUSDT": -0.16170084612220972,
-        "expectancyUSDT": -0.016170084612220973,
-        "profitFactor": 0.7295321757818359,
-        "maxDrawdownUSDT": 0.45230950415607296
+        "netPnlUSDT": -0.19398620559446894,
+        "expectancyUSDT": -0.004849655139861723,
+        "profitFactor": 0.8798766192921909,
+        "maxDrawdownUSDT": 0.721161057523073
+      },
+      "liveEligible": false,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "TREND_BREAKOUT",
+      "params": {
+        "fast": 20,
+        "slow": 60,
+        "lookback": 40,
+        "relvol": 1.0,
+        "sl": 0.02,
+        "tp": 0.04
+      },
+      "symbol": "KERNELUSDT",
+      "candidateId": "VBT-KERNELUSDT-TREND_BREAKOUT-006",
+      "validation": {
+        "trades": 13,
+        "wins": 6,
+        "winRate": 0.46153846153846156,
+        "netPnlUSDT": 0.5643816317574084,
+        "expectancyUSDT": 0.0434139716736468,
+        "profitFactor": 2.3152034281233393,
+        "maxDrawdownUSDT": 0.22672754484724283
+      },
+      "score": 7.705212796557685,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 13976062.97712,
+      "holdoutBase": {
+        "trades": 12,
+        "wins": 3,
+        "winRate": 0.25,
+        "netPnlUSDT": -0.04758681389562719,
+        "expectancyUSDT": -0.003965567824635599,
+        "profitFactor": 0.9413276012578331,
+        "maxDrawdownUSDT": 0.5888025524931492
+      },
+      "holdoutStress2x": {
+        "trades": 12,
+        "wins": 3,
+        "winRate": 0.25,
+        "netPnlUSDT": -0.17967131157941535,
+        "expectancyUSDT": -0.014972609298284612,
+        "profitFactor": 0.8024171849498692,
+        "maxDrawdownUSDT": 0.6983232706588219
+      },
+      "liveEligible": true,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "MEAN_REVERSION",
+      "params": {
+        "bb": 1.6,
+        "rsi_in": 28,
+        "rsi_out": 50,
+        "sl": 0.015,
+        "tp": 0.025
+      },
+      "symbol": "ZILUSDT",
+      "candidateId": "VBT-ZILUSDT-MEAN_REVERSION-017",
+      "validation": {
+        "trades": 26,
+        "wins": 13,
+        "winRate": 0.5,
+        "netPnlUSDT": -0.8269095198759732,
+        "expectancyUSDT": -0.03180421230292205,
+        "profitFactor": 0.43564258958282837,
+        "maxDrawdownUSDT": 0.9152785891322235
+      },
+      "score": 0.01659047564391075,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 1179218.5264359,
+      "holdoutBase": {
+        "trades": 20,
+        "wins": 8,
+        "winRate": 0.4,
+        "netPnlUSDT": -0.3252669651316531,
+        "expectancyUSDT": -0.016263348256582655,
+        "profitFactor": 0.7488321871096845,
+        "maxDrawdownUSDT": 0.849459088116419
+      },
+      "holdoutStress2x": {
+        "trades": 20,
+        "wins": 8,
+        "winRate": 0.4,
+        "netPnlUSDT": -0.5451615927941835,
+        "expectancyUSDT": -0.027258079639709176,
+        "profitFactor": 0.6176596831074872,
+        "maxDrawdownUSDT": 0.9807409108510373
+      },
+      "liveEligible": false,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
+        "shock": 0.012,
+        "relvol": 1.6,
+        "mode": "REVERSAL",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "QIUSDT",
+      "candidateId": "VBT-QIUSDT-VOLUME_ANOMALY-058",
+      "validation": {
+        "trades": 27,
+        "wins": 20,
+        "winRate": 0.7407407407407407,
+        "netPnlUSDT": 1.21111702085976,
+        "expectancyUSDT": 0.044856185957768885,
+        "profitFactor": 2.1769852118947566,
+        "maxDrawdownUSDT": 0.4711566540379462
+      },
+      "score": 7.611805639134365,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 140182.477024,
+      "holdoutBase": {
+        "trades": 19,
+        "wins": 10,
+        "winRate": 0.5263157894736842,
+        "netPnlUSDT": -0.3736382352226448,
+        "expectancyUSDT": -0.01966517027487604,
+        "profitFactor": 0.7496029926758712,
+        "maxDrawdownUSDT": 0.9830098286935135
+      },
+      "holdoutStress2x": {
+        "trades": 19,
+        "wins": 10,
+        "winRate": 0.5263157894736842,
+        "netPnlUSDT": -0.582473432184384,
+        "expectancyUSDT": -0.03065649643075705,
+        "profitFactor": 0.6336158255557378,
+        "maxDrawdownUSDT": 1.0921359449811077
+      },
+      "liveEligible": false,
+      "paperCandidate": false,
+      "discoveryPass": false
+    },
+    {
+      "family": "VOLUME_ANOMALY",
+      "params": {
+        "shock": 0.02,
+        "relvol": 1.6,
+        "mode": "REVERSAL",
+        "sl": 0.018,
+        "tp": 0.035
+      },
+      "symbol": "ADXUSDT",
+      "candidateId": "VBT-ADXUSDT-VOLUME_ANOMALY-062",
+      "validation": {
+        "trades": 9,
+        "wins": 5,
+        "winRate": 0.5555555555555556,
+        "netPnlUSDT": 0.6464802691090434,
+        "expectancyUSDT": 0.07183114101211593,
+        "profitFactor": 4.902646322592359,
+        "maxDrawdownUSDT": 0.1154276315789468
+      },
+      "score": 10.512845969432005,
+      "isNewListing": false,
+      "historyDays": 119.98958333333333,
+      "quoteVolume24h": 373654.3486,
+      "holdoutBase": {
+        "trades": 14,
+        "wins": 8,
+        "winRate": 0.5714285714285714,
+        "netPnlUSDT": -0.2923003473431061,
+        "expectancyUSDT": -0.020878596238793293,
+        "profitFactor": 0.7310584926175062,
+        "maxDrawdownUSDT": 0.7140317658137665
+      },
+      "holdoutStress2x": {
+        "trades": 14,
+        "wins": 8,
+        "winRate": 0.5714285714285714,
+        "netPnlUSDT": -0.44616190855697685,
+        "expectancyUSDT": -0.031868707754069775,
+        "profitFactor": 0.6126504725138263,
+        "maxDrawdownUSDT": 0.8234271294115505
       },
       "liveEligible": false,
       "paperCandidate": false,
@@ -1430,5 +1476,5 @@
     }
   ],
   "dataFailures": {},
-  "generatedAt": "2026-11-20T09:02:13.937738+00:00"
+  "generatedAt": "2026-11-21T08:38:10.815586+00:00"
 }
