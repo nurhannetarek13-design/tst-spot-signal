@@ -9,13 +9,13 @@
   "candidates": [
     {
       "symbol": "NEARUSDT",
-      "price": 2.972,
-      "quoteVolume24h": 67913649.9497,
+      "price": 2.988,
+      "quoteVolume24h": 71848044.8489,
       "score": 40,
-      "oiChange2h": -0.0034961533594097816,
-      "takerBuySellRatio1h": 0.934775,
-      "fundingRate": -8.84e-06,
-      "basis": -0.0005421467025571447,
+      "oiChange2h": -0.0039554936695593845,
+      "takerBuySellRatio1h": 1.022075,
+      "fundingRate": 5.955e-05,
+      "basis": -0.0007669701208479207,
       "paperLongPressure": false
     }
   ],
@@ -25,5 +25,5 @@
     "UUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-23T01:55:04.134173+00:00"
+  "generatedAt": "2026-11-23T10:13:35.295314+00:00"
 }
