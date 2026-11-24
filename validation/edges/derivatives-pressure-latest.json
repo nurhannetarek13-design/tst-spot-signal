@@ -8,34 +8,55 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "ENAUSDT",
-      "price": 0.1025,
-      "quoteVolume24h": 37455966.021862,
+      "symbol": "NEARUSDT",
+      "price": 2.878,
+      "quoteVolume24h": 77107623.4652,
       "score": 90,
-      "oiChange2h": 0.022189962454115975,
-      "takerBuySellRatio1h": 1.09245,
-      "fundingRate": -6.18e-06,
-      "basis": -0.000597583538032076,
+      "oiChange2h": 0.015210820750126253,
+      "takerBuySellRatio1h": 1.340025,
+      "fundingRate": 7.388e-05,
+      "basis": -8.856845031268712e-06,
       "paperLongPressure": true
     },
     {
       "symbol": "SUIUSDT",
-      "price": 0.6758,
-      "quoteVolume24h": 39826342.13548,
-      "score": 60,
-      "oiChange2h": 0.01966423722140953,
-      "takerBuySellRatio1h": 0.8627,
-      "fundingRate": -1.72e-05,
-      "basis": -0.0005201586058358743,
+      "price": 0.653,
+      "quoteVolume24h": 20564668.45784,
+      "score": 90,
+      "oiChange2h": 0.012362881103899381,
+      "takerBuySellRatio1h": 1.203325,
+      "fundingRate": 1.028e-05,
+      "basis": -0.000420884650744191,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "ENAUSDT",
+      "price": 0.0987,
+      "quoteVolume24h": 22375307.072559,
+      "score": 80,
+      "oiChange2h": 0.01825732654380663,
+      "takerBuySellRatio1h": 1.0802,
+      "fundingRate": 2.794e-05,
+      "basis": -0.0003626420554806442,
+      "paperLongPressure": true
+    },
+    {
+      "symbol": "MMTUSDT",
+      "price": 0.2235,
+      "quoteVolume24h": 21226895.8856,
+      "score": 40,
+      "oiChange2h": -0.03787656617991442,
+      "takerBuySellRatio1h": 0.90015,
+      "fundingRate": 4.804e-05,
+      "basis": 1.3643632784887672e-05,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 5,
-  "usableCount": 2,
+  "universeCount": 6,
+  "usableCount": 4,
   "failures": {
     "PEPEUSDT": "NO_FUTURES_SERIES",
-    "UUSDT": "NO_FUTURES_SERIES",
-    "RWUSDUSDT": "NO_FUTURES_SERIES"
+    "UUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-24T06:14:23.306953+00:00"
+  "generatedAt": "2026-11-24T18:03:41.411713+00:00"
 }
