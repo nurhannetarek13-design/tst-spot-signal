@@ -8,23 +8,34 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "NEARUSDT",
-      "price": 2.814,
-      "quoteVolume24h": 60123354.2107,
+      "symbol": "SUIUSDT",
+      "price": 0.6653,
+      "quoteVolume24h": 21980829.60741,
       "score": 40,
-      "oiChange2h": -0.006233925435043752,
-      "takerBuySellRatio1h": 0.763475,
-      "fundingRate": 6.269e-05,
-      "basis": -0.000438015410367143,
+      "oiChange2h": -0.004761732646126116,
+      "takerBuySellRatio1h": 0.9376,
+      "fundingRate": -3.757e-05,
+      "basis": -0.0006220038478605971,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "MMTUSDT",
+      "price": 0.3056,
+      "quoteVolume24h": 21934074.56292,
+      "score": 40,
+      "oiChange2h": -0.03836922238688356,
+      "takerBuySellRatio1h": 1.016375,
+      "fundingRate": 1.68e-06,
+      "basis": -0.001344699074830813,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 1,
+  "universeCount": 5,
+  "usableCount": 2,
   "failures": {
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES",
     "RWUSDUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-25T12:02:04.066934+00:00"
+  "generatedAt": "2026-11-25T21:53:23.151090+00:00"
 }
