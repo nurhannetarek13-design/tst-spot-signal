@@ -9,32 +9,43 @@
   "candidates": [
     {
       "symbol": "SUIUSDT",
-      "price": 0.6751,
-      "quoteVolume24h": 25875944.88588,
-      "score": 60,
-      "oiChange2h": 0.0007302433431337629,
-      "takerBuySellRatio1h": 0.80835,
-      "fundingRate": 9.732e-05,
-      "basis": -0.0005018671493091098,
-      "paperLongPressure": false
+      "price": 0.666,
+      "quoteVolume24h": 28158289.31325,
+      "score": 80,
+      "oiChange2h": 0.012959032184511665,
+      "takerBuySellRatio1h": 1.1487,
+      "fundingRate": 0.0001,
+      "basis": -0.0005332141039673388,
+      "paperLongPressure": true
     },
     {
       "symbol": "MMTUSDT",
-      "price": 0.3035,
-      "quoteVolume24h": 24888597.4542,
+      "price": 0.2274,
+      "quoteVolume24h": 33065500.32849,
       "score": 60,
-      "oiChange2h": 0.010395502238853771,
-      "takerBuySellRatio1h": 0.96575,
-      "fundingRate": -1.788e-05,
-      "basis": -0.0014392250858682454,
+      "oiChange2h": -0.0045545073498585165,
+      "takerBuySellRatio1h": 1.0995,
+      "fundingRate": -0.00027003,
+      "basis": -0.0011660396453478938,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "MANTRAUSDT",
+      "price": 0.00247,
+      "quoteVolume24h": 20480125.23079,
+      "score": 25,
+      "oiChange2h": -0.06983080680073406,
+      "takerBuySellRatio1h": 0.9981,
+      "fundingRate": -0.00258481,
+      "basis": -0.0047071087443130155,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 2,
+  "universeCount": 5,
+  "usableCount": 3,
   "failures": {
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-26T03:54:56.921777+00:00"
+  "generatedAt": "2026-11-26T13:29:44.554029+00:00"
 }
