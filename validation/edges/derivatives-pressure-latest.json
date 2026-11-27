@@ -8,36 +8,36 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
-      "symbol": "INITUSDT",
-      "price": 0.14328,
-      "quoteVolume24h": 23878771.172504,
-      "score": 60,
-      "oiChange2h": 0.019214331526919537,
-      "takerBuySellRatio1h": 0.994325,
-      "fundingRate": -0.00016844,
-      "basis": -0.001842850648669403,
-      "paperLongPressure": false
-    },
-    {
       "symbol": "SUIUSDT",
-      "price": 0.6694,
-      "quoteVolume24h": 21882227.90384,
-      "score": 40,
-      "oiChange2h": -0.007855697493594938,
-      "takerBuySellRatio1h": 0.8363499999999999,
-      "fundingRate": 7.141e-05,
-      "basis": -0.0004607351667311743,
-      "paperLongPressure": false
+      "price": 0.684,
+      "quoteVolume24h": 21326559.3947,
+      "score": 90,
+      "oiChange2h": 0.0006327451759249314,
+      "takerBuySellRatio1h": 1.2878,
+      "fundingRate": 7.385e-05,
+      "basis": -0.0005236535060662018,
+      "paperLongPressure": true
     },
     {
       "symbol": "MMTUSDT",
-      "price": 0.2055,
-      "quoteVolume24h": 32067866.47432,
-      "score": 30,
-      "oiChange2h": -0.011476566654379572,
-      "takerBuySellRatio1h": 1.037025,
-      "fundingRate": -0.00047939,
-      "basis": -0.0033699526746717723,
+      "price": 0.1875,
+      "quoteVolume24h": 29246163.26967,
+      "score": 55,
+      "oiChange2h": 0.05615123886726425,
+      "takerBuySellRatio1h": 0.967875,
+      "fundingRate": -0.0015277,
+      "basis": -0.005894546084453611,
+      "paperLongPressure": false
+    },
+    {
+      "symbol": "INITUSDT",
+      "price": 0.13548,
+      "quoteVolume24h": 26701983.476742,
+      "score": 40,
+      "oiChange2h": -0.027762563964646825,
+      "takerBuySellRatio1h": 0.9941500000000001,
+      "fundingRate": 1.25e-05,
+      "basis": 3.178827530092576e-06,
       "paperLongPressure": false
     }
   ],
@@ -47,5 +47,5 @@
     "UUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-26T22:31:35.369816+00:00"
+  "generatedAt": "2026-11-27T04:44:35.503289+00:00"
 }
