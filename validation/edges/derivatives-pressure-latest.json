@@ -8,33 +8,45 @@
   "note": "Public derivatives context for Spot only. No futures execution, no leverage. Funding/basis are optional fallbacks; OI+taker are primary.",
   "candidates": [
     {
+      "symbol": "WLFIUSDT",
+      "price": 0.0195,
+      "quoteVolume24h": 145058722.35113,
+      "score": 80,
+      "oiChange2h": 0.004337635273647944,
+      "takerBuySellRatio1h": 1.077625,
+      "fundingRate": -0.00019517,
+      "basis": -0.0026082869617940485,
+      "paperLongPressure": true
+    },
+    {
       "symbol": "PORTALUSDT",
-      "price": 0.01708,
-      "quoteVolume24h": 99071484.341237,
+      "price": 0.01556,
+      "quoteVolume24h": 88469485.066569,
       "score": 60,
-      "oiChange2h": -0.017687455742485758,
-      "takerBuySellRatio1h": 1.123875,
-      "fundingRate": -0.00020961,
-      "basis": -0.000237703237728204,
+      "oiChange2h": -0.01203625226339633,
+      "takerBuySellRatio1h": 1.054575,
+      "fundingRate": 6.52e-06,
+      "basis": -0.0005351060436110666,
       "paperLongPressure": false
     },
     {
-      "symbol": "WLFIUSDT",
-      "price": 0.0268,
-      "quoteVolume24h": 42223916.12316,
+      "symbol": "NEARUSDT",
+      "price": 2.948,
+      "quoteVolume24h": 46870531.5384,
       "score": 40,
-      "oiChange2h": -0.539146715100945,
-      "takerBuySellRatio1h": 0.939225,
-      "fundingRate": 5e-05,
-      "basis": 0.0023142765891883688,
+      "oiChange2h": -0.008775750294795603,
+      "takerBuySellRatio1h": 0.682525,
+      "fundingRate": 6.931e-05,
+      "basis": -0.0006814195604990525,
       "paperLongPressure": false
     }
   ],
-  "universeCount": 4,
-  "usableCount": 2,
+  "universeCount": 6,
+  "usableCount": 3,
   "failures": {
     "UUSDT": "NO_FUTURES_SERIES",
+    "RWUSDUSDT": "NO_FUTURES_SERIES",
     "PEPEUSDT": "NO_FUTURES_SERIES"
   },
-  "generatedAt": "2026-11-28T04:50:15.929186+00:00"
+  "generatedAt": "2026-11-28T13:50:41.782193+00:00"
 }
