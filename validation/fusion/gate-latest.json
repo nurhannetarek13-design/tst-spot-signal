@@ -166,6 +166,6 @@
       "stressExpectancyUSDT": null
     }
   },
-  "generatedAt": "2026-11-28T04:45:54.995682+00:00",
+  "generatedAt": "2026-11-28T04:46:44.653122+00:00",
   "note": "CORE_TRIGGER_ONLY historical validation can unlock forward-paper collection only. It never validates FULL_STRATEGY_L2, never enables small-live review, and never enables execution."
 }
